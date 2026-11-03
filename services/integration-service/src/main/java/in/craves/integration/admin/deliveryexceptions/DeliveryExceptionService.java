@@ -91,9 +91,8 @@ public class DeliveryExceptionService {
         // Going back to ACKNOWLEDGED withdraws the request; resolve/dismiss keep it on record.
         String target = to == Status.ACKNOWLEDGED ? null : current.reassignToProviderId();
         if (action == Action.ASSIGN) {
-            // shortcut: the assignee is a staff identity id taken as given (no Auth lookup), like M12's staff ids.
-            if (assigneeId == null) throw bad("assigneeId is required");
-            assignee = assigneeId;
+            // shortcut: an assignee is a staff identity id taken as given (no Auth lookup), like M12's staff ids; none means the caller.
+            assignee = assigneeId == null ? actor : assigneeId;
         }
         if (action == Action.REQUEST_REASSIGNMENT) {
             if (providerId == null || providerId.isBlank()) throw bad("providerId is required");
@@ -112,6 +111,17 @@ public class DeliveryExceptionService {
             to.name(), assignee, target, closing ? text : null, closing, caseId, expectedVersion);
         event(caseId, action.name(), to, actor, text);
         return detail(caseId);
+    }
+
+    /** The order's delivery job when it has exactly one (there is one per kitchen sub-order). */
+    public UUID jobForOrder(UUID orderId) {
+        if (orderId == null) throw bad("deliveryJobId or orderId is required");
+        List<UUID> jobs = jdbc.queryForList("SELECT id FROM delivery_schema.delivery_job WHERE order_id = ? ORDER BY created_at, id LIMIT 7",
+            UUID.class, orderId);
+        if (jobs.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No delivery job for this order");
+        if (jobs.size() > 1) throw conflict("This order has a delivery job per kitchen; open the case with one of these delivery job IDs: "
+            + String.join(", ", jobs.stream().limit(6).map(UUID::toString).toList()) + (jobs.size() > 6 ? " and more" : ""));
+        return jobs.get(0);
     }
 
     public CaseDetail detail(UUID caseId) {

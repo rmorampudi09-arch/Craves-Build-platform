@@ -29,7 +29,10 @@ public class AdminDeliveryExceptionController {
     // Support and audit admins only read (Auth defines both roles as read-only).
     static final String[] WRITE_ROLES = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN"};
 
-    public record OpenDeliveryExceptionRequest(UUID deliveryJobId, Reason reason, String note) {}
+    static final String DISABLED = "Delivery exceptions are switched off";
+
+    /** Either the delivery job or the order; an order with one delivery job per kitchen needs the job id. */
+    public record OpenDeliveryExceptionRequest(UUID deliveryJobId, UUID orderId, Reason reason, String note) {}
     public record DeliveryExceptionActionRequest(Action action, Integer expectedVersion, String note, UUID assigneeId, String providerId) {}
 
     private final DeliveryExceptionService service;
@@ -62,7 +65,8 @@ public class AdminDeliveryExceptionController {
         @RequestBody OpenDeliveryExceptionRequest request) {
         CravesPrincipal actor = require(authentication, WRITE_ROLES);
         if (request == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request body is required");
-        return noStore(HttpStatus.CREATED, service.open(actor.identityId(), request.deliveryJobId(), request.reason(), request.note()));
+        UUID job = request.deliveryJobId() != null ? request.deliveryJobId() : service.jobForOrder(request.orderId());
+        return noStore(HttpStatus.CREATED, service.open(actor.identityId(), job, request.reason(), request.note()));
     }
 
     @PostMapping("/{caseId}/actions")
@@ -75,7 +79,7 @@ public class AdminDeliveryExceptionController {
     }
 
     private CravesPrincipal require(Authentication authentication, String[] roles) {
-        if (!enabled) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        if (!enabled) throw new ResponseStatusException(HttpStatus.NOT_FOUND, DISABLED);
         if (authentication == null || !(authentication.getPrincipal() instanceof CravesPrincipal principal)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Craves access token is required");
         }

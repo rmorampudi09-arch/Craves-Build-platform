@@ -314,6 +314,8 @@ export const chefSubscriptionApi = {
       await httpClient.put<unknown>(
         `/api/v1/chef/subscription-plans/${encodeURIComponent(planId)}/image`,
         form,
+        // A photo over mobile data needs more than the default 12 s.
+        {timeout: 45000},
       ),
       'Uploaded plan photo could not be verified.',
     );

@@ -346,6 +346,8 @@ describe('chefSubscriptionApi plan photo and accepting-subscribers', () => {
     expect(httpClient.put).toHaveBeenCalledWith(
       `/api/v1/chef/subscription-plans/${PLAN_ID}/image`,
       form,
+      // A photo over mobile data needs more than the default 12 s.
+      {timeout: 45000},
     );
   });
 

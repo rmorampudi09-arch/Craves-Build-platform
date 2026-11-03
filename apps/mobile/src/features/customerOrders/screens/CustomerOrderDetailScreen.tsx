@@ -339,6 +339,8 @@ export function CustomerOrderDetailScreen() {
       ? {latitude: address.latitude, longitude: address.longitude}
       : null;
   const courier = tracking.data?.courierLocation ?? null;
+  // The server sends the code only while a Craves rider is carrying the order.
+  const deliveryCode = journey.kind === 'DELIVERY' && !journey.delivered ? tracking.data?.deliveryCode : null;
   const inKitchen = IN_KITCHEN_STATUSES.has(order.status);
   const addressLine = address
     ? [
@@ -534,6 +536,14 @@ export function CustomerOrderDetailScreen() {
             {detail.isFetching ? <ActivityIndicator color={colors.textSecondary} size="small" /> : null}
           </View>
           <Text style={[iosType.subheadline, styles.secondaryText]}>{journey.detail}</Text>
+          {deliveryCode ? (
+            <View style={styles.codeBlock}>
+              <Text style={[iosType.headline, styles.primaryText]}>Delivery code {deliveryCode}</Text>
+              <Text style={[iosType.footnote, styles.secondaryText]}>
+                Share this code with your rider when your food arrives.
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {journey.kind === 'CLOSED' ? null : (
@@ -760,6 +770,7 @@ const styles = StyleSheet.create({
   whiteText: {color: colors.white},
   flexCopy: {minWidth: 0, flex: 1, gap: 2},
   statusBlock: {gap: spacing.xxs},
+  codeBlock: {marginTop: spacing.xs, gap: 2},
   statusTitleRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
   statusTitle: {flexShrink: 1, color: colors.textPrimary},
   map: {borderRadius: radius.lg},

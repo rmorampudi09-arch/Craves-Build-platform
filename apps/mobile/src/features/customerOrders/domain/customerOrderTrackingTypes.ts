@@ -41,4 +41,6 @@ export interface CustomerOrderTracking {
   history: readonly CustomerDeliveryHistoryEntry[];
   /** The delivery partner's last reported position; null until the server reports one. */
   courierLocation: CustomerCourierLocation | null;
+  /** The 4 digits the customer gives a Craves rider at the door; null for other delivery partners. */
+  deliveryCode: string | null;
 }

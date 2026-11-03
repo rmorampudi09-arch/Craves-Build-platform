@@ -51,6 +51,14 @@ const courierLocationSchema = z
   .catch(null)
   .transform(value => value ?? null);
 
+/** Only while a Craves rider carries the order; a malformed code reads as no code. */
+const deliveryCodeSchema = z
+  .string()
+  .regex(/^\d{4}$/)
+  .nullish()
+  .catch(null)
+  .transform(value => value ?? null);
+
 const trackingSchema = z.object({
   orderId: z.string().uuid(),
   deliveryJobId: z.string().uuid().nullable(),
@@ -60,6 +68,7 @@ const trackingSchema = z.object({
   observedAt: nullableTimestampSchema,
   history: z.array(historySchema).max(100),
   courierLocation: courierLocationSchema,
+  deliveryCode: deliveryCodeSchema,
 });
 
 export function parseCustomerOrderTrackingResponse(

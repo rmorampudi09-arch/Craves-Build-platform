@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {AppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
+import {captureException} from '../../../core/observability/observability';
 import {
   CUSTOMER_ORDER_STATUSES,
   CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT,
@@ -92,7 +93,7 @@ const orderSchema = z.object({
   updatedAt: timestampSchema,
 });
 
-const orderWindowSchema = z.array(orderSchema).max(CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT);
+const orderWindowSchema = z.array(z.unknown()).max(CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT);
 
 type ParsedOrder = z.infer<typeof orderSchema>;
 
@@ -122,6 +123,23 @@ export function parseCustomerOrderResponse(value: unknown): CustomerOrder | null
   return parsed.success ? toCustomerOrder(parsed.data) : null;
 }
 
+/** One odd order must not blank the list: a row that fails the schema is dropped and its id reported. */
+export function parseCustomerOrderRows(rows: readonly unknown[]): CustomerOrder[] {
+  const orders: CustomerOrder[] = [];
+  for (const row of rows) {
+    const order = parseCustomerOrderResponse(row);
+    if (order) {
+      orders.push(order);
+    } else {
+      const id = (row as {id?: unknown} | null)?.id;
+      captureException(new Error('Customer order row dropped'), 'customer_order_row_dropped', {
+        orderId: typeof id === 'string' ? id : null,
+      });
+    }
+  }
+  return orders;
+}
+
 export function parseCustomerOrdersResponse(value: unknown): CustomerOrder[] | null {
   const parsed = orderWindowSchema.safeParse(value);
   if (!parsed.success) {
@@ -131,14 +149,14 @@ export function parseCustomerOrdersResponse(value: unknown): CustomerOrder[] | n
   const seenIds = new Set<string>();
   let previousCreatedAt = Number.POSITIVE_INFINITY;
   const orders: CustomerOrder[] = [];
-  for (const rawOrder of parsed.data) {
-    const createdAt = Date.parse(rawOrder.createdAt);
-    if (seenIds.has(rawOrder.id) || createdAt > previousCreatedAt) {
+  for (const order of parseCustomerOrderRows(parsed.data)) {
+    const createdAt = Date.parse(order.createdAt);
+    if (seenIds.has(order.id) || createdAt > previousCreatedAt) {
       return null;
     }
-    seenIds.add(rawOrder.id);
+    seenIds.add(order.id);
     previousCreatedAt = createdAt;
-    orders.push(toCustomerOrder(rawOrder));
+    orders.push(order);
   }
   return orders;
 }

@@ -1,4 +1,5 @@
 import {httpClient} from '../../core/http/httpClient';
+import {captureException} from '../../core/observability/observability';
 import {
   CUSTOMER_ORDERS_PATH,
   CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT,
@@ -7,6 +8,7 @@ import {
   parseCustomerOrdersResponse,
 } from './api/customerOrdersApi';
 
+jest.mock('../../core/observability/observability', () => ({captureException: jest.fn()}));
 jest.mock('../../core/http/httpClient', () => ({
   httpClient: {
     get: jest.fn(),
@@ -109,8 +111,30 @@ describe('P52 customer orders API', () => {
     expect(parseCustomerOrderResponse(mealOrder)?.checkoutId).toBeNull();
   });
 
-  it('rejects unknown statuses rather than inventing lifecycle semantics', () => {
-    expect(parseCustomerOrdersResponse([order({status: 'UNKNOWN'})])).toBeNull();
+  it('drops a row that fails the schema, keeps the rest, and reports its id', () => {
+    const broken = order({id: '99999999-9999-4999-8999-999999999999', status: 'UNKNOWN'});
+
+    const result = parseCustomerOrdersResponse([
+      broken,
+      order({createdAt: '2026-08-08T11:00:00Z'}),
+      'not an order',
+    ]);
+
+    expect(result?.map(item => item.id)).toEqual(['11111111-1111-4111-8111-111111111111']);
+    expect(captureException).toHaveBeenCalledTimes(2);
+    expect(captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      'customer_order_row_dropped',
+      {orderId: broken.id},
+    );
+  });
+
+  it('still rejects a response that is not a list', () => {
+    expect(parseCustomerOrdersResponse({orders: []})).toBeNull();
+  });
+
+  it('keeps the detail strict: unknown statuses are rejected, not guessed', () => {
+    expect(parseCustomerOrderResponse(order({status: 'UNKNOWN'}))).toBeNull();
   });
 
   it('rejects a response larger than the exact backend recent-order window', () => {

@@ -166,7 +166,7 @@ function CaseCard({ item, onChanged }: { item: ExceptionCase; onChanged: (notice
     if (!parsed.success) return setState({ busy: false, error: parsed.error.issues[0]?.message ?? "Check the details." });
     setState({ busy: true, error: "" });
     try {
-      await call(`/${item.id}/actions`, detailSchema, parsed.data);
+      await call(`?case=${item.id}`, detailSchema, parsed.data);
       setState({ busy: false, error: "" });
       await onChanged(done);
     } catch (error) {
@@ -176,7 +176,7 @@ function CaseCard({ item, onChanged }: { item: ExceptionCase; onChanged: (notice
   async function toggleHistory() {
     if (events) return setEvents(null);
     try {
-      setEvents((await call(`/${item.id}`, detailSchema)).events);
+      setEvents((await call(`?case=${item.id}`, detailSchema)).events);
     } catch (error) {
       setState({ busy: false, error: failed(error, "The history is unavailable.") });
     }

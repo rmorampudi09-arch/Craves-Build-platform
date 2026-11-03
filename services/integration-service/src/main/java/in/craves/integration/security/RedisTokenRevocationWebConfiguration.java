@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.server.ResponseStatusException;
@@ -51,7 +52,8 @@ public class RedisTokenRevocationWebConfiguration implements WebMvcConfigurer {
             // Any case, as CravesJwtAuthenticationFilter accepts it: otherwise "bearer <revoked token>" skips this check.
             if (authorization == null || !authorization.regionMatches(true, 0, "Bearer ", 0, 7)) return true;
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication == null || !authentication.isAuthenticated()) return true;
+            // Anonymous requests (the Pidge webhook, which the JWT filter skips) carry a provider secret, not a Craves token.
+            if (authentication == null || !authentication.isAuthenticated() || authentication instanceof AnonymousAuthenticationToken) return true;
             TokenIdentity token = tokenIdentity(authorization);
             String projection;
             try { projection = redisTemplate.opsForValue().get(keyPrefix + ":" + token.identityId()); }

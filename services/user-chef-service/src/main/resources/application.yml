@@ -69,3 +69,8 @@ craves:
     enabled: ${CRAVES_KITCHEN_LAUNCH_ALERTS_ENABLED:false}
     discovery-base-url: ${CRAVES_DISCOVERY_BASE_URL:}
     fixed-delay-ms: ${CRAVES_KITCHEN_LAUNCH_ALERTS_FIXED_DELAY_MS:900000}
+
+# Handbook 099: every log line carries the request's X-Correlation-ID (MDC key correlationId, set by CorrelationIdConfiguration).
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "

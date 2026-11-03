@@ -33,6 +33,8 @@ public class BorzoPidgeHandoffWorker {
     private static final Logger log = LoggerFactory.getLogger(BorzoPidgeHandoffWorker.class);
     private static final int BATCH_SIZE = 20;
     private static final int MAX_ATTEMPTS = 20;
+    // Attempts count the Borzo phase too: the Pidge fallback starts at about attempt 2, so attempt 7 is ~10 minutes in.
+    private static final int STALLED_ALERT_ATTEMPT = 7;
 
     private final BorzoPidgeHandoffRepository handoffs;
     private final DeliveryJobRepository jobs;
@@ -106,7 +108,7 @@ public class BorzoPidgeHandoffWorker {
                     log.error("Delivery handoff requires manual review jobId={} phase={} reason={}",
                         handoff.deliveryJobId(), handoff.state(), reason);
                 } else {
-                    if (handoff.attemptCount() == MAX_ATTEMPTS && "PROCESSING_PIDGE".equals(handoff.state())) {
+                    if (handoff.attemptCount() == STALLED_ALERT_ATTEMPT && "PROCESSING_PIDGE".equals(handoff.state())) {
                         // Borzo is cancelled: keep retrying, since an uncertain Pidge booking must be reconciled and never
                         // doubled, but page once.
                         log.error("CRAVES_ALERT alert=DELIVERY_HANDOFF_STALLED jobId={} attempts={} reason={}",

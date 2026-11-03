@@ -2,6 +2,7 @@ package in.craves.advanced.tastedata;
 
 import in.craves.advanced.platform.data.PersonalDataContributor;
 import in.craves.advanced.platform.data.Sql;
+import in.craves.advanced.platform.erasure.AccountErasureService;
 import in.craves.advanced.platform.module.ModuleRuntime;
 import in.craves.advanced.platform.security.CurrentUser;
 import in.craves.advanced.platform.web.ApiProblem;
@@ -9,7 +10,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +17,6 @@ import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -35,12 +34,15 @@ public class TasteDataController {
 
     private final List<PersonalDataContributor> contributors;
     private final ModuleRuntime runtime;
+    private final AccountErasureService erasure;
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
-    public TasteDataController(List<PersonalDataContributor> contributors, ModuleRuntime runtime, JdbcTemplate jdbc, Clock clock) {
+    public TasteDataController(List<PersonalDataContributor> contributors, ModuleRuntime runtime, AccountErasureService erasure,
+                               JdbcTemplate jdbc, Clock clock) {
         this.contributors = contributors;
         this.runtime = runtime;
+        this.erasure = erasure;
         this.jdbc = jdbc;
         this.clock = clock;
     }
@@ -77,25 +79,10 @@ public class TasteDataController {
 
     /** Erases the caller's own data in every module. Requires the header {@code X-Confirm-Erase: ERASE}. */
     @DeleteMapping
-    @Transactional
     public ResponseEntity<ErasureReceipt> erase(@RequestHeader(value = "X-Confirm-Erase", required = false) String confirm) {
         if (!"ERASE".equals(confirm)) throw ApiProblem.badRequest("CONFIRMATION_REQUIRED", "Send X-Confirm-Erase: ERASE to erase your data");
-        UUID person = CurrentUser.id();
-        int total = jdbc.update("DELETE FROM adv_taste_data.consent WHERE person_id = ?", person);
-        List<String> modules = new ArrayList<>();
-        for (PersonalDataContributor contributor : contributors) {
-            if (!usable(contributor.moduleId())) continue;
-            total += contributor.erase(person);
-            modules.add(contributor.moduleId());
-        }
-        // Stored replies of the person's keyed requests (they can hold names and notes) go too; they are caches, so the receipt does not count them.
-        // shortcut: no index on actor_id; the table keeps only 48 hours of keyed requests. Add one if erasing gets slow.
-        jdbc.update("DELETE FROM adv_platform.idempotency_record WHERE actor_id = ?", person);
-        Instant now = clock.instant();
-        UUID receipt = UUID.randomUUID();
-        jdbc.update("INSERT INTO adv_taste_data.erasure_receipt (id, person_id, records, modules, created_at) VALUES (?,?,?,?,?)",
-                receipt, person, total, modules.toArray(String[]::new), Sql.ts(now));
-        return ok(new ErasureReceipt(receipt, total, modules, now));
+        AccountErasureService.Erased erased = erasure.eraseAll(CurrentUser.id(), false);
+        return ok(new ErasureReceipt(erased.receiptId(), erased.recordsErased(), erased.modules(), erased.erasedAt()));
     }
 
     private boolean usable(String moduleId) {

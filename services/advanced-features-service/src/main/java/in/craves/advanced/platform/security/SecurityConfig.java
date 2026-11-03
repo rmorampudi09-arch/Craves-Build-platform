@@ -44,6 +44,8 @@ public class SecurityConfig {
                         module.publicGetPaths().forEach(path -> auth.requestMatchers(HttpMethod.GET, path).permitAll());
                         module.publicPostPaths().forEach(path -> auth.requestMatchers(HttpMethod.POST, path).permitAll());
                     }
+                    // No token on these: AccountErasureController checks the shared secret itself.
+                    auth.requestMatchers(HttpMethod.POST, "/internal/v1/account-erasure/**").permitAll();
                     auth.requestMatchers("/api/v1/**").authenticated();
                     auth.anyRequest().denyAll();
                 })

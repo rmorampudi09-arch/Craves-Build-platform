@@ -1,6 +1,5 @@
 package in.craves.advanced.platform.erasure;
 
-import in.craves.advanced.kitchencapacity.KitchenCapacityModule;
 import in.craves.advanced.platform.data.PersonalDataContributor;
 import in.craves.advanced.platform.data.Sql;
 import in.craves.advanced.platform.module.FeatureModule;
@@ -55,7 +54,7 @@ public class AccountErasureService {
         boolean tasteData = reachable(TasteDataModule.ID, includeDisabled);
         Map<String, Integer> counts = new LinkedHashMap<>();
         counts.put(TasteDataModule.ID, tasteData ? jdbc.update("DELETE FROM adv_taste_data.consent WHERE person_id = ?", person) : 0);
-        List<String> modules = eraseModules(person, includeDisabled, contributors, counts);
+        List<String> modules = eraseModules(person, includeDisabled, counts);
         // Stored replies of the person's keyed requests (they can hold names and notes) go too; they are caches, so the receipt does not count them.
         // shortcut: no index on actor_id; the table keeps only 48 hours of keyed requests. Add one if erasing gets slow.
         if (!includeDisabled || migrated(PLATFORM_SCHEMA)) jdbc.update("DELETE FROM adv_platform.idempotency_record WHERE actor_id = ?", person);
@@ -63,27 +62,20 @@ public class AccountErasureService {
     }
 
     /**
-     * What the coordinator asks for. CUSTOMER and ALL erase everything; CHEF only the chef-owned module (kitchen-capacity), so a
-     * dual-role person's other data stays. Always includes modules that are switched off.
+     * What the coordinator asks for. CUSTOMER and ALL erase everything, including modules that are switched off. CHEF erases nothing:
+     * every module's data is the person's own as a customer, and the chef's ids in kitchen-capacity (batch, kitchen_load) are kitchen
+     * operating records that stay, so a dual-role person's customer data survives a chef-only request.
      */
     @Transactional
     public Map<String, Integer> erase(UUID requestId, UUID identity, Scope scope) {
-        Erased erased;
-        if (scope == Scope.CHEF) {
-            Map<String, Integer> counts = new LinkedHashMap<>();
-            List<String> modules = eraseModules(identity, true,
-                    contributors.stream().filter(c -> c.moduleId().equals(KitchenCapacityModule.ID)).toList(), counts);
-            erased = receipt(identity, reachable(TasteDataModule.ID, true), true, modules, counts);
-        } else {
-            erased = eraseAll(identity, true);
-        }
-        log.info("account erasure service={} requestId={} scope={} counts={}", SERVICE, requestId, scope, erased.counts());
-        return erased.counts();
+        Map<String, Integer> counts = scope == Scope.CHEF ? Map.of() : eraseAll(identity, true).counts();
+        log.info("account erasure service={} requestId={} scope={} counts={}", SERVICE, requestId, scope, counts);
+        return counts;
     }
 
-    private List<String> eraseModules(UUID person, boolean includeDisabled, List<PersonalDataContributor> which, Map<String, Integer> counts) {
+    private List<String> eraseModules(UUID person, boolean includeDisabled, Map<String, Integer> counts) {
         List<String> modules = new ArrayList<>();
-        for (PersonalDataContributor contributor : which) {
+        for (PersonalDataContributor contributor : contributors) {
             if (reachable(contributor.moduleId(), includeDisabled)) {
                 counts.put(contributor.moduleId(), contributor.erase(person));
                 modules.add(contributor.moduleId());

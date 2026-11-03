@@ -146,23 +146,27 @@ class AccountErasureIT extends IntegrationTestBase {
     }
 
     @Test
-    void chefScopeTouchesOnlyTheKitchenCapacityModule() throws Exception {
+    void chefScopeErasesNothingSoACustomerKeepsTheirData() throws Exception {
         UUID person = UUID.randomUUID();
         makeFoodList(person);
+        jdbc.update("INSERT INTO adv_taste_data.consent (person_id, personalization, product_analytics, updated_at) VALUES (?, true, true, now())", person);
         UUID batch = UUID.randomUUID();
         jdbc.update("INSERT INTO adv_kitchen_capacity.batch (id, menu_item_id, kitchen_id, chef_id, service_date, portions, status, version, created_at, updated_at) "
-                + "VALUES (?, ?, ?, ?, current_date, 10, 'OPEN', 0, now(), now())", batch, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
+                + "VALUES (?, ?, ?, ?, current_date, 10, 'OPEN', 0, now(), now())", batch, UUID.randomUUID(), UUID.randomUUID(), person);
+        // The person's hold as a customer of another kitchen's batch.
         jdbc.update("INSERT INTO adv_kitchen_capacity.hold (id, batch_id, person_id, portions, status, expires_at, created_at, updated_at) "
                 + "VALUES (?, ?, ?, 2, 'CONFIRMED', now() + interval '1 day', now(), now())", UUID.randomUUID(), batch, person);
 
         internal(BASE, erasureBody(person, "CHEF"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("DONE"))
-                .andExpect(jsonPath("$.counts.kitchen-capacity").value(1))
-                .andExpect(jsonPath("$.counts.food-lists").doesNotExist())
-                .andExpect(jsonPath("$.counts.taste-data").doesNotExist());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.service").value("advanced")).andExpect(jsonPath("$.status").value("DONE"))
+                .andExpect(jsonPath("$.counts.length()").value(0));
 
-        assertThat(count("SELECT count(*) FROM adv_kitchen_capacity.hold WHERE person_id = ?", person)).isZero();
+        assertThat(count("SELECT count(*) FROM adv_kitchen_capacity.hold WHERE person_id = ?", person)).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM adv_kitchen_capacity.batch WHERE chef_id = ?", person)).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM adv_taste_data.consent WHERE person_id = ?", person)).isEqualTo(1);
         assertThat(foodLists(person)).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM adv_platform.idempotency_record WHERE actor_id = ?", person)).isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM adv_taste_data.erasure_receipt WHERE person_id = ?", person)).isZero();
     }
 
     private ResultActions internal(String path, String body) throws Exception {

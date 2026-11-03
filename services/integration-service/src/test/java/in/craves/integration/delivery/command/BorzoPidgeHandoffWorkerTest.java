@@ -1,5 +1,7 @@
 package in.craves.integration.delivery.command;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -26,8 +28,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.web.client.ResourceAccessException;
 
+@ExtendWith(OutputCaptureExtension.class)
 class BorzoPidgeHandoffWorkerTest {
     private final BorzoPidgeHandoffRepository handoffs = mock(BorzoPidgeHandoffRepository.class);
     private final DeliveryJobRepository jobs = mock(DeliveryJobRepository.class);
@@ -260,6 +268,63 @@ class BorzoPidgeHandoffWorkerTest {
         verify(pidge, never()).cancel(any());
         verify(handoffs).retry(eq(job.id()), eq("PROCESSING_PIDGE"), any(), any());
         verify(completion, never()).complete(any(), any());
+    }
+
+    /** 14 Oct incident: Borzo cancelled, Pidge rejected the booking, and the handoff retried silently for hours. */
+    @ParameterizedTest
+    @ValueSource(strings = {"REJECTED", "CANCELLED"})
+    void pidgeBookingThatEndedGoesToManualReviewWithAnAlertInsteadOfRetryingForever(String ended,
+                                                                                    CapturedOutput output) {
+        Handoff handoff = pidgePhase(3);
+        HandoffJob job = job(handoff, "SEARCHING");
+        when(handoffs.claimDue(1)).thenReturn(List.of(handoff), List.of());
+        when(jobs.findHandoffJob(job.id())).thenReturn(Optional.of(job));
+        when(pidgeProperties.productionCreateReady()).thenReturn(true);
+        when(catalog.activeProviderIds()).thenReturn(List.of("pidge"));
+        when(eligibility.eligible(job.chefSubOrderId(), job.orderId(),
+            job.id(), job.providerDeliveryId())).thenReturn(true);
+        when(bookings.find(job.chefSubOrderId().toString()))
+            .thenReturn(Optional.of(new PidgeBookingRepository.Booking("pidge-42", ended)));
+
+        worker().processDue();
+
+        verify(handoffs).manualReview(eq(job.id()), any());
+        verify(handoffs, never()).retry(any(), any(), any(), any());
+        verify(pidge, never()).create(any());
+        verify(pidge, never()).reconcileCreate(any(), any());
+        verify(completion, never()).complete(any(), any());
+        assertTrue(output.getAll().contains("CRAVES_ALERT alert=DELIVERY_HANDOFF_NO_COURIER orderId="
+            + job.orderId() + " jobId=" + job.id() + " "));
+    }
+
+    @Test
+    void unresolvedPidgeFallbackKeepsRetryingAndPagesOnceAboutTenMinutesIn(CapturedOutput output) {
+        Handoff atLimit = pidgePhase(7);
+        Handoff pastLimit = pidgePhase(8);
+        when(handoffs.claimDue(1)).thenReturn(List.of(atLimit), List.of(pastLimit), List.of());
+        for (Handoff handoff : List.of(atLimit, pastLimit)) {
+            HandoffJob job = job(handoff, "SEARCHING");
+            when(jobs.findHandoffJob(job.id())).thenReturn(Optional.of(job));
+            when(eligibility.eligible(job.chefSubOrderId(), job.orderId(),
+                job.id(), job.providerDeliveryId()))
+                .thenThrow(new ResourceAccessException("order check timed out"));
+        }
+        when(pidgeProperties.productionCreateReady()).thenReturn(true);
+        when(catalog.activeProviderIds()).thenReturn(List.of("pidge"));
+
+        worker().processDue();
+
+        verify(handoffs).retry(eq(atLimit.deliveryJobId()), eq("PROCESSING_PIDGE"), any(), any());
+        verify(handoffs).retry(eq(pastLimit.deliveryJobId()), eq("PROCESSING_PIDGE"), any(), any());
+        verify(handoffs, never()).manualReview(any(), any());
+        assertTrue(output.getAll().contains("CRAVES_ALERT alert=DELIVERY_HANDOFF_STALLED jobId="
+            + atLimit.deliveryJobId() + " attempts=7 "));
+        assertFalse(output.getAll().contains("jobId=" + pastLimit.deliveryJobId() + " attempts="));
+    }
+
+    private static Handoff pidgePhase(int attempts) {
+        return new Handoff(UUID.randomUUID(), "1250032", "PROCESSING_PIDGE", attempts,
+            Instant.now().minusSeconds(1), true, true);
     }
 
     private void prepareQuote(HandoffJob job) {

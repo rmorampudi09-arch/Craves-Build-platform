@@ -7,7 +7,8 @@ over `ContainerAppConsoleLogs_CL`, plus a metric alert on Service Bus dead-lette
 The module is off by default. With `deployAlerts=false` it creates nothing and costs nothing.
 
 ```bash
-az deployment group create -g rg-craves-prodlow-centralindia \
+# Production is subscription 34eefd95; never deploy to the idle rg-craves-prodlow-centralindia (AGENTS.md).
+az deployment group create -g <monitoring resource group in subscription 34eefd95> \
   -f infra/monitoring/silent-failure-alerts.bicep \
   -p deployAlerts=true \
      logAnalyticsWorkspaceId=<workspace resource id> \
@@ -34,6 +35,10 @@ az deployment group create -g rg-craves-prodlow-centralindia \
 | 13 | `STUCK_ORDER` | order `OrderAlertMonitor` (the catch-all sweeper) | Ready |
 
 The CH-03 internal-call codes (`INTERNAL_CALL_*`) use the same rules.
+
+The Borzo-to-Pidge handoff (integration `BorzoPidgeHandoffWorker`) adds `DELIVERY_HANDOFF_NO_COURIER` (Borzo cancelled and
+Pidge refused or cancelled the fallback, so the order needs a person) and `DELIVERY_HANDOFF_STALLED` (the Pidge fallback
+is still unresolved about 10 minutes later; it keeps retrying). Both are logged once per order.
 
 ## Tuning
 

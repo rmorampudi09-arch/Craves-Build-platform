@@ -10,6 +10,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -31,10 +33,11 @@ class RedisRevocationConsumerTest {
         var registry=new Registry();config.addInterceptors(registry);
         return (HandlerInterceptor)registry.items().getFirst();
     }
-    MockHttpServletRequest request(String version){
+    MockHttpServletRequest request(String version){return request(version,"Bearer ");}
+    MockHttpServletRequest request(String version,String scheme){
         var request=new MockHttpServletRequest("GET","/api/v1/test");
         String payload="{\"sub\":\""+UUID.randomUUID()+"\",\"token_version\":"+version+"}";
-        request.addHeader("Authorization","Bearer e30."+Base64.getUrlEncoder().withoutPadding().encodeToString(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8))+".signature");
+        request.addHeader("Authorization",scheme+"e30."+Base64.getUrlEncoder().withoutPadding().encodeToString(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8))+".signature");
         // The interceptor runs after signature authentication; this is not a JWT signature test.
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("synthetic",null,List.of()));
         return request;
@@ -49,6 +52,22 @@ class RedisRevocationConsumerTest {
         for(String projection:List.of("SUSPENDED|2","ACTIVE|3")){
             var error=assertThrows(ResponseStatusException.class,()->interceptor(projection,false).preHandle(request("2"),new MockHttpServletResponse(),new Object()));
             assertEquals(401,error.getStatusCode().value());
+        }
+    }
+    @Test void revokedTokenIsRejectedWhateverTheCaseOfTheScheme() {
+        // CravesJwtAuthenticationFilter authenticates "bearer" in any case, so the revocation check must see it too.
+        for(String scheme:List.of("bearer ","BEARER ","bEaReR ")){
+            var error=assertThrows(ResponseStatusException.class,()->interceptor("ACTIVE|3",false).preHandle(request("2",scheme),new MockHttpServletResponse(),new Object()));
+            assertEquals(401,error.getStatusCode().value(),scheme);
+        }
+    }
+    @Test void providerWebhookSecretIsNeverReadAsACravesToken() throws Exception {
+        // CravesJwtAuthenticationFilter skips the Pidge webhook, so Spring leaves an anonymous token and the header holds Pidge's secret.
+        for(String scheme:List.of("Bearer ","bearer ")){
+            var request=new MockHttpServletRequest("POST","/api/v1/webhooks/delivery/pidge");
+            request.addHeader("Authorization",scheme+"provider-secret");
+            SecurityContextHolder.getContext().setAuthentication(new AnonymousAuthenticationToken("key","anonymousUser",AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS")));
+            assertTrue(interceptor("ACTIVE|2",false).preHandle(request,new MockHttpServletResponse(),new Object()),scheme);
         }
     }
     @Test void malformedProjectionFailsClosed() {

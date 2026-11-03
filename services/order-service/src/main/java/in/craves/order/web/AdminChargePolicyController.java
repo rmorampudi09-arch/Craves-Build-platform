@@ -22,8 +22,8 @@ public class AdminChargePolicyController {
     }
 
     @GetMapping("/current")
-    public ChargePolicyResponse current() {
-        return orderService.currentChargePolicy();
+    public ChargePolicyResponse current(@AuthenticationPrincipal CravesPrincipal principal) {
+        return orderService.currentChargePolicyForAdmin(principal);
     }
 
     @PostMapping

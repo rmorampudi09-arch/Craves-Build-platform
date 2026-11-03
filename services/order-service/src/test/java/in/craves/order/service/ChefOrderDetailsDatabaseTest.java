@@ -111,7 +111,8 @@ class ChefOrderDetailsDatabaseTest {
     @Test
     void chefFinishesAnOrderAfterClosingTheKitchenAndOtherChefsStillCannotSeeIt() {
         UUID id = placeOrder("note");
-        jdbc.update("UPDATE order_schema.customer_order SET status = 'CHEF_ACCEPTED' WHERE id = ?", id);
+        jdbc.update("UPDATE order_schema.customer_order SET status = 'CHEF_ACCEPTED', prep_time_minutes = 20, "
+            + "accepted_at = ?, ready_at = ? WHERE id = ?", Timestamp.from(T0), Timestamp.from(T0.plusSeconds(1200)), id);
         // Catalog refuses a closed kitchen; ownership comes from the order row, as in the chef order list.
         when(catalog.getKitchen(kitchen)).thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Kitchen is not active"));
 

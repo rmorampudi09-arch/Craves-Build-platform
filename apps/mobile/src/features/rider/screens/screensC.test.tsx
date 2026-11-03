@@ -342,12 +342,12 @@ describe('Payouts (17)', () => {
   it('shows the withdraw card, the next weekly payout and the paid list', async () => {
     await render(<PayoutsScreen />, seed());
     const text = allText();
-    expect(text).toContain('You can withdraw now | ₹822');
+    expect(text).toContain('Ready to pay out | ₹822');
     expect(text).toContain("Pay from trips more than 24 hours ago. Today's ₹414 can be withdrawn from tomorrow.");
     expect(text).toContain('Withdraw ₹822 | Free, once a day. Reaches you by 1 pm tomorrow.');
     expect(text).toContain('Next weekly payout: Mon 26 Oct, by 3 pm');
     expect(text).toContain('Your whole balance goes to UPI ••••@okhdfc. No minimum amount.');
-    expect(text).toContain('Paid | Week of 12 to 18 Oct | ₹3,240 | Paid | Mon 19 Oct, 11:20 am | Bank ref (UTR) 629318472051');
+    expect(text).toContain('Past payouts | Week of 12 to 18 Oct | ₹3,240 | Paid | Mon 19 Oct, 11:20 am | Bank ref (UTR) 629318472051');
     expect(text).toContain('Craves never takes fees, deposits or penalties from your pay.');
   });
 
@@ -397,7 +397,7 @@ describe('Payouts (17)', () => {
     const processing = {payoutId: 'w1', periodLabel: 'Withdrawal', amountPaise: 82200, status: 'PROCESSING' as const};
     await render(<PayoutsScreen />, seed({}, {withdrawablePaise: 0, payouts: [processing]}));
     expect(allText()).toContain('On the way | Withdrawal | ₹822 | Processing');
-    expect(allText()).toContain('Paid | No payouts yet |');
+    expect(allText()).toContain('Past payouts | No payouts yet |');
     expect(has('rider-withdraw')).toBe(false);
   });
 
@@ -426,7 +426,8 @@ describe('SOS (18)', () => {
     await settle();
     expect(riderApi.sendSos).toHaveBeenCalledWith({tripId: 't1', fix: expect.objectContaining({lat: 17.4615})});
     const text = allText();
-    expect(text).toContain('Emergency | Stop somewhere safe first if you can. | Craves ops has your location');
+    expect(text).toContain('SOS | Pick what you need. Stop somewhere safe first if you can. | Craves ops has your location');
+    expect(text).toContain('Ops phone +910000000000, whenever riders are online. A false alarm costs nothing.');
     expect(text).toContain('Call 112 | Police, fire, ambulance');
     expect(text).toContain("If you've had an accident | Ops calls you back within 15 minutes.");
     await press('rider-sos-ops');
@@ -749,7 +750,11 @@ describe('Help (21)', () => {
   it('offers a person to talk to, the questions and the last three trips', async () => {
     await render(<HelpScreen />, [[riderKeys.me, me], [riderKeys.earnings('week'), week(recent)]]);
     const text = allText();
-    expect(text).toContain('Talk to a person | Rider support answers in every slot, in Telugu, Hindi or English. | Call rider support');
+    expect(text).toContain('A person answers | No bot, no ticket number you have to chase. | Call Craves ops');
+    expect(text).toContain('Open while riders are online. Telugu, Hindi and English.');
+    expect(text).toContain('Not happy with an answer? | Write to the grievance officer. They must reply within 30 days');
+    await press('rider-help-grievance');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Terms', {mode: 'view'});
     expect(text).toContain("Open the riders' WhatsApp group");
     expect(text).toContain('Do I lose anything if I decline an offer? | No. Declining, or letting an offer run out, is free');
     expect(text).not.toContain('Every Monday by 3 pm');

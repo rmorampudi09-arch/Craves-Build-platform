@@ -84,15 +84,17 @@ export const en = {
   },
   signIn: {
     brand: 'Craves Riders',
-    title: 'Enter your mobile number',
-    phoneLabel: 'Mobile number',
-    phoneHint: "We'll send a 6-digit code by SMS.",
+    title: 'Deliver home-cooked food in Hyderabad',
+    phoneLabel: 'Your mobile number',
+    phoneHint: 'We send a 6-digit code by SMS. No app fee, ever.',
+    pitch: 'Pay shown before every order. Say no to any order for free. Paid every Monday, withdraw any day.',
+    agree: 'By continuing you agree to the rider terms. New here? The same number starts your application.',
     invalidPhone: 'Enter a 10-digit mobile number.',
     sendCode: 'Send code',
     otpTitle: 'Enter the code',
     otpSentTo: (phone: string) => `Sent by SMS to ${phone}.`,
     changeNumber: 'Change number',
-    otpLabel: '6-digit code',
+    otpLabel: 'Code from the SMS',
     verify: 'Verify',
     resend: 'Resend code',
     resendIn: (seconds: number) => `Resend code in ${seconds}s`,
@@ -103,13 +105,21 @@ export const en = {
   },
   account: {
     headerBlocked: 'Your account',
+    updateBody: (current: string, needed: string) => `You have version ${current}. Version ${needed} or newer is needed to go online. Your sign-in, trips and earnings stay as they are.`,
+    whatsNewTitle: 'What is new',
+    whatsNew: [
+      'A map preview on every offer, so you see where the kitchen is before you accept.',
+      '"Reached the kitchen?" asks you when you arrive, so you tap less.',
+      'Back to Craves and the next step, right in the notification while Google Maps is open.',
+      'Book your own peak slots under Slots.',
+    ],
     checkAgain: 'Check again',
     ratesChecked: (time: string) => `Checked at ${time}. No pay rates yet.`,
     titles: {
       RATES_PENDING: 'Pay rates are on the way',
       SUSPENDED: 'Your account is paused',
       DEACTIVATED: 'Your account is closed',
-      UPDATE_REQUIRED: 'Update the app to continue',
+      UPDATE_REQUIRED: 'Please update the app before your next shift',
     },
     bodies: {
       RATES_PENDING: "Craves publishes its rate card before anyone can go online. You'll read and accept it here as soon as it's out.",
@@ -193,8 +203,11 @@ export const en = {
       sendAll: (total: number) => `Send all ${total} photos to go on.`,
       toPayout: 'Next: payout account',
       send: 'Send application',
-      sentTitle: 'Application sent',
-      sentBody: "Ops checks every application by hand, usually within a day. You don't need to do anything now; the result shows here.",
+      sentTitle: 'Your application',
+      sentBody: 'A person at Craves checks each document, usually within a day. No fee, no deposit. The result shows here.',
+      approvedCount: (done: number, total: number) => `${done} of ${total} approved`,
+      whileYouWait: 'While you wait: read the rate card, so you can go online the moment you are approved.',
+      readRateCard: 'Read the rate card',
       stepSent: 'Application sent',
       stepCheck: 'Ops checks your documents',
       stepCheckBody: 'Usually within a day',
@@ -235,6 +248,9 @@ export const en = {
     title: 'Terms and rate card',
     language: 'Language',
     version: (version: string, from: string) => `Version ${version}, in force from ${from}`,
+    changesAhead: 'Any change is shown here 14 days before it starts, as the Telangana Gig Workers Act requires.',
+    seePay: 'You see your pay before you accept, and you can decline any order with no penalty.',
+    coverAndAccount: 'Accident cover starts on your first online day. Your account can only be paused or ended by a person, with written reasons, 7 days\' notice and a chance to answer.',
     draft: 'Draft pricing, not final',
     whatChanged: 'What changed',
     rateCard: 'Rate card',
@@ -251,6 +267,7 @@ export const en = {
     welcome: 'One last step before your first order: read how you are paid, then accept.',
     // How you get orders (Phase 4, OfferRules).
     rulesTitle: 'How you get orders',
+    rulesLink: 'See how you get orders',
     rulesOneAtATime: (seconds: number) => `Each order goes to one rider at a time. You get ${seconds} seconds to decide.`,
     rulesAtOnce: (count: number, seconds: number) =>
       `Each order goes to ${count} riders at once. You get ${seconds} seconds, and the first to accept gets it.`,
@@ -270,6 +287,8 @@ export const en = {
   },
   setup: {
     title: 'Phone setup',
+    heading: 'Make sure offers reach you',
+    canGoOnlineWith: (required: number, total: number) => `You can go online with ${required} of ${total}: location and notifications. Home shows which ones are still off.`,
     intro:
       'Do this once so offers reach you, even with the screen off. Xiaomi, Oppo, Vivo and Realme phones close apps to save battery unless you allow them.',
     progress: (done: number, total: number) => `${done} of ${total} done`,
@@ -383,9 +402,10 @@ export const en = {
     stopHeadingHome: 'Stop heading home',
   },
   goOnline: {
-    title: 'Quick selfie to go online',
+    title: 'A quick selfie, then you\'re online',
     close: 'Close',
-    heading: 'Take off your helmet and look at the camera',
+    notNow: 'Not now, stay offline',
+    heading: 'Face the camera in daylight or under a light. No helmet, no mask.',
     why: "Ops checks it's you. Customers never see this photo.",
     shutter: 'Take selfie',
     goingOnline: 'Going online…',
@@ -659,8 +679,7 @@ export const en = {
   payouts: {
     emptyHint: 'Each payout shows here with its bank reference (UTR).',
     title: 'Payouts',
-    canWithdraw: 'You can withdraw now',
-    // The server decides what is withdrawable; this only explains the 24-hour rule.
+    canWithdraw: 'Ready to pay out',
     withdrawNote: (today?: string) =>
       today
         ? `Pay from trips more than 24 hours ago. Today's ${today} can be withdrawn from tomorrow.`
@@ -673,13 +692,14 @@ export const en = {
     next: (day: string) => `Next weekly payout: ${day}, by 3 pm`,
     nextBody: (account?: string) =>
       `Your whole balance goes to ${account ?? 'your payout account'}. No minimum amount.`,
-    paid: 'Paid',
+    paid: 'Past payouts',
     onTheWay: 'On the way',
     notStarted: 'Payouts will appear here once they start.',
     empty: 'No payouts yet',
     utr: (utr: string) => `Bank ref (UTR) ${utr}`,
     status: {SCHEDULED: 'Scheduled', PROCESSING: 'Processing', PAID: 'Paid', FAILED: 'Failed'},
     noFees: 'Craves never takes fees, deposits or penalties from your pay.',
+    failedNote: 'A payout that fails (wrong account, bank down) is retried the next working day and shown here with the bank\'s reason. Changing the bank account is done in person with ops, for your safety.',
   },
   profile: {
     title: 'Profile',
@@ -731,11 +751,15 @@ export const en = {
   help: {
     noTripsHint: 'Trips from the last 7 days show here, so you can report a problem with one.',
     title: 'Help',
-    talkTitle: 'Talk to a person',
-    talkBody: 'Rider support answers in every slot, in Telugu, Hindi or English.',
-    callSupport: 'Call rider support',
+    talkTitle: 'A person answers',
+    talkBody: 'No bot, no ticket number you have to chase.',
+    callSupport: 'Call Craves ops',
     whatsapp: "Open the riders' WhatsApp group",
-    faqTitle: 'Common questions',
+    hours: 'Open while riders are online. Telugu, Hindi and English.',
+    grievanceTitle: 'Not happy with an answer?',
+    grievanceBody: 'Write to the grievance officer. They must reply within 30 days, and the Telangana welfare board portal is the step after that.',
+    grievanceLink: 'Write to the grievance officer',
+    faqTitle: 'Riders ask most',
     faqs: [
       {
         q: 'Do I lose anything if I decline an offer?',
@@ -764,9 +788,9 @@ export const en = {
   },
   sos: {
     callsOnly: 'Calls work any time. Your location goes to ops once your rider account is active.',
-    title: 'Emergency',
-    note: 'Stop somewhere safe first if you can.',
-    callOps: 'Call Craves ops',
+    title: 'SOS',
+    note: 'Pick what you need. Stop somewhere safe first if you can.',
+    callOps: 'Call Craves ops now',
     call112: 'Call 112',
     call112Sub: 'Police, fire, ambulance',
     sharing: 'Sending your location to Craves ops…',
@@ -777,6 +801,7 @@ export const en = {
     accidentBody:
       'Ops calls you back within 15 minutes. Craves pays the first hospital bill and files the insurance claim for you. Your booked slots are paid while you recover.',
     close: 'Close',
+    opsLine: (phone: string) => `Ops phone ${phone}, whenever riders are online. A false alarm costs nothing.`,
   },
   notice: {
     title: 'Notice',

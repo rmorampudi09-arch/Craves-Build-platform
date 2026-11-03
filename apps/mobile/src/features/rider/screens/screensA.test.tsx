@@ -513,7 +513,7 @@ describe('Account status and the application', () => {
       await flush();
       const text = allText();
       expect(text).toContain('Your application | Not active yet');
-      expect(text).toContain('Application sent | Ops checks every application by hand, usually within a day.');
+      expect(text).toContain('Your application | A person at Craves checks each document, usually within a day. No fee, no deposit. The result shows here.');
       expect(text).toContain('Sent ra****@okaxis. | Checking');
     });
   });
@@ -530,7 +530,8 @@ describe('Account status and the application', () => {
         // The current step shows its number in its circle.
         "Application sent | 2 | Ops checks your documents | Usually within a day | You're approved | Then you accept your pay terms, set up your phone and go online.",
       );
-      expect(text).toContain('What you sent | Driving licence | Checking');
+      expect(text).toContain('1 of 7 approved | Driving licence | Checking');
+      expect(text).toContain('While you wait: read the rate card, so you can go online the moment you are approved. | Read the rate card');
       expect(text).toContain('Bank proof | Name matches');
       expect(text).toContain('Your details | Name | Ravi Kumar');
       expect(tree.root.findAll(node => String(node.props.testID).startsWith('rider-upload-'))).toHaveLength(0);
@@ -809,7 +810,8 @@ describe('Account status and the application', () => {
 
     it('asks for an update when the app is too old', async () => {
       await render(<AccountStatusScreen />, [[riderKeys.me, {...me, minAppVersion: '9.0.0'}]]);
-      expect(allText()).toContain('Update the app to continue');
+      expect(allText()).toContain('Please update the app before your next shift | You have version');
+      expect(allText()).toContain('What is new | A map preview on every offer');
       expect(allText()).not.toContain('Disagree?');
     });
   });
@@ -990,12 +992,15 @@ describe('Phone setup', () => {
     (riderDevice.state as jest.Mock).mockResolvedValueOnce(device('xiaomi'));
     await render(<PhoneSetupScreen {...props} />);
     const text = allText();
-    expect(text).toContain('4 of 7 done');
+    expect(text).toContain('Make sure offers reach you');
+    expect(text).toContain('4 of 6 done');
+    expect(text).toContain('Test ring | Your phone rings and vibrates the way it does for an offer.');
+    expect(text).toContain('You can go online with 2 of 6: location and notifications. Home shows which ones are still off.');
     expect(text).toContain('On your Xiaomi: open Security, then Permissions, then Autostart, and turn on Craves Riders.');
     expect(text).toContain('Open recent apps, press and hold the Craves Riders card, then tap the lock.');
     expect(text).not.toContain('Allow location');
     await act(async () => tree.root.findByProps({label: "I've locked it"}).props.onPress());
-    expect(allText()).toContain('5 of 7 done');
+    expect(allText()).toContain('5 of 6 done');
   });
 
   it('advises showing offers over the lock screen, never needs it to go online, and opens its settings', async () => {
@@ -1004,7 +1009,7 @@ describe('Phone setup', () => {
     expect(allText()).toContain(
       'Show offers over the lock screen | Recommended | Tap the button and allow full screen notifications for Craves Riders.',
     );
-    expect(allText()).toContain('3 of 7 done');
+    expect(allText()).toContain('3 of 6 done');
     expect(press('rider-setup-done')).toBeTruthy();
     await act(async () => tree.root.findByProps({label: 'Allow over the lock screen'}).props.onPress());
     expect(riderDevice.openFullScreenSettings).toHaveBeenCalled();
@@ -1245,7 +1250,7 @@ describe('Go online', () => {
   it('explains the selfie, then starts the shift with the front-camera photo', async () => {
     (riderApi.startShift as jest.Mock).mockResolvedValueOnce(shift);
     const client = await render(<GoOnlineScreen {...props} />, [[riderKeys.home, {online: false, todayEarningsPaise: 0, todayTrips: 0}]]);
-    expect(allText()).toContain('Take off your helmet and look at the camera');
+    expect(allText()).toContain("A quick selfie, then you're online | Face the camera in daylight or under a light. No helmet, no mask.");
     expect(allText()).toContain("Ops checks it's you. Customers never see this photo.");
     await act(async () => press('rider-selfie-shutter').props.onPress());
     expect(ImagePicker.launchCameraAsync).toHaveBeenCalledWith(expect.objectContaining({cameraType: 'front'}));

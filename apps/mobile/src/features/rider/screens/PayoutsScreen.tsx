@@ -108,6 +108,7 @@ export function PayoutsScreen() {
             {p.paid}
           </Text>
           {paid.length ? paid.map(card) : <StateCard icon="wallet" title={p.empty} body={p.emptyHint} testID="rider-payouts-empty" />}
+          <Text style={styles.meta}>{p.failedNote}</Text>
           <Text style={[styles.meta, styles.centred]}>{p.noFees}</Text>
         </>
       ) : payouts.isError ? (

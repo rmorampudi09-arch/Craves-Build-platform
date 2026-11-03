@@ -185,7 +185,6 @@ function SignedIn() {
             <Stack.Screen name="GoOnline" component={GoOnlineScreen} options={{presentation: 'fullScreenModal'}} />
             <Stack.Screen name="Help" component={HelpScreen} />
             <Stack.Screen name="Notice" component={NoticeScreen} />
-            <Stack.Screen name="Rules" component={RulesScreen} />
             <Stack.Screen name="AccountStatus" component={AccountStatusScreen} navigationKey={gate.kind} />
             <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} navigationKey={gate.kind} />
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
@@ -193,9 +192,11 @@ function SignedIn() {
           </>
         )}
         {gate.kind !== 'ready' ? (
-          // The account, terms and privacy screens show SOS and the demo chip too.
+          // The account, terms and privacy screens show SOS and the demo chip too, and can read the rate card and the rules.
           <>
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
+            {gate.kind === 'terms' ? null : <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} navigationKey={gate.kind} />}
+            <Stack.Screen name="Rules" component={RulesScreen} navigationKey={gate.kind} />
             {DEMO_PANEL ? <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} /> : null}
           </>
         ) : null}

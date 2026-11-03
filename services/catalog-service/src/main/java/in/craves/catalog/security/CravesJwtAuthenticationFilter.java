@@ -27,7 +27,18 @@ public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
         String bearerPrefix = "Bearer" + " ";
         String headerValue = request.getHeader(headerName);
         if (StringUtils.hasText(headerValue) && headerValue.startsWith(bearerPrefix)) {
-            CravesPrincipal principal = jwtVerifier.verify(headerValue.substring(bearerPrefix.length()));
+            CravesPrincipal principal;
+            try {
+                principal = jwtVerifier.verify(headerValue.substring(bearerPrefix.length()));
+            } catch (RuntimeException ex) {
+                // Verification runs before MVC error handling: answer 401 so the app renews its sign-in, never an empty 403 or a 500.
+                SecurityContextHolder.clearContext();
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setHeader("Cache-Control", "no-store");
+                response.setContentType("application/json");
+                response.getWriter().write("{\"code\":\"INVALID_ACCESS_TOKEN\",\"message\":\"A valid Craves access token is required.\"}");
+                return;
+            }
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 principal,
                 null,

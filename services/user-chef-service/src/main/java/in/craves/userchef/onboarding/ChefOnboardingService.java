@@ -52,6 +52,7 @@ public class ChefOnboardingService {
 
     public State mine(CurrentUser user) {
         requireApplicant(user);
+        applications.reopenIfErased(user.identityId());
         // Admins see everyone who signed in to the Chef application, with their sign-in phone, even before any save.
         jdbc.update("INSERT INTO chef_onboarding_visit(identity_id,phone_number) VALUES (?,?) ON CONFLICT (identity_id) " +
             "DO UPDATE SET phone_number=EXCLUDED.phone_number,last_seen_at=now()",user.identityId(),user.phoneNumber());
@@ -344,6 +345,7 @@ public class ChefOnboardingService {
 
     private void lock(CurrentUser user) {
         emailProjection.lockIdentity(user.identityId());
+        applications.reopenIfErased(user.identityId());
         jdbc.query("SELECT id FROM chef_application WHERE identity_id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),user.identityId());
     }
     private Draft find(UUID identityId,boolean lock) {

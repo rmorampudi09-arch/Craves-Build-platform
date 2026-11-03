@@ -61,6 +61,39 @@ public class ChefApplicationService {
         this(jdbcTemplate,storageService,authInternalClient,notificationInternalClient,emailProjection,false);
     }
 
+    /**
+     * Chef-side account erasure leaves the person's application row anonymised with erased_at set (a person has one
+     * row). When they apply again the same row becomes a fresh draft: pending, nothing submitted or reviewed, no saved
+     * details. Their old evidence is hidden from the new draft, not deleted: rows and blobs stay, with a history snapshot.
+     */
+    @Transactional
+    public void reopenIfErased(UUID identityId) {
+        List<UUID> reopened = jdbcTemplate.query(
+            "UPDATE chef_application SET status = 'PENDING', rejection_reason = NULL, reviewed_at = NULL, reviewed_by_identity_id = NULL, "
+                + "submitted_at = now(), erased_at = NULL, updated_at = now() WHERE identity_id = ? AND erased_at IS NOT NULL RETURNING id",
+            (rs, row) -> rs.getObject(1, UUID.class), identityId);
+        if (reopened.isEmpty()) {
+            return;
+        }
+        UUID applicationId = reopened.getFirst();
+        jdbcTemplate.update(
+            "INSERT INTO chef_onboarding_document_history(id,document_id,identity_id,action,snapshot) "
+                + "SELECT gen_random_uuid(),id,identity_id,'REOPENED_AFTER_ERASURE',to_jsonb(d) FROM chef_kyc_document d "
+                + "WHERE application_id = ? AND removed_at IS NULL", applicationId);
+        jdbcTemplate.update("UPDATE chef_kyc_document SET removed_at = now(), updated_at = now() WHERE application_id = ? AND removed_at IS NULL", applicationId);
+        // Only the language is kept: it is not personal and the form needs one. An application saved before the new
+        // onboarding has no draft row yet, so this makes one.
+        jdbcTemplate.update(
+            "INSERT INTO chef_onboarding_draft(identity_id, application_id, details) VALUES (?, ?, '{}'::jsonb) "
+                + "ON CONFLICT (identity_id) DO UPDATE SET "
+                + "details = jsonb_strip_nulls(jsonb_build_object('language', chef_onboarding_draft.details->'language')), "
+                + "submitted = false, review_status = 'DRAFT', correction_reason = NULL, correction_sections = NULL, "
+                + "terms_version = NULL, terms_accepted_at = NULL, bank_enrollment_id = NULL, fssai_reviewed_number = NULL, "
+                + "fssai_reviewed_by = NULL, fssai_reviewed_at = NULL, fssai_review_evidence = NULL, "
+                + "version = chef_onboarding_draft.version + 1, updated_at = now()",
+            identityId, applicationId);
+    }
+
     @Transactional(readOnly = true)
     public ChefApplicationResponse getMyApplication(CurrentUser user) {
         List<ChefApplicationResponse> rows = findApplications("WHERE identity_id = ?", user.identityId());
@@ -73,6 +106,7 @@ public class ChefApplicationService {
     @Transactional
     public ChefApplicationResponse submitApplication(CurrentUser user, ChefApplicationRequest request) {
         emailProjection.lockIdentity(user.identityId());
+        reopenIfErased(user.identityId());
         String canonicalEmail = authInternalClient.requireVerifiedEmail(user.identityId(), request.email());
         List<String> statuses = jdbcTemplate.query(
               "SELECT status FROM chef_application WHERE identity_id = ? FOR UPDATE",
@@ -108,6 +142,7 @@ public class ChefApplicationService {
 
     @Transactional
     public KycDocumentResponse uploadDocument(CurrentUser user, KycDocumentType documentType, MultipartFile file) {
+        reopenIfErased(user.identityId());
         jdbcTemplate.query("SELECT id FROM chef_application WHERE identity_id=? FOR UPDATE",(rs,row)->rs.getObject(1,UUID.class),user.identityId());
         ChefApplicationResponse application = getExistingApplication(user.identityId());
         if(Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE application_id=? AND submitted AND review_status<>'MORE_INFORMATION_REQUIRED')",Boolean.class,application.id())))
@@ -120,12 +155,13 @@ public class ChefApplicationService {
         }
 
         List<ExistingDocument> existing = jdbcTemplate.query(
-            "SELECT id, status FROM chef_kyc_document WHERE application_id = ? AND document_type = ?",
-            (rs, rowNum) -> new ExistingDocument(rs.getObject("id", UUID.class), rs.getString("status")),
+            "SELECT id, status, removed_at IS NOT NULL AS removed FROM chef_kyc_document WHERE application_id = ? AND document_type = ?",
+            (rs, rowNum) -> new ExistingDocument(rs.getObject("id", UUID.class), rs.getString("status"), rs.getBoolean("removed")),
             application.id(),
             documentType.name()
         );
-        if (!existing.isEmpty() && "APPROVED".equals(existing.getFirst().status())) {
+        // A document hidden when an erased application was reopened is no longer accepted evidence.
+        if (!existing.isEmpty() && "APPROVED".equals(existing.getFirst().status()) && !existing.getFirst().removed()) {
             throw ApiException.conflict(
                 "CHEF_DOCUMENT_ALREADY_APPROVED",
                 "An approved Chef document stays accepted and cannot be replaced unless the application is reopened through a controlled process"
@@ -420,5 +456,5 @@ public class ChefApplicationService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    private record ExistingDocument(UUID id, String status) {}
+    private record ExistingDocument(UUID id, String status, boolean removed) {}
 }

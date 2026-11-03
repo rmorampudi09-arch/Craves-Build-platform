@@ -2,8 +2,10 @@ package in.craves.integration.erasure;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.erasure.AccountErasureDtos.Blocker;
 import in.craves.integration.erasure.AccountErasureDtos.ErasureResponse;
 import in.craves.integration.erasure.AccountErasureDtos.Scope;
@@ -41,12 +43,14 @@ class AccountErasureDatabaseTest {
          "notes":{"craves_checkout_id":"%s","craves_customer_identity_id":"%s","customer_name":"Real Person"}}""";
     private static final String CASHFREE_WEBHOOK = """
         {"data":{"order":{"order_id":"%s","order_amount":433.10,"order_currency":"INR"},
-         "payment":{"cf_payment_id":"7001","payment_status":"SUCCESS","payment_amount":433.10,"payment_currency":"INR"},
+         "payment":{"cf_payment_id":"7001","payment_status":"SUCCESS","payment_amount":433.10,"payment_currency":"INR",
+                    "payment_method":{"upi":{"channel":"collect","upi_id":"9876543210@ybl"}}},
          "customer_details":{"customer_name":"Real Person","customer_id":"%s","customer_email":"real.person@example.com",
                              "customer_phone":"9876543210"}},"type":"PAYMENT_SUCCESS_WEBHOOK"}""";
     private static final String RAZORPAY_WEBHOOK = """
         {"event":"payment.captured","payload":{"payment":{"entity":{"id":"pay_7001","order_id":"%s","status":"captured",
          "amount":43310,"currency":"INR","email":"real.person@example.com","contact":"+919876543210",
+         "vpa":"9876543210@okaxis","card":{"last4":"1234","network":"Visa"},
          "notes":{"customer_name":"Real Person"}}}}}""";
     private static final String CASHFREE_RESPONSE = """
         {"order_id":"%s","cf_order_id":"3001","order_status":"ACTIVE","order_amount":433.10,"payment_session_id":"session_abc",
@@ -54,6 +58,20 @@ class AccountErasureDatabaseTest {
                              "customer_phone":"9876543210"}}""";
     private static final String RAZORPAY_RESPONSE = """
         {"id":"%s","amount":43310,"currency":"INR","status":"created","notes":{"customer_name":"Real Person"}}""";
+    /** What Craves stores for a delivery: the command, with the pickup (kitchen) and the customer's drop-off. */
+    private static final String DELIVERY_COMMAND = """
+        {"commandId":"%s","orderId":"%s","chefSubOrderId":"%s","area":"Madhapur","deliveryRequest":{"matter":"Food","declaredGoodsValue":433.10,
+         "pickup":{"address":"Kitchen road 1","contactName":"Chef Kitchen","contactPhone":"8888888888","latitude":17.4,"longitude":78.4},
+         "dropoff":{"address":"12 Real Street, Flat 4","contactName":"Real Person","contactPhone":"9876543210","latitude":17.4412345,
+           "longitude":78.3912345,"note":"Gate code 1234","addressLine1":"12 Real Street","addressLine2":"Flat 4",
+           "landmark":"Near Real Temple","area":"Madhapur","city":"Hyderabad","state":"Telangana","postalCode":"500081","country":"India"}}}""";
+    /** A Borzo order as the provider returns it: the kitchen is point 0, the customer point 1, the rider is the courier. */
+    private static final String BORZO_ORDER = """
+        {"order":{"order_id":%d,"status":"active","payment_amount":"150.00","courier":{"name":"Rider Name","phone":"7777777777"},
+          "points":[{"address":"Kitchen road 1","contact_person":{"name":"Chef Kitchen","phone":"8888888888"},"latitude":"17.4","longitude":"78.4"},
+            {"address":"12 Real Street, Flat 4","contact_person":{"name":"Real Person","phone":"9876543210"},"latitude":"17.4412345",
+             "longitude":"78.3912345","note":"Gate code 1234","building_number":"12","delivery_id":11712,
+             "tracking_url":"https://tracking.example/11712","delivery":{"status":"parcel_picked_up"}}]}}""";
     private static final String[] PERSONAL = {"Real Person", "9876543210", "real.person@example.com"};
     /** Legal records and everything of someone else's: a chef erase, a blocked erase and the other side never change them. */
     private static final List<String> MONEY_TABLES = List.of(
@@ -62,10 +80,14 @@ class AccountErasureDatabaseTest {
         "finance_bank_request", "chef_earning_entry", "chef_referral_posting");
     /** What a CUSTOMER erase may change, besides the personal fields. */
     private static final List<String> CUSTOMER_TABLES = List.of(
-        "payment_order", "refund", "payment_attempt", "payment_event", "webhook_inbox", "cashfree_webhook_delivery", "fleet_schema.trip");
+        "payment_order", "refund", "payment_attempt", "payment_event", "webhook_inbox", "cashfree_webhook_delivery", "fleet_schema.trip",
+        "fleet_schema.trip_event", "delivery_schema.delivery_command", "delivery_schema.delivery_assignment",
+        "delivery_schema.delivery_assignment_candidate", "delivery_schema.delivery_job", "delivery_schema.delivery_event",
+        "delivery_schema.delivery_webhook_inbox");
     private static final List<String> ALL_TABLES = java.util.stream.Stream.concat(MONEY_TABLES.stream(), CUSTOMER_TABLES.stream()).toList();
     private static final Set<String> COUNT_KEYS = Set.of(
-        "payment_order", "payment_attempt", "payment_event", "webhook_inbox", "cashfree_webhook_delivery", "fleet_trip");
+        "payment_order", "payment_attempt", "payment_event", "webhook_inbox", "cashfree_webhook_delivery", "fleet_trip", "fleet_trip_event",
+        "delivery_command", "delivery_assignment", "delivery_assignment_candidate", "delivery_job", "delivery_event", "delivery_webhook_inbox");
 
     static JdbcTemplate jdbc;
     static TransactionTemplate tx;
@@ -89,7 +111,7 @@ class AccountErasureDatabaseTest {
 
     @BeforeEach
     void setup() {
-        service = new AccountErasureService(jdbc);
+        service = new AccountErasureService(jdbc, new ObjectMapper());
     }
 
     // ---- fixtures -------------------------------------------------------------------------------------------
@@ -158,13 +180,67 @@ class AccountErasureDatabaseTest {
         return id;
     }
 
-    /** One fleet trip for a checkout; the customer's name and phone are the columns under test, the rider's are not. */
     private static UUID trip(UUID checkout, String state) {
+        return trip(checkout, state, UUID.randomUUID(), "Near Real Temple");
+    }
+
+    /** One fleet trip for a checkout; the customer's name, phone and drop-off are the columns under test, the rider's are not. */
+    private static UUID trip(UUID checkout, String state, UUID chefSubOrder, String landmark) {
         UUID id = UUID.randomUUID();
         seed("INSERT INTO fleet_schema.trip(id,chef_sub_order_id,order_id,chef_id,order_code,state,items_count,kitchen_name,kitchen_area,kitchen_address,"
-            + "kitchen_lat,kitchen_lng,chef_phone,customer_first_name,customer_phone,drop_area,drop_address,drop_lat,drop_lng)"
-            + " VALUES (?,?,?,?,'#ABCDEF12',?,2,'Kitchen','Area','Kitchen road',17.4,78.4,'8888888888','Real','9876543210','Drop area','Drop road',17.5,78.5)",
-            id, UUID.randomUUID(), checkout, UUID.randomUUID(), state);
+            + "kitchen_lat,kitchen_lng,chef_phone,customer_first_name,customer_phone,drop_area,drop_address,drop_landmark,drop_lat,drop_lng)"
+            + " VALUES (?,?,?,?,'#ABCDEF12',?,2,'Kitchen','Area','Kitchen road',17.4,78.4,'8888888888','Real','9876543210','Drop area',"
+            + "'12 Real Street, Flat 4',?,17.4412345,78.3912345)", id, chefSubOrder, checkout, UUID.randomUUID(), state, landmark);
+        return id;
+    }
+
+    private static void tripEvent(UUID trip, String detail) {
+        seed("INSERT INTO fleet_schema.trip_event(id,trip_id,kind,actor_type,detail) VALUES (?,?,'FAILED','RIDER',?::jsonb)", UUID.randomUUID(), trip, detail);
+    }
+
+    private static UUID job(UUID checkout, UUID chefSubOrder, String status, String snapshot) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO delivery_schema.delivery_job(id,chef_sub_order_id,order_id,provider_id,provider_delivery_id,status,quote_snapshot)"
+            + " VALUES (?,?,?,'borzo',?,?,?::jsonb)", id, chefSubOrder, checkout, "borzo-" + id, status, snapshot);
+        return id;
+    }
+
+    private static UUID command(UUID checkout, UUID chefSubOrder, String status) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO delivery_schema.delivery_command(id,chef_sub_order_id,order_id,command_type,status,dispatch_at,idempotency_key,payload)"
+            + " VALUES (?,?,?,'QUOTE_AND_CREATE',?,now(),?,?::jsonb)", id, chefSubOrder, checkout, status, "cmd/" + id,
+            DELIVERY_COMMAND.formatted(id, checkout, chefSubOrder));
+        return id;
+    }
+
+    private static UUID assignment(UUID checkout, UUID chefSubOrder) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO delivery_schema.delivery_assignment(id,chef_sub_order_id,order_id,strategy,status,scoring_version,request_context)"
+            + " VALUES (?,?,?,'GREEDY','ASSIGNED','test',?::jsonb)", id, chefSubOrder, checkout,
+            "{\"area\":\"Madhapur\",\"distanceKm\":2.5,\"candidates\":[{\"providerId\":\"borzo\",\"providerMetadata\":"
+                + BORZO_ORDER.formatted(1250032) + "}]}");
+        return id;
+    }
+
+    private static UUID candidate(UUID assignment) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO delivery_schema.delivery_assignment_candidate(id,assignment_id,provider_id,candidate_rank,predicted_success_probability,"
+            + "combined_score,stored_avg,momentum,exploration_sample,provider_quality_score,proximity_score,final_score,status,provider_metadata)"
+            + " VALUES (?,?,'borzo',1,0.5,50,50,'STABLE',0.5,50,50,50,'RANKED',?::jsonb)", id, assignment, BORZO_ORDER.formatted(1250032));
+        return id;
+    }
+
+    private static UUID deliveryEvent(UUID job, String payload) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO delivery_schema.delivery_event(id,delivery_job_id,provider_id,provider_event_id,event_type,normalized_status,payload,occurred_at,source)"
+            + " VALUES (?,?,'borzo',?,'order_changed','PICKED_UP',?::jsonb,now(),'WEBHOOK')", id, job, "evt/" + id, payload);
+        return id;
+    }
+
+    private static UUID deliveryInbox(UUID job, String status, String body) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO delivery_schema.delivery_webhook_inbox(id,provider_id,provider_event_id,processing_status,raw_payload,delivery_job_id)"
+            + " VALUES (?,'borzo',?,?,?::jsonb,?)", id, "inb/" + id, status, body, job);
         return id;
     }
 
@@ -428,8 +504,11 @@ class AccountErasureDatabaseTest {
         Map<String, String> afterFirst = snapshots(ALL_TABLES);
         ErasureResponse second = erase(customer, Scope.ALL);
 
-        assertEquals(Map.of("payment_order", 1, "payment_attempt", 1, "payment_event", 1, "webhook_inbox", 1,
-            "cashfree_webhook_delivery", 1, "fleet_trip", 1), first.counts());
+        Map<String, Integer> expected = new java.util.HashMap<>();
+        COUNT_KEYS.forEach(k -> expected.put(k, 0));
+        expected.putAll(Map.of("payment_order", 1, "payment_attempt", 1, "payment_event", 1, "webhook_inbox", 1,
+            "cashfree_webhook_delivery", 1, "fleet_trip", 1));
+        assertEquals(expected, first.counts());
         assertEquals("DONE", second.status());
         assertAllZero(second);
         assertEquals(afterFirst, snapshots(ALL_TABLES));
@@ -552,6 +631,11 @@ class AccountErasureDatabaseTest {
         final List<UUID> deliveryInFlight = new ArrayList<>();
         final List<UUID> tripsFinished = new ArrayList<>();
         UUID tripActive;
+        UUID chefSubOrderOfFleetTrip;
+        UUID job, command, commandFleet, assignment, candidate, deliveryEvt, deliveryInboxProcessed, deliveryInboxDead;
+        UUID jobActive, commandActive, assignmentActive, candidateActive, deliveryEvtActive, deliveryInboxActive;
+        UUID commandNotStarted, deliveryInboxReceived, deliveryInboxFailed;
+        UUID tripEventFinished, tripEventActive;
         // Rows that must stay as they are: still being handled.
         List<UUID> inFlightInbox() {
             return List.of(inboxReceived, inboxPending);
@@ -592,18 +676,56 @@ class AccountErasureDatabaseTest {
             sc.deliveryInFlight.add(delivery(status, CASHFREE_WEBHOOK.formatted(paidRef, owner)));
         }
         sc.deliveryPending = delivery("COMPLETED", CASHFREE_WEBHOOK.formatted(pendingRef, owner));
-        for (String state : List.of("DELIVERED", "FAILED", "CANCELLED")) {
-            sc.tripsFinished.add(trip(paidCheckout, state));
-        }
+        // The first finished trip is the one the Craves fleet delivered for chef order cs3; the FAILED one has no landmark.
+        sc.chefSubOrderOfFleetTrip = UUID.randomUUID();
+        sc.tripsFinished.add(trip(paidCheckout, "DELIVERED", sc.chefSubOrderOfFleetTrip, "Near Real Temple"));
+        sc.tripsFinished.add(trip(paidCheckout, "FAILED", UUID.randomUUID(), null));
+        sc.tripsFinished.add(trip(paidCheckout, "CANCELLED", UUID.randomUUID(), "Near Real Temple"));
         sc.tripActive = trip(paidCheckout, "PICKED_UP");
+        String note = "{\"reason\":\"CUSTOMER_UNREACHABLE\",\"callsMade\":3,\"note\":\"Real Person was not at 12 Real Street, called 9876543210\"}";
+        tripEvent(sc.tripsFinished.get(0), note);
+        tripEvent(sc.tripActive, note);
+        sc.tripEventFinished = jdbc.queryForObject("SELECT id FROM fleet_schema.trip_event WHERE trip_id=?", UUID.class, sc.tripsFinished.get(0));
+        sc.tripEventActive = jdbc.queryForObject("SELECT id FROM fleet_schema.trip_event WHERE trip_id=?", UUID.class, sc.tripActive);
+        // cs1: a delivered Borzo order with all its records; cs2: one still searching for a rider; cs3: delivered by the fleet,
+        // no provider job; cs4: a command that has not run yet.
+        UUID cs1 = UUID.randomUUID();
+        UUID cs2 = UUID.randomUUID();
+        UUID cs4 = UUID.randomUUID();
+        sc.job = job(paidCheckout, cs1, "DELIVERED", "{\"providerId\":\"borzo\",\"delivery\":{\"providerMetadata\":" + BORZO_ORDER.formatted(1250032) + "}}");
+        sc.command = command(paidCheckout, cs1, "COMPLETED");
+        sc.assignment = assignment(paidCheckout, cs1);
+        sc.candidate = candidate(sc.assignment);
+        sc.deliveryEvt = deliveryEvent(sc.job, BORZO_ORDER.formatted(1250032));
+        sc.deliveryInboxProcessed = deliveryInbox(sc.job, "PROCESSED", BORZO_ORDER.formatted(1250032));
+        sc.deliveryInboxDead = deliveryInbox(sc.job, "DEAD_LETTER", BORZO_ORDER.formatted(1250032));
+        sc.deliveryInboxReceived = deliveryInbox(sc.job, "RECEIVED", BORZO_ORDER.formatted(1250032));
+        sc.deliveryInboxFailed = deliveryInbox(sc.job, "FAILED", BORZO_ORDER.formatted(1250032));
+        sc.jobActive = job(paidCheckout, cs2, "SEARCHING", "{\"delivery\":{\"providerMetadata\":" + BORZO_ORDER.formatted(1250033) + "}}");
+        sc.commandActive = command(paidCheckout, cs2, "COMPLETED");
+        sc.assignmentActive = assignment(paidCheckout, cs2);
+        sc.candidateActive = candidate(sc.assignmentActive);
+        sc.deliveryEvtActive = deliveryEvent(sc.jobActive, BORZO_ORDER.formatted(1250033));
+        sc.deliveryInboxActive = deliveryInbox(sc.jobActive, "PROCESSED", BORZO_ORDER.formatted(1250033));
+        sc.commandFleet = command(paidCheckout, sc.chefSubOrderOfFleetTrip, "COMPLETED");
+        sc.commandNotStarted = command(paidCheckout, cs4, "SCHEDULED");
         return sc;
     }
 
     /** What the same text looks like once the person's fields are replaced and nothing else is. */
     private static String erased(String text) {
-        return text.replace("+919876543210", AccountErasureService.ERASED_PHONE).replace("9876543210", AccountErasureService.ERASED_PHONE)
+        return text.replace("9876543210@ybl", AccountErasureService.ERASED_UPI_ID).replace("9876543210@okaxis", AccountErasureService.ERASED_UPI_ID)
+            .replace("+919876543210", AccountErasureService.ERASED_PHONE).replace("9876543210", AccountErasureService.ERASED_PHONE)
             .replace("Real Person", AccountErasureService.ERASED_NAME)
             .replace("real.person@example.com", AccountErasureService.ERASED_EMAIL);
+    }
+
+    /** The same for a delivery record: the customer's drop-off goes, the kitchen, the rider, amounts and ids stay. */
+    private static String erasedDrop(String text) {
+        return text.replace("12 Real Street, Flat 4", "[deleted]").replace("12 Real Street", "[deleted]").replace("Flat 4", "[deleted]")
+            .replace("Near Real Temple", "[deleted]").replace("Gate code 1234", "[deleted]").replace("500081", "000000")
+            .replace("17.4412345", "0").replace("78.3912345", "0").replace("\"building_number\": \"12\"", "\"building_number\": \"[deleted]\"")
+            .replace("9876543210", AccountErasureService.ERASED_PHONE).replace("Real Person", AccountErasureService.ERASED_NAME);
     }
 
     private static void assertErased(String table, String column, UUID id, String before) {
@@ -613,7 +735,7 @@ class AccountErasureDatabaseTest {
     }
 
     private static String tripWithoutPersonalColumns(UUID id) {
-        return jdbc.queryForObject("SELECT (to_jsonb(t) - 'customer_first_name' - 'customer_phone')::text FROM fleet_schema.trip t WHERE id=?", String.class, id);
+        return jdbc.queryForObject("SELECT (to_jsonb(t) - 'customer_first_name' - 'customer_phone' - 'drop_address' - 'drop_landmark' - 'drop_lat' - 'drop_lng')::text FROM fleet_schema.trip t WHERE id=?", String.class, id);
     }
 
     @Test
@@ -676,6 +798,12 @@ class AccountErasureDatabaseTest {
         }
         assertEquals(attemptMoneyBefore, jdbc.queryForObject("SELECT concat_ws('|',cf_payment_id,payment_status,payment_amount,payment_currency,provider,payment_order_id)"
             + " FROM payment_schema.payment_attempt WHERE id=?", String.class, mine.attemptPaid));
+        assertEquals(AccountErasureService.ERASED_UPI_ID, jdbc.queryForObject(
+            "SELECT raw_payload->'data'->'payment'->'payment_method'->'upi'->>'upi_id' FROM payment_schema.payment_attempt WHERE id=?", String.class, mine.attemptPaid));
+        assertEquals(AccountErasureService.ERASED_UPI_ID, jdbc.queryForObject(
+            "SELECT raw_payload->'payload'->'payment'->'entity'->>'vpa' FROM payment_schema.payment_event WHERE id=?", String.class, mine.eventRazor));
+        assertEquals("1234", jdbc.queryForObject(
+            "SELECT raw_payload->'payload'->'payment'->'entity'->'card'->>'last4' FROM payment_schema.payment_event WHERE id=?", String.class, mine.eventRazor), "masked card digits stay");
         assertEquals(attemptPendingBefore, row("payment_schema.payment_attempt", mine.attemptPending), "the order is still being paid");
         assertEquals(eventPendingBefore, row("payment_schema.payment_event", mine.eventPending), "the order is still being paid");
         assertEquals(otherAttemptBefore, row("payment_schema.payment_attempt", other.attemptPaid));
@@ -735,8 +863,13 @@ class AccountErasureDatabaseTest {
         for (UUID id : mine.tripsFinished) {
             assertEquals(AccountErasureService.ERASED_NAME, jdbc.queryForObject("SELECT customer_first_name FROM fleet_schema.trip WHERE id=?", String.class, id));
             assertEquals(AccountErasureService.ERASED_PHONE, jdbc.queryForObject("SELECT customer_phone FROM fleet_schema.trip WHERE id=?", String.class, id));
-            assertEquals(otherColumns.get(id), tripWithoutPersonalColumns(id), "state, rider, kitchen, chef phone, drop address and ids stay");
+            assertEquals(AccountErasureService.ERASED_TEXT, jdbc.queryForObject("SELECT drop_address FROM fleet_schema.trip WHERE id=?", String.class, id));
+            assertEquals(0.0, jdbc.queryForObject("SELECT drop_lat FROM fleet_schema.trip WHERE id=?", Double.class, id));
+            assertEquals(0.0, jdbc.queryForObject("SELECT drop_lng FROM fleet_schema.trip WHERE id=?", Double.class, id));
+            assertEquals(otherColumns.get(id), tripWithoutPersonalColumns(id), "state, rider, kitchen, chef phone, drop area and ids stay");
         }
+        assertEquals(AccountErasureService.ERASED_TEXT, jdbc.queryForObject("SELECT drop_landmark FROM fleet_schema.trip WHERE id=?", String.class, mine.tripsFinished.get(0)));
+        assertNull(jdbc.queryForObject("SELECT drop_landmark FROM fleet_schema.trip WHERE id=?", String.class, mine.tripsFinished.get(1)), "no landmark stays no landmark");
         assertEquals(activeBefore, row("fleet_schema.trip", mine.tripActive), "a trip still on the road is not touched");
         assertEquals(otherBefore, row("fleet_schema.trip", other.tripActive));
         assertEquals(otherFinishedBefore, other.tripsFinished.stream().map(id -> row("fleet_schema.trip", id)).toList());
@@ -755,5 +888,98 @@ class AccountErasureDatabaseTest {
         assertEquals(AccountErasureService.ERASED_NAME, jdbc.queryForObject(
             "SELECT request_payload->'customer_details'->>'customer_name' FROM payment_schema.payment_order WHERE id=?", String.class, id));
         assertEquals("1.50", jdbc.queryForObject("SELECT request_payload->>'order_amount' FROM payment_schema.payment_order WHERE id=?", String.class, id));
+    }
+
+    @Test
+    void eraseScrubsTheDropOffInDeliveryRecordsOfFinishedDeliveriesOnly() {
+        Scene mine = scene(customer);
+        Scene other = scene(UUID.randomUUID());
+        Map<String, String> before = new java.util.LinkedHashMap<>();
+        before.put("delivery_command/" + mine.command, column("delivery_schema.delivery_command", "payload", mine.command));
+        before.put("delivery_command/" + mine.commandFleet, column("delivery_schema.delivery_command", "payload", mine.commandFleet));
+        before.put("delivery_assignment/" + mine.assignment, column("delivery_schema.delivery_assignment", "request_context", mine.assignment));
+        before.put("delivery_assignment_candidate/" + mine.candidate, column("delivery_schema.delivery_assignment_candidate", "provider_metadata", mine.candidate));
+        before.put("delivery_job/" + mine.job, column("delivery_schema.delivery_job", "quote_snapshot", mine.job));
+        before.put("delivery_event/" + mine.deliveryEvt, column("delivery_schema.delivery_event", "payload", mine.deliveryEvt));
+        before.put("delivery_webhook_inbox/" + mine.deliveryInboxProcessed, column("delivery_schema.delivery_webhook_inbox", "raw_payload", mine.deliveryInboxProcessed));
+        before.put("delivery_webhook_inbox/" + mine.deliveryInboxDead, column("delivery_schema.delivery_webhook_inbox", "raw_payload", mine.deliveryInboxDead));
+        Map<String, String> untouched = new java.util.LinkedHashMap<>();
+        untouched.put("delivery_command/" + mine.commandActive, row("delivery_schema.delivery_command", mine.commandActive));
+        untouched.put("delivery_command/" + mine.commandNotStarted, row("delivery_schema.delivery_command", mine.commandNotStarted));
+        untouched.put("delivery_assignment/" + mine.assignmentActive, row("delivery_schema.delivery_assignment", mine.assignmentActive));
+        untouched.put("delivery_assignment_candidate/" + mine.candidateActive, row("delivery_schema.delivery_assignment_candidate", mine.candidateActive));
+        untouched.put("delivery_job/" + mine.jobActive, row("delivery_schema.delivery_job", mine.jobActive));
+        untouched.put("delivery_event/" + mine.deliveryEvtActive, row("delivery_schema.delivery_event", mine.deliveryEvtActive));
+        untouched.put("delivery_webhook_inbox/" + mine.deliveryInboxActive, row("delivery_schema.delivery_webhook_inbox", mine.deliveryInboxActive));
+        untouched.put("delivery_webhook_inbox/" + mine.deliveryInboxReceived, row("delivery_schema.delivery_webhook_inbox", mine.deliveryInboxReceived));
+        untouched.put("delivery_webhook_inbox/" + mine.deliveryInboxFailed, row("delivery_schema.delivery_webhook_inbox", mine.deliveryInboxFailed));
+        for (Scene o : List.of(other)) {
+            untouched.put("delivery_command/" + o.command, row("delivery_schema.delivery_command", o.command));
+            untouched.put("delivery_assignment/" + o.assignment, row("delivery_schema.delivery_assignment", o.assignment));
+            untouched.put("delivery_assignment_candidate/" + o.candidate, row("delivery_schema.delivery_assignment_candidate", o.candidate));
+            untouched.put("delivery_job/" + o.job, row("delivery_schema.delivery_job", o.job));
+            untouched.put("delivery_event/" + o.deliveryEvt, row("delivery_schema.delivery_event", o.deliveryEvt));
+            untouched.put("delivery_webhook_inbox/" + o.deliveryInboxProcessed, row("delivery_schema.delivery_webhook_inbox", o.deliveryInboxProcessed));
+        }
+        Map<String, String> othersBefore = new java.util.LinkedHashMap<>();
+        othersBefore.put("job", jdbc.queryForObject("SELECT concat_ws('|',id,chef_sub_order_id,order_id,provider_id,provider_delivery_id,status) FROM delivery_schema.delivery_job WHERE id=?", String.class, mine.job));
+        othersBefore.put("command", jdbc.queryForObject("SELECT concat_ws('|',id,chef_sub_order_id,order_id,command_type,status,idempotency_key) FROM delivery_schema.delivery_command WHERE id=?", String.class, mine.command));
+        othersBefore.put("inbox", jdbc.queryForObject("SELECT concat_ws('|',id,provider_id,provider_event_id,processing_status,delivery_job_id) FROM delivery_schema.delivery_webhook_inbox WHERE id=?", String.class, mine.deliveryInboxProcessed));
+
+        ErasureResponse response = erase(customer, Scope.CUSTOMER);
+
+        assertEquals(2, response.counts().get("delivery_command"), "the Borzo order's and the one the fleet delivered");
+        assertEquals(1, response.counts().get("delivery_assignment"));
+        assertEquals(1, response.counts().get("delivery_assignment_candidate"));
+        assertEquals(1, response.counts().get("delivery_job"));
+        assertEquals(1, response.counts().get("delivery_event"));
+        assertEquals(2, response.counts().get("delivery_webhook_inbox"), "PROCESSED and DEAD_LETTER; RECEIVED and FAILED are still being handled");
+        before.forEach((key, text) -> {
+            String[] parts = key.split("/");
+            String table = "delivery_schema." + parts[0];
+            String column = switch (parts[0]) {
+                case "delivery_command", "delivery_event" -> "payload";
+                case "delivery_assignment" -> "request_context";
+                case "delivery_assignment_candidate" -> "provider_metadata";
+                case "delivery_job" -> "quote_snapshot";
+                default -> "raw_payload";
+            };
+            String after = column(table, column, UUID.fromString(parts[1]));
+            assertClean(after);
+            assertFalse(after.contains("12 Real Street") || after.contains("Gate code") || after.contains("Real Temple") || after.contains("17.4412345")
+                || after.contains("78.3912345") || after.contains("500081"), key + ": " + after);
+            assertEquals(erasedDrop(text), after, key + ": only the drop-off changes; the kitchen, the rider, amounts and ids stay");
+        });
+        untouched.forEach((key, text) -> {
+            String[] parts = key.split("/");
+            assertEquals(text, row("delivery_schema." + parts[0], UUID.fromString(parts[1])), key + " is still being handled or is someone else's");
+        });
+        assertEquals(othersBefore.get("job"), jdbc.queryForObject("SELECT concat_ws('|',id,chef_sub_order_id,order_id,provider_id,provider_delivery_id,status) FROM delivery_schema.delivery_job WHERE id=?", String.class, mine.job));
+        assertEquals(othersBefore.get("command"), jdbc.queryForObject("SELECT concat_ws('|',id,chef_sub_order_id,order_id,command_type,status,idempotency_key) FROM delivery_schema.delivery_command WHERE id=?", String.class, mine.command));
+        assertEquals(othersBefore.get("inbox"), jdbc.queryForObject("SELECT concat_ws('|',id,provider_id,provider_event_id,processing_status,delivery_job_id) FROM delivery_schema.delivery_webhook_inbox WHERE id=?", String.class, mine.deliveryInboxProcessed));
+        // The Borzo courier and the kitchen are not the customer's.
+        assertEquals("7777777777", jdbc.queryForObject("SELECT payload->'order'->'courier'->>'phone' FROM delivery_schema.delivery_event WHERE id=?", String.class, mine.deliveryEvt));
+        assertEquals("8888888888", jdbc.queryForObject("SELECT payload->'deliveryRequest'->'pickup'->>'contactPhone' FROM delivery_schema.delivery_command WHERE id=?", String.class, mine.command));
+        assertAllZero(erase(customer, Scope.CUSTOMER));
+    }
+
+    @Test
+    void eraseScrubsTripEventNotesOfFinishedTripsOnly() {
+        Scene mine = scene(customer);
+        String activeBefore = row("fleet_schema.trip_event", mine.tripEventActive);
+        String before = column("fleet_schema.trip_event", "detail", mine.tripEventFinished);
+
+        ErasureResponse response = erase(customer, Scope.CUSTOMER);
+
+        assertEquals(1, response.counts().get("fleet_trip_event"));
+        String after = column("fleet_schema.trip_event", "detail", mine.tripEventFinished);
+        assertClean(after);
+        assertFalse(after.contains("12 Real Street") || after.contains("Real Person"), after);
+        assertEquals("CUSTOMER_UNREACHABLE", jdbc.queryForObject("SELECT detail->>'reason' FROM fleet_schema.trip_event WHERE id=?", String.class, mine.tripEventFinished));
+        assertEquals("3", jdbc.queryForObject("SELECT detail->>'callsMade' FROM fleet_schema.trip_event WHERE id=?", String.class, mine.tripEventFinished));
+        assertEquals(AccountErasureService.ERASED_TEXT, jdbc.queryForObject("SELECT detail->>'note' FROM fleet_schema.trip_event WHERE id=?", String.class, mine.tripEventFinished));
+        assertEquals(activeBefore, row("fleet_schema.trip_event", mine.tripEventActive), "the trip is still on the road");
+        assertFalse(before.equals(after));
+        assertAllZero(erase(customer, Scope.CUSTOMER));
     }
 }

@@ -143,14 +143,16 @@ public class AccountErasureService {
                 "processing_status IN ('COMPLETED', 'DEAD_LETTER') AND " + NAMES_A_FINISHED_ORDER, identityId));
             // A fleet trip's order_id is the checkout id; only the customer's own columns change, never the rider's.
             counts.put("fleet_trip", jdbc.update(
-                "UPDATE fleet_schema.trip SET customer_first_name = ?, customer_phone = ?, drop_address = ?, "
+                "UPDATE fleet_schema.trip tr SET customer_first_name = ?, customer_phone = ?, drop_address = ?, "
                     + "drop_landmark = CASE WHEN drop_landmark IS NULL THEN NULL ELSE ? END, drop_lat = 0, drop_lng = 0 "
-                    + "WHERE state IN (" + TRIP_FINISHED + ") AND order_id IN " + CHECKOUTS + " AND (customer_first_name IS DISTINCT FROM ? "
+                    + "WHERE tr.state IN (" + TRIP_FINISHED + ") AND tr.order_id IN " + CHECKOUTS + " AND " + finished("tr.chef_sub_order_id")
+                    + " AND (customer_first_name IS DISTINCT FROM ? "
                     + "OR customer_phone IS DISTINCT FROM ? OR drop_address IS DISTINCT FROM ? OR (drop_landmark IS NOT NULL AND drop_landmark <> ?) "
                     + "OR drop_lat <> 0 OR drop_lng <> 0)",
                 ERASED_NAME, ERASED_PHONE, ERASED_TEXT, ERASED_TEXT, identityId, identityId, ERASED_NAME, ERASED_PHONE, ERASED_TEXT, ERASED_TEXT));
             counts.put("fleet_trip_event", scrubColumn("fleet_schema.trip_event", "detail", "::jsonb", TRIP_EVENT_KEYS,
-                "trip_id IN (SELECT id FROM fleet_schema.trip WHERE state IN (" + TRIP_FINISHED + ") AND order_id IN " + CHECKOUTS + ")",
+                "trip_id IN (SELECT st.id FROM fleet_schema.trip st WHERE st.state IN (" + TRIP_FINISHED + ") AND st.order_id IN " + CHECKOUTS
+                    + " AND " + finished("st.chef_sub_order_id") + ")",
                 identityId, identityId));
             // Delivery records: only for an order whose delivery is over (see finished()).
             counts.put("delivery_command", scrubDropoff("delivery_command", "payload", over("t"), identityId, identityId));
@@ -160,12 +162,13 @@ public class AccountErasureService {
             String finishedJobs = "SELECT jb.id FROM delivery_schema.delivery_job jb WHERE jb.status IN (" + JOB_FINISHED + ") AND " + over("jb");
             counts.put("delivery_job", scrubDropoff("delivery_job", "quote_snapshot", "t.id IN (" + finishedJobs + ")", identityId, identityId));
             counts.put("delivery_event", scrubDropoff("delivery_event", "payload", "t.delivery_job_id IN (" + finishedJobs + ")", identityId, identityId));
-            // A webhook not yet processed (RECEIVED, PROCESSING) or retried (FAILED) is still being handled.
+            // A webhook not yet processed (RECEIVED, PROCESSING) or retried (FAILED) is still being handled. A job keeps the provider's
+            // ORDER id (Borzo's order id), so it is matched with the row's provider_order_id, never with the row's own delivery id.
             counts.put("delivery_webhook_inbox", scrubDropoff("delivery_webhook_inbox", "raw_payload",
                 "t.processing_status IN ('PROCESSED', 'DUPLICATE', 'REJECTED', 'DEAD_LETTER') AND EXISTS (SELECT 1 FROM delivery_schema.delivery_job j "
                     + "WHERE j.status IN (" + JOB_FINISHED + ") AND j.order_id IN " + CHECKOUTS + " AND " + finished("j.chef_sub_order_id")
-                    + " AND (j.id = t.delivery_job_id OR (j.provider_id = t.provider_id AND (j.provider_delivery_id = t.provider_delivery_id "
-                    + "OR j.provider_delivery_id = t.provider_order_id))))", identityId, identityId));
+                    + " AND (j.id = t.delivery_job_id OR (j.provider_id = t.provider_id AND j.provider_delivery_id = t.provider_order_id)))",
+                identityId, identityId));
         }
         LOGGER.info("account erasure service=integration requestId={} scope={} counts={}", requestId, scope, counts);
         return ErasureResponse.done(counts);
@@ -194,11 +197,14 @@ public class AccountErasureService {
     }
 
     /**
-     * A delivery is over when no job and no current fleet trip of the chef order is still going and at least one job or trip
-     * ended (or its command was given up). The stored command is what a Borzo to Pidge handoff books from, so it stays until then.
+     * A delivery is over when no job, no current fleet trip and no open fleet stage of the chef order is still going and at
+     * least one job or trip ended (or its command was given up). A rider who hands an order back leaves a CANCELLED trip and
+     * opens a Borzo or Pidge stage, so an open stage means the order is still being booked. The stored command is what a
+     * Borzo to Pidge handoff books from, so it stays until then too.
      */
     private static String finished(String chefSubOrder) {
-        return "(NOT EXISTS (SELECT 1 FROM delivery_schema.delivery_job fj WHERE fj.chef_sub_order_id = " + chefSubOrder
+        return "(NOT EXISTS (SELECT 1 FROM fleet_schema.trip_stage fs JOIN fleet_schema.trip fst ON fst.id = fs.trip_id WHERE fst.chef_sub_order_id = "
+            + chefSubOrder + " AND fs.state = 'OPEN') AND NOT EXISTS (SELECT 1 FROM delivery_schema.delivery_job fj WHERE fj.chef_sub_order_id = " + chefSubOrder
             + " AND fj.status NOT IN (" + JOB_FINISHED + ")) AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip ft WHERE ft.chef_sub_order_id = "
             + chefSubOrder + " AND ft.replaced_at IS NULL AND ft.state NOT IN (" + TRIP_FINISHED + ")) AND (EXISTS (SELECT 1 FROM delivery_schema.delivery_job fj "
             + "WHERE fj.chef_sub_order_id = " + chefSubOrder + ") OR EXISTS (SELECT 1 FROM fleet_schema.trip ft WHERE ft.chef_sub_order_id = " + chefSubOrder

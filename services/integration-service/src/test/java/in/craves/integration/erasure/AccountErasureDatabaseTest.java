@@ -237,6 +237,25 @@ class AccountErasureDatabaseTest {
         return id;
     }
 
+    /** A Borzo webhook row with the ids the normalizer stores: its order id, and its own delivery id. */
+    private static UUID deliveryInboxWithIds(String status, String body, String providerOrderId, String providerDeliveryId) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO delivery_schema.delivery_webhook_inbox(id,provider_id,provider_event_id,processing_status,raw_payload,provider_order_id,"
+            + "provider_delivery_id) VALUES (?,'borzo',?,?,?::jsonb,?,?)", id, "inb/" + id, status, body, providerOrderId, providerDeliveryId);
+        return id;
+    }
+
+    private static UUID stage(UUID trip, String provider, String state) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO fleet_schema.trip_stage(id,trip_id,seq,provider,state,deadline_at,closed_at) VALUES (?,?,1,?,?,now() + interval '10 minutes',"
+            + "CASE WHEN ? = 'CLOSED' THEN now() ELSE NULL END)", id, trip, provider, state, state);
+        return id;
+    }
+
+    private static void closeStage(UUID stage) {
+        seed("UPDATE fleet_schema.trip_stage SET state = 'CLOSED', closed_at = now() WHERE id = ?", stage);
+    }
+
     private static UUID deliveryInbox(UUID job, String status, String body) {
         UUID id = UUID.randomUUID();
         seed("INSERT INTO delivery_schema.delivery_webhook_inbox(id,provider_id,provider_event_id,processing_status,raw_payload,delivery_job_id)"
@@ -980,6 +999,68 @@ class AccountErasureDatabaseTest {
         assertEquals(AccountErasureService.ERASED_TEXT, jdbc.queryForObject("SELECT detail->>'note' FROM fleet_schema.trip_event WHERE id=?", String.class, mine.tripEventFinished));
         assertEquals(activeBefore, row("fleet_schema.trip_event", mine.tripEventActive), "the trip is still on the road");
         assertFalse(before.equals(after));
+        assertAllZero(erase(customer, Scope.CUSTOMER));
+    }
+
+    @Test
+    void aTripHandedBackToACourierIsNotScrubbedWhileTheOrderIsStillBeingBooked() {
+        UUID checkout = UUID.randomUUID();
+        UUID chefSubOrder = UUID.randomUUID();
+        payment(customer, checkout, "PAID", "{}", null);
+        // The rider gave the order back: the trip is CANCELLED (not replaced) and a Borzo stage is open to book a courier.
+        UUID trip = trip(checkout, "CANCELLED", chefSubOrder, "Near Real Temple");
+        tripEvent(trip, "{\"reason\":\"CUSTOMER_UNREACHABLE\",\"note\":\"Real Person was not at 12 Real Street, called 9876543210\"}");
+        UUID event = jdbc.queryForObject("SELECT id FROM fleet_schema.trip_event WHERE trip_id=?", UUID.class, trip);
+        UUID stage = stage(trip, "BORZO", "OPEN");
+        // The courier also gave up: the job is CANCELLED and the order goes to the ops queue.
+        UUID job = job(checkout, chefSubOrder, "CANCELLED", "{\"delivery\":{\"providerMetadata\":" + BORZO_ORDER.formatted(1250034) + "}}");
+        UUID command = command(checkout, chefSubOrder, "COMPLETED");
+        UUID event2 = deliveryEvent(job, BORZO_ORDER.formatted(1250034));
+        String tripBefore = row("fleet_schema.trip", trip);
+        String tripEventBefore = row("fleet_schema.trip_event", event);
+        String commandBefore = row("delivery_schema.delivery_command", command);
+        String jobBefore = row("delivery_schema.delivery_job", job);
+        String eventBefore = row("delivery_schema.delivery_event", event2);
+
+        ErasureResponse open = erase(customer, Scope.CUSTOMER);
+
+        assertAllZero(open);
+        assertEquals(tripBefore, row("fleet_schema.trip", trip), "the order is still being booked");
+        assertEquals(tripEventBefore, row("fleet_schema.trip_event", event));
+        assertEquals(commandBefore, row("delivery_schema.delivery_command", command));
+        assertEquals(jobBefore, row("delivery_schema.delivery_job", job));
+        assertEquals(eventBefore, row("delivery_schema.delivery_event", event2));
+
+        // Once the stage is closed nothing is left going: everything is scrubbed.
+        closeStage(stage);
+        ErasureResponse closed = erase(customer, Scope.CUSTOMER);
+
+        assertEquals(1, closed.counts().get("fleet_trip"));
+        assertEquals(1, closed.counts().get("fleet_trip_event"));
+        assertEquals(1, closed.counts().get("delivery_command"));
+        assertEquals(1, closed.counts().get("delivery_job"));
+        assertEquals(1, closed.counts().get("delivery_event"));
+        assertEquals(AccountErasureService.ERASED_TEXT, jdbc.queryForObject("SELECT drop_address FROM fleet_schema.trip WHERE id=?", String.class, trip));
+        assertAllZero(erase(customer, Scope.CUSTOMER));
+    }
+
+    @Test
+    void aBorzoDeliveryIdThatEqualsAJobsOrderIdDoesNotReachAnotherCustomersWebhookRow() {
+        Scene mine = scene(customer);
+        String jobsBorzoOrderId = jdbc.queryForObject("SELECT provider_delivery_id FROM delivery_schema.delivery_job WHERE id=?", String.class, mine.job);
+        // Someone else's finished webhook row, not tied to any job of mine, whose Borzo DELIVERY id happens to be the string my job
+        // keeps as its Borzo ORDER id. The two are different id spaces; only the order id may be compared.
+        UUID others = deliveryInboxWithIds("PROCESSED", BORZO_ORDER.formatted(777), "777", jobsBorzoOrderId);
+        // A row of mine that never got a job id, but names my job's Borzo order id as its order id: that one is mine.
+        UUID unmatched = deliveryInboxWithIds("PROCESSED", BORZO_ORDER.formatted(1250032), jobsBorzoOrderId, "11712");
+        String othersBefore = row("delivery_schema.delivery_webhook_inbox", others);
+        String unmatchedBefore = column("delivery_schema.delivery_webhook_inbox", "raw_payload", unmatched);
+
+        ErasureResponse response = erase(customer, Scope.CUSTOMER);
+
+        assertEquals(3, response.counts().get("delivery_webhook_inbox"), "PROCESSED and DEAD_LETTER of the job, and the row matched by order id");
+        assertEquals(othersBefore, row("delivery_schema.delivery_webhook_inbox", others), "another customer's row stays");
+        assertEquals(erasedDrop(unmatchedBefore), column("delivery_schema.delivery_webhook_inbox", "raw_payload", unmatched));
         assertAllZero(erase(customer, Scope.CUSTOMER));
     }
 }

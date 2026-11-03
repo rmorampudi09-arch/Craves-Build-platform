@@ -35,6 +35,10 @@ az deployment group create -g rg-craves-prodlow-centralindia \
 
 The CH-03 internal-call codes (`INTERNAL_CALL_*`) use the same rules.
 
+The Borzo-to-Pidge handoff (integration `BorzoPidgeHandoffWorker`) adds `DELIVERY_HANDOFF_NO_COURIER` (Borzo cancelled and
+Pidge refused or cancelled the fallback, so the order needs a person) and `DELIVERY_HANDOFF_STALLED` (the Pidge fallback
+is still unresolved after 20 attempts; it keeps retrying). Both are logged once per order.
+
 ## Tuning
 
 - `CRAVES_MONITORING_ENABLED=false` turns off the order and integration monitors.

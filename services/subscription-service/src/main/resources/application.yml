@@ -55,6 +55,7 @@ craves:
     enabled: ${CRAVES_TOKEN_REVOCATION_ENABLED:false}
   catalog:
     base-url: ${CRAVES_CATALOG_BASE_URL:https://api.craves.in/api/v1/catalog}
+    internal-access-value: ${CRAVES_INTERNAL_SERVICE_SECRET:}
   subscription:
     capacity:
       hold-minutes: ${CRAVES_SUBSCRIPTION_CAPACITY_HOLD_MINUTES:15}

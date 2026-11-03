@@ -123,7 +123,7 @@ describe('chefBusinessInformationApi KYC evidence', () => {
     expect(httpClient.post).toHaveBeenCalledWith(
       CHEF_PROOF_FILES_ROUTE,
       formData,
-      {signal: undefined},
+      {signal: undefined, timeout: 45000},
     );
 
     Object.defineProperty(formDataGlobal, 'FormData', {

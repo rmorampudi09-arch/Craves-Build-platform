@@ -39,6 +39,9 @@ export const CHEF_PROOF_FILES_ROUTE =
 export const CHEF_APPLICATION_EVIDENCE_ROUTE =
   '/api/v1/chef/application?evidence=true' as const;
 
+/** A document photo over mobile data needs more than the default 12 s (same as onboarding). */
+const SLOW_UPLOAD_MS = 45000;
+
 export interface ChefProofUploadFile {
   uri: string;
   name: string;
@@ -478,7 +481,7 @@ export const chefBusinessInformationApi = {
     const response = await httpClient.post<unknown>(
       CHEF_PROOF_FILES_ROUTE,
       formData,
-      {signal},
+      {signal, timeout: SLOW_UPLOAD_MS},
     );
     const parsed = parseChefBusinessProofDocument(response);
     if (!parsed || parsed.documentType !== documentType) {

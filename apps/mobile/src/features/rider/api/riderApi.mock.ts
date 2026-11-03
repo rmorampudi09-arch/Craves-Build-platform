@@ -371,12 +371,16 @@ export function createMockRiderApi(options: MockOptions = {}) {
       waitPayPerMinutePaise: 150,
       sealed: true,
       chefReadyAt: iso(now()),
+      rateCardVersion: state.me.termsVersion,
+      offerPayPaise: offer.payPaise,
+      pickupDistanceM: offer.pickupDistanceM,
+      dropDistanceM: offer.dropDistanceM,
     };
   }
 
   function endTrip(step: TripStep, extra: Partial<Trip> = {}): Trip {
     const trip = state.activeTrip as Trip;
-    const ended: Trip = { ...trip, ...extra, step, version: trip.version + 1 };
+    const ended: Trip = { ...trip, ...extra, step, version: trip.version + 1, finishedAt: iso(now()) };
     state.activeTrip = null;
     state.endedTrip = ended;
     state.otpTries = 0;
@@ -439,6 +443,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
         step: move[1],
         version: trip.version + 1,
         ...(move[1] === 'AT_KITCHEN' ? { arrivedKitchenAt: iso(now()) } : {}),
+        ...(move[1] === 'PICKED_UP' ? { pickedUpAt: iso(now()) } : {}),
       };
       return state.activeTrip;
     }

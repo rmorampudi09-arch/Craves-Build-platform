@@ -39,7 +39,8 @@ export interface RiderMe {
    * nativeTripOutbox (P2-02): trip steps go through the phone's native outbox, which sends them after a kill or reboot.
    * riderChoices (Phase 4): the rider can take a break while online and choose the farthest pickup and drop.
    */
-  features: {payoutsEnabled: boolean; withdrawEnabled: boolean; nativeTripOutbox?: boolean; riderChoices?: boolean};
+  /** maskedCalls (app 1.3.3): calls go through Craves's relay numbers, so the trip screen says so; off by default. */
+  features: {payoutsEnabled: boolean; withdrawEnabled: boolean; nativeTripOutbox?: boolean; riderChoices?: boolean; maskedCalls?: boolean};
   /** P2-09: the privacy notice in force, absent while none is set; url may hold {language}. */
   privacyNotice?: {version: string; url: string; accepted: boolean};
 }
@@ -274,6 +275,15 @@ export interface Trip {
   sealed: boolean;
   /** When the chef marked the food ready; the free wait starts at the later of this and arrival. */
   chefReadyAt?: string;
+  /** App 1.3.3 (R-05): the trip and trip-complete screens as drawn; older servers leave these out and the lines hide. */
+  rateCardVersion?: string;
+  /** The locked pay the offer showed ("Offer said at least ₹61"). */
+  offerPayPaise?: Paise;
+  /** The offer's distances, the ones pay counts, not the route ridden. */
+  pickupDistanceM?: number;
+  dropDistanceM?: number;
+  pickedUpAt?: string;
+  finishedAt?: string;
 }
 
 export interface PayLine {

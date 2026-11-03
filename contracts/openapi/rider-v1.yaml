@@ -478,6 +478,12 @@ components:
         arrivedKitchenAt: {type: string, format: date-time}
         waitFreeSeconds: {type: integer}
         unreachableWaitSeconds: {type: integer}
+        rateCardVersion: {type: string, description: 'App 1.3.3: the rate card the pay was locked on ("Rate card 2026-11-v1")'}
+        offerPayPaise: {$ref: '#/components/schemas/Paise', description: 'App 1.3.3: the locked pay the offer showed ("Offer said at least ₹61")'}
+        pickupDistanceM: {type: integer, description: 'App 1.3.3: the offer distance to the kitchen, the one pay counts'}
+        dropDistanceM: {type: integer, description: 'App 1.3.3: the offer distance kitchen to customer'}
+        pickedUpAt: {type: string, format: date-time}
+        finishedAt: {type: string, format: date-time, description: 'When the trip ended (delivered, failed or cancelled)'}
         waitPayPerMinutePaise: {$ref: '#/components/schemas/Paise'}
         cancelReason: {type: string}
         payLines: {type: array, items: {$ref: '#/components/schemas/PayLine'}}

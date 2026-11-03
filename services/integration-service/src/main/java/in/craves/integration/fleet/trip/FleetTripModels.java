@@ -83,9 +83,15 @@ public final class FleetTripModels {
 
     /** Never carries the customer's promised time. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    /**
+     * App 1.3.3 (REDESIGN.md, R-05): rateCardVersion, offerPayPaise (the locked pay the offer showed), both offer distances
+     * and the picked-up and finished times, for the trip and trip-complete screens as drawn. Each is left out when unknown.
+     */
     public record Trip(String tripId, int version, String step, String orderCode, int itemsCount, long payPaise, Kitchen kitchen,
                        Customer customer, Instant arrivedKitchenAt, long waitFreeSeconds, long unreachableWaitSeconds,
-                       Long waitPayPerMinutePaise, String cancelReason, List<PayLine> payLines, boolean sealed, Instant chefReadyAt) {
+                       Long waitPayPerMinutePaise, String cancelReason, List<PayLine> payLines, boolean sealed, Instant chefReadyAt,
+                       String rateCardVersion, Long offerPayPaise, Integer pickupDistanceM, Integer dropDistanceM, Instant pickedUpAt,
+                       Instant finishedAt) {
     }
 
     /**

@@ -534,8 +534,11 @@ public class OrderService {
     public OrderResponse getOrderForChef(CravesPrincipal principal, UUID orderId) {
         requireChef(principal);
         OrderResponse order = findChefOrder(orderId);
-        CatalogKitchen kitchen = catalogClient.getKitchen(order.kitchenId());
-        if (!kitchen.identityId().equals(principal.identityId())) {
+        // Owner from the order row (V16 keeps it NOT NULL), like the chef order list: Catalog refuses a closed kitchen,
+        // which stopped chefs finishing orders that were cooking when they closed it.
+        UUID owner = jdbcTemplate.queryForObject(
+            "SELECT chef_identity_id FROM order_schema.customer_order WHERE id = ?", UUID.class, orderId);
+        if (!principal.identityId().equals(owner)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chef cannot access this order");
         }
         return order;

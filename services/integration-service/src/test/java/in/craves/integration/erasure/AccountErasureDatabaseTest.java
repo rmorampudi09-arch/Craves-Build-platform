@@ -8,6 +8,7 @@ import in.craves.integration.erasure.AccountErasureDtos.Blocker;
 import in.craves.integration.erasure.AccountErasureDtos.ErasureResponse;
 import in.craves.integration.erasure.AccountErasureDtos.Scope;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,10 +39,33 @@ class AccountErasureDatabaseTest {
     private static final String RAZORPAY_PAYLOAD = """
         {"amount":43310,"currency":"INR","receipt":"CRV_ORDER_2_RZP",
          "notes":{"craves_checkout_id":"%s","craves_customer_identity_id":"%s","customer_name":"Real Person"}}""";
+    private static final String CASHFREE_WEBHOOK = """
+        {"data":{"order":{"order_id":"%s","order_amount":433.10,"order_currency":"INR"},
+         "payment":{"cf_payment_id":"7001","payment_status":"SUCCESS","payment_amount":433.10,"payment_currency":"INR"},
+         "customer_details":{"customer_name":"Real Person","customer_id":"%s","customer_email":"real.person@example.com",
+                             "customer_phone":"9876543210"}},"type":"PAYMENT_SUCCESS_WEBHOOK"}""";
+    private static final String RAZORPAY_WEBHOOK = """
+        {"event":"payment.captured","payload":{"payment":{"entity":{"id":"pay_7001","order_id":"%s","status":"captured",
+         "amount":43310,"currency":"INR","email":"real.person@example.com","contact":"+919876543210",
+         "notes":{"customer_name":"Real Person"}}}}}""";
+    private static final String CASHFREE_RESPONSE = """
+        {"order_id":"%s","cf_order_id":"3001","order_status":"ACTIVE","order_amount":433.10,"payment_session_id":"session_abc",
+         "customer_details":{"customer_id":"%s","customer_name":"Real Person","customer_email":"real.person@example.com",
+                             "customer_phone":"9876543210"}}""";
+    private static final String RAZORPAY_RESPONSE = """
+        {"id":"%s","amount":43310,"currency":"INR","status":"created","notes":{"customer_name":"Real Person"}}""";
+    private static final String[] PERSONAL = {"Real Person", "9876543210", "real.person@example.com"};
+    /** Legal records and everything of someone else's: a chef erase, a blocked erase and the other side never change them. */
     private static final List<String> MONEY_TABLES = List.of(
         "ledger_transaction", "ledger_line", "finance_payable", "finance_payout_instruction",
         "finance_payout_allocation", "finance_chef_payout_control", "finance_beneficiary_version",
-        "finance_bank_request", "chef_earning_entry", "chef_referral_posting", "payment_order", "refund");
+        "finance_bank_request", "chef_earning_entry", "chef_referral_posting");
+    /** What a CUSTOMER erase may change, besides the personal fields. */
+    private static final List<String> CUSTOMER_TABLES = List.of(
+        "payment_order", "refund", "payment_attempt", "payment_event", "webhook_inbox", "cashfree_webhook_delivery", "fleet_schema.trip");
+    private static final List<String> ALL_TABLES = java.util.stream.Stream.concat(MONEY_TABLES.stream(), CUSTOMER_TABLES.stream()).toList();
+    private static final Set<String> COUNT_KEYS = Set.of(
+        "payment_order", "payment_attempt", "payment_event", "webhook_inbox", "cashfree_webhook_delivery", "fleet_trip");
 
     static JdbcTemplate jdbc;
     static TransactionTemplate tx;
@@ -86,9 +110,61 @@ class AccountErasureDatabaseTest {
     }
 
     private static UUID payment(UUID owner, String payload) {
+        return payment(owner, UUID.randomUUID(), "PAID", payload, null);
+    }
+
+    /** provider_order_id is what the provider's webhooks carry; checkout_id is what the fleet trip's order_id is. */
+    private static UUID payment(UUID owner, UUID checkout, String status, String payload, String response) {
+        return payment(owner, checkout, providerOrderId(checkout), status, payload, response);
+    }
+
+    private static UUID payment(UUID owner, UUID checkout, String providerOrderId, String status, String payload, String response) {
         UUID id = UUID.randomUUID();
-        seed("INSERT INTO payment_schema.payment_order(id,checkout_id,customer_identity_id,craves_payment_order_ref,amount,currency,status,request_payload)"
-            + " VALUES (?,?,?,?,?,'INR','PAID',?::jsonb)", id, UUID.randomUUID(), owner, "test/" + id, new BigDecimal("433.10"), payload);
+        seed("INSERT INTO payment_schema.payment_order(id,checkout_id,customer_identity_id,craves_payment_order_ref,provider_order_id,amount,currency,"
+            + "status,request_payload,response_payload) VALUES (?,?,?,?,?,?,'INR',?,?::jsonb,?::jsonb)",
+            id, checkout, owner, "test/" + id, providerOrderId, new BigDecimal("433.10"), status, payload, response);
+        return id;
+    }
+
+    private static String providerOrderId(UUID checkout) {
+        return "CRV_" + checkout.toString().replace("-", "");
+    }
+
+    private static UUID attempt(UUID payment, String payload) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO payment_schema.payment_attempt(id,payment_order_id,cf_payment_id,payment_status,payment_amount,payment_currency,raw_payload)"
+            + " VALUES (?,?,'7001','SUCCESS',433.10,'INR',?::jsonb)", id, payment, payload);
+        return id;
+    }
+
+    private static UUID event(UUID payment, String payload) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO payment_schema.payment_event(id,payment_order_id,provider_event_id,event_type,payment_status,raw_payload)"
+            + " VALUES (?,?,?,'PAYMENT_SUCCESS_WEBHOOK','SUCCESS',?::jsonb)", id, payment, "evt/" + id, payload);
+        return id;
+    }
+
+    private static UUID inbox(String status, String body) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO payment_schema.webhook_inbox(id,provider,event_identity,processing_status,raw_payload) VALUES (?,'CASHFREE',?,?,?)",
+            id, "evt/" + id, status, body);
+        return id;
+    }
+
+    private static UUID delivery(String status, String body) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO payment_schema.cashfree_webhook_delivery(id,idempotency_key,webhook_version,webhook_timestamp,webhook_signature,raw_payload,"
+            + "processing_status) VALUES (?,?,'2025-01-01',1700000000,'signature',?,?)", id, "key/" + id, body, status);
+        return id;
+    }
+
+    /** One fleet trip for a checkout; the customer's name and phone are the columns under test, the rider's are not. */
+    private static UUID trip(UUID checkout, String state) {
+        UUID id = UUID.randomUUID();
+        seed("INSERT INTO fleet_schema.trip(id,chef_sub_order_id,order_id,chef_id,order_code,state,items_count,kitchen_name,kitchen_area,kitchen_address,"
+            + "kitchen_lat,kitchen_lng,chef_phone,customer_first_name,customer_phone,drop_area,drop_address,drop_lat,drop_lng)"
+            + " VALUES (?,?,?,?,'#ABCDEF12',?,2,'Kitchen','Area','Kitchen road',17.4,78.4,'8888888888','Real','9876543210','Drop area','Drop road',17.5,78.5)",
+            id, UUID.randomUUID(), checkout, UUID.randomUUID(), state);
         return id;
     }
 
@@ -132,8 +208,13 @@ class AccountErasureDatabaseTest {
     }
 
     private static void control(UUID owner, boolean onHold) {
-        seed("INSERT INTO payment_schema.finance_chef_payout_control(chef_identity_id,on_hold,hold_reason,hold_kind)"
-            + " VALUES (?,?,?, 'OPERATIONAL')", owner, onHold, onHold ? "Test hold" : null);
+        control(owner, onHold, "OPERATIONAL");
+    }
+
+    /** BANK_REQUIREMENT is the hold every earning chef starts with until a bank account is verified. */
+    private static void control(UUID owner, boolean onHold, String kind) {
+        seed("INSERT INTO payment_schema.finance_chef_payout_control(chef_identity_id,on_hold,hold_reason,hold_kind) VALUES (?,?,?,?)",
+            owner, onHold, onHold ? "BANK_REQUIREMENT".equals(kind) ? "Beneficiary verification required" : "Test hold" : null, kind);
     }
 
     private static void legacyEarning(UUID owner, String status) {
@@ -175,8 +256,8 @@ class AccountErasureDatabaseTest {
     }
 
     private static String snapshot(String table) {
-        return jdbc.queryForObject("SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]'::jsonb)::text FROM payment_schema."
-            + table + " t", String.class);
+        return jdbc.queryForObject("SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]'::jsonb)::text FROM "
+            + (table.contains(".") ? table : "payment_schema." + table) + " t", String.class);
     }
 
     private static Map<String, String> snapshots(List<String> tables) {
@@ -185,6 +266,26 @@ class AccountErasureDatabaseTest {
 
     private static String payload(UUID paymentId) {
         return jdbc.queryForObject("SELECT request_payload::text FROM payment_schema.payment_order WHERE id=?", String.class, paymentId);
+    }
+
+    private static void assertAllZero(ErasureResponse response) {
+        assertEquals(COUNT_KEYS, response.counts().keySet());
+        assertTrue(response.counts().values().stream().allMatch(n -> n == 0), response.counts().toString());
+    }
+
+    private static void assertClean(String text) {
+        for (String personal : PERSONAL) {
+            assertFalse(text.contains(personal), personal + " still in " + text);
+        }
+        assertFalse(text.contains("76543210") || text.contains("@example.com"), "nothing partially visible: " + text);
+    }
+
+    private static String column(String table, String column, UUID id) {
+        return jdbc.queryForObject("SELECT " + column + "::text FROM " + table + " WHERE id=?", String.class, id);
+    }
+
+    private static String row(String table, UUID id) {
+        return jdbc.queryForObject("SELECT to_jsonb(t)::text FROM " + table + " t WHERE id=?", String.class, id);
     }
 
     private static Set<String> codes(List<Blocker> blockers) {
@@ -261,11 +362,12 @@ class AccountErasureDatabaseTest {
 
         assertEquals("DONE", response.status());
         assertEquals("integration", response.service());
-        assertEquals(Map.of("payment_order", 2), response.counts());
+        assertEquals(COUNT_KEYS, response.counts().keySet());
+        assertEquals(2, response.counts().get("payment_order"));
         for (UUID id : List.of(cashfree, razorpay)) {
             String after = payload(id);
             assertFalse(after.contains("Real Person") || after.contains("9876543210") || after.contains("real.person@example.com"), after);
-            assertFalse(after.contains("3210") || after.contains("@example.com"), "nothing partially visible: " + after);
+            assertFalse(after.contains("76543210") || after.contains("@example.com"), "nothing partially visible: " + after);
         }
         // Everything that is not the person stays exactly as it was: amounts, order ids, urls, identities.
         assertEquals("433.10", jdbc.queryForObject("SELECT request_payload->>'order_amount' FROM payment_schema.payment_order WHERE id=?", String.class, cashfree));
@@ -291,7 +393,7 @@ class AccountErasureDatabaseTest {
 
         ErasureResponse response = erase(customer, Scope.CUSTOMER);
 
-        assertEquals(Map.of("payment_order", 0), response.counts());
+        assertAllZero(response);
         assertEquals(before, snapshot("payment_order"));
         assertEquals("{}", payload(empty));
     }
@@ -305,7 +407,7 @@ class AccountErasureDatabaseTest {
 
         ErasureResponse response = erase(customer, Scope.CUSTOMER);
 
-        assertEquals(Map.of("payment_order", 1), response.counts());
+        assertEquals(1, response.counts().get("payment_order"));
         assertEquals(jdbc.queryForObject("SELECT ?::jsonb::text", String.class, odd), payload(oddPayment));
         assertEquals("[1, 2]", payload(notAnObject));
         assertFalse(payload(normal).contains("Real Person"));
@@ -313,32 +415,46 @@ class AccountErasureDatabaseTest {
 
     @Test
     void eraseTwiceIsDoneWithZeroCounts() {
-        payment(customer, CASHFREE_PAYLOAD.formatted(customer));
+        UUID checkout = UUID.randomUUID();
+        UUID paid = payment(customer, checkout, "PAID", CASHFREE_PAYLOAD.formatted(customer), CASHFREE_PAYLOAD.formatted(customer));
+        attempt(paid, CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), customer));
+        event(paid, CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), customer));
+        inbox("PROCESSED", CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), customer));
+        delivery("COMPLETED", CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), customer));
+        trip(checkout, "DELIVERED");
         settledChef();
 
         ErasureResponse first = erase(customer, Scope.ALL);
-        Map<String, String> afterFirst = snapshots(MONEY_TABLES);
+        Map<String, String> afterFirst = snapshots(ALL_TABLES);
         ErasureResponse second = erase(customer, Scope.ALL);
 
-        assertEquals(Map.of("payment_order", 1), first.counts());
+        assertEquals(Map.of("payment_order", 1, "payment_attempt", 1, "payment_event", 1, "webhook_inbox", 1,
+            "cashfree_webhook_delivery", 1, "fleet_trip", 1), first.counts());
         assertEquals("DONE", second.status());
-        assertEquals(Map.of("payment_order", 0), second.counts());
-        assertEquals(afterFirst, snapshots(MONEY_TABLES));
+        assertAllZero(second);
+        assertEquals(afterFirst, snapshots(ALL_TABLES));
         // Same for a person this service never saw (worker retry after a timeout).
         UUID stranger = UUID.randomUUID();
-        assertEquals(Map.of("payment_order", 0), erase(stranger, Scope.CUSTOMER).counts());
+        assertAllZero(erase(stranger, Scope.CUSTOMER));
         assertEquals(Map.of(), erase(stranger, Scope.CHEF).counts());
     }
 
     @Test
     void eraseChefChangesNothing() {
         settledChef();
-        payment(chef, CASHFREE_PAYLOAD.formatted(chef)); // the same person is also a customer: CHEF must not touch it
+        // The same person is also a customer: a CHEF erase must not touch any of it.
+        UUID checkout = UUID.randomUUID();
+        UUID paid = payment(chef, checkout, "PAID", CASHFREE_PAYLOAD.formatted(chef), CASHFREE_PAYLOAD.formatted(chef));
+        attempt(paid, CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), chef));
+        event(paid, CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), chef));
+        inbox("PROCESSED", CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), chef));
+        delivery("COMPLETED", CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), chef));
+        trip(checkout, "DELIVERED");
         refund(payment(chef, "{}"), chef, "SUCCESS");
         assertTrue(service.blockers(chef, Scope.CHEF).isEmpty());
-        Map<String, String> before = snapshots(MONEY_TABLES);
-        Map<String, Long> counts = MONEY_TABLES.stream().collect(Collectors.toMap(t -> t,
-            t -> jdbc.queryForObject("SELECT count(*) FROM payment_schema." + t, Long.class)));
+        Map<String, String> before = snapshots(ALL_TABLES);
+        Map<String, Long> counts = ALL_TABLES.stream().collect(Collectors.toMap(t -> t,
+            t -> jdbc.queryForObject("SELECT count(*) FROM " + (t.contains(".") ? t : "payment_schema." + t), Long.class)));
         assertTrue(counts.get("finance_payable") > 0 && counts.get("finance_payout_instruction") > 0
             && counts.get("ledger_transaction") > 0 && counts.get("finance_bank_request") > 0, "the fixture really holds money rows");
 
@@ -346,22 +462,22 @@ class AccountErasureDatabaseTest {
 
         assertEquals("DONE", response.status());
         assertEquals(Map.of(), response.counts());
-        assertEquals(before, snapshots(MONEY_TABLES), "row contents, not only counts");
-        MONEY_TABLES.forEach(t -> assertEquals(counts.get(t), jdbc.queryForObject("SELECT count(*) FROM payment_schema." + t, Long.class), t));
+        assertEquals(before, snapshots(ALL_TABLES), "row contents, not only counts");
+        ALL_TABLES.forEach(t -> assertEquals(counts.get(t),
+            jdbc.queryForObject("SELECT count(*) FROM " + (t.contains(".") ? t : "payment_schema." + t), Long.class), t));
     }
 
     @Test
     void eraseCustomerLeavesChefMoneyRowsUntouched() {
         settledChef();
         UUID paymentId = payment(chef, CASHFREE_PAYLOAD.formatted(chef));
-        List<String> chefTables = MONEY_TABLES.stream().filter(t -> !t.equals("payment_order") && !t.equals("refund")).toList();
-        Map<String, String> before = snapshots(chefTables);
+        Map<String, String> before = snapshots(MONEY_TABLES);
 
         ErasureResponse response = erase(chef, Scope.CUSTOMER);
 
-        assertEquals(Map.of("payment_order", 1), response.counts());
+        assertEquals(1, response.counts().get("payment_order"));
         assertFalse(payload(paymentId).contains("Real Person"));
-        assertEquals(before, snapshots(chefTables));
+        assertEquals(before, snapshots(MONEY_TABLES));
     }
 
     @Test
@@ -370,7 +486,14 @@ class AccountErasureDatabaseTest {
         refund(paymentId, customer, "PROCESSING");
         payable(customer);
         control(customer, true);
-        Map<String, String> before = snapshots(MONEY_TABLES);
+        UUID checkout = UUID.randomUUID();
+        UUID paid = payment(customer, checkout, "PAID", CASHFREE_PAYLOAD.formatted(customer), CASHFREE_PAYLOAD.formatted(customer));
+        attempt(paid, CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), customer));
+        event(paid, CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), customer));
+        inbox("PROCESSED", CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), customer));
+        delivery("COMPLETED", CASHFREE_WEBHOOK.formatted(providerOrderId(checkout), customer));
+        trip(checkout, "DELIVERED");
+        Map<String, String> before = snapshots(ALL_TABLES);
 
         for (Scope scope : List.of(Scope.CUSTOMER, Scope.CHEF, Scope.ALL)) {
             ErasureResponse response = erase(customer, scope);
@@ -378,8 +501,259 @@ class AccountErasureDatabaseTest {
             assertEquals(scope == Scope.CUSTOMER ? Set.of("REFUND_IN_FLIGHT")
                 : scope == Scope.CHEF ? Set.of("PAYABLE_UNPAID", "PAYOUT_ON_HOLD")
                 : Set.of("REFUND_IN_FLIGHT", "PAYABLE_UNPAID", "PAYOUT_ON_HOLD"), codes(response.blockers()), scope.name());
-            assertEquals(before, snapshots(MONEY_TABLES), scope.name());
+            assertEquals(before, snapshots(ALL_TABLES), scope.name());
         }
         assertTrue(payload(paymentId).contains("Real Person"));
+    }
+
+    // ---- a payout hold only blocks while something is owed ---------------------------------------------------
+
+    @Test
+    void aHoldWithNothingOwedIsNotABlocker() {
+        for (String kind : List.of("BANK_REQUIREMENT", "OPERATIONAL")) {
+            UUID settled = UUID.randomUUID();
+            allocate(instruction(settled, "PAID"), payable(settled), true);
+            legacyEarning(settled, "SETTLED");
+            control(settled, true, kind);
+
+            assertTrue(service.blockers(settled, Scope.CHEF).isEmpty(), kind);
+            assertTrue(service.blockers(settled, Scope.ALL).isEmpty(), kind);
+            assertEquals("DONE", tx.execute(s -> service.erase(settled, Scope.CHEF, request)).status(), kind);
+        }
+    }
+
+    @Test
+    void aHoldWithSomethingOwedBlocks() {
+        for (String kind : List.of("BANK_REQUIREMENT", "OPERATIONAL")) {
+            UUID unpaid = UUID.randomUUID();
+            payable(unpaid);
+            control(unpaid, true, kind);
+            assertEquals(Set.of("PAYABLE_UNPAID", "PAYOUT_ON_HOLD"), codes(service.blockers(unpaid, Scope.CHEF)), kind);
+
+            UUID unsettled = UUID.randomUUID();
+            legacyEarning(unsettled, "SETTLEMENT_PENDING");
+            control(unsettled, true, kind);
+            assertEquals(Set.of("SETTLEMENT_PENDING", "PAYOUT_ON_HOLD"), codes(service.blockers(unsettled, Scope.CHEF)), kind);
+        }
+        UUID noHold = UUID.randomUUID();
+        payable(noHold);
+        control(noHold, false);
+        assertEquals(Set.of("PAYABLE_UNPAID"), codes(service.blockers(noHold, Scope.CHEF)));
+    }
+
+    // ---- the personal fields kept in provider records and on fleet trips -------------------------------------
+
+    private static final class Scene {
+        UUID paid, razor, pending;
+        UUID attemptPaid, attemptRazor, attemptPending, eventPaid, eventRazor, eventPending;
+        UUID inboxRazor, inboxReceived, inboxPending, deliveryPending;
+        final List<UUID> inboxFinished = new ArrayList<>();
+        final List<UUID> deliveryFinished = new ArrayList<>();
+        final List<UUID> deliveryInFlight = new ArrayList<>();
+        final List<UUID> tripsFinished = new ArrayList<>();
+        UUID tripActive;
+        // Rows that must stay as they are: still being handled.
+        List<UUID> inFlightInbox() {
+            return List.of(inboxReceived, inboxPending);
+        }
+    }
+
+    /**
+     * A paid Cashfree order, a paid Razorpay order and one still being paid, each with the provider records Craves keeps,
+     * plus webhook rows and fleet trips in every state.
+     */
+    private static Scene scene(UUID owner) {
+        Scene sc = new Scene();
+        UUID paidCheckout = UUID.randomUUID();
+        UUID razorCheckout = UUID.randomUUID();
+        UUID pendingCheckout = UUID.randomUUID();
+        String razorOrder = "order_Rzp" + razorCheckout.toString().substring(0, 8);
+        String paidRef = providerOrderId(paidCheckout);
+        String pendingRef = providerOrderId(pendingCheckout);
+        sc.paid = payment(owner, paidCheckout, "PAID", CASHFREE_PAYLOAD.formatted(owner), CASHFREE_RESPONSE.formatted(paidRef, owner));
+        sc.razor = payment(owner, razorCheckout, razorOrder, "PAID", RAZORPAY_PAYLOAD.formatted(razorCheckout, owner), RAZORPAY_RESPONSE.formatted(razorOrder));
+        sc.pending = payment(owner, pendingCheckout, "PAYMENT_PENDING", CASHFREE_PAYLOAD.formatted(owner), CASHFREE_RESPONSE.formatted(pendingRef, owner));
+        sc.attemptPaid = attempt(sc.paid, CASHFREE_WEBHOOK.formatted(paidRef, owner));
+        sc.attemptRazor = attempt(sc.razor, RAZORPAY_WEBHOOK.formatted(razorOrder));
+        sc.attemptPending = attempt(sc.pending, CASHFREE_WEBHOOK.formatted(pendingRef, owner));
+        sc.eventPaid = event(sc.paid, CASHFREE_WEBHOOK.formatted(paidRef, owner));
+        sc.eventRazor = event(sc.razor, RAZORPAY_WEBHOOK.formatted(razorOrder));
+        sc.eventPending = event(sc.pending, CASHFREE_WEBHOOK.formatted(pendingRef, owner));
+        for (String status : List.of("PROCESSED", "DUPLICATE", "REJECTED", "FAILED")) {
+            sc.inboxFinished.add(inbox(status, CASHFREE_WEBHOOK.formatted(paidRef, owner)));
+        }
+        sc.inboxRazor = inbox("PROCESSED", RAZORPAY_WEBHOOK.formatted(razorOrder));
+        sc.inboxReceived = inbox("RECEIVED", CASHFREE_WEBHOOK.formatted(paidRef, owner));
+        sc.inboxPending = inbox("PROCESSED", CASHFREE_WEBHOOK.formatted(pendingRef, owner));
+        for (String status : List.of("COMPLETED", "DEAD_LETTER")) {
+            sc.deliveryFinished.add(delivery(status, CASHFREE_WEBHOOK.formatted(paidRef, owner)));
+        }
+        for (String status : List.of("RECEIVED", "PROCESSING", "FAILED")) {
+            sc.deliveryInFlight.add(delivery(status, CASHFREE_WEBHOOK.formatted(paidRef, owner)));
+        }
+        sc.deliveryPending = delivery("COMPLETED", CASHFREE_WEBHOOK.formatted(pendingRef, owner));
+        for (String state : List.of("DELIVERED", "FAILED", "CANCELLED")) {
+            sc.tripsFinished.add(trip(paidCheckout, state));
+        }
+        sc.tripActive = trip(paidCheckout, "PICKED_UP");
+        return sc;
+    }
+
+    /** What the same text looks like once the person's fields are replaced and nothing else is. */
+    private static String erased(String text) {
+        return text.replace("+919876543210", AccountErasureService.ERASED_PHONE).replace("9876543210", AccountErasureService.ERASED_PHONE)
+            .replace("Real Person", AccountErasureService.ERASED_NAME)
+            .replace("real.person@example.com", AccountErasureService.ERASED_EMAIL);
+    }
+
+    private static void assertErased(String table, String column, UUID id, String before) {
+        String after = column(table, column, id);
+        assertClean(after);
+        assertEquals(erased(before), after, table + "." + column + ": only the person's fields change; amounts and ids stay");
+    }
+
+    private static String tripWithoutPersonalColumns(UUID id) {
+        return jdbc.queryForObject("SELECT (to_jsonb(t) - 'customer_first_name' - 'customer_phone')::text FROM fleet_schema.trip t WHERE id=?", String.class, id);
+    }
+
+    @Test
+    void eraseScrubsPaymentOrderResponsePayloadToo() {
+        Scene mine = scene(customer);
+        Scene other = scene(UUID.randomUUID());
+        Map<UUID, String> responsesBefore = new java.util.HashMap<>();
+        Map<UUID, String> requestsBefore = new java.util.HashMap<>();
+        List.of(mine.paid, mine.razor, mine.pending).forEach(id -> {
+            responsesBefore.put(id, column("payment_schema.payment_order", "response_payload", id));
+            requestsBefore.put(id, column("payment_schema.payment_order", "request_payload", id));
+        });
+        String otherBefore = row("payment_schema.payment_order", other.paid);
+        String moneyBefore = jdbc.queryForObject("SELECT string_agg(concat_ws('|',id,amount,currency,status,provider_order_id,craves_payment_order_ref,updated_at),',' ORDER BY id)"
+            + " FROM payment_schema.payment_order WHERE customer_identity_id=?", String.class, customer);
+
+        ErasureResponse response = erase(customer, Scope.CUSTOMER);
+
+        // The order's own payloads are scrubbed whatever its state: nothing compares them and the row is the person's.
+        assertEquals(3, response.counts().get("payment_order"));
+        for (UUID id : List.of(mine.paid, mine.razor, mine.pending)) {
+            assertErased("payment_schema.payment_order", "response_payload", id, responsesBefore.get(id));
+            assertErased("payment_schema.payment_order", "request_payload", id, requestsBefore.get(id));
+        }
+        assertEquals("433.10", jdbc.queryForObject("SELECT response_payload->>'order_amount' FROM payment_schema.payment_order WHERE id=?", String.class, mine.paid));
+        assertEquals(customer.toString(), jdbc.queryForObject("SELECT response_payload->'customer_details'->>'customer_id' FROM payment_schema.payment_order WHERE id=?", String.class, mine.paid));
+        assertEquals(moneyBefore, jdbc.queryForObject("SELECT string_agg(concat_ws('|',id,amount,currency,status,provider_order_id,craves_payment_order_ref,updated_at),',' ORDER BY id)"
+            + " FROM payment_schema.payment_order WHERE customer_identity_id=?", String.class, customer));
+        assertEquals(otherBefore, row("payment_schema.payment_order", other.paid));
+        assertAllZero(erase(customer, Scope.CUSTOMER));
+    }
+
+    @Test
+    void eraseScrubsPaymentAttemptAndEventPayloadsOfFinishedOrders() {
+        Scene mine = scene(customer);
+        Scene other = scene(UUID.randomUUID());
+        Map<String, String> before = new java.util.HashMap<>();
+        for (UUID id : List.of(mine.attemptPaid, mine.attemptRazor)) {
+            before.put(id.toString(), column("payment_schema.payment_attempt", "raw_payload", id));
+        }
+        for (UUID id : List.of(mine.eventPaid, mine.eventRazor)) {
+            before.put(id.toString(), column("payment_schema.payment_event", "raw_payload", id));
+        }
+        String attemptPendingBefore = row("payment_schema.payment_attempt", mine.attemptPending);
+        String eventPendingBefore = row("payment_schema.payment_event", mine.eventPending);
+        String otherAttemptBefore = row("payment_schema.payment_attempt", other.attemptPaid);
+        String otherEventBefore = row("payment_schema.payment_event", other.eventPaid);
+        String attemptMoneyBefore = jdbc.queryForObject("SELECT concat_ws('|',cf_payment_id,payment_status,payment_amount,payment_currency,provider,payment_order_id)"
+            + " FROM payment_schema.payment_attempt WHERE id=?", String.class, mine.attemptPaid);
+
+        ErasureResponse response = erase(customer, Scope.CUSTOMER);
+
+        assertEquals(2, response.counts().get("payment_attempt"));
+        assertEquals(2, response.counts().get("payment_event"));
+        for (UUID id : List.of(mine.attemptPaid, mine.attemptRazor)) {
+            assertErased("payment_schema.payment_attempt", "raw_payload", id, before.get(id.toString()));
+        }
+        for (UUID id : List.of(mine.eventPaid, mine.eventRazor)) {
+            assertErased("payment_schema.payment_event", "raw_payload", id, before.get(id.toString()));
+        }
+        assertEquals(attemptMoneyBefore, jdbc.queryForObject("SELECT concat_ws('|',cf_payment_id,payment_status,payment_amount,payment_currency,provider,payment_order_id)"
+            + " FROM payment_schema.payment_attempt WHERE id=?", String.class, mine.attemptPaid));
+        assertEquals(attemptPendingBefore, row("payment_schema.payment_attempt", mine.attemptPending), "the order is still being paid");
+        assertEquals(eventPendingBefore, row("payment_schema.payment_event", mine.eventPending), "the order is still being paid");
+        assertEquals(otherAttemptBefore, row("payment_schema.payment_attempt", other.attemptPaid));
+        assertEquals(otherEventBefore, row("payment_schema.payment_event", other.eventPaid));
+        ErasureResponse second = erase(customer, Scope.CUSTOMER);
+        assertAllZero(second);
+    }
+
+    @Test
+    void eraseScrubsFinishedWebhookRowsOnly() {
+        Scene mine = scene(customer);
+        Scene other = scene(UUID.randomUUID());
+        Map<UUID, String> before = new java.util.HashMap<>();
+        List<UUID> inboxToScrub = new ArrayList<>(mine.inboxFinished);
+        inboxToScrub.add(mine.inboxRazor);
+        inboxToScrub.forEach(id -> before.put(id, column("payment_schema.webhook_inbox", "raw_payload", id)));
+        mine.deliveryFinished.forEach(id -> before.put(id, column("payment_schema.cashfree_webhook_delivery", "raw_payload", id)));
+        Map<UUID, String> untouched = new java.util.HashMap<>();
+        mine.inFlightInbox().forEach(id -> untouched.put(id, row("payment_schema.webhook_inbox", id)));
+        mine.deliveryInFlight.forEach(id -> untouched.put(id, row("payment_schema.cashfree_webhook_delivery", id)));
+        untouched.put(mine.deliveryPending, row("payment_schema.cashfree_webhook_delivery", mine.deliveryPending));
+        other.inboxFinished.forEach(id -> untouched.put(id, row("payment_schema.webhook_inbox", id)));
+        other.deliveryFinished.forEach(id -> untouched.put(id, row("payment_schema.cashfree_webhook_delivery", id)));
+        String statusBefore = jdbc.queryForObject("SELECT string_agg(concat_ws('|',id,provider,event_identity,processing_status),',' ORDER BY id) FROM payment_schema.webhook_inbox",
+            String.class);
+
+        ErasureResponse response = erase(customer, Scope.CUSTOMER);
+
+        assertEquals(5, response.counts().get("webhook_inbox"), "four finished statuses and the Razorpay row");
+        assertEquals(2, response.counts().get("cashfree_webhook_delivery"), "COMPLETED and DEAD_LETTER");
+        inboxToScrub.forEach(id -> assertErased("payment_schema.webhook_inbox", "raw_payload", id, before.get(id)));
+        mine.deliveryFinished.forEach(id -> assertErased("payment_schema.cashfree_webhook_delivery", "raw_payload", id, before.get(id)));
+        // RECEIVED, PROCESSING and FAILED are still being handled (FAILED is retried); a pending order's rows wait.
+        mine.inFlightInbox().forEach(id -> assertEquals(untouched.get(id), row("payment_schema.webhook_inbox", id)));
+        mine.deliveryInFlight.forEach(id -> assertEquals(untouched.get(id), row("payment_schema.cashfree_webhook_delivery", id)));
+        assertEquals(untouched.get(mine.deliveryPending), row("payment_schema.cashfree_webhook_delivery", mine.deliveryPending));
+        other.inboxFinished.forEach(id -> assertEquals(untouched.get(id), row("payment_schema.webhook_inbox", id)));
+        other.deliveryFinished.forEach(id -> assertEquals(untouched.get(id), row("payment_schema.cashfree_webhook_delivery", id)));
+        assertEquals(statusBefore, jdbc.queryForObject("SELECT string_agg(concat_ws('|',id,provider,event_identity,processing_status),',' ORDER BY id) FROM payment_schema.webhook_inbox",
+            String.class), "statuses and identities stay");
+        assertAllZero(erase(customer, Scope.CUSTOMER));
+    }
+
+    @Test
+    void eraseScrubsCustomerNameAndPhoneOnFinishedFleetTripsOnly() {
+        Scene mine = scene(customer);
+        Scene other = scene(UUID.randomUUID());
+        Map<UUID, String> otherColumns = new java.util.HashMap<>();
+        mine.tripsFinished.forEach(id -> otherColumns.put(id, tripWithoutPersonalColumns(id)));
+        String activeBefore = row("fleet_schema.trip", mine.tripActive);
+        String otherBefore = row("fleet_schema.trip", other.tripActive);
+        List<String> otherFinishedBefore = other.tripsFinished.stream().map(id -> row("fleet_schema.trip", id)).toList();
+
+        ErasureResponse response = erase(customer, Scope.CUSTOMER);
+
+        assertEquals(3, response.counts().get("fleet_trip"));
+        for (UUID id : mine.tripsFinished) {
+            assertEquals(AccountErasureService.ERASED_NAME, jdbc.queryForObject("SELECT customer_first_name FROM fleet_schema.trip WHERE id=?", String.class, id));
+            assertEquals(AccountErasureService.ERASED_PHONE, jdbc.queryForObject("SELECT customer_phone FROM fleet_schema.trip WHERE id=?", String.class, id));
+            assertEquals(otherColumns.get(id), tripWithoutPersonalColumns(id), "state, rider, kitchen, chef phone, drop address and ids stay");
+        }
+        assertEquals(activeBefore, row("fleet_schema.trip", mine.tripActive), "a trip still on the road is not touched");
+        assertEquals(otherBefore, row("fleet_schema.trip", other.tripActive));
+        assertEquals(otherFinishedBefore, other.tripsFinished.stream().map(id -> row("fleet_schema.trip", id)).toList());
+        assertAllZero(erase(customer, Scope.CUSTOMER));
+    }
+
+    @Test
+    void aNameWithEscapedQuotesAndBackslashesIsReplacedWhole() {
+        UUID id = payment(customer, "{\"customer_details\":{\"customer_id\":\"x\",\"customer_name\":\"Anne \\\"Real Person\\\" O\\\\Brien\","
+            + "\"customer_phone\":\"9876543210\"},\"order_amount\":1.50}");
+
+        assertEquals(1, erase(customer, Scope.CUSTOMER).counts().get("payment_order"));
+
+        String after = payload(id);
+        assertFalse(after.contains("Real Person") || after.contains("Brien") || after.contains("Anne"), after);
+        assertEquals(AccountErasureService.ERASED_NAME, jdbc.queryForObject(
+            "SELECT request_payload->'customer_details'->>'customer_name' FROM payment_schema.payment_order WHERE id=?", String.class, id));
+        assertEquals("1.50", jdbc.queryForObject("SELECT request_payload->>'order_amount' FROM payment_schema.payment_order WHERE id=?", String.class, id));
     }
 }

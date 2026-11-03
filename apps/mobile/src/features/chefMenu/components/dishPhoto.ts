@@ -55,21 +55,19 @@ export async function pickDishPhoto(source: DishPhotoSource): Promise<{photo: Di
   }
 }
 
-/** Deletes dish photos one by one. One that will not delete is left: the new photo is already saved, so the save must not fail. */
-async function removeImages(menuItemId: string, images: readonly ChefMenuItemImage[]): Promise<void> {
-  for (const image of images) {
-    try {
-      await chefMenuApi.deleteImage(menuItemId, image.id);
-    } catch {
-      // Left in place: it can be cleared on the next photo change.
-    }
+/** Deletes one dish photo. One that will not delete is left: the save must not fail over it. */
+async function removeImage(menuItemId: string, image: ChefMenuItemImage): Promise<void> {
+  try {
+    await chefMenuApi.deleteImage(menuItemId, image.id);
+  } catch {
+    // Left in place: it is replaced again on the next photo change.
   }
 }
 
 /**
- * Sends the photo as the dish's main one and then deletes the dish's old photos, so they do not pile up to the server's
- * limit of 5. False when it did not upload (the dish itself is already saved), 'limit' when the dish is full of photos
- * that could not be cleared.
+ * Sends the photo as the dish's main one and then deletes the main photo it replaces, so replacing does not pile up to
+ * the server's limit of 5. Other (gallery) photos are never deleted: the website lets chefs keep them. False when it did
+ * not upload (the dish itself is already saved), 'limit' when the dish holds 5 photos and none is the main one to replace.
  */
 export async function uploadDishPhoto(
   menuItemId: string,
@@ -83,20 +81,21 @@ export async function uploadDishPhoto(
       formData.append('file', file as unknown as Blob);
       return chefMenuApi.uploadImage(menuItemId, formData, true);
     };
-    let stale = oldImages;
+    const cover = oldImages.find(image => image.primary);
     try {
       await send();
     } catch (error) {
-      const extras = stale.filter(image => !image.primary);
-      if (toAppApiError(error).code !== MENU_IMAGE_LIMIT_REACHED || extras.length === 0) {
+      if (toAppApiError(error).code !== MENU_IMAGE_LIMIT_REACHED || !cover) {
         throw error;
       }
-      // A dish saved by an older build can already hold 5 photos: free the extra ones (not the cover), then send once more.
-      await removeImages(menuItemId, extras);
-      stale = stale.filter(image => image.primary);
+      // Full dish: the main photo being replaced is the one photo that may go first, then send once more.
+      await removeImage(menuItemId, cover);
       await send();
+      return true;
     }
-    await removeImages(menuItemId, stale);
+    if (cover) {
+      await removeImage(menuItemId, cover);
+    }
     return true;
   } catch (error) {
     return toAppApiError(error).code === MENU_IMAGE_LIMIT_REACHED ? 'limit' : false;

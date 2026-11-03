@@ -341,7 +341,7 @@ function DishForm({
           reset(chefMenuItemToFormValues(saved));
           setPhotoError(
             uploaded === 'limit'
-              ? "This dish already has the most photos it can hold, and we couldn't remove the old ones. Please try again."
+              ? 'This dish already has 5 photos. Remove one on the Craves website first, then try again.'
               : "The new photo didn't upload. Your other changes are saved. Try the photo again.",
           );
           return;

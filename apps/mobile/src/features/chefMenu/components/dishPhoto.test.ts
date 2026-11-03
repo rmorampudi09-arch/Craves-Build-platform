@@ -69,14 +69,20 @@ describe('uploadDishPhoto', () => {
   });
 
   describe('replacing the dish photo', () => {
-    it('deletes the old photos of the dish once the new one is saved', async () => {
-      const old = [image(1, true), image(2, false)];
+    const deleted = () => jest.mocked(chefMenuApi.deleteImage).mock.calls.map(call => call[1]);
+
+    it('deletes only the old main photo once the new one is saved, never the gallery', async () => {
+      const old = [image(1, true), image(2, false), image(3, false)];
 
       await expect(uploadDishPhoto(DISH_ID, photo(1200, 900), old)).resolves.toBe(true);
 
-      expect(chefMenuApi.deleteImage).toHaveBeenCalledTimes(2);
-      expect(chefMenuApi.deleteImage).toHaveBeenCalledWith(DISH_ID, old[0].id);
-      expect(chefMenuApi.deleteImage).toHaveBeenCalledWith(DISH_ID, old[1].id);
+      expect(deleted()).toEqual([old[0].id]);
+    });
+
+    it('deletes nothing when the dish had no main photo', async () => {
+      await expect(uploadDishPhoto(DISH_ID, photo(1200, 900), [image(2, false)])).resolves.toBe(true);
+
+      expect(chefMenuApi.deleteImage).not.toHaveBeenCalled();
     });
 
     it('keeps the old photos when the new one did not upload', async () => {
@@ -87,31 +93,40 @@ describe('uploadDishPhoto', () => {
       expect(chefMenuApi.deleteImage).not.toHaveBeenCalled();
     });
 
-    it('still reports the photo saved when an old one cannot be deleted', async () => {
+    it('still reports the photo saved when the old main photo cannot be deleted', async () => {
       jest.mocked(chefMenuApi.deleteImage).mockRejectedValue(new Error('offline'));
 
       await expect(uploadDishPhoto(DISH_ID, photo(1200, 900), [image(1, true), image(2, false)])).resolves.toBe(true);
 
-      expect(chefMenuApi.deleteImage).toHaveBeenCalledTimes(2);
+      expect(chefMenuApi.deleteImage).toHaveBeenCalledTimes(1);
     });
 
-    it('frees the extra photos of a dish already at the limit, then sends the new one and drops the old cover', async () => {
+    it('at the limit deletes the old main photo first, then sends the new one, and leaves the gallery alone', async () => {
       const old = [image(1, true), image(2, false), image(3, false)];
       jest.mocked(chefMenuApi.uploadImage).mockRejectedValueOnce(limit());
 
       await expect(uploadDishPhoto(DISH_ID, photo(1200, 900), old)).resolves.toBe(true);
 
       expect(chefMenuApi.uploadImage).toHaveBeenCalledTimes(2);
-      expect(jest.mocked(chefMenuApi.deleteImage).mock.calls.map(call => call[1])).toEqual([old[1].id, old[2].id, old[0].id]);
+      expect(deleted()).toEqual([old[0].id]);
     });
 
-    it('reports the limit when there is nothing it may delete', async () => {
+    it('at the limit with five gallery photos and no main one, deletes nothing and reports the limit', async () => {
       jest.mocked(chefMenuApi.uploadImage).mockRejectedValue(limit());
 
-      await expect(uploadDishPhoto(DISH_ID, photo(1200, 900), [image(1, true)])).resolves.toBe('limit');
+      await expect(uploadDishPhoto(DISH_ID, photo(1200, 900), [image(1, false), image(2, false)])).resolves.toBe('limit');
 
       expect(chefMenuApi.uploadImage).toHaveBeenCalledTimes(1);
       expect(chefMenuApi.deleteImage).not.toHaveBeenCalled();
+    });
+
+    it('reports the limit when it still blocks the upload after the old main photo is gone', async () => {
+      const old = [image(1, true), image(2, false)];
+      jest.mocked(chefMenuApi.uploadImage).mockRejectedValue(limit());
+
+      await expect(uploadDishPhoto(DISH_ID, photo(1200, 900), old)).resolves.toBe('limit');
+
+      expect(deleted()).toEqual([old[0].id]);
     });
   });
 });

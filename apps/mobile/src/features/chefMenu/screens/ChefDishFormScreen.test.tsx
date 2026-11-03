@@ -641,7 +641,7 @@ describe('ChefDishFormScreen', () => {
         mockApi.uploadImage.mockRejectedValue(new AppApiError('MENU_IMAGE_LIMIT_REACHED', 'A dish can have up to 5 photos', 409));
         await press('Save changes');
         await settle();
-        expect(has("This dish already has the most photos it can hold, and we couldn't remove the old ones. Please try again.")).toBe(true);
+        expect(has('This dish already has 5 photos. Remove one on the Craves website first, then try again.')).toBe(true);
         expect(has("The new photo didn't upload. Your other changes are saved. Try the photo again.")).toBe(false);
         expect(mockLeft).not.toHaveBeenCalled();
       });

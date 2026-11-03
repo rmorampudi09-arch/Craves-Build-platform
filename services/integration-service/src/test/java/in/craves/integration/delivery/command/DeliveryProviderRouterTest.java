@@ -100,6 +100,35 @@ class DeliveryProviderRouterTest {
     }
 
     @Test
+    void anOpenProviderCircuitSkipsThatProvidersQuoteLikeAFailedQuote() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("fast", "backup"));
+        FakeAdapter fast = new FakeAdapter("fast", 5, "110.00", CreateBehavior.SUCCESS);
+        FakeAdapter backup = new FakeAdapter("backup", 8, "90.00", CreateBehavior.SUCCESS);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setQuoteTimeoutSeconds(4);
+        properties.setMaxProviderAttempts(2);
+        when(intelligence.assign(any())).thenReturn(assignment(UUID.randomUUID(), UUID.randomUUID()));
+        DeliveryProviderRouter router = new DeliveryProviderRouter(
+            List.of(fast, backup), catalog, intelligence, mock(DeliveryAssignmentRepository.class), properties,
+            quoteExecutor, clock
+        );
+        ProviderGuard guard = new ProviderGuard(1, java.time.Duration.ofMinutes(1), 8, clock);
+        assertThatThrownBy(() -> guard.quote("fast", () -> { throw new IllegalStateException("HTTP 502"); },
+            java.time.Duration.ofSeconds(4))).isInstanceOf(IllegalStateException.class);
+        router.setProviderGuard(guard);
+
+        var result = router.route(command());
+
+        assertThat(fast.quoteCalls()).isZero();
+        assertThat(backup.quoteCalls()).isEqualTo(1);
+        assertThat(result.providerId()).isEqualTo("backup");
+        assertThat(result.quoteAudit())
+            .anySatisfy(audit -> assertThat(audit.error()).contains("fast circuit open"));
+    }
+
+    @Test
     void timedPolicyAttemptsOnlyBorzoBeforeTwoMinutesAndOnlyPidgeAfterward() {
         var catalog = mock(DeliveryProviderCatalogRepository.class);
         var intelligence = mock(DeliveryIntelligenceService.class);

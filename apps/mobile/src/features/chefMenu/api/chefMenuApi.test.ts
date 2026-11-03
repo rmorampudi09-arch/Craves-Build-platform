@@ -148,6 +148,23 @@ describe('chefMenuApi contract model', () => {
     ).toBeNull();
   });
 
+  it('keeps a dish from before the delivery-details migration, where weight and thermobox are null', () => {
+    const legacy = {
+      ...menuItem,
+      description: null,
+      servesCount: null,
+      preparationTimeMinutes: null,
+      spiceLevel: null,
+      unitPackageWeightGrams: null,
+      thermoboxRequired: null,
+    };
+    expect(parseChefMenuItem(legacy)).toEqual(legacy);
+    expect(parseChefMenuItems([menuItem, legacy])).toEqual([menuItem, legacy]);
+    expect(
+      parseChefMenuItem({...menuItem, thermoboxRequired: 'false'}),
+    ).toBeNull();
+  });
+
   it('rejects a list when any row violates the exact item contract', () => {
     expect(parseChefMenuItems([menuItem, {...menuItem, status: 'ARCHIVED'}])).toBeNull();
   });

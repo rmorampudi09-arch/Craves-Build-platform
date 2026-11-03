@@ -50,7 +50,7 @@ export interface CustomerOrderDeliveryAddress {
 
 export interface CustomerOrder {
   id: string;
-  checkoutId: string;
+  checkoutId: string | null;
   kitchenId: string;
   kitchenName: string;
   status: CustomerOrderStatus;

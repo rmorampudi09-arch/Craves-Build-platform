@@ -73,7 +73,8 @@ const itemSchema = z.object({
 
 const orderSchema = z.object({
   id: z.string().uuid(),
-  checkoutId: z.string().uuid(),
+  // Meal-plan (subscription) orders have no checkout.
+  checkoutId: z.string().uuid().nullable(),
   kitchenId: z.string().uuid(),
   kitchenName: z.string().trim().min(1).max(180),
   status: z.enum(CUSTOMER_ORDER_STATUSES),

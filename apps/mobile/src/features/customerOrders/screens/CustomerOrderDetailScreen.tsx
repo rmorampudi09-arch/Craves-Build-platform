@@ -397,7 +397,7 @@ export function CustomerOrderDetailScreen() {
   };
 
   const continuePendingPayment = async () => {
-    if (paymentBusy || order.status !== 'PAYMENT_PENDING') return;
+    if (paymentBusy || order.status !== 'PAYMENT_PENDING' || !order.checkoutId) return;
     setPaymentBusy(true);
     setPaymentError(null);
     try {
@@ -693,7 +693,7 @@ export function CustomerOrderDetailScreen() {
           </View>
         ) : null}
 
-        {order.status === 'PAYMENT_PENDING' ? (
+        {order.status === 'PAYMENT_PENDING' && order.checkoutId ? (
           <Pressable
             accessibilityLabel="Continue payment"
             accessibilityRole="button"

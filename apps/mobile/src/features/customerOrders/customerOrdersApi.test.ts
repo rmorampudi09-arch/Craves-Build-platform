@@ -3,6 +3,7 @@ import {
   CUSTOMER_ORDERS_PATH,
   CUSTOMER_ORDERS_SERVER_WINDOW_LIMIT,
   customerOrdersApi,
+  parseCustomerOrderResponse,
   parseCustomerOrdersResponse,
 } from './api/customerOrdersApi';
 
@@ -87,6 +88,25 @@ describe('P52 customer orders API', () => {
     // The customer's own map pin stays: the order screen shows it on the delivery map.
     expect(result?.[0].deliveryAddress).toMatchObject({latitude: null, longitude: null});
     expect(result?.[0].grandTotal).toEqual({amount: '229', currency: 'INR'});
+  });
+
+  it('keeps a meal-plan order, which has no checkout, in the list and the detail', () => {
+    // Subscription orders are stored with checkout_id NULL and all-zero money.
+    const mealOrder = order({
+      checkoutId: null,
+      status: 'CHEF_ACCEPTANCE_PENDING',
+      foodSubtotal: 0,
+      platformFee: 0,
+      taxAmount: 0,
+      deliveryFee: 0,
+      grandTotal: 0,
+    });
+
+    expect(parseCustomerOrdersResponse([mealOrder, order({
+      id: '88888888-8888-4888-8888-888888888888',
+      createdAt: '2026-08-08T11:00:00Z',
+    })])).toHaveLength(2);
+    expect(parseCustomerOrderResponse(mealOrder)?.checkoutId).toBeNull();
   });
 
   it('rejects unknown statuses rather than inventing lifecycle semantics', () => {

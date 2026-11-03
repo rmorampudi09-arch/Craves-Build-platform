@@ -2,9 +2,11 @@
 # Publishes M25's delivery exception routes (integration-service, docs/advanced-features/modules.md) as four operations on
 # the existing admin operations API (craves-admin-operational-investigations-v1, api/v1/admin/operations) of the mobile
 # gateway (apim-craves-prod-34eefd, api.craves.in), for the admin console's /admin/delivery-exceptions page.
-# Writes only these four operations and their policies (infra/apim/admin-operational-investigations/authenticated-policy.xml:
-# Bearer required, no-store), routed to ca-craves-integration-prod's ingress (FQDN read at run time); every other
-# operation stays as it is. The backend answers 404 until CRAVES_DELIVERY_EXCEPTIONS_ENABLED=true and checks roles itself.
+# Writes only these four operations; each gets the live policy of the delivery-command investigation on the same API
+# (Bearer required, no-store, routed to ca-craves-integration-prod), which the script checks first. It does not use
+# infra/apim/admin-operational-investigations/authenticated-policy.xml: this APIM refuses that template ("Block statements
+# must be enclosed in { and }", 3 Nov 2026). Every other operation stays as it is. The backend answers 404 until
+# CRAVES_DELIVERY_EXCEPTIONS_ENABLED=true and checks roles itself.
 #
 #   DRY_RUN=true bash scripts/apim/configure-delivery-exceptions-admin-apim.sh             lists the operations, calls nothing
 #   CONFIRM_APIM_WRITE=true bash scripts/apim/configure-delivery-exceptions-admin-apim.sh  scoped, idempotent write (az login first)
@@ -23,8 +25,7 @@ PUBLIC_HOST=https://api.craves.in
 EXPECTED_SUBSCRIPTION=34eefd95-1a19-416f-b9df-92b326500615
 INTEGRATION_RG=rg-craves-integration-prod
 INTEGRATION_APP=ca-craves-integration-prod
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-POLICY_TEMPLATE="$ROOT/infra/apim/admin-operational-investigations/authenticated-policy.xml"
+SOURCE_OPERATION=get-admin-delivery-command-investigation
 # operation id|method|template|display name
 OPERATIONS=(
   "list-admin-delivery-exceptions|GET|/delivery-exceptions|List delivery exception cases"
@@ -34,12 +35,11 @@ OPERATIONS=(
 )
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
-[[ -f "$POLICY_TEMPLATE" ]] || fail "APIM policy template is missing"
 echo "Operations on $API_ID (/$API_PATH) of $APIM, routed to $INTEGRATION_APP:"
 printf '  %s\n' "${OPERATIONS[@]}"
 if [[ "${DRY_RUN,,}" == true ]]; then echo "DRY_RUN: no az or curl call was made; nothing was written."; exit 0; fi
 [[ "${CONFIRM_APIM_WRITE,,}" == true ]] || fail 'Set CONFIRM_APIM_WRITE=true for the scoped APIM write (or DRY_RUN=true to preview).'
-for tool in az jq curl sed; do command -v "$tool" >/dev/null || fail "$tool is required"; done
+for tool in az jq curl; do command -v "$tool" >/dev/null || fail "$tool is required"; done
 
 # Read-only checks first: nothing is written until they pass.
 SUB=$(az account show --query id -o tsv --only-show-errors)
@@ -55,15 +55,16 @@ READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
 [[ $(az containerapp revision show -g "$INTEGRATION_RG" -n "$INTEGRATION_APP" --revision "$READY" --query properties.healthState -o tsv --only-show-errors) == Healthy ]] ||
   fail "$INTEGRATION_APP's ready revision is not Healthy; nothing written."
 BACKEND="https://$FQDN/$API_PATH"
-# The delivery-command investigation should already go there; say so when it does not (it is not changed here).
-SOURCE_POLICY=$(az rest --method get --url "$API_MGMT/operations/get-admin-delivery-command-investigation/policies/policy?api-version=$API_VERSION" \
-  --query properties.value -o tsv --only-show-errors 2>/dev/null || true)
-[[ "$SOURCE_POLICY" == *"base-url=\"$BACKEND\""* ]] || echo "WARNING: get-admin-delivery-command-investigation does not route to $BACKEND; check it separately."
-echo "Backend: $BACKEND"
+policy() { az rest --method get --url "$API_MGMT/operations/$1/policies/policy?api-version=$API_VERSION&format=rawxml" \
+  --query properties.value -o tsv --only-show-errors 2>/dev/null; }
+SOURCE_POLICY=$(policy "$SOURCE_OPERATION") || fail "Could not read $SOURCE_OPERATION's policy; nothing written."
+[[ "$SOURCE_POLICY" == *"base-url=\"$BACKEND\""* && "$SOURCE_POLICY" == *Bearer* && "$SOURCE_POLICY" == *no-store* ]] ||
+  fail "$SOURCE_OPERATION's policy does not route to $BACKEND with the Bearer and no-store guards; review it by hand. Nothing written."
+echo "Backend: $BACKEND (policy copied from $SOURCE_OPERATION)"
 
 for ROW in "${OPERATIONS[@]}"; do
   IFS='|' read -r ID METHOD TEMPLATE DISPLAY <<<"$ROW"
-  BODY=$(mktemp); RENDERED=$(mktemp); POLICY_BODY=$(mktemp)
+  BODY=$(mktemp); POLICY_BODY=$(mktemp)
   jq -n --arg display "$DISPLAY" --arg method "$METHOD" --arg template "$TEMPLATE" \
     '{properties:{displayName:$display,method:$method,urlTemplate:$template,
       templateParameters:(if ($template|test("\\{caseId\\}")) then [{name:"caseId",type:"string",required:true}] else [] end),
@@ -71,13 +72,12 @@ for ROW in "${OPERATIONS[@]}"; do
         {statusCode:401,description:"Authentication required"},{statusCode:403,description:"Admin role required"},
         {statusCode:404,description:"Not found or switched off"},{statusCode:409,description:"Case changed"}]}}' >"$BODY"
   az rest --method put --url "$API_MGMT/operations/$ID?api-version=$API_VERSION" --body @"$BODY" -o none --only-show-errors
-  sed "s|__BACKEND_URL__|${BACKEND}|g" "$POLICY_TEMPLATE" >"$RENDERED"
-  jq -Rs '{properties:{format:"rawxml",value:.}}' "$RENDERED" >"$POLICY_BODY"
+  jq -Rs '{properties:{format:"rawxml",value:.}}' <<<"$SOURCE_POLICY" >"$POLICY_BODY"
   az rest --method put --url "$API_MGMT/operations/$ID/policies/policy?api-version=$API_VERSION" --body @"$POLICY_BODY" -o none --only-show-errors
-  rm -f "$BODY" "$RENDERED" "$POLICY_BODY"
+  rm -f "$BODY" "$POLICY_BODY"
   OPERATION=$(az apim api operation show -g "$RG" --service-name "$APIM" --api-id "$API_ID" --operation-id "$ID" -o json --only-show-errors)
   [[ $(jq -r .method <<<"$OPERATION") == "$METHOD" && $(jq -r .urlTemplate <<<"$OPERATION") == "$TEMPLATE" ]] || fail "$ID read-back failed"
-  POLICY=$(az rest --method get --url "$API_MGMT/operations/$ID/policies/policy?api-version=$API_VERSION" --query properties.value -o tsv --only-show-errors)
+  POLICY=$(policy "$ID") || fail "$ID policy read-back failed"
   [[ "$POLICY" == *"$BACKEND"* && "$POLICY" == *Bearer* && "$POLICY" == *no-store* ]] || fail "$ID policy read-back failed"
   echo "OK $METHOD /$API_PATH$TEMPLATE"
 done

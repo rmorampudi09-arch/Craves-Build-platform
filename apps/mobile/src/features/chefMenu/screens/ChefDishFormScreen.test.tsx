@@ -912,7 +912,7 @@ describe('ChefDishFormScreen', () => {
       await press('Jain');
       await press('Publish dish');
       await settle();
-      expect(has('Pick at least one cuisine to save diet labels.')).toBe(true);
+      expect(count('Pick at least one cuisine to save diet labels.')).toBe(2);
       expect(mockApi.createItem).not.toHaveBeenCalled();
       expect(mockTaxonomy.saveChefLabels).not.toHaveBeenCalled();
       expect(mockLeft).not.toHaveBeenCalled();
@@ -1031,7 +1031,7 @@ describe('ChefDishFormScreen', () => {
         mockTaxonomy.saveChefLabels.mockRejectedValue(new Error('offline'));
         await press('Save changes');
         await settle();
-        expect(has("Labels didn't save. Try again.")).toBe(true);
+        expect(count("Labels didn't save. Try again.")).toBe(2);
         expect(mockApi.uploadImage).not.toHaveBeenCalled();
         expect(mockLeft).not.toHaveBeenCalled();
       });
@@ -1043,7 +1043,7 @@ describe('ChefDishFormScreen', () => {
       mockTaxonomy.saveChefLabels.mockRejectedValue(new Error('offline'));
       await press('Save changes');
       await settle();
-      expect(has("Labels didn't save. Try again.")).toBe(true);
+      expect(count("Labels didn't save. Try again.")).toBe(2);
       expect(checked('Vegan')).toBe(true);
       expect(mockLeft).not.toHaveBeenCalled();
     });

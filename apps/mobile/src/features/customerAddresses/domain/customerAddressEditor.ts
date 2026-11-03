@@ -1,11 +1,10 @@
 import type {
   CustomerAddress,
-  CustomerAddressLabel,
   CustomerAddressUpdateRequest,
 } from './customerAddressContract';
 
 export interface CustomerAddressDraft {
-  addressLabel: CustomerAddressLabel | null;
+  addressLabel: string | null;
   recipientName: string;
   contactPhoneNumber: string;
   addressLine1: string;

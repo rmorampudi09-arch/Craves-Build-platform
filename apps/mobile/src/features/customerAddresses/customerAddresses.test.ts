@@ -5,7 +5,9 @@ import {
   CUSTOMER_ADDRESSES_VIEW_CART_CONTENT_CLEARANCE,
   resolveCustomerAddressesContentBottomInset,
 } from './customerAddressesActiveCart';
+import {parseCustomerAddressesResponse} from './api/customerAddressesApi';
 import {
+  customerAddressLabel,
   isCustomerAddressDeliveryReady,
   parseCustomerAddress,
   toCustomerAddressUpdateRequest,
@@ -92,10 +94,27 @@ describe('customer address contract and active/empty visuals', () => {
     });
   });
 
-  it('rejects an address response outside the approved enum contract', () => {
+  it('keeps a custom address name saved on the website and sends it back on edit', () => {
+    const address = parseCustomerAddress({...validAddressResponse, addressLabel: " Mom's House "});
+
+    expect(address?.addressLabel).toBe("Mom's House");
+    expect(address && customerAddressLabel(address)).toBe("Mom's House");
+    expect(address && toCustomerBrowsingLocation(address)?.label).toBe("Mom's House");
+    expect(address && toCustomerAddressUpdateRequest(address)?.addressLabel).toBe("Mom's House");
+  });
+
+  it('shows a generic label for a label it cannot read, and keeps the address and the list', () => {
+    for (const addressLabel of [42, '   ', 'x'.repeat(81)]) {
+      const address = parseCustomerAddress({...validAddressResponse, addressLabel});
+      expect(address).not.toBeNull();
+      expect(address && customerAddressLabel(address)).toBe('Saved address');
+    }
     expect(
-      parseCustomerAddress({...validAddressResponse, addressLabel: 'PRIMARY'}),
-    ).toBeNull();
+      parseCustomerAddressesResponse([
+        {...validAddressResponse, addressLabel: "Mom's House"},
+        validAddressResponse,
+      ]),
+    ).toHaveLength(2);
   });
 
   it('keeps the detached View Cart overlay suppressed because cart now lives in bottom navigation', () => {

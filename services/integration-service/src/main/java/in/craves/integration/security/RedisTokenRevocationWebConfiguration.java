@@ -48,7 +48,8 @@ public class RedisTokenRevocationWebConfiguration implements WebMvcConfigurer {
         @Override
         public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
             String authorization = request.getHeader("Authorization");
-            if (authorization == null || !authorization.startsWith("Bearer ")) return true;
+            // Any case, as CravesJwtAuthenticationFilter accepts it: otherwise "bearer <revoked token>" skips this check.
+            if (authorization == null || !authorization.regionMatches(true, 0, "Bearer ", 0, 7)) return true;
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication == null || !authentication.isAuthenticated()) return true;
             TokenIdentity token = tokenIdentity(authorization);

@@ -59,13 +59,14 @@ public class AdminSessionRevocationWebConfiguration implements WebMvcConfigurer 
             @Override public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
                 Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
                 String authorization = request.getHeader("Authorization");
+                // The scheme matches in any case, as CravesJwtAuthenticationFilter accepts it: otherwise "bearer <admin token>" skips the live check.
                 if (authentication == null || !authentication.isAuthenticated() || authentication instanceof AnonymousAuthenticationToken
-                    || authorization == null || !authorization.startsWith("Bearer ")) return true;
+                    || authorization == null || !authorization.regionMatches(true, 0, "Bearer ", 0, 7)) return true;
                 if (!hasInternalRole(authorization.substring(7))) return true;
                 if (!permits.tryAcquire()) throw unavailable();
                 try {
                     HttpRequest verification = HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(5))
-                        .header("Authorization", authorization).header("Accept", "application/json").GET().build();
+                        .header("Authorization", "Bearer " + authorization.substring(7)).header("Accept", "application/json").GET().build();
                     var reply = client.send(verification, HttpResponse.BodyHandlers.discarding());
                     int status = reply.statusCode();
                     if (status == 401 || status == 403)

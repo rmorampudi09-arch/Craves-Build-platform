@@ -758,6 +758,19 @@ describe('ChefMealPlanEditorScreen', () => {
       expect(allText()).toContain('Draft saved');
     });
 
+    it('keeps the form locked once a save sends the chef back, so nothing re-renders while the screen leaves', async () => {
+      // Clearing the busy state during the exit re-rendered the screen as Android removed it and crashed the app.
+      mockCreatePlan.mockResolvedValueOnce(plan({}));
+      render();
+      fillDetails();
+      tryLeave();
+
+      await act(async () => pressable('Save draft').props.onPress());
+
+      expect(mockGoBack).toHaveBeenCalled();
+      expect(input('Plan name').props.editable).toBe(false);
+    });
+
     it('takes the chef back to the step with the problem when a draft saved from a later step is not complete', async () => {
       // A draft that came back without a description, opened on the Meals step.
       mockPlans = [plan({description: null})];

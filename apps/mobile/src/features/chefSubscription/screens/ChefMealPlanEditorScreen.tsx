@@ -370,6 +370,7 @@ function MealPlanEditor({
     setPhotoError(null);
     setScheduleNote(false);
     let id = savedPlanId;
+    let leavesScreen = false;
     try {
       const input = {
         name: form.name.trim(),
@@ -399,14 +400,18 @@ function MealPlanEditor({
         return;
       }
       toast.show(mode === 'submit' ? 'Sent to Craves for approval' : 'Draft saved');
+      leavesScreen = true;
       setLeaving(true);
     } catch (cause) {
       setServerError(
         cause instanceof AppApiError ? cause.message : 'The meal plan could not be saved. Try again.',
       );
     } finally {
-      saving.current = false;
-      setBusy(null);
+      // A finished save keeps the lock: re-rendering the form while Android removes the screen crashed the app.
+      if (!leavesScreen) {
+        saving.current = false;
+        setBusy(null);
+      }
       if (id) {
         invalidateChefMealPlans(queryClient).catch(() => undefined);
       }

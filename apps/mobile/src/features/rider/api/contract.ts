@@ -219,6 +219,17 @@ export interface Offer {
   payLines: PayLine[];
   /** Why this offer came to this rider (Phase 4); left out by older servers. */
   reason?: OfferReason;
+  /** App 1.3.3 (docs/riders/REDESIGN.md): the offer reads as drawn. Each is optional, so older servers still show the offer. */
+  kitchenName?: string;
+  /** Minutes from where the rider is to the kitchen. */
+  pickupMinutes?: number;
+  /** Minutes until the chef says the food is ready; left out when the kitchen hasn't said. */
+  foodReadyInMinutes?: number;
+  /**
+   * A next-order offer: this order starts after the rider's current drop (DISPATCH.md, "next-order offers"). pickupDistanceM
+   * is then measured from that drop. Accepting works as any offer; the trip opens once the current one ends.
+   */
+  afterTrip?: {dropLocality: string; dropMinutes: number; foodReadyAt?: string};
 }
 
 export type TripStep =

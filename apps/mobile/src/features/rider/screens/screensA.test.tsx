@@ -1426,41 +1426,38 @@ describe('Offer', () => {
     await render(<OfferScreen {...props()} />);
     const text = allText();
     // A slow first render under load can take a second or two off the 40 s countdown.
-    expect(text).toMatch(/New order \| (40|39|38)s left \| You get at least \| ₹67/);
-    expect(text).toContain('₹40 base + ₹18 drop distance + ₹9 ride to the kitchen. Locked once you accept.');
-    expect(text).toContain('To the kitchen | 2.0 km | Kitchen to customer | 4.0 km');
-    expect(text).toContain('Madhapur | Kondapur | About 28 min in total, 2 items');
-    expect(text).toContain('Declining is free and never affects your future offers.');
+    expect(text).toMatch(/New order · Madhapur \| (40|39|38)s left \| ₹67 \| You get at least this, plus any tip\. Pay is locked before you accept\./);
+    expect(text).toContain('₹40 base + ₹18 drop distance + ₹9 ride to the kitchen | To the kitchen | 2.0 km | Kitchen to customer | 4.0 km · Kondapur | Whole trip | about 28 min | Accept | Not this one');
+    expect(text).toContain('Saying no is free. Nothing is counted.');
     const pay = tree.root.findByProps({testID: 'rider-offer-pay'});
     expect(StyleSheet.flatten(pay.props.style)).toMatchObject({fontSize: 72, fontWeight: '900'});
     expect(pay.props.adjustsFontSizeToFit).toBe(true);
-    expect(tree.root.findByProps({accessibilityLabel: 'Madhapur to Kondapur'})).toBeTruthy();
   });
 
   it('says why the offer came to this rider, when the server says', async () => {
     const withReason = {...props(), route: {...props().route, params: {offer: {...offer, reason: {rule: 'FAIR' as const, place: 1, riders: 3, atOnce: 1, round: 1, bandM: 1500, bandRiders: 2, earnedPerHourPaise: 0, freeMinutes: 40}}, receivedAtMs: Date.now()}}};
     await render(<OfferScreen {...withReason} />);
     expect(allText()).toContain(
-      "Madhapur | Kondapur | About 28 min in total, 2 items | Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn. | Declining is free",
+      "Whole trip | about 28 min | Fair turns: free riders near the kitchen who have earned less per online hour today hear first. It's your turn. Only you are being asked right now. | Accept",
     );
     await render(<OfferScreen {...props()} />);
     expect(allText()).not.toContain('Fair turns');
-    expect(allText()).toContain('About 28 min in total, 2 items | Declining is free');
+    expect(allText()).toContain('Whole trip | about 28 min | Accept');
   });
 
   it('tells a rider heading home how much nearer home the drop leaves them', async () => {
     const homeward = {rule: 'NEAREST' as const, place: 1, riders: 2, atOnce: 1, round: 1, homeNearerM: 3240};
     await render(<OfferScreen {...{...props(), route: {...props().route, params: {offer: {...offer, reason: homeward}, receivedAtMs: Date.now()}}}} />);
-    expect(allText()).toContain("You're the nearest free rider. | On your way home: the drop leaves you 3.2 km nearer home. | Declining is free");
+    expect(allText()).toContain("You're the nearest free rider. Only you are being asked right now. | On your way home: the drop leaves you 3.2 km nearer home. | Accept");
   });
 
-  it('leaves the item count off when the server sends none, and says "1 item"', async () => {
-    const withItems = (itemsCount?: number) => ({...props(), route: {...props().route, params: {offer: {...offer, itemsCount}, receivedAtMs: Date.now()}}});
-    await render(<OfferScreen {...withItems(undefined)} />);
-    expect(allText()).toContain('About 28 min in total |');
-    expect(allText()).not.toContain('items');
-    await render(<OfferScreen {...withItems(1)} />);
-    expect(allText()).toContain('About 28 min in total, 1 item |');
+  it('shows the food-ready row only when the kitchen has said, and the minutes to the kitchen only when the server sends them', async () => {
+    const withTimes = (extra: Partial<Offer>) => ({...props(), route: {...props().route, params: {offer: {...offer, ...extra}, receivedAtMs: Date.now()}}});
+    await render(<OfferScreen {...withTimes({})} />);
+    expect(allText()).toContain('To the kitchen | 2.0 km | Kitchen to customer');
+    expect(allText()).not.toContain('Food ready in');
+    await render(<OfferScreen {...withTimes({foodReadyInMinutes: 8, pickupMinutes: 5})} />);
+    expect(allText()).toContain('To the kitchen | 2.0 km · 5 min | Kitchen to customer | 4.0 km · Kondapur | Food ready in | about 8 min | Whole trip');
   });
 
   it('declines for free and closes', async () => {
@@ -1528,13 +1525,13 @@ describe('Offer', () => {
 
   it('shows just the lock when the server sends no breakdown', async () => {
     await render(<OfferScreen {...props()} route={{key: 'Offer', name: 'Offer', params: {offer: {...offer, payLines: []}, receivedAtMs: Date.now()}}} />);
-    expect(allText()).toContain('₹67 | Locked once you accept.');
+    expect(allText()).toContain('₹67 | You get at least this, plus any tip. Pay is locked before you accept. | To the kitchen');
   });
 
   it("adds rain mode's top-up to the breakdown, in the server's total", async () => {
     const rainy = {...offer, payPaise: 8700, payLines: [...offer.payLines, {component: 'rain', label: 'rain top-up', amountPaise: 2000}]};
     await render(<OfferScreen {...props()} route={{key: 'Offer', name: 'Offer', params: {offer: rainy, receivedAtMs: Date.now()}}} />);
-    expect(allText()).toContain('₹87 | ₹40 base + ₹18 drop distance + ₹9 ride to the kitchen + ₹20 rain top-up. Locked once you accept.');
+    expect(allText()).toContain('₹87 | You get at least this, plus any tip. Pay is locked before you accept. | ₹40 base + ₹18 drop distance + ₹9 ride to the kitchen + ₹20 rain top-up | To the kitchen');
   });
 
   it('stops the ring and holds Decline while Accept is on its way; with no answer, the offer stays and both come back', async () => {
@@ -1547,7 +1544,7 @@ describe('Offer', () => {
     expect(riderOnlineService.stopRinging).toHaveBeenCalledWith('o1');
     expect(press('rider-offer-decline').props.disabled).toBe(true);
     await act(async () => fail(new AppApiError('NETWORK', 'Offline', undefined, undefined, true)));
-    expect(allText()).toContain('No internet. Check your connection and try again. | Accept | Decline');
+    expect(allText()).toContain('No internet. Check your connection and try again. | Accept | Not this one');
     expect(press('rider-offer-accept').props.disabled).toBe(false);
     expect(press('rider-offer-decline').props.disabled).toBe(false);
     // A second accept may go (the server gives the same trip to a repeat).
@@ -1566,6 +1563,6 @@ describe('Offer', () => {
     jest.useFakeTimers();
     const now = Date.now();
     await render(<OfferScreen {...props(now)} route={{...props(now).route, params: {offer, receivedAtMs: now, deadlineMs: now + 32_000}}} />);
-    expect(allText()).toMatch(/New order \| (32|31|30)s left/);
+    expect(allText()).toMatch(/New order · Madhapur \| (32|31|30)s left/);
   });
 });

@@ -231,6 +231,30 @@ describe('Offer', () => {
     expect(mockNavigation.replace).toHaveBeenCalledWith('Trip');
   });
 
+  it('reads as drawn: the kitchen, the trip in rows, why it came, and a free no', async () => {
+    const drawn = {...offer, kitchenName: "Lakshmi's Kitchen", pickupMinutes: 3, foodReadyInMinutes: 8, reason: {rule: 'SOONEST' as const, place: 1, riders: 4, atOnce: 1, round: 1}};
+    await render(<OfferScreen route={{...route(), params: {offer: drawn, receivedAtMs: Date.now()}}} navigation={mockNavigation as never} />, []);
+    const text = allText();
+    for (const line of ["New order · Lakshmi's Kitchen", 'You get at least this, plus any tip. Pay is locked before you accept.', 'To the kitchen', '1.2 km · 3 min',
+      'Kitchen to customer', '3.4 km · Kondapur', 'Food ready in', 'about 8 min', 'Whole trip', 'about 28 min', 'Not this one', 'Saying no is free. Nothing is counted.']) {
+      expect(text).toContain(line);
+    }
+    expect(tree.root.findByProps({testID: 'rider-offer-why'}).props.children).toBe(
+      'Of the free riders, you can reach the kitchen soonest. Only you are being asked right now.',
+    );
+  });
+
+  it('shows a next-order offer on top of the current trip', async () => {
+    const next = {...offer, kitchenName: "Anu's Tiffins", pickupMinutes: 5, afterTrip: {dropLocality: 'Kondapur', dropMinutes: 4, foodReadyAt: '2026-10-19T15:16:00Z'}};
+    await render(<OfferScreen route={{...route(), params: {offer: next, receivedAtMs: Date.now()}}} navigation={mockNavigation as never} />, []);
+    const text = allText();
+    for (const line of ['Current trip · to Kondapur', 'About 4 min to the drop', 'Next order · starts after this drop', "Anu's Tiffins, 1.2 km from your drop. Pay is locked now.",
+      'From your drop to the kitchen', 'Food ready at', 'Take it after this drop', 'Saying no is free. Your current trip is not affected.']) {
+      expect(text).toContain(line);
+    }
+    expect(text).not.toContain('Whole trip');
+  });
+
   it('says when another rider took the order', async () => {
     (riderApi.acceptOffer as jest.Mock).mockRejectedValueOnce(new AppApiError('OFFER_TAKEN', 'taken', 409));
     await render(<OfferScreen route={route()} navigation={mockNavigation as never} />, []);

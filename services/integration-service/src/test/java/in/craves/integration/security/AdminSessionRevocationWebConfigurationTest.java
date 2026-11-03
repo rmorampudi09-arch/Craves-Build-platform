@@ -20,11 +20,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 class AdminSessionRevocationWebConfigurationTest {
     @AfterEach void clear() { SecurityContextHolder.clearContext(); }
-    MockHttpServletRequest request(String role) {
+    MockHttpServletRequest request(String role) { return request(role, "Bearer "); }
+    MockHttpServletRequest request(String role, String scheme) {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("verified-principal", null, List.of()));
         var request = new MockHttpServletRequest("GET", "/api/v1/admin/test");
         String payload = Base64.getUrlEncoder().withoutPadding().encodeToString(("{\"roles\":[\"" + role + "\"]}").getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        request.addHeader("Authorization", "Bearer synthetic." + payload + ".already-verified-by-filter");
+        request.addHeader("Authorization", scheme + "synthetic." + payload + ".already-verified-by-filter");
         return request;
     }
     AdminSessionRevocationWebConfiguration configuration(HttpClient client, Semaphore permits) {
@@ -47,6 +48,21 @@ class AdminSessionRevocationWebConfigurationTest {
         for (String role : List.of("PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "CHEF_ADMIN", "COMPLIANCE_ADMIN", "SUBSCRIPTION_ADMIN", "NOTIFICATION_ADMIN", "AUDIT_ADMIN"))
             assertTrue(gate.preHandle(request(role), new MockHttpServletResponse(), new Object()));
         verify(client, times(9)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+    }
+    @Test void anyCaseOfTheSchemeStillChecksLiveAuthWithTheStandardScheme() throws Exception {
+        // CravesJwtAuthenticationFilter authenticates "bearer" in any case; the live check must not be skipped for it.
+        for (String scheme : List.of("bearer ", "BEARER ")) {
+            var client = mock(HttpClient.class);
+            @SuppressWarnings("unchecked") HttpResponse<Void> reply = mock(HttpResponse.class);
+            when(reply.statusCode()).thenReturn(401); when(client.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(reply);
+            var request = request("PLATFORM_ADMIN", scheme);
+            var failure = assertThrows(ResponseStatusException.class, () -> configuration(client, new Semaphore(16)).interceptor()
+                .preHandle(request, new MockHttpServletResponse(), new Object()));
+            assertEquals(401, failure.getStatusCode().value());
+            var sent = org.mockito.ArgumentCaptor.forClass(HttpRequest.class);
+            verify(client).send(sent.capture(), any(HttpResponse.BodyHandler.class));
+            assertEquals("Bearer " + request.getHeader("Authorization").substring(7), sent.getValue().headers().firstValue("Authorization").orElseThrow());
+        }
     }
     @Test void genericSuccessWithoutVerifiedSessionMarkerNeverGrantsAccess() throws Exception {
         var client = mock(HttpClient.class);

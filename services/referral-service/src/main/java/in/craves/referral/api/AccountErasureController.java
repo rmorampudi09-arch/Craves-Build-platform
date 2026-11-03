@@ -22,7 +22,8 @@ public class AccountErasureController {
     private record Input(UUID requestId,UUID identity,Scope scope) { }
 
     @PostMapping("/blockers") public Object blockers(HttpServletRequest request) {
-        return Map.of("service",AccountErasureService.SERVICE,"blockers",erasure.blockers(read(request,false).identity()));
+        Input in=read(request,false);
+        return Map.of("service",AccountErasureService.SERVICE,"blockers",erasure.blockers(in.identity(),in.scope()));
     }
     /** Only subscription and catalog have work at this step; every other service answers DONE with nothing. */
     @PostMapping("/prepare") public Object prepare(HttpServletRequest request) {

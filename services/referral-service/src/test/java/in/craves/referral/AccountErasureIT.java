@@ -26,18 +26,26 @@ class AccountErasureIT {
     }
     /** The whole row as text: a plain row map cannot be compared because its uuid[] column is a driver object. */
     String memberJson(UUID id) { return r.db.one("SELECT to_jsonb(m)::text AS j FROM referral_schema.member m WHERE user_id=?",id).get("j").toString(); }
+    /** One more order under the owner, awarded but not yet matured: the owner gets a PENDING reward of 2000. */
+    ReferralTestRig.Order pendingReward(ReferralTestRig.Member owner) {
+        var order=r.order(r.member(owner),r.member(null),100000);
+        r.deliver(order);r.finance(order,1,0,7000);r.awards.award(order.id());
+        assertEquals(1,r.db.count("SELECT count(*) FROM referral_schema.reward WHERE beneficiary_id=? AND status='PENDING'",owner.id()));
+        return order;
+    }
+    static List<String> codes(List<AccountErasureService.Blocker> blockers) { return blockers.stream().map(AccountErasureService.Blocker::code).toList(); }
     long journalRows() { return r.db.count("SELECT count(*) FROM referral_schema.journal"); }
     boolean active(ReferralTestRig.Member m) { return bool(r.db.one("SELECT is_active FROM referral_schema.member WHERE user_id=?",m.id()),"is_active"); }
     void assertAllZero(Result result) { assertTrue(result.done());assertFalse(result.counts().isEmpty());result.counts().values().forEach(n->assertEquals(0,n)); }
 
     @Test void openFraudCaseBlocksEraseAndNothingChanges() {
         var owner=memberWithCredit();long journal=journalRows();
-        assertTrue(erasure.blockers(owner.id()).isEmpty());
+        for(Scope scope:Scope.values()) assertTrue(erasure.blockers(owner.id(),scope).isEmpty());
         r.program.fraud(owner.id(),"test-case:"+owner.id(),"DUPLICATE_IDENTITY_SIGNAL","TEST_ONLY");
-        var blockers=erasure.blockers(owner.id());
-        assertEquals(List.of("FRAUD_CASE_OPEN"),blockers.stream().map(AccountErasureService.Blocker::code).toList());
-        assertFalse(blockers.getFirst().detail().isBlank());
         for(Scope scope:Scope.values()) {
+            var blockers=erasure.blockers(owner.id(),scope);
+            assertEquals(List.of("FRAUD_CASE_OPEN"),codes(blockers));
+            assertFalse(blockers.getFirst().detail().isBlank());
             var result=erasure.erase(UUID.randomUUID(),owner.id(),scope);
             assertFalse(result.done());assertEquals(blockers,result.blockers());
         }
@@ -48,7 +56,7 @@ class AccountErasureIT {
         r.program.fraud(owner.id(),"test-case:"+owner.id(),"DUPLICATE_IDENTITY_SIGNAL","TEST_ONLY");
         UUID id=uuid(r.db.one("SELECT id FROM referral_schema.fraud_case WHERE user_id=?",owner.id()),"id");
         r.program.resolveFraud(UUID.randomUUID(),id,true,"TEST_ONLY_REVIEW");
-        assertTrue(erasure.blockers(owner.id()).isEmpty());
+        assertTrue(erasure.blockers(owner.id(),Scope.ALL).isEmpty());
         assertTrue(erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL).done());
     }
     @Test void eraseForfeitsCustomerCreditsWithOneJournalEntry() {
@@ -65,14 +73,68 @@ class AccountErasureIT {
         assertEquals(0,number(entry,"pending_delta")+number(entry,"reserved_delta"));assertTrue(entry.get("event_key").toString().startsWith("forfeit:"));
         assertEquals(1,r.db.count("SELECT count(*) FROM referral_schema.outbox WHERE event_key=?","journal:"+number(entry,"id")),"finance still gets the entry");
     }
-    @Test void eraseForfeitsOnlyAvailableCreditNotMoneyInFlight() {
-        var owner=memberWithCredit();r.assess(owner);
-        r.cashouts.request(owner.id(),UUID.randomUUID(),1500);
+    @Test void aCashOutThatIsNotFinishedBlocksCustomerAndAllAndNothingChanges() {
+        var owner=memberWithCredit();r.assess(owner);UUID cashout=UUID.randomUUID();
+        r.cashouts.request(owner.id(),cashout,1500);
         assertEquals(500,r.balance(owner,"available_paise"));assertEquals(1500,r.balance(owner,"reserved_paise"));
-        var reservation=r.db.rows("SELECT * FROM referral_schema.reservation");
+        long journal=journalRows();var reservation=r.db.rows("SELECT * FROM referral_schema.reservation");String member=memberJson(owner.id());
+        for(Scope scope:List.of(Scope.CUSTOMER,Scope.ALL)) {
+            var blockers=erasure.blockers(owner.id(),scope);
+            assertEquals(List.of("CASH_OUT_IN_FLIGHT"),codes(blockers));assertFalse(blockers.getFirst().detail().isBlank());
+            var result=erasure.erase(UUID.randomUUID(),owner.id(),scope);
+            assertFalse(result.done());assertEquals(blockers,result.blockers());
+        }
+        assertTrue(erasure.blockers(owner.id(),Scope.CHEF).isEmpty());
+        assertAllZero(erasure.erase(UUID.randomUUID(),owner.id(),Scope.CHEF));
+        assertEquals(500,r.balance(owner,"available_paise"));assertEquals(1500,r.balance(owner,"reserved_paise"));
+        assertEquals(journal,journalRows());assertEquals(reservation,r.db.rows("SELECT * FROM referral_schema.reservation"));assertEquals(member,memberJson(owner.id()));
+        r.cashouts.cancel(owner.id(),cashout);
+        assertTrue(erasure.blockers(owner.id(),Scope.ALL).isEmpty());
         assertEquals(Map.of("journal",1,"member",1),erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL).counts());
-        assertEquals(0,r.balance(owner,"available_paise"));assertEquals(1500,r.balance(owner,"reserved_paise"));
-        assertEquals(reservation,r.db.rows("SELECT * FROM referral_schema.reservation"));
+        assertEquals(0,r.balance(owner,"available_paise"));assertEquals(0,r.balance(owner,"reserved_paise"));
+    }
+    @Test void everyUnfinishedCashOutStatusBlocksAndPaidDoesNot() {
+        var owner=memberWithCredit();r.assess(owner);UUID cashout=UUID.randomUUID();
+        r.cashouts.request(owner.id(),cashout,1500);
+        // The same steps the payout code takes, in the order the reservation guard allows.
+        String[][] steps={{"RESERVED",null},
+            {"APPROVED","UPDATE referral_schema.reservation SET status='APPROVED',net_paise=1500,withholding_paise=0,approved_by=gen_random_uuid(),approval_ref='TEST_ONLY' WHERE id=?"},
+            {"SUBMITTED","UPDATE referral_schema.reservation SET status='SUBMITTED',attempt_id=gen_random_uuid() WHERE id=?"},
+            {"UNKNOWN","UPDATE referral_schema.reservation SET status='UNKNOWN' WHERE id=?"},
+            {"PAID","UPDATE referral_schema.reservation SET status='PAID',provider_ref='TEST_ONLY_REF',paid_at=now() WHERE id=?"}};
+        for(String[] step:steps) {
+            if(step[1]!=null) r.db.update(step[1],cashout);
+            assertEquals(step[0],r.db.one("SELECT status FROM referral_schema.reservation WHERE id=?",cashout).get("status"));
+            assertEquals(step[0].equals("PAID")?List.of():List.of("CASH_OUT_IN_FLIGHT"),codes(erasure.blockers(owner.id(),Scope.CUSTOMER)),step[0]);
+        }
+    }
+    @Test void aPendingRewardBlocksAllButNotCustomerOrChef() {
+        var owner=memberWithCredit();var order=pendingReward(owner);
+        assertEquals(2000,r.balance(owner,"pending_paise"));
+        long journal=journalRows();String member=memberJson(owner.id());
+        var blockers=erasure.blockers(owner.id(),Scope.ALL);
+        assertEquals(List.of("REWARD_PENDING"),codes(blockers));assertFalse(blockers.getFirst().detail().isBlank());
+        var blocked=erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL);
+        assertFalse(blocked.done());assertEquals(blockers,blocked.blockers());
+        assertEquals(2000,r.balance(owner,"available_paise"));assertEquals(journal,journalRows());assertEquals(member,memberJson(owner.id()));
+        // One side only never retires the member, so its pending reward still credits a live account: not a blocker.
+        assertTrue(erasure.blockers(owner.id(),Scope.CHEF).isEmpty());assertTrue(erasure.blockers(owner.id(),Scope.CUSTOMER).isEmpty());
+        assertAllZero(erasure.erase(UUID.randomUUID(),owner.id(),Scope.CHEF));
+        var rewards=r.db.rows("SELECT * FROM referral_schema.reward ORDER BY id");
+        assertEquals(Map.of("journal",1,"member",0),erasure.erase(UUID.randomUUID(),owner.id(),Scope.CUSTOMER).counts());
+        assertEquals(0,r.balance(owner,"available_paise"));assertEquals(2000,r.balance(owner,"pending_paise"));
+        assertEquals(rewards,r.db.rows("SELECT * FROM referral_schema.reward ORDER BY id"));assertTrue(active(owner));
+        // Once the reward is credited it is available balance, which ALL forfeits.
+        r.mature(order,0);
+        assertEquals(0,r.db.count("SELECT count(*) FROM referral_schema.reward WHERE beneficiary_id=? AND status='PENDING'",owner.id()));
+        assertTrue(erasure.blockers(owner.id(),Scope.ALL).isEmpty());
+        assertEquals(Map.of("journal",1,"member",1),erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL).counts());
+        assertEquals(0,r.balance(owner,"available_paise"));assertFalse(active(owner));
+    }
+    @Test void aPendingRewardOfAMemberThatIsAlreadyInactiveDoesNotBlock() {
+        var owner=r.member(null);pendingReward(owner);
+        r.program.status(r.json(Map.of("userId",owner.id().toString(),"version",2,"active",false,"reasonRef","TEST_ONLY")));
+        assertFalse(active(owner));assertTrue(erasure.blockers(owner.id(),Scope.ALL).isEmpty());
     }
     @Test void eraseKeepsFraudHashes() {
         UUID id=UUID.randomUUID();String a="a".repeat(64),b="b".repeat(64),c="c".repeat(64);
@@ -125,13 +187,13 @@ class AccountErasureIT {
     }
     @Test void aPersonWithNoReferralRecordIsDoneWithZeroCounts() {
         UUID stranger=UUID.randomUUID();
-        assertTrue(erasure.blockers(stranger).isEmpty());
+        for(Scope scope:Scope.values()) assertTrue(erasure.blockers(stranger,scope).isEmpty());
         for(Scope scope:Scope.values()) assertAllZero(erasure.erase(UUID.randomUUID(),stranger,scope));
     }
     @Test void aSchemaThatWasNeverCreatedIsNothingToErase() {
         r.db.jdbc.execute("DROP SCHEMA referral_schema CASCADE");
         UUID id=UUID.randomUUID();
-        assertTrue(erasure.blockers(id).isEmpty());
+        assertTrue(erasure.blockers(id,Scope.ALL).isEmpty());
         assertTrue(erasure.erase(UUID.randomUUID(),id,Scope.ALL).done());
     }
 }

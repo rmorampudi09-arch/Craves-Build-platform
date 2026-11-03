@@ -22,8 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
  * Account deletion. An order that is still being paid for, cooked, delivered or refunded stops it. Otherwise CUSTOMER erase
  * deletes the cart, reviews, delivery codes and replay records, and replaces the delivery address, phone and note of every
  * order and checkout with placeholders. The order rows stay with their ids, amounts and owner: once an order is bound to a
- * financial snapshot the database refuses any change to them. A chef has nothing to remove here, only orders that may block.
- * Every step is safe to repeat.
+ * financial snapshot the database refuses any change to them. Copies of the address in the message tables go too, but only
+ * once the message is finished (sent, published or processed): one still waiting to go out is left for the sender. A chef
+ * has nothing to remove here, only orders that may block. Every step is safe to repeat.
  */
 @Service
 public class AccountErasureService {
@@ -47,6 +48,12 @@ public class AccountErasureService {
     private static final List<String> DROPOFF_VALUES =
         List.of(ERASED_TEXT, ERASED_PHONE, ERASED_TEXT, ERASED_TEXT, ERASED_TEXT, ERASED_TEXT, ERASED_POSTAL_CODE);
     private static final String OWN_REVIEWS = "SELECT id FROM " + SCHEMA + "order_review WHERE customer_identity_id = ?";
+    private static final String OWN_ORDERS = "SELECT id FROM " + SCHEMA + "customer_order WHERE customer_identity_id = ?";
+    // The customer's stop in a CHEF_ACCEPTED_ORDER event; merged over the stored object, so the kitchen's stop and the rest stay.
+    private static final String DROPOFF_PATH = "payload_json #> '{data,deliveryRequest,dropoff}'";
+    private static final String DROPOFF_PLACEHOLDERS = ("{\"address\":\"%1$s\",\"contactName\":\"%1$s\",\"contactPhone\":\"%2$s\","
+        + "\"latitude\":0,\"longitude\":0,\"addressLine1\":\"%1$s\",\"addressLine2\":null,\"landmark\":null,\"area\":\"%1$s\","
+        + "\"city\":\"%1$s\",\"state\":\"%1$s\",\"postalCode\":\"%3$s\"}").formatted(ERASED_TEXT, ERASED_PHONE, ERASED_POSTAL_CODE);
 
     private final JdbcTemplate db;
 
@@ -87,8 +94,11 @@ public class AccountErasureService {
                 counts.put(table, delete(table + " WHERE review_id IN (" + OWN_REVIEWS + ")", identityId));
             }
             counts.put("order_review", delete("order_review WHERE customer_identity_id = ?", identityId));
-            counts.put("order_delivery_code", delete("order_delivery_code WHERE order_id IN (SELECT id FROM " + SCHEMA + "customer_order WHERE customer_identity_id = ?)", identityId));
+            counts.put("order_delivery_code", delete("order_delivery_code WHERE order_id IN (" + OWN_ORDERS + ")", identityId));
             counts.put("idempotency_record", delete("idempotency_record WHERE actor_hash = ?", idempotencyActorHash(identityId)));
+            counts.put("notification_outbox", delete("notification_outbox WHERE user_identity_id = ? AND user_role = 'CUSTOMER' AND status IN ('SENT', 'DEAD')", identityId));
+            counts.put("domain_event_outbox", scrubPublishedDropoffs(identityId));
+            counts.put("delivery_status_inbox", scrubFinishedTrackingLinks(identityId));
             // updated_at is left alone: the admin dashboard counts deliveries by it, and the order itself did not change.
             counts.put("customer_order", anonymiseDropoff("customer_order", true, identityId));
             counts.put("checkout", anonymiseDropoff("checkout", false, identityId));
@@ -111,6 +121,29 @@ public class AccountErasureService {
                 + DROPOFF_NOW + (withNote ? ", customer_note" : "") + ") IS DISTINCT FROM ("
                 + DROPOFF_ERASED + (withNote ? ", NULL" : "") + ")",
             args.toArray());
+    }
+
+    /** Events already published (or given up on) only; PENDING, FAILED and PROCESSING ones are still to be sent with the real address. */
+    private int scrubPublishedDropoffs(UUID identityId) {
+        return db.update(
+            "UPDATE " + SCHEMA + "domain_event_outbox SET payload_json = jsonb_set(payload_json, '{data,deliveryRequest,dropoff}', ("
+                + DROPOFF_PATH + ") || CAST(? AS jsonb)) WHERE aggregate_type = 'CUSTOMER_ORDER' AND status IN ('PUBLISHED', 'DEAD') "
+                + "AND aggregate_id IN (" + OWN_ORDERS + ") AND jsonb_typeof(" + DROPOFF_PATH + ") = 'object' "
+                + "AND (" + DROPOFF_PATH + ") <> ((" + DROPOFF_PATH + ") || CAST(? AS jsonb))",
+            DROPOFF_PLACEHOLDERS, identityId, DROPOFF_PLACEHOLDERS);
+    }
+
+    /**
+     * The provider's tracking link for the person's delivery. The courier's own details and the handoff fields the delivery
+     * code reads from this payload stay. Rows still waiting for an earlier event are left as they are.
+     */
+    private int scrubFinishedTrackingLinks(UUID identityId) {
+        return db.update(
+            "UPDATE " + SCHEMA + "delivery_status_inbox SET payload = jsonb_set(payload, '{data,trackingUrl}', to_jsonb(CAST(? AS text))) "
+                + "WHERE processing_status IN ('PROCESSED', 'STALE', 'TERMINAL_PROTECTED', 'NO_CHANGE', 'REJECTED') "
+                + "AND chef_sub_order_id IN (" + OWN_ORDERS + ") AND jsonb_typeof(payload #> '{data,trackingUrl}') = 'string' "
+                + "AND payload #>> '{data,trackingUrl}' <> ?",
+            ERASED_TEXT, identityId, ERASED_TEXT);
     }
 
     private int delete(String fromAndWhere, Object... args) {

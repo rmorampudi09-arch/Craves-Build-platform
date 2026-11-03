@@ -150,7 +150,8 @@ class AccountErasureDatabaseTest {
             Map.entry("order_review_report", 2), Map.entry("order_review_helpful_vote", 2),
             Map.entry("order_review_moderation_audit", 1), Map.entry("order_review_media", 1), Map.entry("order_review_tag", 1),
             Map.entry("order_review_revision", 1), Map.entry("order_review", 1), Map.entry("order_delivery_code", 1),
-            Map.entry("idempotency_record", 2), Map.entry("customer_order", 2), Map.entry("checkout", 2)), response.counts());
+            Map.entry("idempotency_record", 2), Map.entry("notification_outbox", 0), Map.entry("domain_event_outbox", 0),
+            Map.entry("delivery_status_inbox", 0), Map.entry("customer_order", 2), Map.entry("checkout", 2)), response.counts());
         assertEquals(0, count("order_schema.cart WHERE customer_identity_id = ?", customer));
         assertEquals(0, count("order_schema.cart_item i JOIN order_schema.cart c ON c.id = i.cart_id WHERE c.customer_identity_id = ?", customer));
         assertEquals(0, count("order_schema.order_review WHERE customer_identity_id = ?", customer));
@@ -321,6 +322,95 @@ class AccountErasureDatabaseTest {
         assertEquals(1, count("order_schema.idempotency_record WHERE actor_hash = ?", actorHash(customer)));
     }
 
+    @Test
+    void eraseDeletesFinishedNotificationsButNotPendingOnesOrOtherPeoples() {
+        order(customer, chef, "DELIVERED");
+        notification(customer, "CUSTOMER", "SENT");
+        notification(customer, "CUSTOMER", "DEAD");
+        UUID pending = notification(customer, "CUSTOMER", "PENDING");
+        UUID processing = notification(customer, "CUSTOMER", "PROCESSING");
+        UUID failed = notification(customer, "CUSTOMER", "FAILED");
+        UUID asChef = notification(customer, "CHEF", "SENT");
+        UUID others = notification(other, "CUSTOMER", "SENT");
+        String kept = rows("notification_outbox", pending, processing, failed, asChef, others);
+
+        ErasureResponse response = service.erase(customer, Scope.CUSTOMER, request);
+
+        assertEquals(2, response.counts().get("notification_outbox"));
+        assertEquals(0, count("order_schema.notification_outbox WHERE user_identity_id = ? AND user_role = 'CUSTOMER' AND status IN ('SENT', 'DEAD')", customer));
+        // Still waiting to be sent, written for them as a chef, or somebody else's: exactly as they were.
+        assertEquals(kept, rows("notification_outbox", pending, processing, failed, asChef, others));
+        assertEquals(0, service.erase(customer, Scope.CUSTOMER, request).counts().get("notification_outbox"));
+        assertEquals(kept, rows("notification_outbox", pending, processing, failed, asChef, others));
+    }
+
+    @Test
+    void eraseScrubsTheDropoffInPublishedDomainEventsButNotPendingOnesOrOtherPeoples() {
+        UUID mine = order(customer, chef, "DELIVERED");
+        UUID theirs = order(other, chef, "DELIVERED");
+        UUID published = domainEvent(mine, "PUBLISHED");
+        UUID dead = domainEvent(mine, "DEAD");
+        UUID pending = domainEvent(mine, "PENDING");
+        UUID failed = domainEvent(mine, "FAILED");
+        UUID processing = domainEvent(mine, "PROCESSING");
+        UUID others = domainEvent(theirs, "PUBLISHED");
+        String kept = rows("domain_event_outbox", pending, failed, processing, others);
+        String restBefore = domainEventWithoutDropoff(published);
+        String pickupBefore = jdbc.queryForObject("SELECT (payload_json #> '{data,deliveryRequest,pickup}')::text FROM order_schema.domain_event_outbox WHERE id = ?", String.class, published);
+
+        ErasureResponse response = service.erase(customer, Scope.CUSTOMER, request);
+
+        assertEquals(2, response.counts().get("domain_event_outbox"));
+        for (UUID id : List.of(published, dead)) {
+            String payload = jdbc.queryForObject("SELECT payload_json::text FROM order_schema.domain_event_outbox WHERE id = ?", String.class, id);
+            for (String gone : List.of(PHONE, "Asha Rao", "12 Lake View Road", "Flat 4B", "Near the temple", "Madhapur", "500081", "17.44", "78.39")) {
+                assertFalse(payload.contains(gone), gone + " is still in " + payload);
+            }
+            Map<String, Object> dropoff = jdbc.queryForMap(
+                "SELECT payload_json #>> '{data,deliveryRequest,dropoff,contactName}' AS name, payload_json #>> '{data,deliveryRequest,dropoff,contactPhone}' AS phone, "
+                    + "payload_json #>> '{data,deliveryRequest,dropoff,postalCode}' AS postal, payload_json #>> '{data,deliveryRequest,dropoff,addressLine1}' AS line1, "
+                    + "payload_json #>> '{data,deliveryRequest,dropoff,addressLine2}' AS line2 FROM order_schema.domain_event_outbox WHERE id = ?", id);
+            assertEquals(AccountErasureService.ERASED_TEXT, dropoff.get("name"));
+            assertEquals(AccountErasureService.ERASED_PHONE, dropoff.get("phone"));
+            assertEquals(AccountErasureService.ERASED_POSTAL_CODE, dropoff.get("postal"));
+            assertEquals(AccountErasureService.ERASED_TEXT, dropoff.get("line1"));
+            assertNull(dropoff.get("line2"));
+        }
+        // The kitchen's side, the items and the envelope are untouched.
+        assertEquals(restBefore, domainEventWithoutDropoff(published));
+        assertEquals(pickupBefore, jdbc.queryForObject("SELECT (payload_json #> '{data,deliveryRequest,pickup}')::text FROM order_schema.domain_event_outbox WHERE id = ?", String.class, published));
+        assertEquals(kept, rows("domain_event_outbox", pending, failed, processing, others));
+        assertEquals(0, service.erase(customer, Scope.CUSTOMER, request).counts().get("domain_event_outbox"));
+        assertEquals(kept, rows("domain_event_outbox", pending, failed, processing, others));
+    }
+
+    @Test
+    void eraseScrubsTheTrackingLinkInFinishedDeliveryInboxRowsButNotWaitingOnes() {
+        UUID mine = order(customer, chef, "DELIVERED");
+        UUID theirs = order(other, chef, "DELIVERED");
+        List<UUID> finished = List.of("PROCESSED", "STALE", "TERMINAL_PROTECTED", "NO_CHANGE", "REJECTED").stream()
+            .map(status -> deliveryInbox(mine, status)).toList();
+        UUID received = deliveryInbox(mine, "RECEIVED");
+        UUID waitingPrior = deliveryInbox(mine, "WAITING_FOR_PRIOR_PROVIDER");
+        UUID waitingHandoff = deliveryInbox(mine, "WAITING_FOR_HANDOFF");
+        UUID others = deliveryInbox(theirs, "PROCESSED");
+        String kept = rows("delivery_status_inbox", received, waitingPrior, waitingHandoff, others);
+        List<String> restBefore = finished.stream().map(this::inboxWithoutTrackingLink).toList();
+
+        ErasureResponse response = service.erase(customer, Scope.CUSTOMER, request);
+
+        assertEquals(5, response.counts().get("delivery_status_inbox"));
+        for (int i = 0; i < finished.size(); i++) {
+            assertEquals(AccountErasureService.ERASED_TEXT, jdbc.queryForObject(
+                "SELECT payload #>> '{data,trackingUrl}' FROM order_schema.delivery_status_inbox WHERE event_id = ?", String.class, finished.get(i)));
+            // Everything else the delivery code reads from the payload, and the courier's own details, stay.
+            assertEquals(restBefore.get(i), inboxWithoutTrackingLink(finished.get(i)));
+        }
+        assertEquals(kept, rows("delivery_status_inbox", received, waitingPrior, waitingHandoff, others));
+        assertEquals(0, service.erase(customer, Scope.CUSTOMER, request).counts().get("delivery_status_inbox"));
+        assertEquals(kept, rows("delivery_status_inbox", received, waitingPrior, waitingHandoff, others));
+    }
+
     // ---- fixtures ----
 
     /** A checkout with its one order, both carrying the same delivery address snapshot and a note. */
@@ -398,6 +488,50 @@ class AccountErasureDatabaseTest {
             UUID.randomUUID(), review, reporter);
     }
 
+    private UUID notification(UUID user, String role, String status) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO order_schema.notification_outbox(id, event_key, event_type, aggregate_type, aggregate_id, user_identity_id, user_role, "
+            + "title, body, payload, status) VALUES (?, ?, 'ORDER_CREATED', 'ORDER', ?, ?, ?, 'Order created', 'Your Craves order has been created.', "
+            + "'{\"checkoutId\":\"x\"}'::jsonb, ?)", id, "test-" + id, UUID.randomUUID(), user, role, status);
+        return id;
+    }
+
+    /** The CHEF_ACCEPTED_ORDER event as the factory writes it: the kitchen's stop, the customer's stop and the items. */
+    private UUID domainEvent(UUID orderId, String status) {
+        UUID id = UUID.randomUUID();
+        String payload = """
+            {"eventId":"%s","eventType":"CHEF_ACCEPTED_ORDER","eventVersion":"1.0","subject":"%s","data":{"orderId":"%s","chefSubOrderId":"%s",
+             "area":"Kondapur","deliveryRequest":{"matter":"Food order #AB12CD34",
+             "pickup":{"address":"5 Kitchen Lane, Kondapur","contactName":"Test kitchen","contactPhone":"9000000000","latitude":17.46,"longitude":78.36,
+              "note":"Craves order #AB12CD34. Match this number with the kitchen.","addressLine1":"5 Kitchen Lane","addressLine2":null,"landmark":null,
+              "area":"Kondapur","city":"Hyderabad","state":"Telangana","postalCode":"500084","country":"India"},
+             "dropoff":{"address":"12 Lake View Road, Flat 4B, Near the temple, Madhapur, Hyderabad, Telangana, 500081","contactName":"Asha Rao",
+              "contactPhone":"%s","latitude":17.4401234,"longitude":78.3912345,"note":"Craves order #AB12CD34.","addressLine1":"12 Lake View Road",
+              "addressLine2":"Flat 4B","landmark":"Near the temple","area":"Madhapur","city":"Hyderabad","state":"Telangana","postalCode":"500081",
+              "country":"India"},
+             "items":[{"itemName":"Test meal","quantity":1}]}}}
+            """.formatted(id, orderId, UUID.randomUUID(), orderId, PHONE);
+        jdbc.update("INSERT INTO order_schema.domain_event_outbox(id, event_key, aggregate_type, aggregate_id, event_type, event_version, occurred_at, "
+            + "correlation_id, source, subject, payload_json, status) VALUES (?, ?, 'CUSTOMER_ORDER', ?, 'CHEF_ACCEPTED_ORDER', '1.0', now(), ?, "
+            + "'order-service', ?, ?::jsonb, ?)", id, "CHEF_ACCEPTED_ORDER:" + id, orderId, UUID.randomUUID(), orderId.toString(), payload, status);
+        return id;
+    }
+
+    /** A provider status event as the inbox keeps it: the tracking link, the handoff fields the code reads, and the courier. */
+    private UUID deliveryInbox(UUID orderId, String processingStatus) {
+        UUID id = UUID.randomUUID();
+        String payload = """
+            {"eventId":"%s","eventType":"DELIVERY_STATUS_CHANGED","data":{"deliveryJobId":"%s","chefSubOrderId":"%s","providerId":"pidge","status":"DELIVERED",
+             "trackingUrl":"https://track.example.invalid/t/abc123","handoffFromProviderId":"borzo","handoffFromProviderDeliveryId":"B-1",
+             "courierName":"Ravi","courierPhone":"9111111111"}}
+            """.formatted(id, UUID.randomUUID(), orderId);
+        jdbc.update("INSERT INTO order_schema.delivery_status_inbox(event_id, event_type, event_version, correlation_id, subject, delivery_job_id, "
+            + "chef_sub_order_id, provider_id, provider_delivery_id, normalized_status, observed_at, payload, processing_status) VALUES "
+            + "(?, 'DELIVERY_STATUS_CHANGED', '1.0', ?, ?, ?, ?, 'pidge', 'P-1', 'DELIVERED', now(), ?::jsonb, ?)",
+            id, UUID.randomUUID(), "delivery-job/" + id, UUID.randomUUID(), orderId, payload, processingStatus);
+        return id;
+    }
+
     private void idempotency(UUID actor, String key) {
         jdbc.update("INSERT INTO order_schema.idempotency_record(actor_hash, idem_key, request_hash, state, owner_token, http_status, response_body) "
             + "VALUES (?, ?, repeat('b', 64), 'COMPLETED', ?, 200, convert_to('{\"dropoff\":\"" + PHONE + "\"}', 'UTF8'))",
@@ -424,6 +558,22 @@ class AccountErasureDatabaseTest {
         return jdbc.queryForObject("SELECT (to_jsonb(o) - ARRAY['dropoff_recipient_name', 'dropoff_contact_phone', 'dropoff_address_line1', "
             + "'dropoff_address_line2', 'dropoff_landmark', 'dropoff_area_name', 'dropoff_city', 'dropoff_state', 'dropoff_postal_code', "
             + "'dropoff_latitude', 'dropoff_longitude', 'customer_note'])::text FROM " + ORDER_TABLES + " WHERE id = ?", String.class, orderId);
+    }
+
+    /** The listed rows of a table as one string, for comparing before and after. */
+    private String rows(String table, UUID... ids) {
+        String key = table.equals("delivery_status_inbox") ? "event_id" : "id";
+        return jdbc.queryForObject("SELECT string_agg(to_jsonb(t)::text, ',' ORDER BY " + key + ") FROM order_schema." + table + " t WHERE " + key
+            + " IN (" + "?, ".repeat(ids.length - 1) + "?)", String.class, (Object[]) ids);
+    }
+
+    private String domainEventWithoutDropoff(UUID id) {
+        return jdbc.queryForObject("SELECT (to_jsonb(e) - 'payload_json')::text || (payload_json #- '{data,deliveryRequest,dropoff}')::text "
+            + "FROM order_schema.domain_event_outbox e WHERE id = ?", String.class, id);
+    }
+
+    private String inboxWithoutTrackingLink(UUID id) {
+        return jdbc.queryForObject("SELECT (payload #- '{data,trackingUrl}')::text FROM order_schema.delivery_status_inbox WHERE event_id = ?", String.class, id);
     }
 
     private int count(String fromAndWhere, Object... args) {

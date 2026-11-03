@@ -20,6 +20,7 @@ import in.craves.subscription.lifecycle.SubscriptionLifecycleService;
 import in.craves.subscription.occurrence.OccurrenceRepository;
 import in.craves.subscription.policy.SubscriptionPolicyRepository;
 import in.craves.subscription.repository.PostgresCompatibleSubscriptionRepository;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
@@ -101,6 +102,15 @@ class AccountErasureDatabaseTest {
         return db.queryForObject("SELECT notes FROM subscription_schema.customer_subscription WHERE id=?", String.class, subscription);
     }
 
+    void history(UUID subscription, UUID actor, String reason) {
+        db.update("INSERT INTO subscription_schema.subscription_status_history(subscription_id,old_status,new_status,reason,actor_identity_id,created_at) "
+            + "VALUES (?,'ACTIVE','CANCELLED',?,?,clock_timestamp())", subscription, reason, actor);
+    }
+
+    Timestamp updatedAt(UUID subscription) {
+        return db.queryForObject("SELECT updated_at FROM subscription_schema.customer_subscription WHERE id=?", Timestamp.class, subscription);
+    }
+
     int count(String sql, Object... args) {
         return db.queryForObject("SELECT count(*) FROM " + sql, Integer.class, args);
     }
@@ -157,6 +167,20 @@ class AccountErasureDatabaseTest {
     }
 
     @Test
+    void prepareAllClosesTheChefsPlansEvenWhenACustomerCancelIsRefused() {
+        // One person who runs a plan and also subscribes to another chef's plan that cannot be cancelled.
+        UUID strictPlan = UUID.randomUUID();
+        addPlan(strictPlan, UUID.randomUUID(), "ACTIVE", false);
+        UUID refused = subscribe(chef, strictPlan, "PAUSED", null);
+
+        ApiException failure = assertThrows(ApiException.class, () -> service.prepare(chef, Scope.ALL, request));
+
+        assertEquals("SUBSCRIPTION_CANCEL_DISABLED", failure.getCode());
+        assertEquals("PAUSED", status(refused));
+        assertEquals(0, count("subscription_schema.subscription_plan WHERE chef_identity_id=? AND accepting_subscribers", chef));
+    }
+
+    @Test
     void prepareChefStopsNewSubscribers() {
         UUID draft = UUID.randomUUID();
         addPlan(draft, chef, "DRAFT", true);
@@ -188,22 +212,46 @@ class AccountErasureDatabaseTest {
         db.update("INSERT INTO subscription_schema.subscription_skip_request(id,subscription_id,service_date,status,reason,actor_identity_id) "
             + "VALUES (?,?,?,'REQUESTED','Out of town at my mother''s',?)", UUID.randomUUID(), mine, LocalDate.now().plusDays(2), customer);
         String invoicesBefore = db.queryForObject("SELECT jsonb_agg(to_jsonb(i) ORDER BY id)::text FROM subscription_schema.subscription_invoice i", String.class);
-        String historyBefore = db.queryForObject("SELECT jsonb_agg(to_jsonb(h) ORDER BY id)::text FROM subscription_schema.subscription_status_history h", String.class);
+        String historyBefore = db.queryForObject("SELECT jsonb_agg(to_jsonb(h) - 'reason' ORDER BY id)::text FROM subscription_schema.subscription_status_history h", String.class);
         String planBefore = db.queryForObject("SELECT to_jsonb(p)::text FROM subscription_schema.subscription_plan p WHERE id=?", String.class, plan);
+        Timestamp touchedBefore = updatedAt(mine), untouchedBefore = updatedAt(withoutNotes);
 
         ErasureResponse done = service.erase(customer, Scope.CUSTOMER, request);
 
         assertEquals("DONE", done.status());
-        assertEquals(Map.of("customer_subscription", 1, "subscription_skip_request", 1), done.counts());
+        assertEquals(Map.of("customer_subscription", 1, "subscription_skip_request", 1, "subscription_status_history", 1), done.counts());
         assertEquals(AccountErasureService.ERASED_TEXT, notes(mine));
         assertEquals(AccountErasureService.ERASED_TEXT, db.queryForObject(
             "SELECT reason FROM subscription_schema.subscription_skip_request WHERE subscription_id=?", String.class, mine));
         assertNull(notes(withoutNotes));
+        assertTrue(updatedAt(mine).after(touchedBefore), "a changed row says when it changed");
+        assertEquals(untouchedBefore, updatedAt(withoutNotes));
         assertEquals("Not mine", notes(theirs));
         assertEquals(invoicesBefore, db.queryForObject("SELECT jsonb_agg(to_jsonb(i) ORDER BY id)::text FROM subscription_schema.subscription_invoice i", String.class));
-        assertEquals(historyBefore, db.queryForObject("SELECT jsonb_agg(to_jsonb(h) ORDER BY id)::text FROM subscription_schema.subscription_status_history h", String.class));
+        assertEquals(historyBefore, db.queryForObject("SELECT jsonb_agg(to_jsonb(h) - 'reason' ORDER BY id)::text FROM subscription_schema.subscription_status_history h", String.class));
         // A dual-role chef who erases the customer side keeps the meal plans they run.
         assertEquals(planBefore, db.queryForObject("SELECT to_jsonb(p)::text FROM subscription_schema.subscription_plan p WHERE id=?", String.class, plan));
+    }
+
+    @Test
+    void eraseBlanksOnlyWhatTheCustomerTypedInStatusHistory() {
+        UUID mine = subscribe(customer, plan, "CANCELLED", null);
+        UUID other = UUID.randomUUID();
+        UUID theirs = subscribe(other, plan, "CANCELLED", null);
+        history(mine, customer, "Moving to Pune, call 9876543210");
+        history(mine, customer, AccountErasureService.DELETION_CANCEL_REASON);
+        history(mine, null, "Provider status FAILED");
+        history(mine, chef, "Admin note");
+        history(theirs, other, "Their own words");
+
+        ErasureResponse done = service.erase(customer, Scope.CUSTOMER, request);
+
+        assertEquals(1, done.counts().get("subscription_status_history"));
+        assertEquals(List.of(AccountErasureService.ERASED_TEXT, AccountErasureService.DELETION_CANCEL_REASON, "Provider status FAILED", "Admin note"),
+            db.queryForList("SELECT reason FROM subscription_schema.subscription_status_history WHERE subscription_id=? ORDER BY created_at, id", String.class, mine));
+        assertEquals(List.of("Their own words"),
+            db.queryForList("SELECT reason FROM subscription_schema.subscription_status_history WHERE subscription_id=?", String.class, theirs));
+        assertEquals(0, service.erase(customer, Scope.CUSTOMER, request).counts().get("subscription_status_history"));
     }
 
     @Test
@@ -250,7 +298,7 @@ class AccountErasureDatabaseTest {
     }
 
     @Test
-    void eraseChefIsBlockedWhileAnySubscriberRemainsThenArchivesThePlans() {
+    void eraseChefIsBlockedWhileAnySubscriberRemainsThenDeactivatesThePlans() {
         UUID subscriber = subscribe(customer, plan, "PAYMENT_FAILED", null);
         subscribe(UUID.randomUUID(), plan, "EXPIRED", null);
 

@@ -18,14 +18,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Account deletion. CUSTOMER: plans are cancelled when deletion is requested (prepare), erase waits while any is still
- * running, and their free text is blanked at erase. CHEF: plans stop taking subscribers at request and are archived at erase. Money rows (invoices, credits) and
- * status history are never changed. Every step is safe to repeat.
+ * Account deletion. CUSTOMER: plans are cancelled at request (prepare); erase waits while any still runs, then blanks the
+ * customer's free text. CHEF: plans stop taking subscribers at request and are deactivated at erase. Invoices and day
+ * credits are never changed. Every step is safe to repeat.
  */
 @Service
 public class AccountErasureService {
     /** What notes and skip reasons are replaced with. */
     public static final String ERASED_TEXT = "[deleted]";
+    /** The reason prepare writes on each cancel; it says nothing about the person, so erase keeps it. */
+    public static final String DELETION_CANCEL_REASON = "Account deletion requested";
     private static final Logger LOGGER = LoggerFactory.getLogger(AccountErasureService.class);
     private static final String SCHEMA = "subscription_schema.";
 
@@ -61,11 +63,12 @@ public class AccountErasureService {
     /** Not one transaction: each cancel commits on its own, as it does for a customer, so a retry only redoes what is left. */
     public ErasureResponse prepare(UUID identityId, Scope scope, UUID requestId) {
         Map<String, Integer> counts = new LinkedHashMap<>();
-        if (scope != Scope.CHEF) {
-            counts.put("customer_subscription", cancelSubscriptions(identityId));
-        }
+        // Chef part first: a customer cancel the plan's rules refuse throws, and must not leave this chef's plans taking subscribers.
         if (scope != Scope.CUSTOMER) {
             counts.put("subscription_plan", closePlansToNewSubscribers(identityId));
+        }
+        if (scope != Scope.CHEF) {
+            counts.put("customer_subscription", cancelSubscriptions(identityId));
         }
         return ErasureResponse.done(counts);
     }
@@ -79,15 +82,20 @@ public class AccountErasureService {
         Map<String, Integer> counts = new LinkedHashMap<>();
         if (scope != Scope.CHEF) {
             counts.put("customer_subscription", db.update(
-                "UPDATE " + SCHEMA + "customer_subscription SET notes = ? WHERE customer_identity_id = ? AND notes IS NOT NULL AND notes <> ?",
+                "UPDATE " + SCHEMA + "customer_subscription SET notes = ?, updated_at = now() WHERE customer_identity_id = ? AND notes IS NOT NULL AND notes <> ?",
                 ERASED_TEXT, identityId, ERASED_TEXT));
             counts.put("subscription_skip_request", db.update(
                 "UPDATE " + SCHEMA + "subscription_skip_request SET reason = ? WHERE reason IS NOT NULL AND reason <> ? "
                     + "AND subscription_id IN (SELECT id FROM " + SCHEMA + "customer_subscription WHERE customer_identity_id = ?)",
                 ERASED_TEXT, ERASED_TEXT, identityId));
+            // Cancel, pause and resume reasons are typed by the customer, who is then the actor; system-written rows have no or another actor.
+            counts.put("subscription_status_history", db.update(
+                "UPDATE " + SCHEMA + "subscription_status_history SET reason = ? WHERE actor_identity_id = ? AND reason IS NOT NULL "
+                    + "AND reason NOT IN (?, ?) AND subscription_id IN (SELECT id FROM " + SCHEMA + "customer_subscription WHERE customer_identity_id = ?)",
+                ERASED_TEXT, identityId, ERASED_TEXT, DELETION_CANCEL_REASON, identityId));
         }
         if (scope != Scope.CUSTOMER) {
-            counts.put("subscription_plan", archivePlans(identityId));
+            counts.put("subscription_plan", deactivatePlans(identityId));
         }
         LOGGER.info("account erasure service=subscription requestId={} scope={} counts={}", requestId, scope, counts);
         return ErasureResponse.done(counts);
@@ -103,7 +111,7 @@ public class AccountErasureService {
         ApiException refused = null;
         for (UUID subscriptionId : open) {
             try {
-                lifecycle.cancel(subscriptionId, "Account deletion requested", customer);
+                lifecycle.cancel(subscriptionId, DELETION_CANCEL_REASON, customer);
                 cancelled++;
             } catch (ApiException exception) {
                 // The plan's own rules (cancellation switched off, cutoff passed) refuse this one; cancel the rest, then fail so the call is retried.
@@ -129,13 +137,13 @@ public class AccountErasureService {
     }
 
     /** INACTIVE is the status an admin gives a retired plan; the old status is read from the row as it was before the update. */
-    private int archivePlans(UUID chefId) {
+    private int deactivatePlans(UUID chefId) {
         return db.update(
-            "WITH archived AS (UPDATE " + SCHEMA + "subscription_plan p SET status = 'INACTIVE', accepting_subscribers = FALSE, updated_at = now() "
+            "WITH deactivated AS (UPDATE " + SCHEMA + "subscription_plan p SET status = 'INACTIVE', accepting_subscribers = FALSE, updated_at = now() "
                 + "FROM " + SCHEMA + "subscription_plan prev WHERE prev.id = p.id AND p.chef_identity_id = ? "
                 + "AND (p.status <> 'INACTIVE' OR p.accepting_subscribers) RETURNING p.id, prev.status AS old_status) "
                 + "INSERT INTO " + SCHEMA + "subscription_plan_audit (id, plan_id, actor_identity_id, action, old_status, new_status, reason, created_at) "
-                + "SELECT gen_random_uuid(), id, ?, 'ACCOUNT_ERASURE', old_status, 'INACTIVE', 'Chef account deleted', now() FROM archived",
+                + "SELECT gen_random_uuid(), id, ?, 'ACCOUNT_ERASURE', old_status, 'INACTIVE', 'Chef account deleted', now() FROM deactivated",
             chefId, chefId);
     }
 

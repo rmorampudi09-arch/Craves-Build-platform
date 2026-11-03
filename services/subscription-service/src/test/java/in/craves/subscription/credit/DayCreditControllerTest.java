@@ -94,8 +94,17 @@ class DayCreditControllerTest {
 
     @Test
     void signInIsRequired() throws Exception {
+        // 401, not an empty 403: the app renews its sign-in only on 401.
         mockMvc.perform(post(PATH, SUBSCRIPTION_ID, CREDIT_ID)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"choice\":\"REFUND\"}"))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void anExpiredTokenIs401() throws Exception {
+        when(jwtVerifier.verify("expired")).thenThrow(new IllegalArgumentException("expired"));
+        mockMvc.perform(post(PATH, SUBSCRIPTION_ID, CREDIT_ID).header("Authorization", "Bearer expired")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"choice\":\"REFUND\"}"))
+            .andExpect(status().isUnauthorized());
     }
 }

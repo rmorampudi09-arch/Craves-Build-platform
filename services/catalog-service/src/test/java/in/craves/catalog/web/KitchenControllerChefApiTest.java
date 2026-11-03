@@ -117,6 +117,17 @@ class KitchenControllerChefApiTest {
     }
 
     @Test
+    void photoStorageFailureIsA502WithItsCodeNotAnUnexplainedError() throws Exception {
+        com.azure.storage.blob.models.BlobStorageException refused = mock(com.azure.storage.blob.models.BlobStorageException.class);
+        when(refused.getErrorCode()).thenReturn(com.azure.storage.blob.models.BlobErrorCode.AUTHORIZATION_PERMISSION_MISMATCH);
+        when(catalog.uploadKitchenPhoto(eq(chef), eq(KitchenPhotoKind.KITCHEN), any())).thenThrow(refused);
+        mvc.perform(multipart("/api/v1/kitchens/me/photos").file(new MockMultipartFile("file", "k.png", "image/png", new byte[]{1})).param("kind", "KITCHEN"))
+            .andExpect(status().isBadGateway())
+            .andExpect(jsonPath("$.code").value("MEDIA_STORE_FAILED"))
+            .andExpect(jsonPath("$.details[0]").value("storage: AuthorizationPermissionMismatch"));
+    }
+
+    @Test
     void photoUploadRejectsAnUnknownKind() throws Exception {
         mvc.perform(multipart("/api/v1/kitchens/me/photos").file(new MockMultipartFile("file", "k.png", "image/png", new byte[]{1})).param("kind", "DISH"))
             .andExpect(status().isBadRequest());

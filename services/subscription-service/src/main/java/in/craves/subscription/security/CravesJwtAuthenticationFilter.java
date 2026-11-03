@@ -26,7 +26,18 @@ public class CravesJwtAuthenticationFilter extends OncePerRequestFilter {
         throws ServletException, IOException {
         String header = request.getHeader("Authorization");
         if (StringUtils.hasText(header) && header.startsWith("Bearer ")) {
-            CurrentUser currentUser = jwtVerifier.verify(header.substring(7));
+            CurrentUser currentUser;
+            try {
+                currentUser = jwtVerifier.verify(header.substring(7));
+            } catch (RuntimeException ex) {
+                // Verification runs before MVC error handling: answer 401 so the app renews its sign-in, never an empty 403 or a 500.
+                SecurityContextHolder.clearContext();
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setHeader("Cache-Control", "no-store");
+                response.setContentType("application/json");
+                response.getWriter().write("{\"code\":\"INVALID_ACCESS_TOKEN\",\"message\":\"A valid Craves access token is required.\"}");
+                return;
+            }
             List<SimpleGrantedAuthority> authorities = currentUser.roles().stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()))
                 .toList();

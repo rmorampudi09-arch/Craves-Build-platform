@@ -782,7 +782,7 @@ public class OrderService {
             rs.getString("customer_note"),
             hasPartner ? new DeliveryPartnerResponse(partnerName, partnerPhone, partnerPhotoUrl, partnerPickupEtaAt) : null,
             instant(rs, "chef_handed_over_at")
-        );
+        ).forChef();
     }
 
     private CustomerAddressSnapshotResponse mapDropoffSnapshot(ResultSet rs) throws SQLException {

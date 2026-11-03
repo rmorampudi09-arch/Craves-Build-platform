@@ -589,6 +589,12 @@ public class OrderService {
         return rows.getFirst();
     }
 
+    /** The admin read; checkout keeps reading {@link #currentChargePolicy()} without a role. */
+    public ChargePolicyResponse currentChargePolicyForAdmin(CravesPrincipal principal) {
+        requireAdmin(principal);
+        return currentChargePolicy();
+    }
+
     public ChargePolicyResponse currentChargePolicy() {
         return jdbcTemplate.query(
             "SELECT * FROM order_schema.charge_policy WHERE is_active = true ORDER BY created_at DESC LIMIT 1",

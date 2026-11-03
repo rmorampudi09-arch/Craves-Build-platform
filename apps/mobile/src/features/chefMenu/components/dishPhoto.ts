@@ -1,6 +1,10 @@
 import {Alert, Linking} from 'react-native';
+import {ImageManipulator, SaveFormat} from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import {CHEF_MENU_IMAGE_CONTENT_TYPES, chefMenuApi} from '../api/chefMenuApi';
+
+// Catalog keeps dish photos at 1600 px on the long edge; anything larger only slows the upload.
+const MAX_EDGE = 1600;
 
 export type DishPhoto = ImagePicker.ImagePickerAsset;
 export type DishPhotoSource = 'camera' | 'gallery';
@@ -51,18 +55,33 @@ export async function pickDishPhoto(source: DishPhotoSource): Promise<{photo: Di
   }
 }
 
+/**
+ * A full-size camera photo (often 8+ MB) is too big for the server's 8 MB limit or too slow over mobile data,
+ * so it is shrunk to a JPEG first. If shrinking fails, the original is sent.
+ */
+async function uploadFile(menuItemId: string, photo: DishPhoto): Promise<{uri: string; name: string; type: string}> {
+  try {
+    const context = ImageManipulator.manipulate(photo.uri);
+    if (Math.max(photo.width, photo.height) > MAX_EDGE) {
+      context.resize(photo.width >= photo.height ? {width: MAX_EDGE} : {height: MAX_EDGE});
+    }
+    const image = await context.renderAsync();
+    const small = await image.saveAsync({compress: 0.8, format: SaveFormat.JPEG});
+    return {uri: small.uri, name: `craves-dish-${menuItemId}.jpg`, type: 'image/jpeg'};
+  } catch {
+    return {
+      uri: photo.uri,
+      name: photo.fileName?.trim() || `craves-dish-${menuItemId}.jpg`,
+      type: photo.mimeType || 'image/jpeg',
+    };
+  }
+}
+
 /** Sends the photo as the dish's main one. False when it did not upload (the dish itself is already saved). */
 export async function uploadDishPhoto(menuItemId: string, photo: DishPhoto): Promise<boolean> {
   try {
     const formData = new FormData();
-    formData.append(
-      'file',
-      {
-        uri: photo.uri,
-        name: photo.fileName?.trim() || `craves-dish-${menuItemId}.jpg`,
-        type: photo.mimeType || 'image/jpeg',
-      } as unknown as Blob,
-    );
+    formData.append('file', (await uploadFile(menuItemId, photo)) as unknown as Blob);
     await chefMenuApi.uploadImage(menuItemId, formData, true);
     return true;
   } catch {

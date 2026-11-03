@@ -642,7 +642,8 @@ export const chefMenuApi = {
         primary ? 'true' : 'false'
       }`,
       formData,
-      {signal},
+      // A photo over mobile data needs more than the default 12 s.
+      {signal, timeout: 45000},
     );
     return requireImageResponse(response);
   },

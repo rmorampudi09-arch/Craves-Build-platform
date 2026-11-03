@@ -352,7 +352,8 @@ describe('chefMenuApi contract model', () => {
     expect(post).toHaveBeenCalledWith(
       `/api/v1/kitchens/me/menu-items/${MENU_ITEM_ID}/images?primary=true`,
       formData,
-      {signal: undefined},
+      // A photo over mobile data needs more than the default 12 s.
+      {signal: undefined, timeout: 45000},
     );
   });
 

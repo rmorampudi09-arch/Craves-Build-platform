@@ -87,6 +87,15 @@ jest.mock('expo-image-picker', () => ({
   })),
 }));
 
+// Native image resizing: screens only need the photo back unchanged.
+jest.mock('expo-image-manipulator', () => {
+  const context = {
+    resize: jest.fn(() => context),
+    renderAsync: jest.fn(async () => ({saveAsync: jest.fn(async () => ({uri: 'file:///mock/small.jpg', width: 1600, height: 1200}))})),
+  };
+  return {SaveFormat: {JPEG: 'jpeg', PNG: 'png', WEBP: 'webp'}, ImageManipulator: {manipulate: jest.fn(() => context)}};
+});
+
 // Blur/glass are native visual boundaries. App-level Jest only needs stable
 // host components and capability fallbacks, not expo-modules-core emitters.
 jest.mock('expo-blur', () => {

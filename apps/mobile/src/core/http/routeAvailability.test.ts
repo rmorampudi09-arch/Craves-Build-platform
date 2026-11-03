@@ -1,6 +1,6 @@
 import {AxiosError} from 'axios';
 import {AppApiError} from './apiError';
-import {isRouteNotPublished} from './routeAvailability';
+import {isBodyLess403, isRouteNotPublished} from './routeAvailability';
 
 function axiosFailure(status: number, data?: unknown) {
   const error = new AxiosError('failed', 'ERR_BAD_REQUEST');
@@ -32,5 +32,14 @@ describe('isRouteNotPublished', () => {
     expect(isRouteNotPublished(new AxiosError('Network Error', 'ERR_NETWORK'))).toBe(false);
     expect(isRouteNotPublished(new Error('boom'))).toBe(false);
     expect(isRouteNotPublished(undefined)).toBe(false);
+  });
+});
+
+describe('isBodyLess403', () => {
+  it('is true only for a 403 without a backend code', () => {
+    expect(isBodyLess403(axiosFailure(403))).toBe(true);
+    expect(isBodyLess403(axiosFailure(403, {code: 'CHEF_KITCHEN_SUSPENDED'}))).toBe(false);
+    expect(isBodyLess403(axiosFailure(401))).toBe(false);
+    expect(isBodyLess403(axiosFailure(404))).toBe(false);
   });
 });

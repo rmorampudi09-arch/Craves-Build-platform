@@ -160,6 +160,14 @@ craves:
     default-strategy: ${CRAVES_DELIVERY_ASSIGNMENT_STRATEGY:STOCHASTIC}
     maintenance-cron: ${CRAVES_DELIVERY_MAINTENANCE_CRON:0 0 2 * * *}
     maintenance-zone: ${CRAVES_DELIVERY_MAINTENANCE_ZONE:Asia/Kolkata}
+  # Handbook 104: per-provider circuit breaker and concurrency limit around delivery quotes (ProviderGuard). Off by default.
+  # Give open-duration a unit (30s; a bare number means milliseconds); keep max-concurrent-calls at or above
+  # CRAVES_DELIVERY_MAX_CONCURRENT_MESSAGES, since each command quotes each provider once at a time.
+  provider-resilience:
+    enabled: ${CRAVES_PROVIDER_RESILIENCE_ENABLED:false}
+    failure-threshold: ${CRAVES_PROVIDER_RESILIENCE_FAILURE_THRESHOLD:5}
+    open-duration: ${CRAVES_PROVIDER_RESILIENCE_OPEN_DURATION:30s}
+    max-concurrent-calls: ${CRAVES_PROVIDER_RESILIENCE_MAX_CONCURRENT_CALLS:8}
   delivery-command:
     enabled: ${CRAVES_DELIVERY_COMMAND_ENABLED:false}
     reconciliation-enabled: ${CRAVES_DELIVERY_RECONCILIATION_ENABLED:false}
@@ -315,3 +323,8 @@ management:
           include: readinessState,db
         token-revocation:
           include: readinessState,redis
+
+# Handbook 099: every log line carries the request's X-Correlation-ID (MDC key correlationId, set by CorrelationIdConfiguration).
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "

@@ -22,6 +22,7 @@ import {
   useChefToast,
 } from '../../chefShell/components/ui';
 import {formatDayLabel} from '../../chefShell/domain/chefFormat';
+import {chefFailureText} from '../../chefShell/domain/sellingNotReady';
 import {chefKitchenScheduleApi, type ChefKitchenSchedule} from '../api/chefKitchenScheduleApi';
 import {DayHoursForm, SpecialDayForm, type SpecialDayValue} from '../components/HoursForms';
 import {DAYS, rangesForDay, summarizeRanges, withDayRanges} from '../domain/openingHours';
@@ -65,8 +66,8 @@ export function ChefKitchenScheduleScreen() {
       if (await kitchen.setOpen(open)) {
         toast.show(open ? 'Your kitchen is open' : 'Your kitchen is closed');
       }
-    } catch {
-      toast.show(KITCHEN_UPDATE_FAILED);
+    } catch (error) {
+      toast.show(chefFailureText(error, KITCHEN_UPDATE_FAILED));
     }
   };
 
@@ -87,8 +88,8 @@ export function ChefKitchenScheduleScreen() {
     setSheetError(null);
     try {
       await run();
-    } catch {
-      setSheetError(HOURS_SAVE_FAILED);
+    } catch (error) {
+      setSheetError(chefFailureText(error, HOURS_SAVE_FAILED));
     } finally {
       busy.current = false;
       setSaving(false);

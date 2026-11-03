@@ -67,8 +67,8 @@ export function ChefMenuScreen() {
   const navigation = useNavigation<ChefMenuNavigation>();
   const toast = useChefToast();
   const menu = useChefMenuModel();
-  const {items, status, availabilityStateByItem, publishDraft, refresh, updateAvailability} = menu;
-  const setOn = useDishSwitch(updateAvailability);
+  const {items, status, availabilityStateByItem, publishDraft, refresh, lastRefusal} = menu;
+  const setOn = useDishSwitch(menu);
   const [query, setQuery] = React.useState('');
   const [filter, setFilter] = React.useState<Filter>(ALL);
   const [publishing, setPublishing] = React.useState<ChefMenuItem | null>(null);
@@ -108,7 +108,7 @@ export function ChefMenuScreen() {
     try {
       const saved = await publishDraft(item);
       setPublishing(null);
-      toast.show(saved ? `${item.itemName} is live` : `We couldn't publish ${item.itemName}. Try again.`);
+      toast.show(saved ? `${item.itemName} is live` : lastRefusal() ?? `We couldn't publish ${item.itemName}. Try again.`);
     } finally {
       publishLock.current = false;
     }

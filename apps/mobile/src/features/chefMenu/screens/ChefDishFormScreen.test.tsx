@@ -492,6 +492,16 @@ describe('ChefDishFormScreen', () => {
       expect(withLabel('Publish dish')).toBeTruthy();
     });
 
+    it('says why a new dish cannot go live yet when the chef cannot sell', async () => {
+      await mount('add', undefined);
+      await fillRequired();
+      mockApi.createItem.mockRejectedValue(new AppApiError('CHEF_SELLING_NOT_READY', 'Complete the required finance review before accepting new orders', 409));
+      await press('Publish dish');
+      await settle();
+      expect(has('You can start selling once Craves approves your kitchen.')).toBe(true);
+      expect(has('Complete the required finance review before accepting new orders')).toBe(false);
+    });
+
     it('opens pre-filled as "Copy of <name>" when duplicating, without the photo', async () => {
       await mount('add', {copyOfMenuItemId: ID});
       expect(input('Dish name').props.value).toBe('Copy of Dum Chicken biriyani');
@@ -707,6 +717,15 @@ describe('ChefDishFormScreen', () => {
       await settle();
       expect(has('The dish could not be saved. Check your details and try again.')).toBe(true);
       expect(mockLeft).not.toHaveBeenCalled();
+    });
+
+    it('says why the changes were refused when the chef cannot sell yet', async () => {
+      await mount('edit', {menuItemId: ID});
+      await type('Price', '170');
+      mockApi.replaceItem.mockRejectedValue(new AppApiError('CHEF_SELLING_NOT_READY', 'Complete the required finance review before accepting new orders', 409));
+      await press('Save changes');
+      await settle();
+      expect(has('You can start selling once Craves approves your kitchen.')).toBe(true);
     });
 
     it('says so when the dish is not on the menu any more', async () => {

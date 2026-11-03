@@ -1,5 +1,6 @@
 import React from 'react';
 import {ConfirmDialog, useChefToast} from '../../chefShell/components/ui';
+import {chefFailureText} from '../../chefShell/domain/sellingNotReady';
 import type {KitchenOpenState, KitchenPauseDuration} from '../../chefProfile/state/useKitchenOpenState';
 import {KitchenStatusSheet} from './KitchenStatusSheet';
 
@@ -54,8 +55,8 @@ export function useKitchenStatusControl(
       if (await action()) {
         toast.show(done);
       }
-    } catch {
-      toast.show(KITCHEN_UPDATE_FAILED);
+    } catch (failure) {
+      toast.show(chefFailureText(failure, KITCHEN_UPDATE_FAILED));
     }
   };
   const open = () => change(() => kitchen.setOpen(true), 'Your kitchen is open');

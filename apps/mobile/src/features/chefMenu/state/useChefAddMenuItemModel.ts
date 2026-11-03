@@ -3,6 +3,7 @@ import {useQueryClient} from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
 import {AppApiError} from '../../../core/http/apiError';
+import {chefFailureText} from '../../chefShell/domain/sellingNotReady';
 import {chefMenuApi, type ChefMenuItem} from '../api/chefMenuApi';
 import {
   buildChefMenuItemRequest,
@@ -23,7 +24,7 @@ export interface ChefAddMenuItemModel {
 
 function publicSubmitFailure(cause: unknown): string {
   return cause instanceof AppApiError
-    ? cause.message
+    ? chefFailureText(cause, cause.message)
     : 'The dish could not be saved. Check your details and try again.';
 }
 

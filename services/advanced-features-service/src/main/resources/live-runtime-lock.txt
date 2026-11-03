@@ -36,3 +36,5 @@ in.craves.advanced.aisearch.AiSearchController
 in.craves.advanced.liveactivities.LiveActivityController
 in.craves.advanced.policies.PolicyController
 in.craves.advanced.policies.PolicyAdminController
+in.craves.advanced.accountdeletion.AccountDeletionController
+in.craves.advanced.accountdeletion.AccountDeletionAdminController

@@ -2,14 +2,12 @@ package in.craves.advanced.tastedata;
 
 import in.craves.advanced.platform.data.PersonalDataContributor;
 import in.craves.advanced.platform.data.Sql;
-import in.craves.advanced.platform.module.ModuleRuntime;
 import in.craves.advanced.platform.security.CurrentUser;
 import in.craves.advanced.platform.web.ApiProblem;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,13 +32,13 @@ public class TasteDataController {
     public record ErasureReceipt(UUID receiptId, int recordsErased, List<String> modules, Instant erasedAt) { }
 
     private final List<PersonalDataContributor> contributors;
-    private final ModuleRuntime runtime;
+    private final PersonalDataEraser eraser;
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
-    public TasteDataController(List<PersonalDataContributor> contributors, ModuleRuntime runtime, JdbcTemplate jdbc, Clock clock) {
+    public TasteDataController(List<PersonalDataContributor> contributors, PersonalDataEraser eraser, JdbcTemplate jdbc, Clock clock) {
         this.contributors = contributors;
-        this.runtime = runtime;
+        this.eraser = eraser;
         this.jdbc = jdbc;
         this.clock = clock;
     }
@@ -69,7 +67,7 @@ public class TasteDataController {
         export.put("exportedAt", clock.instant());
         export.put("consent", consentOf(person));
         for (PersonalDataContributor contributor : contributors) {
-            if (usable(contributor.moduleId())) export.put(contributor.moduleId(), contributor.export(person));
+            if (eraser.usable(contributor.moduleId())) export.put(contributor.moduleId(), contributor.export(person));
         }
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .header("Content-Disposition", "attachment; filename=\"craves-taste-data.json\"").body(export);
@@ -81,32 +79,12 @@ public class TasteDataController {
     public ResponseEntity<ErasureReceipt> erase(@RequestHeader(value = "X-Confirm-Erase", required = false) String confirm) {
         if (!"ERASE".equals(confirm)) throw ApiProblem.badRequest("CONFIRMATION_REQUIRED", "Send X-Confirm-Erase: ERASE to erase your data");
         UUID person = CurrentUser.id();
-        int total = jdbc.update("DELETE FROM adv_taste_data.consent WHERE person_id = ?", person);
-        List<String> modules = new ArrayList<>();
-        for (PersonalDataContributor contributor : contributors) {
-            if (!usable(contributor.moduleId())) continue;
-            total += contributor.erase(person);
-            modules.add(contributor.moduleId());
-        }
-        // Stored replies of the person's keyed requests (they can hold names and notes) go too; they are caches, so the receipt does not count them.
-        // shortcut: no index on actor_id; the table keeps only 48 hours of keyed requests. Add one if erasing gets slow.
-        jdbc.update("DELETE FROM adv_platform.idempotency_record WHERE actor_id = ?", person);
+        PersonalDataEraser.Erased erased = eraser.erase(person);
         Instant now = clock.instant();
         UUID receipt = UUID.randomUUID();
         jdbc.update("INSERT INTO adv_taste_data.erasure_receipt (id, person_id, records, modules, created_at) VALUES (?,?,?,?,?)",
-                receipt, person, total, modules.toArray(String[]::new), Sql.ts(now));
-        return ok(new ErasureReceipt(receipt, total, modules, now));
-    }
-
-    private boolean usable(String moduleId) {
-        return runtime.modules().stream().filter(m -> m.id().equals(moduleId)).findFirst().map(module -> {
-            try {
-                runtime.ensureReady(module);
-                return true;
-            } catch (ApiProblem unavailable) {
-                return false;
-            }
-        }).orElse(false);
+                receipt, person, erased.records(), erased.modules().toArray(String[]::new), Sql.ts(now));
+        return ok(new ErasureReceipt(receipt, erased.records(), erased.modules(), now));
     }
 
     private Consent consentOf(UUID person) {

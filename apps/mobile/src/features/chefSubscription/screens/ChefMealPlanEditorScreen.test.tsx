@@ -159,10 +159,10 @@ function lunchSchedule(extra: Array<Record<string, unknown>> = []) {
   };
 }
 
-async function attachPhoto() {
+async function attachPhoto(size: {width: number; height: number; fileSize: number} = {width: 800, height: 600, fileSize: 1000}) {
   jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValueOnce({
     canceled: false,
-    assets: [{uri: 'file:///plan.jpg', width: 800, height: 600, mimeType: 'image/jpeg', fileSize: 1000, fileName: 'plan.jpg'}],
+    assets: [{uri: 'file:///plan.jpg', ...size, mimeType: 'image/jpeg', fileName: 'plan.jpg'}],
   } as never);
   await act(async () => pressable('Add plan photo').props.onPress());
 }
@@ -686,6 +686,27 @@ describe('ChefMealPlanEditorScreen', () => {
       expect(mockUploadPlanImage).not.toHaveBeenCalled();
       expect(mockSubmit).toHaveBeenCalledWith(PLAN_ID, '');
       expect(mockGoBack).toHaveBeenCalled();
+    });
+
+    it('shrinks a large camera photo instead of refusing it, and uploads the small JPEG', async () => {
+      const append = jest.spyOn(FormData.prototype, 'append');
+      mockPlans = [plan({imageUrl: null})];
+      mockSchedule = lunchSchedule();
+      mockUpdatePlan.mockResolvedValueOnce(plan({imageUrl: null}));
+      mockPutSchedule.mockResolvedValueOnce(undefined);
+      mockUploadPlanImage.mockResolvedValueOnce(plan({}));
+      mockSubmit.mockResolvedValueOnce(plan({status: 'PENDING_APPROVAL'}));
+      render(PLAN_ID);
+      await attachPhoto({width: 8160, height: 6120, fileSize: 9_000_000});
+      expect(allText()).not.toContain('Photo is too large');
+      reachReview();
+      await submit(true);
+
+      // The global image-manipulator mock returns this file.
+      expect(append).toHaveBeenCalledWith('file', {uri: 'file:///mock/small.jpg', name: `craves-plan-${PLAN_ID}.jpg`, type: 'image/jpeg'});
+      expect(mockUploadPlanImage).toHaveBeenCalledTimes(1);
+      expect(mockSubmit).toHaveBeenCalledWith(PLAN_ID, '');
+      append.mockRestore();
     });
 
     it('keeps the saved plan and does not submit when the photo is rejected', async () => {

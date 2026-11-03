@@ -5,6 +5,7 @@ import {useQueryClient} from '@tanstack/react-query';
 import type {ChefProductStackParamList} from '../../../app/navigation/types';
 import {toAppApiError} from '../../../core/http/apiError';
 import {isRouteNotPublished} from '../../../core/http/routeAvailability';
+import {shrinkPhoto} from '../../../core/media/shrinkPhoto';
 import {
   colors,
   fontWeight,
@@ -192,10 +193,9 @@ export function ChefEditProfileScreen() {
       }
     } catch (error) {
       const locked = toAppApiError(error).code === 'KITCHEN_PHOTOS_LOCKED';
-      if (locked) {
-        // The tiles were out of date (photos arrived from the application or another device): show what the server holds.
-        query.refetch().catch(() => undefined);
-      }
+      // The tiles may be out of date (a slow upload the server still stored, or photos from the application or another
+      // device). Show what the server holds before the next tap: a retry would otherwise land in the next empty slot.
+      await query.refetch().catch(() => undefined);
       toast.show(
         locked
           ? KITCHEN_PHOTOS_LOCKED_MESSAGE
@@ -220,12 +220,7 @@ export function ChefEditProfileScreen() {
       if ('error' in picked) {
         return picked.error;
       }
-      const {photo} = picked;
-      const updated = await chefProfileApi.uploadPhoto(kind, {
-        uri: photo.uri,
-        name: photo.fileName?.trim() || 'craves-photo.jpg',
-        type: photo.mimeType || 'image/jpeg',
-      });
+      const updated = await chefProfileApi.uploadPhoto(kind, await shrinkPhoto(picked.photo, 'craves-photo.jpg'));
       await synchronizeChefProfileAfterSave(queryClient, identityId as string, updated);
       return 'Photo saved';
     });

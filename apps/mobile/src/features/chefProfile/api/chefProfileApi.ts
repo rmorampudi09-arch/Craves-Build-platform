@@ -318,7 +318,8 @@ export const chefProfileApi = {
   ): Promise<ChefKitchenProfile> {
     const body = new FormData();
     body.append('file', photo as unknown as Blob);
-    return parseKitchenResponse(await httpClient.post<unknown>(`/api/v1/kitchens/me/photos?kind=${kind}`, body, {signal}));
+    // A photo over mobile data needs more than the default 12 s.
+    return parseKitchenResponse(await httpClient.post<unknown>(`/api/v1/kitchens/me/photos?kind=${kind}`, body, {signal, timeout: 45000}));
   },
 
   async deletePhoto(kind: ChefKitchenPhotoKind, signal?: AbortSignal): Promise<ChefKitchenProfile> {

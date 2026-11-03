@@ -23,6 +23,7 @@ const mockApi = {
   replaceItem: jest.fn(),
   updateAvailability: jest.fn(),
   uploadImage: jest.fn(),
+  deleteImage: jest.fn(),
   deleteItem: jest.fn(),
 };
 const mockTaxonomy = {
@@ -74,6 +75,7 @@ jest.mock('../api/chefMenuApi', () => ({
     replaceItem: (...args: unknown[]) => mockApi.replaceItem(...args),
     updateAvailability: (...args: unknown[]) => mockApi.updateAvailability(...args),
     uploadImage: (...args: unknown[]) => mockApi.uploadImage(...args),
+    deleteImage: (...args: unknown[]) => mockApi.deleteImage(...args),
     deleteItem: (...args: unknown[]) => mockApi.deleteItem(...args),
   },
 }));
@@ -628,6 +630,30 @@ describe('ChefDishFormScreen', () => {
         expect(mockApi.replaceItem).not.toHaveBeenCalled();
         expect(has('Changes saved')).toBe(true);
         expect(mockLeft).toHaveBeenCalledTimes(1);
+      });
+
+      it('deletes the old photo of the dish after the new one is saved, and a failed delete does not fail the save', async () => {
+        await mount('edit', {menuItemId: ID});
+        await choosePhoto();
+        mockApi.uploadImage.mockResolvedValue({});
+        mockApi.deleteImage.mockRejectedValue(new Error('offline'));
+        await press('Save changes');
+        await settle();
+        expect(mockApi.uploadImage).toHaveBeenCalledTimes(1);
+        expect(mockApi.deleteImage).toHaveBeenCalledWith(ID, '123e4567-e89b-42d3-a456-426614174050');
+        expect(has('Changes saved')).toBe(true);
+        expect(mockLeft).toHaveBeenCalledTimes(1);
+      });
+
+      it('says the dish has too many photos when the server keeps refusing the new one for that reason', async () => {
+        await mount('edit', {menuItemId: ID});
+        await choosePhoto();
+        mockApi.uploadImage.mockRejectedValue(new AppApiError('MENU_IMAGE_LIMIT_REACHED', 'A dish can have up to 5 photos', 409));
+        await press('Save changes');
+        await settle();
+        expect(has('This dish already has 5 photos. Remove one on the Craves website first, then try again.')).toBe(true);
+        expect(has("The new photo didn't upload. Your other changes are saved. Try the photo again.")).toBe(false);
+        expect(mockLeft).not.toHaveBeenCalled();
       });
 
       it('keeps Save changes off until the refresh after the upload is done, and sends the dish once', async () => {

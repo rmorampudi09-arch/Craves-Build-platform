@@ -186,7 +186,8 @@ describe('chefProfileApi photos', () => {
     const [url, body, options] = (httpClient.post as jest.Mock).mock.calls[0];
     expect(url).toBe('/api/v1/kitchens/me/photos?kind=CHEF');
     expect(body).toBeInstanceOf(FormData);
-    expect(options).toEqual({signal: undefined});
+    // A photo over mobile data needs more than the default 12 s.
+    expect(options).toEqual({signal: undefined, timeout: 45000});
   });
 
   it('removes a photo by kind', async () => {

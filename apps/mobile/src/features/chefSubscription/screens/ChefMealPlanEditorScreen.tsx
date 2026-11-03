@@ -7,6 +7,7 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {useQueryClient} from '@tanstack/react-query';
 import type {ChefProductStackParamList} from '../../../app/navigation/types';
 import {AppApiError} from '../../../core/http/apiError';
+import {shrinkPhoto} from '../../../core/media/shrinkPhoto';
 import {
   borderWidth,
   colors,
@@ -88,9 +89,6 @@ type Step = 1 | 2 | 3;
 
 const STEP_NAMES: Record<Step, string> = {1: 'Details', 2: 'Meals', 3: 'Review'};
 const MONTH_DAYS = Array.from({length: 28}, (_, index) => index + 1);
-// Server limits for plan photos (JPEG/PNG only; WebP is rejected).
-const MAX_PHOTO_BYTES = 2_097_152;
-const MAX_PHOTO_SIDE = 4096;
 const SLOT_ICON: Record<MealSlot, string> = {
   BREAKFAST: 'coffee-outline',
   LUNCH: 'weather-sunny',
@@ -320,10 +318,6 @@ function MealPlanEditor({
         setPhotoError('Choose a JPEG or PNG photo.');
         return;
       }
-      if ((asset.fileSize ?? 0) > MAX_PHOTO_BYTES || asset.width > MAX_PHOTO_SIDE || asset.height > MAX_PHOTO_SIDE) {
-        setPhotoError('Photo is too large. Pick a smaller photo.');
-        return;
-      }
       setPhoto(asset);
       setDirty(true);
     } catch {
@@ -342,11 +336,8 @@ function MealPlanEditor({
     if (!('imageUrl' in saved)) return unavailable();
     try {
       const body = new FormData();
-      body.append('file', {
-        uri: asset.uri,
-        name: asset.fileName?.trim() || `craves-plan-${saved.id}.jpg`,
-        type: asset.mimeType || 'image/jpeg',
-      } as unknown as Blob);
+      // Shrunk to a 1600 px JPEG, far inside the server's 2 MiB / 4096 px limits; a server refusal still shows its message below.
+      body.append('file', (await shrinkPhoto(asset, `craves-plan-${saved.id}.jpg`)) as unknown as Blob);
       await chefSubscriptionApi.uploadPlanImage(saved.id, body);
       return true;
     } catch (cause) {

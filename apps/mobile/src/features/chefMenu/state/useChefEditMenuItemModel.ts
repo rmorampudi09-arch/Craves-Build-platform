@@ -4,6 +4,7 @@ import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
 import {AppApiError} from '../../../core/http/apiError';
 import {isRouteNotPublished} from '../../../core/http/routeAvailability';
+import {chefFailureText} from '../../chefShell/domain/sellingNotReady';
 import {chefMenuApi, type ChefMenuItem} from '../api/chefMenuApi';
 import {
   buildChefMenuPublishRequest,
@@ -33,7 +34,7 @@ function publicSubmitFailure(cause: unknown): {
   details: readonly string[];
 } {
   if (cause instanceof AppApiError) {
-    return {message: cause.message, details: cause.details};
+    return {message: chefFailureText(cause, cause.message), details: cause.details};
   }
   return {
     message: 'The dish could not be saved. Check your details and try again.',

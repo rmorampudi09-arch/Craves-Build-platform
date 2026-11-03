@@ -233,6 +233,18 @@ describe('ChefMenuScreen', () => {
     expect(withLabel('Undo')).toBeUndefined();
   });
 
+  it('says why a switch was refused when the chef cannot sell yet', async () => {
+    await mount();
+    mockApi.updateAvailability.mockRejectedValue(new AppApiError('CHEF_SELLING_NOT_READY', 'Complete the required finance review before accepting new orders', 409));
+    await act(async () => {
+      switchFor('Paneer biryani')!.props.onValueChange(false);
+    });
+    await settle();
+    expect(switchFor('Paneer biryani')!.props.value).toBe(true);
+    expect(has('You can start selling once Craves approves your kitchen.')).toBe(true);
+    expect(has("We couldn't update Paneer biryani. Try again.")).toBe(false);
+  });
+
   it('puts the switch back and says it could not save when the server refuses', async () => {
     await mount();
     mockApi.updateAvailability.mockRejectedValue(new AppApiError('HTTP_500', 'raw server text', 500));
@@ -274,6 +286,17 @@ describe('ChefMenuScreen', () => {
     expect(has('Tomato curry is live')).toBe(true);
     expect(withLabel('Publish Tomato curry')).toBeUndefined();
     expect(switchFor('Tomato curry')!.props.value).toBe(true);
+  });
+
+  it('says why a draft cannot be published yet when the chef cannot sell', async () => {
+    await mount();
+    mockApi.replaceItem.mockRejectedValue(new AppApiError('CHEF_SELLING_NOT_READY', 'Complete the required finance review before accepting new orders', 409));
+    await press('Publish Tomato curry');
+    await press('Publish dish');
+    await settle();
+    expect(has('You can start selling once Craves approves your kitchen.')).toBe(true);
+    expect(has("We couldn't publish Tomato curry. Try again.")).toBe(false);
+    expect(withLabel('Publish Tomato curry')).toBeTruthy();
   });
 
   it('says a dish could not be published and keeps it a draft', async () => {

@@ -92,6 +92,16 @@ export function chefBusinessDocumentTypeLabel(
       return 'Aadhaar card';
     case 'PAN_CARD':
       return 'PAN card';
+    case 'KITCHEN_PHOTO_1':
+      return 'Kitchen photo';
+    case 'KITCHEN_PHOTO_2':
+      return 'Cooking setup photo';
+    case 'FSSAI_LICENSE':
+      return 'FSSAI licence';
+    case 'SELECTED_PROOF_FRONT':
+      return 'ID proof · front';
+    case 'SELECTED_PROOF_BACK':
+      return 'ID proof · back';
   }
 }
 

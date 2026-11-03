@@ -133,13 +133,14 @@ export const chefSupportCasesApi = {
     });
 
     const parsed = parseSupportCasePage(response);
-    if (
-      !parsed ||
-      parsed.cases.some(entry => entry.requesterRole !== 'CHEF')
-    ) {
+    if (!parsed) {
       throw new Error('CHEF_SUPPORT_CASES_INVALID_RESPONSE');
     }
-    return parsed;
+    // The server lists every case of the account, so this list also holds the customer's own tickets.
+    return {
+      ...parsed,
+      cases: parsed.cases.filter(entry => entry.requesterRole === 'CHEF'),
+    };
   },
 
   async get(caseId: string, signal?: AbortSignal): Promise<SupportCaseDetail> {

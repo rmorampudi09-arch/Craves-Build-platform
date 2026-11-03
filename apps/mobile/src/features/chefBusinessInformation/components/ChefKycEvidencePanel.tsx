@@ -184,7 +184,7 @@ export function ChefKycEvidencePanel({
           mediaTypes: ['images'],
           allowsEditing: documentType === 'APPLICANT_PHOTO',
           aspect: documentType === 'APPLICANT_PHOTO' ? [1, 1] : undefined,
-          quality: 1,
+          quality: 0.8,
         });
         if (result.canceled || !result.assets[0]) return;
 

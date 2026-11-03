@@ -134,6 +134,14 @@ describe('ChefKitchenScheduleScreen', () => {
     expect(ui.has("We couldn't update your kitchen. Check your connection and try again.")).toBe(true);
   });
 
+  it('says why the kitchen cannot open yet instead of blaming the connection', async () => {
+    await mount();
+    mockKitchen.setOpen.mockRejectedValue(new AppApiError('CHEF_SELLING_NOT_READY', 'Complete the required finance review before accepting new orders', 409));
+    await ui.toggle('Taking orders', true);
+    expect(ui.has('You can start selling once Craves approves your kitchen.')).toBe(true);
+    expect(ui.has("We couldn't update your kitchen. Check your connection and try again.")).toBe(false);
+  });
+
   it('shows a closed kitchen as off, and a kitchen Craves has paused as locked', async () => {
     mockKitchen.status = 'closed';
     mockKitchen.closedReason = 'chef';
@@ -234,6 +242,16 @@ describe('ChefKitchenScheduleScreen', () => {
     await ui.settle();
     expect(ui.has("We couldn't save your hours. Please try again.")).toBe(true);
     expect(ui.byLabel('Save')).toBeDefined();
+  });
+
+  it('says why the hours were refused when the chef cannot sell yet', async () => {
+    mockApi.replace.mockRejectedValue(new AppApiError('CHEF_SELLING_NOT_READY', 'Complete the required finance review before accepting new orders', 409));
+    await mount();
+    await ui.press('Monday');
+    await ui.press('Save');
+    await ui.settle();
+    expect(ui.has('You can start selling once Craves approves your kitchen.')).toBe(true);
+    expect(ui.has("We couldn't save your hours. Please try again.")).toBe(false);
   });
 
   it('shows Coming soon for the hours when the route is not published, and the switch still works', async () => {

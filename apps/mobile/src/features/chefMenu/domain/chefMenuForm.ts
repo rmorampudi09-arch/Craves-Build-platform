@@ -127,8 +127,11 @@ export function chefMenuItemToFormValues(item: ChefMenuItem): ChefMenuFormValues
         ? ''
         : String(item.preparationTimeMinutes),
     spiceLevel: item.spiceLevel ?? '',
-    unitPackageWeightGrams: String(item.unitPackageWeightGrams),
-    thermoboxRequired: item.thermoboxRequired,
+    unitPackageWeightGrams:
+      item.unitPackageWeightGrams == null
+        ? ''
+        : String(item.unitPackageWeightGrams),
+    thermoboxRequired: item.thermoboxRequired ?? false,
     available: item.available,
   };
 }

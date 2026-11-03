@@ -50,14 +50,15 @@ describe('chefBusinessInformationApi KYC evidence', () => {
       ]),
     ).toHaveLength(2);
 
+    // Types the panel does not offer (v2 kitchen photos, FSSAI, future ones) are left out, not fatal.
     expect(
       parseChefBusinessEvidence([
-        {
-          ...uploaded,
-          documentType: 'PAN_CARD',
-        },
+        {...uploaded, documentType: 'PAN_CARD'},
+        {...uploaded, documentType: 'KITCHEN_PHOTO_1'},
+        {...uploaded, documentType: 'FSSAI_LICENSE'},
+        {...uploaded, documentType: 'SOMETHING_NEW'},
       ]),
-    ).toBeNull();
+    ).toEqual([]);
   });
 
   it('reads the dedicated current evidence endpoint', async () => {
@@ -122,7 +123,7 @@ describe('chefBusinessInformationApi KYC evidence', () => {
     expect(httpClient.post).toHaveBeenCalledWith(
       CHEF_PROOF_FILES_ROUTE,
       formData,
-      {signal: undefined},
+      {signal: undefined, timeout: 45000},
     );
 
     Object.defineProperty(formDataGlobal, 'FormData', {
@@ -145,5 +146,89 @@ describe('chefBusinessInformationApi KYC evidence', () => {
     ).rejects.toThrow('Unsupported Chef application document type.');
 
     expect(httpClient.post).not.toHaveBeenCalled();
+  });
+
+  describe('verification record', () => {
+    const doc = (documentType: string, index: number) => ({
+      ...uploaded,
+      id: `${index.toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`,
+      documentType,
+    });
+    // Shape of GET /api/v1/chef/application for a chef who applied through onboarding v2.
+    const v2Record = (documents: unknown[]) => ({
+      id: '44444444-4444-4444-8444-444444444444',
+      identityId: '22222222-2222-4222-8222-222222222222',
+      phoneNumber: '+919876543210',
+      email: 'chef@example.com',
+      firstName: 'Relangi',
+      lastName: 'M',
+      addressLine1: '12 Main Road',
+      addressLine2: null,
+      landmark: null,
+      city: 'Hyderabad',
+      state: 'Telangana',
+      postalCode: '500072',
+      latitude: 17.4,
+      longitude: 78.4,
+      status: 'PENDING',
+      rejectionReason: null,
+      submittedAt: '2026-10-20T10:00:00Z',
+      reviewedAt: null,
+      reviewedByIdentityId: null,
+      documents,
+      referenceCode: 'CRV-10001',
+    });
+    const V2_TYPES = [
+      'KITCHEN_PHOTO_1',
+      'KITCHEN_PHOTO_2',
+      'FSSAI_LICENSE',
+      'SELECTED_PROOF_FRONT',
+      'SELECTED_PROOF_BACK',
+    ];
+
+    it('reads a v2 chef record so the bank account screen gets the applicant name', async () => {
+      (httpClient.get as jest.Mock).mockResolvedValue(
+        v2Record(V2_TYPES.map(doc)),
+      );
+
+      const record = await chefBusinessInformationApi.getVerificationRecord();
+
+      expect(record.status).toBe('PENDING');
+      expect(record.firstName).toBe('Relangi');
+      expect(record.documents.map(item => item.documentType)).toEqual(V2_TYPES);
+    });
+
+    it('skips a document type it does not know and has no length cap', async () => {
+      const everyType = [
+        'APPLICANT_PHOTO',
+        'GOVERNMENT_ID_FRONT',
+        'GOVERNMENT_ID_BACK',
+        'TAX_ID_CARD',
+        'AADHAAR_CARD',
+        'PAN_CARD',
+        ...V2_TYPES,
+        'SOMETHING_NEW',
+      ];
+      (httpClient.get as jest.Mock).mockResolvedValue(
+        v2Record(everyType.map(doc)),
+      );
+
+      const record = await chefBusinessInformationApi.getVerificationRecord();
+
+      expect(record.documents).toHaveLength(11);
+      expect(record.documents.map(item => item.documentType)).not.toContain(
+        'SOMETHING_NEW',
+      );
+    });
+
+    it('still rejects a known document type that is malformed', async () => {
+      (httpClient.get as jest.Mock).mockResolvedValue(
+        v2Record([{...doc('KITCHEN_PHOTO_1', 1), fileSizeBytes: 0}]),
+      );
+
+      await expect(
+        chefBusinessInformationApi.getVerificationRecord(),
+      ).rejects.toThrow('unsupported response');
+    });
   });
 });

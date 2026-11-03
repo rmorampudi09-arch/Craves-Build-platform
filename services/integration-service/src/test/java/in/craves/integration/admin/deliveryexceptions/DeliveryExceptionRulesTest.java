@@ -9,6 +9,7 @@ import in.craves.integration.security.CravesPrincipal;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -45,11 +46,28 @@ class DeliveryExceptionRulesTest {
         assertThatThrownBy(() -> off.listDeliveryExceptions(as("PLATFORM_ADMIN"), null, null, 30, 0)).satisfies(e -> assertThat(code(e)).isEqualTo(404));
         var on = new AdminDeliveryExceptionController(service, true);
         on.listDeliveryExceptions(as("SUPPORT_ADMIN"), null, null, 30, 0);
-        var request = new AdminDeliveryExceptionController.OpenDeliveryExceptionRequest(UUID.randomUUID(), DeliveryExceptionService.Reason.OTHER, "x");
+        var request = new AdminDeliveryExceptionController.OpenDeliveryExceptionRequest(UUID.randomUUID(), null, DeliveryExceptionService.Reason.OTHER, "x");
         assertThatThrownBy(() -> on.openDeliveryException(as("SUPPORT_ADMIN"), request)).satisfies(e -> assertThat(code(e)).isEqualTo(403));
         assertThatThrownBy(() -> on.openDeliveryException(as("CHEF"), request)).satisfies(e -> assertThat(code(e)).isEqualTo(403));
         assertThatThrownBy(() -> on.listDeliveryExceptions(as("OPERATIONS_ADMIN"), null, null, 101, 0)).satisfies(e -> assertThat(code(e)).isEqualTo(400));
         on.openDeliveryException(as("OPERATIONS_ADMIN"), request);
         verify(service).open(any(), eq(request.deliveryJobId()), eq(request.reason()), eq("x"));
+        // An order id is resolved to the order's delivery job first.
+        var byOrder = new AdminDeliveryExceptionController.OpenDeliveryExceptionRequest(null, UUID.randomUUID(), DeliveryExceptionService.Reason.OTHER, "y");
+        UUID job = UUID.randomUUID();
+        when(service.jobForOrder(byOrder.orderId())).thenReturn(job);
+        on.openDeliveryException(as("OPERATIONS_ADMIN"), byOrder);
+        verify(service).open(any(), eq(job), eq(DeliveryExceptionService.Reason.OTHER), eq("y"));
+    }
+
+    @Test void errorsCarryACodeAndTheServiceMessage() {
+        var advice = new DeliveryExceptionApiAdvice();
+        var off = advice.refused(new ResponseStatusException(HttpStatus.NOT_FOUND, AdminDeliveryExceptionController.DISABLED));
+        assertThat(off.getStatusCode().value()).isEqualTo(404);
+        assertThat(off.getBody().code()).isEqualTo("DELIVERY_EXCEPTIONS_DISABLED");
+        var stale = advice.refused(new ResponseStatusException(HttpStatus.CONFLICT, "Case changed since version 3"));
+        assertThat(stale.getBody()).isEqualTo(new DeliveryExceptionApiAdvice.ErrorBody("CONFLICT", "Case changed since version 3"));
+        assertThat(stale.getHeaders().getCacheControl()).isEqualTo("no-store");
+        assertThat(advice.refused(new ResponseStatusException(HttpStatus.NOT_FOUND)).getBody()).isEqualTo(new DeliveryExceptionApiAdvice.ErrorBody("NOT_FOUND", ""));
     }
 }

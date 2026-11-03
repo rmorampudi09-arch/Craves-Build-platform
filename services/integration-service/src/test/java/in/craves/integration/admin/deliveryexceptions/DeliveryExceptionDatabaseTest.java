@@ -122,6 +122,23 @@ class DeliveryExceptionDatabaseTest {
         assertThat(service.detail(c.id()).exceptionCase().version()).isZero();
     }
 
+    @Test void findsTheOrdersOnlyDeliveryJobAndAssignsTheCallerByDefault() {
+        UUID job = job();
+        UUID order = jdbc.queryForObject("SELECT order_id FROM delivery_schema.delivery_job WHERE id=?", UUID.class, job);
+        assertThat(service.jobForOrder(order)).isEqualTo(job);
+        assertThatThrownBy(() -> service.jobForOrder(UUID.randomUUID())).satisfies(e -> assertThat(status(e)).isEqualTo(404));
+        assertThatThrownBy(() -> service.jobForOrder(null)).satisfies(e -> assertThat(status(e)).isEqualTo(400));
+        // A second kitchen's delivery on the same order: the console must name the job.
+        jdbc.update("INSERT INTO delivery_schema.delivery_job(id,chef_sub_order_id,order_id,provider_id,status) VALUES (?,?,?,'pidge','SEARCHING_AGENT')",
+            UUID.randomUUID(), UUID.randomUUID(), order);
+        assertThatThrownBy(() -> service.jobForOrder(order)).satisfies(e -> {
+            assertThat(status(e)).isEqualTo(409);
+            assertThat(((ResponseStatusException) e).getReason()).contains(job.toString());
+        });
+        var c = service.open(OPS, job, Reason.PICKUP_DELAYED, null).exceptionCase();
+        assertThat(service.act(OPS, c.id(), Action.ASSIGN, 0, null, null, null).exceptionCase().assigneeId()).isEqualTo(OPS);
+    }
+
     @Test void listFiltersAndPages() {
         for (int i = 0; i < 3; i++) service.open(OPS, job(), Reason.FOOD_DAMAGED, null);
         var dismissed = service.open(OPS, job(), Reason.OTHER, "dup").exceptionCase();

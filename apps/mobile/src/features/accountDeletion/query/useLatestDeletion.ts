@@ -5,12 +5,14 @@ import {useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError} from '../../../core/http/apiError';
 import {accountDeletionApi} from '../api/accountDeletionApi';
 import {shouldShowDeleteRow} from '../domain/deletionModel';
+import {accountDeletionQueryKey} from './accountDeletionQueryKey';
 
 /** The person's latest delete request, and whether the Delete row may show (only when the server answered). */
 export function useLatestDeletion() {
   const identityId = useAppSelector(state => state.auth.identity?.id);
   const query = useQuery({
-    queryKey: ['account-deletion', identityId],
+    // Disabled while signed out, so the placeholder id is never fetched.
+    queryKey: accountDeletionQueryKey(identityId ?? 'signed-out'),
     queryFn: () => accountDeletionApi.getLatest(),
     enabled: Boolean(identityId),
     refetchOnMount: 'always',
@@ -35,7 +37,8 @@ export function useLatestDeletion() {
     (query.isError && shouldShowDeleteRow({ok: false, error: toAppApiError(query.error)}));
 
   return {
-    latest: query.data ?? null,
+    // A failed refresh keeps the old data in react-query; the row is hidden then, so the request goes too.
+    latest: query.isSuccess ? query.data : null,
     showRow,
     status: query.status,
     refetch: () => refetch(),

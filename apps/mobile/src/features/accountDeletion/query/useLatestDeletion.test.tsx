@@ -4,6 +4,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import {accountDeletionApi} from '../api/accountDeletionApi';
 import type {DeletionView} from '../domain/deletionTypes';
+import {accountDeletionQueryKey} from './accountDeletionQueryKey';
 import {useLatestDeletion} from './useLatestDeletion';
 
 let mockIdentityId: string | undefined;
@@ -37,6 +38,13 @@ function Probe() {
   return null;
 }
 
+// react-query hands its result to React on the next timer tick.
+async function settle() {
+  await act(async () => {
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+  });
+}
+
 async function mount() {
   await act(async () => {
     tree = renderer.create(
@@ -45,10 +53,7 @@ async function mount() {
       </QueryClientProvider>,
     );
   });
-  // react-query hands its result to React on the next timer tick.
-  await act(async () => {
-    await new Promise<void>(resolve => setTimeout(resolve, 0));
-  });
+  await settle();
 }
 
 describe('useLatestDeletion', () => {
@@ -72,7 +77,7 @@ describe('useLatestDeletion', () => {
     getLatest.mockResolvedValue(view);
     await mount();
     expect(result).toMatchObject({latest: view, showRow: true, status: 'success'});
-    expect(queryClient.getQueryData(['account-deletion', 'identity-1'])).toEqual(view);
+    expect(queryClient.getQueryData(accountDeletionQueryKey('identity-1'))).toEqual(view);
   });
 
   it('shows the row when the person never asked to delete', async () => {
@@ -96,6 +101,16 @@ describe('useLatestDeletion', () => {
     await mount();
     expect(result).toMatchObject({latest: null, showRow: false, status: 'error'});
     expect(getLatest).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the old request and hides the row when a later refresh fails', async () => {
+    getLatest.mockResolvedValueOnce(view);
+    await mount();
+    expect(result).toMatchObject({latest: view, showRow: true});
+    getLatest.mockRejectedValueOnce(new AppApiError('HTTP_503', 'Unavailable', 503));
+    await act(async () => result.refetch());
+    await settle();
+    expect(result).toMatchObject({latest: null, showRow: false, status: 'error'});
   });
 
   it('asks once on mount, and again on refetch', async () => {

@@ -55,6 +55,10 @@ RS256 JWTs verified exactly like the other services (issuer, audience, UUID subj
 re-checked live with Auth (`X-Craves-Admin-Session: verified-v1`), deny-by-default routes, ownership checks in every service
 method, no-store responses, share tokens stored only as SHA-256, chef ownership confirmed with Catalog using the chef's own token.
 
+The one exception to deny-by-default is `POST /internal/v1/account-erasure` (and `/blockers`, `/prepare`), called by the auth-service deletion
+coordinator: no token, but the header `X-Craves-Internal-Secret` must equal `CRAVES_INTERNAL_SERVICE_SECRET` (401 otherwise; 503 while the secret is unset).
+It erases the person in every module, including switched-off ones whose schema was migrated once; `my-taste-data` erase still skips switched-off modules.
+
 ## Build and test
 
 ```bash

@@ -122,7 +122,7 @@ public class ChefDocumentReviewService {
         return jdbcTemplate.query(
             """
                 SELECT d.identity_id, d.document_type, d.status AS document_status,
-                       a.status AS application_status
+                       a.status AS application_status, a.erased_at IS NOT NULL AS erased
                 FROM chef_kyc_document d
                 JOIN chef_application a ON a.id = d.application_id
                 WHERE d.id = ? AND d.removed_at IS NULL AND d.application_id = ?
@@ -132,7 +132,8 @@ public class ChefDocumentReviewService {
                 resultSet.getObject("identity_id", UUID.class),
                 resultSet.getString("document_type"),
                 resultSet.getString("document_status"),
-                resultSet.getString("application_status")
+                resultSet.getString("application_status"),
+                resultSet.getBoolean("erased")
             ),
             documentId,
             applicationId
@@ -142,6 +143,10 @@ public class ChefDocumentReviewService {
     }
 
     private void requirePendingReview(DocumentReviewTarget target) {
+        // KYC rows of an erased application are locked: no decision, whatever their status.
+        if (target.erased()) {
+            throw ChefApplicationService.erasedApplication();
+        }
         boolean supplement="APPROVED".equals(target.applicationStatus()) &&
             java.util.Set.of("SELECTED_PROOF_FRONT","SELECTED_PROOF_BACK","KITCHEN_PHOTO_1","KITCHEN_PHOTO_2","FSSAI_LICENSE").contains(target.documentType()) &&
             Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE identity_id=? AND submitted=true)",Boolean.class,target.chefIdentityId()));
@@ -259,6 +264,7 @@ public class ChefDocumentReviewService {
         UUID chefIdentityId,
         String documentType,
         String documentStatus,
-        String applicationStatus
+        String applicationStatus,
+        boolean erased
     ) {}
 }

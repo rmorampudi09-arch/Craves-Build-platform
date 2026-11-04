@@ -227,6 +227,42 @@ class ReferralHttpContractIT {
         // Only synthetic API response bodies are exported; no token, HMAC or private key.
     }
 
+    HttpResponse<String> erasure(String name,String suffix,Object body) throws Exception {
+        return source(name,"/internal/v1/account-erasure"+suffix,Json.write(r.json(body)).getBytes(StandardCharsets.UTF_8),true);
+    }
+    @Test void accountErasureRoutesAreSignedAndOnlyForTheAuthSource() throws Exception {
+        var member=r.member(null);UUID request=UUID.randomUUID();
+        for(String suffix:List.of("/blockers","/prepare","")) {
+            var body=Map.of("requestId",request.toString(),"identityId",member.id().toString(),"scope","ALL");
+            var ok=erasure("auth",suffix,body);assertEquals(200,ok.statusCode(),ok.body());
+            assertEquals("referral",Json.parse(ok.body()).path("service").asText());
+            assertEquals(403,erasure("order",suffix,body).statusCode());assertEquals(403,erasure("finance",suffix,body).statusCode());
+            assertEquals(401,source("auth","/internal/v1/account-erasure"+suffix,Json.write(r.json(body)).getBytes(StandardCharsets.UTF_8),false).statusCode());
+            assertEquals(405,get("/internal/v1/account-erasure"+suffix,null).statusCode());
+        }
+        assertEquals(404,erasure("auth","/other",Map.of()).statusCode());
+        var done=Json.parse(erasure("auth","",Map.of("requestId",request.toString(),"identityId",member.id().toString(),"scope","CHEF")).body());
+        assertEquals("DONE",done.path("status").asText());assertEquals(0,done.path("counts").path("member").asInt());
+        var blockers=Json.parse(erasure("auth","/blockers",Map.of("identityId",member.id().toString(),"scope","CUSTOMER")).body());
+        assertTrue(blockers.path("blockers").isArray());assertEquals(0,blockers.path("blockers").size());
+        assertTrue(Json.parse(erasure("auth","/prepare",Map.of("requestId",request.toString(),"identityId",member.id().toString(),"scope","ALL")).body()).path("counts").isEmpty());
+    }
+    @Test void accountErasureAnswers400ForBadInputAnd409WhenBlocked() throws Exception {
+        var member=r.member(null);String id=member.id().toString(),request=UUID.randomUUID().toString();
+        assertEquals(400,erasure("auth","",Map.of("requestId",request,"identityId",id,"scope","EVERYONE")).statusCode());
+        assertEquals(400,erasure("auth","",Map.of("requestId",request,"identityId",id)).statusCode());
+        assertEquals(400,erasure("auth","",Map.of("identityId",id,"scope","ALL")).statusCode());
+        assertEquals(400,erasure("auth","/prepare",Map.of("requestId",request,"identityId","not-a-uuid","scope","ALL")).statusCode());
+        assertEquals(400,erasure("auth","/blockers",Map.of("identityId",id,"scope","all")).statusCode());
+        r.program.fraud(member.id(),"test-case:"+id,"DUPLICATE_IDENTITY_SIGNAL","TEST_ONLY");
+        var blocked=erasure("auth","",Map.of("requestId",request,"identityId",id,"scope","ALL"));
+        assertEquals(409,blocked.statusCode(),blocked.body());
+        var json=Json.parse(blocked.body());assertEquals("BLOCKED",json.path("status").asText());assertEquals("referral",json.path("service").asText());
+        assertEquals("FRAUD_CASE_OPEN",json.path("blockers").get(0).path("code").asText());assertTrue(json.path("counts").isMissingNode());
+        assertTrue(r.db.count("SELECT count(*) FROM referral_schema.member WHERE user_id=? AND is_active",member.id())==1);
+        assertEquals("FRAUD_CASE_OPEN",Json.parse(erasure("auth","/blockers",Map.of("identityId",id,"scope","CHEF")).body()).path("blockers").get(0).path("code").asText());
+    }
+
     @Test void privateLookupRequiresOrderSignatureAndOnlyReturnsReadiness() throws Exception {
         var seller=r.member(null);var buyer=r.member(null);var id=UUID.randomUUID();
         var body=r.json(Map.of("requestId",id.toString(),"at",TIME.instant().toString(),"userIds",List.of(seller.id().toString(),buyer.id().toString())));

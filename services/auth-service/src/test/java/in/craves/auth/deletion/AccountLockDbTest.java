@@ -1,6 +1,8 @@
 package in.craves.auth.deletion;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -13,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
+import in.craves.auth.admin.AdminAccountInterventionRepository;
 import in.craves.auth.api.FirebaseExchangeRequest;
 import in.craves.auth.api.IdentityResponse;
 import in.craves.auth.config.JwtProperties;
@@ -22,6 +25,7 @@ import in.craves.auth.deletion.DeletionModel.Scope;
 import in.craves.auth.deletion.DeletionModel.Via;
 import in.craves.auth.domain.AuthIdentity;
 import in.craves.auth.domain.AuthIdentityRole;
+import in.craves.auth.exception.AuthException;
 import in.craves.auth.repository.AuthAuditRepository;
 import in.craves.auth.repository.AuthIdentityRepository;
 import in.craves.auth.repository.AuthIdentityRoleRepository;
@@ -42,13 +46,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.parallel.ResourceLock;
+import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.SharedEntityManagerCreator;
+import org.springframework.orm.jpa.persistenceunit.PersistenceManagedTypes;
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -57,6 +70,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @ResourceLock("disposable-email-auth-migration-schemas")
 class AccountLockDbTest {
     static final Instant NOW = Instant.parse("2026-11-04T10:00:00Z");
+    static DriverManagerDataSource source;
     static JdbcTemplate jdbc;
     static DataSourceTransactionManager transactions;
     static TransactionTemplate tx;
@@ -64,7 +78,7 @@ class AccountLockDbTest {
     static AccountLock lock;
 
     @BeforeAll static void database() {
-        var source = AccountDeletionRepositoryDbTest.migratedSchema("account_lock_test");
+        source = AccountDeletionRepositoryDbTest.migratedSchema("account_lock_test");
         jdbc = new JdbcTemplate(source);
         transactions = new DataSourceTransactionManager(source);
         tx = new TransactionTemplate(transactions);
@@ -118,6 +132,71 @@ class AccountLockDbTest {
 
         deletions.transition(request.id(), RequestStatus.ERASING, RequestStatus.COMPLETED, m -> m.put("completed_at", NOW));
         assertEquals(List.of("CHEF", "CUSTOMER"), signIn(id), "once erased, signing in starts a new customer side");
+    }
+
+    /**
+     * Real Hibernate: a sign-in that read the login before the day-30 lock committed writes back only the columns it changed
+     * (AuthIdentity is @DynamicUpdate), so it can neither reactivate the account nor restore the old token_version.
+     */
+    @Test void aSignInThatReadTheLoginBeforeTheLockLeavesItLocked() {
+        UUID id = identity("CUSTOMER");
+        var factory = new LocalContainerEntityManagerFactoryBean();
+        factory.setDataSource(source);
+        factory.setManagedTypes(PersistenceManagedTypes.of(AuthIdentity.class.getName()));
+        factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
+        factory.afterPropertiesSet();
+        try {
+            var emf = factory.getObject();
+            var identities = new JpaRepositoryFactory(SharedEntityManagerCreator.createSharedEntityManager(emf))
+                .getRepository(AuthIdentityRepository.class);
+            Instant lockedAt = new TransactionTemplate(new JpaTransactionManager(emf)).execute(status -> {
+                AuthIdentity signingIn = identities.findById(id).orElseThrow();
+                // The lock commits on another connection between the sign-in's read and its write.
+                Instant locked = CompletableFuture.supplyAsync(() -> {
+                    tx.executeWithoutResult(t -> lock.lock(request(id, Scope.ALL, RequestStatus.ERASING)));
+                    return jdbc.queryForObject("SELECT updated_at FROM auth_identity WHERE id = ?", Timestamp.class, id).toInstant();
+                }).join();
+                signingIn.setLastLoginAt(Instant.now());
+                identities.save(signingIn);
+                return locked;
+            });
+
+            assertEquals("SUSPENDED 2", login(id), "the sign-in wrote back neither the old status nor the old token_version");
+            var row = jdbc.queryForMap("SELECT last_login_at, updated_at FROM auth_identity WHERE id = ?", id);
+            assertNotNull(row.get("last_login_at"));
+            assertTrue(((Timestamp) row.get("updated_at")).toInstant().isAfter(lockedAt), "@PreUpdate still dates the write");
+        } finally {
+            factory.destroy();
+        }
+    }
+
+    @Test void staffCannotReactivateAWholeAccountBeingErasedOrErased() {
+        var interventions = new AdminAccountInterventionRepository(jdbc);
+        UUID admin = identity(), id = identity("CUSTOMER", "CHEF");
+        DeletionRequest request = deletions.insert(id, Scope.ALL, RequestStatus.SCHEDULED, Via.APP, NOW.minus(Duration.ofDays(30)), NOW);
+        tx.executeWithoutResult(s -> {
+            assertTrue(deletions.transition(request.id(), RequestStatus.SCHEDULED, RequestStatus.ERASING, m -> m.put("locked_at", NOW)));
+            lock.lock(request);
+        });
+        Runnable reactivate = () -> interventions.request(admin, id, "REACTIVATE", "Synthetic support escalation", UUID.randomUUID());
+
+        assertRefused(reactivate, "ACCOUNT_DELETION_IN_PROGRESS");
+        deletions.transition(request.id(), RequestStatus.ERASING, RequestStatus.COMPLETED, m -> m.put("completed_at", NOW));
+        assertRefused(reactivate, "ACCOUNT_DELETION_IN_PROGRESS");
+
+        assertEquals("SUSPENDED 2", login(id), "the tombstone stays locked");
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM auth_admin_intervention WHERE identity_id = ?", Integer.class, id));
+        // Only the whole-account lock is guarded: staff still lift their own suspension of a chef whose chef side is erasing.
+        UUID chef = identity("CUSTOMER", "CHEF");
+        deletions.insert(chef, Scope.CHEF, RequestStatus.ERASING, Via.APP, NOW, NOW);
+        interventions.request(admin, chef, "SUSPEND", "Synthetic support escalation", UUID.randomUUID());
+        assertEquals("ACTIVE", interventions.request(admin, chef, "REACTIVATE", "Synthetic support escalation", UUID.randomUUID()).status());
+    }
+
+    static void assertRefused(Runnable call, String code) {
+        AuthException refused = assertThrows(AuthException.class, call::run);
+        assertEquals(HttpStatus.CONFLICT, refused.getStatus());
+        assertEquals(code, refused.getCode());
     }
 
     List<String> signIn(UUID id) throws Exception {

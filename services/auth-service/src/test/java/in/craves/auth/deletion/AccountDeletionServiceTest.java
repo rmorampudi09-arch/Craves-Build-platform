@@ -80,7 +80,9 @@ class AccountDeletionServiceTest {
     }
 
     @Test
-    void customerRequestIsScheduledThirtyDaysOut() {
+    void customerSideOfAChefIsScheduledThirtyDaysOut() {
+        when(roles.findRoleCodesByIdentityId(identityId)).thenReturn(List.of("CHEF", "CUSTOMER"));
+
         var result = service.request(user, Scope.CUSTOMER, Via.WEB);
 
         assertThat(result.created()).isTrue();
@@ -158,6 +160,14 @@ class AccountDeletionServiceTest {
     }
 
     @Test
+    void customerOnlyAccountMustAskForTheWholeAccount() {
+        // CUSTOMER alone would leave the login, which sign-in turns back into a customer: such a person asks for ALL.
+        assertRefused(() -> service.request(user, Scope.CUSTOMER, Via.APP), HttpStatus.CONFLICT, "ACCOUNT_DELETION_SCOPE_NOT_ALLOWED");
+        verify(deletions, never()).insert(any(), any(), any(), any(), any(), any());
+        verify(identities, never()).incrementTokenVersion(any());
+    }
+
+    @Test
     void customerCannotAskForChefSide() {
         assertRefused(() -> service.request(user, Scope.CHEF, Via.APP), HttpStatus.CONFLICT, "ACCOUNT_DELETION_SCOPE_NOT_ALLOWED");
         verify(deletions, never()).insert(any(), any(), any(), any(), any(), any());
@@ -165,7 +175,7 @@ class AccountDeletionServiceTest {
 
     @Test
     void requestBumpsTokenVersionAndInsertsEightPrepareSteps() {
-        var result = service.request(user, Scope.CUSTOMER, Via.APP);
+        var result = service.request(user, Scope.ALL, Via.APP);
 
         assertThat(AccountErasureClient.ERASE_ORDER).hasSize(8);
         verify(deletions).insertSteps(result.view().requestId(), Phase.PREPARE, AccountErasureClient.ERASE_ORDER, NOW);
@@ -174,13 +184,13 @@ class AccountDeletionServiceTest {
 
     @Test
     void noticesGoOutAfterCommitAndOffTheRequestThread() {
-        serviceWith(Runnable::run).request(user, Scope.CUSTOMER, Via.APP);
+        serviceWith(Runnable::run).request(user, Scope.ALL, Via.APP);
 
         var order = inOrder(transactions, notices);
         order.verify(transactions).commit(any());
         order.verify(notices).requested(any(), eq(false));
 
-        service.request(user, Scope.CUSTOMER, Via.APP);
+        service.request(user, Scope.ALL, Via.APP);
         assertThat(queued).hasSize(1);
     }
 
@@ -188,7 +198,7 @@ class AccountDeletionServiceTest {
     void aFullNoticeQueueDoesNotFailTheRequest() {
         var full = serviceWith(task -> { throw new RejectedExecutionException("full"); });
 
-        assertThatCode(() -> full.request(user, Scope.CUSTOMER, Via.APP)).doesNotThrowAnyException();
+        assertThatCode(() -> full.request(user, Scope.ALL, Via.APP)).doesNotThrowAnyException();
         verify(notices, never()).requested(any(), anyBoolean());
     }
 

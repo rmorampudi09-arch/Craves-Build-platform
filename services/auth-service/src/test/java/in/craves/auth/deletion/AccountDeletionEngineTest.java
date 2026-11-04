@@ -68,6 +68,8 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.TransactionDefinition;
@@ -530,24 +532,66 @@ class AccountDeletionEngineTest {
     }
 
     @Test
-    void aBlockedStepRetriesNextDay() {
+    void aBlockedStepRetriesNextDayAndAlertsEachTime() {
         DeletionRequest request = erasing(Scope.CHEF, null);
         live(request, eraseSteps(request, 2, NOW));
-        client.answers.put("erase integration", new ServiceCall(Outcome.BLOCKED, Map.of(), List.of(), null));
+        client.answers.put("erase integration", new ServiceCall(Outcome.BLOCKED, Map.of(), List.of(
+            new Blocker("integration", "PAYOUT_PENDING", "synthetic +910000000000"), new Blocker("integration", "ORDER_OPEN", "")), null));
 
         engine.runOnce(NOW);
         Instant later = NOW.plus(Duration.ofHours(23));
         clock.set(later);
         engine.runOnce(later);
-        client.answers.clear();
         Instant nextDay = NOW.plus(Duration.ofDays(1));
         clock.set(nextDay);
         engine.runOnce(nextDay);
+        client.answers.clear();
+        Instant dayAfter = nextDay.plus(Duration.ofDays(1));
+        clock.set(dayAfter);
+        engine.runOnce(dayAfter);
 
         verify(deletions).recordStep(request.id(), ERASE, "integration", BLOCKED, null, null, nextDay);
-        assertEquals(List.of("erase integration", "erase integration"), client.calls, "nothing runs past a blocked step");
+        verify(deletions).recordStep(request.id(), ERASE, "integration", BLOCKED, null, null, dayAfter);
+        assertEquals(Collections.nCopies(3, "erase integration"), client.calls, "nothing runs past a blocked step");
         verify(deletions).recordStep(request.id(), ERASE, "integration", DONE, 0, null, null);
-        assertEquals(List.of(), alerts(), "a refusal is not a failure");
+        // The account is locked and "keep" answers 409, so someone must hear of it: codes only, never the details.
+        String alert = "CRAVES_ALERT alert=ACCOUNT_DELETION_ERASE_BLOCKED requestId=" + request.id()
+            + " service=integration codes=PAYOUT_PENDING,ORDER_OPEN";
+        assertEquals(List.of(alert, alert), alerts(), "every blocked erase attempt alerts");
+    }
+
+    @Test
+    void aSweepStepForAuthIsNeverALoginWipe() {
+        DeletionRequest request = with(erasing(Scope.ALL, NOW), COMPLETED, null);
+        given(request, Stream.concat(eraseSteps(request, 9, NOW).stream(), Stream.of(step(request, SWEEP, "auth", PENDING, 0, NOW))).toList());
+
+        engine.runOnce(NOW);
+
+        verify(deletions).recordStep(request.id(), SWEEP, "auth", PENDING, null, "UNSUPPORTED_STEP", NOW.plus(Duration.ofMinutes(5)));
+        verifyNoInteractions(eraser);
+        assertEquals(List.of(), client.calls);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Scope.class)
+    void aKeptRequestsReleaseSkipsWhileANewerChefRequestIsOpen(Scope newerScope) {
+        DeletionRequest kept = with(request(Scope.CHEF, SCHEDULED, NOW.plus(Duration.ofDays(20)), null), CANCELLED, null);
+        given(kept, List.of(step(kept, RELEASE, "catalog", PENDING, 0, NOW)));
+        DeletionRequest newer = new DeletionRequest(UUID.randomUUID(), kept.identityId(), newerScope, RequestStatus.PENDING_REVIEW,
+            Via.APP, NOW, null, null, null, null, null, null, null, null, null, null, null);
+        when(deletions.findOpen(kept.identityId())).thenReturn(Optional.of(newer));
+
+        engine.runOnce(NOW);
+
+        verify(deletions).recordStep(kept.id(), RELEASE, "catalog", DONE, 0, null, null);
+        if (newerScope == Scope.CUSTOMER) {
+            assertEquals(List.of("release catalog"), client.calls, "a customer request closed no kitchen");
+        } else {
+            // The newer request's prepare kept the original state; its own release restores it.
+            assertEquals(List.of(), client.calls, "the old release would reopen what the newer request closed");
+            assertEquals(List.of("Account deletion release skipped requestId=" + kept.id() + " openRequestId=" + newer.id()
+                + " service=catalog"), logs.list.stream().map(ILoggingEvent::getFormattedMessage).toList());
+        }
     }
 
     @Test

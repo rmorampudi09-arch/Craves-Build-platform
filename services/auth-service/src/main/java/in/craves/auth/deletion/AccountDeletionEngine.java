@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -137,14 +138,24 @@ public class AccountDeletionEngine {
         UUID id = request.id();
         ServiceCall call = switch (step.phase()) {
             case PREPARE -> client.prepare(step.service(), id, request.identityId(), request.scope());
-            case RELEASE -> client.release(step.service(), id, request.identityId(), request.scope());
-            case ERASE, SWEEP -> AUTH.equals(step.service()) ? eraseLogin(request)
+            case RELEASE -> release(request, step.service());
+            // Only ERASE wipes the login: eraseNext runs it after the 8 services are done.
+            case ERASE -> AUTH.equals(step.service()) ? eraseLogin(request)
+                : client.erase(step.service(), id, request.identityId(), request.scope());
+            case SWEEP -> AUTH.equals(step.service()) ? new ServiceCall(Outcome.FAILED, Map.of(), List.of(), "UNSUPPORTED_STEP")
                 : client.erase(step.service(), id, request.identityId(), request.scope());
         };
         Instant now = clock.instant(); // when the answer came, which can be well after the tick started
         switch (call.outcome()) {
             case DONE -> deletions.recordStep(id, step.phase(), step.service(), StepStatus.DONE, call.erasedCount(), null, null);
-            case BLOCKED -> deletions.recordStep(id, step.phase(), step.service(), StepStatus.BLOCKED, null, null, now.plus(RECHECK));
+            case BLOCKED -> {
+                deletions.recordStep(id, step.phase(), step.service(), StepStatus.BLOCKED, null, null, now.plus(RECHECK));
+                // The account is locked and "keep" answers 409: a refusal now would wait forever unless someone is told.
+                if (step.phase() == Phase.ERASE) {
+                    LOGGER.error("CRAVES_ALERT alert=ACCOUNT_DELETION_ERASE_BLOCKED requestId={} service={} codes={}", id, step.service(),
+                        call.blockers().stream().map(Blocker::code).collect(Collectors.joining(",")));
+                }
+            }
             case FAILED -> {
                 int attempts = step.attempts() + 1;
                 deletions.recordStep(id, step.phase(), step.service(), StepStatus.PENDING, null, call.error(), now.plus(backoff(attempts)));
@@ -155,6 +166,19 @@ public class AccountDeletionEngine {
             }
         }
         return call.outcome() == Outcome.DONE;
+    }
+
+    /**
+     * A kept request's release, unless a newer chef or whole-account request is open: its prepare found the kitchen already
+     * closed and kept the original state, which its own release restores. Releasing now would reopen what it closed.
+     */
+    private ServiceCall release(DeletionRequest request, String service) {
+        Optional<DeletionRequest> newer = deletions.findOpen(request.identityId()).filter(open -> open.scope() != Scope.CUSTOMER);
+        if (newer.isPresent()) {
+            LOGGER.info("Account deletion release skipped requestId={} openRequestId={} service={}", request.id(), newer.get().id(), service);
+            return new ServiceCall(Outcome.DONE, Map.of(), List.of(), null);
+        }
+        return client.release(service, request.id(), request.identityId(), request.scope());
     }
 
     /** Auth's own step, answered like a service's. */

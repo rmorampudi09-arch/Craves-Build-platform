@@ -105,7 +105,10 @@ public class AccountDeletionService {
             }
             List<String> held = roles.findRoleCodesByIdentityId(identityId);
             boolean chef = held.contains("CHEF");
-            if ((scope == Scope.CHEF && !chef) || (scope == Scope.ALL && held.contains("RIDER"))) {
+            boolean rider = held.contains("RIDER");
+            // CUSTOMER alone fits only a person with another side to keep; for anyone else it would leave a login that
+            // signing in turns back into a customer, so they ask for ALL.
+            if ((scope == Scope.CHEF && !chef) || (scope == Scope.ALL && rider) || (scope == Scope.CUSTOMER && !chef && !rider)) {
                 throw AuthException.conflict("ACCOUNT_DELETION_SCOPE_NOT_ALLOWED", "This account cannot ask for that kind of deletion");
             }
             boolean needsReview = scope == Scope.CHEF || (scope == Scope.ALL && chef);

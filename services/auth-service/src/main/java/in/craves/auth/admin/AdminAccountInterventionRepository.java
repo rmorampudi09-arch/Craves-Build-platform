@@ -1,5 +1,6 @@
 package in.craves.auth.admin;
 
+import in.craves.auth.exception.AuthException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -42,6 +43,12 @@ public class AdminAccountInterventionRepository {
         };
         if ("SUSPEND".equals(action) && actorIdentityId.equals(targetIdentityId)) {
             throw new IllegalStateException("An administrator cannot suspend their own account");
+        }
+        // The deletion lock suspended this login (the row lock above orders us after it); reactivating would undo it.
+        if ("REACTIVATE".equals(action) && Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM account_deletion_request WHERE identity_id = ? AND scope = 'ALL' "
+                + "AND status IN ('ERASING', 'COMPLETED'))", Boolean.class, targetIdentityId))) {
+            throw AuthException.conflict("ACCOUNT_DELETION_IN_PROGRESS", "The account is being erased or has been erased");
         }
 
         boolean changed = !targetStatus.equals(identity.status());

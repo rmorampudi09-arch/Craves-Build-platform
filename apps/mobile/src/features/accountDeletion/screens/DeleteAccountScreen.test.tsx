@@ -4,7 +4,7 @@ import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import {sessionManager} from '../../auth/api/sessionManager';
-import {screenQueries} from '../../chefProfile/testing/screenTestKit';
+import {deferred, screenQueries} from '../../chefProfile/testing/screenTestKit';
 import {accountDeletionApi} from '../api/accountDeletionApi';
 import {deletionCopy} from '../domain/deletionCopy';
 import type {AppMode, DeletionView} from '../domain/deletionTypes';
@@ -141,6 +141,9 @@ describe('DeleteAccountScreen', () => {
       expect(ui.has(deletionCopy.customerSummary.chefSideStays)).toBe(false);
       await ui.press('Delete my account');
       expect(ui.has('Delete your customer side on 5 Dec?')).toBe(true);
+      // No chef side here, so the sheet must not say one stays.
+      expect(ui.has(deletionCopy.confirm.customerSideBodyNoChef)).toBe(true);
+      expect(ui.has(deletionCopy.confirm.customerSideBody)).toBe(false);
       await sendFromSheet('Delete my account');
       expect(request).toHaveBeenCalledWith('CUSTOMER');
     });
@@ -229,6 +232,15 @@ describe('DeleteAccountScreen', () => {
       expect(request).toHaveBeenCalledTimes(1);
     });
 
+    it('does not say the customer side stays when the chef has no customer role', async () => {
+      mockRoles = ['CHEF'];
+      await mount('CHEF');
+      await ui.press('Only my chef side');
+      await ui.press('Continue');
+      expect(ui.has(deletionCopy.chefSummary.lastStepSide)).toBe(true);
+      expect(ui.has(deletionCopy.chefSummary.customerSideStays)).toBe(false);
+    });
+
     it('shows one choice and the rider note for a rider who is also a chef', async () => {
       mockRoles = ['CUSTOMER', 'CHEF', 'RIDER'];
       await mount('CHEF');
@@ -315,6 +327,25 @@ describe('DeleteAccountScreen', () => {
       expect(ui.has('Request sent')).toBe(true);
     });
 
+    it('keeps the request state when a status call that began earlier answers after the POST', async () => {
+      await mount('CUSTOMER');
+      const late = deferred<null>();
+      getLatest.mockReturnValueOnce(late.promise);
+      await act(async () => {
+        queryClient.refetchQueries({queryKey: accountDeletionQueryKey('user-1')}).catch(() => undefined);
+      });
+
+      await ui.press('Delete my account');
+      await sendFromSheet('Delete my account');
+      expect(ui.has('Request sent')).toBe(true);
+
+      await act(async () => late.resolve(null));
+      await ui.settle();
+
+      expect(ui.has('Request sent')).toBe(true);
+      expect(ui.has('Deleted on 5 Dec 2026')).toBe(false);
+    });
+
     it('shows the open request when one was already made', async () => {
       request.mockRejectedValue(new AppApiError('ACCOUNT_DELETION_ALREADY_REQUESTED', 'Open', 409));
       getLatest.mockResolvedValueOnce(null).mockResolvedValue(open({scope: 'ALL', status: 'SCHEDULED', dueAt: '2026-12-05T08:00:00Z'}));
@@ -338,6 +369,28 @@ describe('DeleteAccountScreen', () => {
   });
 
   describe('a request already on record', () => {
+    it.each([
+      ['customer', 'CUSTOMER', ['CUSTOMER']],
+      ['chef', 'CHEF', ['CUSTOMER', 'CHEF']],
+    ] as const)('%s: a failed status call shows a retry, not the start flow', async (_name, mode, roles) => {
+      mockRoles = [...roles];
+      getLatest.mockRejectedValueOnce(new AppApiError('NETWORK_ERROR', 'Offline'));
+      await mount(mode);
+      expect(ui.has(deletionCopy.loadError.title)).toBe(true);
+      expect(ui.byLabel('Delete my account')).toBeUndefined();
+      expect(ui.has('Deleted on 5 Dec 2026')).toBe(false);
+      expect(ui.has(deletionCopy.chooser.title)).toBe(false);
+      expect(ui.byLabel('Continue')).toBeUndefined();
+
+      getLatest.mockResolvedValue(open({status: 'SCHEDULED', scope: 'ALL', dueAt: '2026-12-05T08:00:00Z'}));
+      await ui.press(deletionCopy.loadError.retry);
+      await ui.settle();
+
+      expect(getLatest).toHaveBeenCalledTimes(2);
+      expect(ui.has(deletionCopy.loadError.title)).toBe(false);
+      expect(ui.has('Your account will be deleted on 5 Dec 2026')).toBe(true);
+    });
+
     it('shows nothing of the start flow while the status loads', async () => {
       getLatest.mockReturnValue(new Promise(() => undefined));
       await mount('CUSTOMER');

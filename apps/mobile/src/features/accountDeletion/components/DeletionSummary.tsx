@@ -15,6 +15,8 @@ interface Props {
   longDate: string;
   /** Customer side only: the person also has a chef side, which stays. */
   chefSideStays: boolean;
+  /** Chef side only: the person also has a customer side, which stays. */
+  customerSideStays: boolean;
 }
 
 function Label({text}: {text: string}) {
@@ -82,7 +84,7 @@ function Steps({last}: {last: string}) {
   );
 }
 
-function ChefSummary({all}: {all: boolean}) {
+function ChefSummary({all, customerSideStays}: {all: boolean; customerSideStays: boolean}) {
   return (
     <>
       <Steps last={all ? chef.lastStepAll : chef.lastStepSide} />
@@ -93,14 +95,14 @@ function ChefSummary({all}: {all: boolean}) {
       <Kept body={chef.keptBody} label={chef.keptLabel} title={chef.keptTitle} />
       {all ? (
         <Kept body={customer.keptBody} label={customer.keptLabel} title={customer.keptTitle} />
-      ) : (
+      ) : customerSideStays ? (
         <DeletionNote text={chef.customerSideStays} tone="success" />
-      )}
+      ) : null}
     </>
   );
 }
 
-function CustomerSummary({all, shortDate, longDate, chefSideStays}: Omit<Props, 'kind'> & {all: boolean}) {
+function CustomerSummary({all, shortDate, longDate, chefSideStays}: Pick<Props, 'shortDate' | 'longDate' | 'chefSideStays'> & {all: boolean}) {
   return (
     <>
       <View style={styles.card}>
@@ -132,11 +134,11 @@ function CustomerSummary({all, shortDate, longDate, chefSideStays}: Omit<Props, 
 }
 
 /** What goes and what Craves keeps, in the four forms the owner approved (spec, "The start"). */
-export function DeletionSummary({kind, shortDate, longDate, chefSideStays}: Props) {
+export function DeletionSummary({kind, shortDate, longDate, chefSideStays, customerSideStays}: Props) {
   return (
     <View style={styles.root}>
       {kind === 'chefSide' || kind === 'chefAll' ? (
-        <ChefSummary all={kind === 'chefAll'} />
+        <ChefSummary all={kind === 'chefAll'} customerSideStays={customerSideStays} />
       ) : (
         <CustomerSummary all={kind === 'customerAll'} chefSideStays={chefSideStays} longDate={longDate} shortDate={shortDate} />
       )}

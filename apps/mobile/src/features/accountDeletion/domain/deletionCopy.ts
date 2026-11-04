@@ -63,6 +63,7 @@ export const deletionCopy = {
     customerSideTitle: (short: string) => `Delete your customer side on ${short}?`,
     customerAllBody: 'Your profile, addresses, saved lists, reviews and meal plans go. Past orders stay for tax, without your name.',
     customerSideBody: 'Your addresses, saved lists, reviews and meal plans go. Your chef side stays.',
+    customerSideBodyNoChef: 'Your addresses, saved lists, reviews and meal plans go.',
     customerInfo: (short: string) => `New orders pause today. Changed your mind? Tap Keep my account any time before ${short}.`,
     customerButton: 'Delete my account',
     chefTitle: 'Close your kitchen and send the request?',
@@ -77,6 +78,11 @@ export const deletionCopy = {
     scopeNotAllowed: "This account can't ask for that. Contact Craves support.",
     failed: "Your request wasn't sent. Try again.",
     invalidResponse: "Craves couldn't read your deletion request. Try again.",
+  },
+  loadError: {
+    title: "Couldn't check your delete request",
+    body: 'Check your connection and try again.',
+    retry: 'Try again',
   },
   state: {
     inReviewTag: 'In review',

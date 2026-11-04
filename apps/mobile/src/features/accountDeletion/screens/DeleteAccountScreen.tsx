@@ -2,6 +2,7 @@ import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {useQueryClient} from '@tanstack/react-query';
 import {useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError, type AppApiError} from '../../../core/http/apiError';
+import {TerminalState} from '../../../shared/components/LifecycleStates';
 import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
 import {ChefActionButton} from '../../chefShell/components/ui';
 import {accountDeletionApi} from '../api/accountDeletionApi';
@@ -60,7 +61,10 @@ function useSendDeletion(refetch: () => void, closeSheet: () => void) {
         const view = await accountDeletionApi.request(scope);
         // The screen shows the new state from this answer, without a second status call.
         if (identityId) {
-          queryClient.setQueryData(accountDeletionQueryKey(identityId), view);
+          const queryKey = accountDeletionQueryKey(identityId);
+          // A status call still in flight would answer with the old "nothing open" and overwrite this.
+          await queryClient.cancelQueries({queryKey});
+          queryClient.setQueryData(queryKey, view);
         }
         await refreshAfterDeletionChange();
       } catch (caught) {
@@ -136,6 +140,7 @@ function DeletionStart({mode, Scaffold, refetch}: Props & {refetch: () => void})
   }
 
   const kind = summaryKindFor(scope, roles);
+  const hasChef = roles.includes('CHEF');
   const shortDate = formatDeletionDate(dueAt, 'short');
   const customerKind = kind === 'customerAll' || kind === 'customerSide';
   return (
@@ -152,7 +157,8 @@ function DeletionStart({mode, Scaffold, refetch}: Props & {refetch: () => void})
         }
         title={summaryTitle(kind)}>
         <DeletionSummary
-          chefSideStays={roles.includes('CHEF')}
+          chefSideStays={hasChef}
+          customerSideStays={roles.includes('CUSTOMER')}
           kind={kind}
           longDate={formatDeletionDate(dueAt, 'long')}
           shortDate={shortDate}
@@ -160,6 +166,7 @@ function DeletionStart({mode, Scaffold, refetch}: Props & {refetch: () => void})
       </Scaffold>
       <DeletionConfirmSheet
         busy={sending}
+        chefSideStays={hasChef}
         error={error}
         kind={kind}
         onCancel={closeSheet}
@@ -183,6 +190,19 @@ export function DeleteAccountScreen({mode, Scaffold}: Props) {
     return (
       <Scaffold title={title}>
         <LoadingIndicator />
+      </Scaffold>
+    );
+  }
+  if (status === 'error') {
+    // Unknown is not "nothing open": a person with a request on record must never be offered a new one.
+    return (
+      <Scaffold title={title}>
+        <TerminalState
+          actionLabel={deletionCopy.loadError.retry}
+          description={deletionCopy.loadError.body}
+          onAction={refetch}
+          title={deletionCopy.loadError.title}
+        />
       </Scaffold>
     );
   }

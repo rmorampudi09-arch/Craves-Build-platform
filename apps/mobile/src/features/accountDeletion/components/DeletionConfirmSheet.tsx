@@ -8,12 +8,12 @@ import {DeletionNote} from './DeletionNote';
 
 const {confirm} = deletionCopy;
 
-function contentFor(kind: SummaryKind, shortDate: string) {
+function contentFor(kind: SummaryKind, shortDate: string, chefSideStays: boolean) {
   switch (kind) {
     case 'customerAll':
       return {title: confirm.customerAllTitle(shortDate), body: confirm.customerAllBody, info: confirm.customerInfo(shortDate), button: confirm.customerButton};
     case 'customerSide':
-      return {title: confirm.customerSideTitle(shortDate), body: confirm.customerSideBody, info: confirm.customerInfo(shortDate), button: confirm.customerButton};
+      return {title: confirm.customerSideTitle(shortDate), body: chefSideStays ? confirm.customerSideBody : confirm.customerSideBodyNoChef, info: confirm.customerInfo(shortDate), button: confirm.customerButton};
     case 'chefSide':
       return {title: confirm.chefTitle, body: confirm.chefSideBody, info: confirm.chefInfo, button: confirm.chefButton};
     case 'chefAll':
@@ -26,6 +26,8 @@ interface Props {
   kind: SummaryKind;
   /** Customer scopes: today + 30 days, "5 Dec". */
   shortDate: string;
+  /** Customer side only: the person also has a chef side, which stays. */
+  chefSideStays: boolean;
   /** The request is on its way: both buttons ignore taps. */
   busy: boolean;
   /** Why the last try did not go; sits above the buttons. */
@@ -35,8 +37,8 @@ interface Props {
 }
 
 /** The last question before the request is sent. Cancel closes it; the red button sends. */
-export function DeletionConfirmSheet({visible, kind, shortDate, busy, error, onCancel, onConfirm}: Props) {
-  const content = contentFor(kind, shortDate);
+export function DeletionConfirmSheet({visible, kind, shortDate, chefSideStays, busy, error, onCancel, onConfirm}: Props) {
+  const content = contentFor(kind, shortDate, chefSideStays);
   return (
     <ChefSheet
       footer={

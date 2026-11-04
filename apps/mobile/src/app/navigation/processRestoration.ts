@@ -30,6 +30,7 @@ const customerNoParamScreenSchema = z.enum([
   'CustomerSettings',
   'CustomerSettingsNotifications',
   'CustomerSettingsPrivacySecurity',
+  'CustomerSettingsDeleteAccount',
   'CustomerSettingsChangePassword',
   'CustomerSettingsLanguage',
   'CustomerSettingsAppearance',

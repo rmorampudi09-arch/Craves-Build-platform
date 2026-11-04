@@ -83,12 +83,34 @@ public class MediaStorageService {
     /** Best effort: removes the blob a public photo URL of this store points at; anything else is ignored. */
     public void deleteByPublicUrl(String url) {
         try {
-            String prefix = publicBaseUrl() + "/";
-            // Shared by every chef who picked that face, so switching faces must never delete the file.
-            if (url != null && url.startsWith(prefix) && !url.startsWith(prefix + CHEF_AVATAR_FOLDER)) deleteQuietly(url.substring(prefix.length()));
+            String blobName = ownedBlobName(url);
+            if (blobName != null) deleteQuietly(blobName);
         } catch (RuntimeException ex) {
             log.warn("Photo blob could not be removed: {}", ex.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * The blob of this store that a photo URL points at, or null for another host and for the shared chef avatar faces:
+     * every chef who picked a face uses the same file, so neither switching faces nor erasing a chef may delete it.
+     */
+    public String ownedBlobName(String url) {
+        if (url == null) return null;
+        String prefix = publicBaseUrl() + "/";
+        if (!url.startsWith(prefix)) return null;
+        String blobName = url.substring(prefix.length());
+        return blobName.isEmpty() || blobName.startsWith(CHEF_AVATAR_FOLDER) ? null : blobName;
+    }
+
+    /** Same rule for a dish photo row, which names its blob inside its own container: only this store's container is ours. */
+    public String ownedBlobName(String blobContainer, String blobName) {
+        boolean ours = blobContainer != null && blobContainer.equals(properties.getMediaContainer()) && blobName != null;
+        return ours && !blobName.isEmpty() && !blobName.startsWith(CHEF_AVATAR_FOLDER) ? blobName : null;
+    }
+
+    /** Deletes the blob if it is there. Unlike deleteQuietly a storage failure is thrown, so account erasure fails and is retried. */
+    public boolean delete(String blobName) {
+        return containerClient().getBlobClient(blobName).deleteIfExists();
     }
 
     /** Best effort: a missing blob or unconfigured store never blocks removing the photo record. */

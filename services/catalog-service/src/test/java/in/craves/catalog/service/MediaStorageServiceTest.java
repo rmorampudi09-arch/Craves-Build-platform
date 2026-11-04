@@ -1,11 +1,20 @@
 package in.craves.catalog.service;
 
+import com.azure.storage.blob.BlobClient;
+import com.azure.storage.blob.BlobContainerClient;
 import in.craves.catalog.config.CatalogStorageProperties;
 import java.util.Base64;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -60,5 +69,46 @@ class MediaStorageServiceTest {
             in.craves.catalog.exception.ApiException.class, () -> MediaStorageService.publishable(broken, "image/jpeg"));
         org.junit.jupiter.api.Assertions.assertEquals(400, error.getStatus());
         org.junit.jupiter.api.Assertions.assertEquals("PHOTO_UNREADABLE", error.getCode());
+    }
+
+    private MediaStorageService storageWith(BlobClient blob) {
+        var properties = new CatalogStorageProperties();
+        properties.setPublicMediaBaseUrl("https://media.craves.example/");
+        var storage = spy(new MediaStorageService(properties));
+        var container = mock(BlobContainerClient.class);
+        when(container.getBlobClient("public/dishes/a.png")).thenReturn(blob);
+        doReturn(container).when(storage).buildContainerClient();
+        return storage;
+    }
+
+    @Test void deleteRemovesTheBlobAndSaysWhetherItWasThere() {
+        var blob = mock(BlobClient.class);
+        when(blob.deleteIfExists()).thenReturn(true, false);
+        var storage = storageWith(blob);
+
+        assertTrue(storage.delete("public/dishes/a.png"));
+        assertFalse(storage.delete("public/dishes/a.png")); // already gone is not an error: a retry is safe
+    }
+
+    @Test void deleteLetsAStorageFailureThrowSoErasureCanBeRetried() {
+        var blob = mock(BlobClient.class);
+        when(blob.deleteIfExists()).thenThrow(new IllegalStateException("storage down"));
+
+        assertThrows(IllegalStateException.class, () -> storageWith(blob).delete("public/dishes/a.png"));
+    }
+
+    @Test void ownedBlobNameIsTheOneRuleForUrlsOfThisStoreAndNeverASharedAvatar() {
+        var properties = new CatalogStorageProperties();
+        properties.setPublicMediaBaseUrl("https://media.craves.example/");
+        properties.setMediaContainer("media");
+        var storage = new MediaStorageService(properties);
+
+        assertEquals("public/kitchens/k1/chef/abc.png", storage.ownedBlobName("https://media.craves.example/public/kitchens/k1/chef/abc.png"));
+        assertNull(storage.ownedBlobName("https://media.craves.example/public/chef-avatars/chef-avatar-04.jpg"));
+        assertNull(storage.ownedBlobName("https://elsewhere.example/public/kitchens/k1/chef/abc.png"));
+        assertNull(storage.ownedBlobName(null));
+        assertEquals("public/dishes/a.png", storage.ownedBlobName("media", "public/dishes/a.png"));
+        assertNull(storage.ownedBlobName("old-account-container", "public/dishes/a.png"));
+        assertNull(storage.ownedBlobName("media", "public/chef-avatars/chef-avatar-04.jpg"));
     }
 }

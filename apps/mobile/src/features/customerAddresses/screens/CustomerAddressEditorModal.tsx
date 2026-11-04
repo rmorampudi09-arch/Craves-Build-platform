@@ -1,4 +1,4 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import * as Location from 'expo-location';
 import {toAppApiError} from '../../../core/http/apiError';
@@ -19,7 +19,7 @@ import {Button} from '../../../shared/components/Button';
 import {Icon} from '../../../shared/components/Icon';
 import {InputField} from '../../../shared/components/InputField';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
-import {customerAddressesApi} from '../api/customerAddressesApi';
+import {customerAddressesApi, type CustomerLocationSuggestion} from '../api/customerAddressesApi';
 import type {CustomerAddress, CustomerAddressCategory} from '../domain/customerAddressContract';
 import {
   CUSTOMER_ADDRESS_PINCODE_FALLBACK_COPY,
@@ -36,6 +36,10 @@ import {
   useCreateCustomerAddressMutation,
   useUpdateCustomerAddressMutation,
 } from '../query/customerAddressQueries';
+
+const MIN_SEARCH_LENGTH = 3;
+const MAX_SUGGESTIONS = 5;
+const SEARCH_DELAY_MS = 400;
 
 interface Props {
   mode: 'add' | 'edit';
@@ -85,6 +89,49 @@ export function CustomerAddressEditorModal({mode, address, addresses, onClose}: 
       {text: 'Discard', style: 'destructive', onPress: onClose},
     ]);
   }, [draft, onClose, original]);
+
+  // Handbook 009/012: without location access the customer can still find the place by typing; the chosen place
+  // fills the address and its map pin the same way the current location does.
+  const [searchText, setSearchText] = useState('');
+  const [suggestions, setSuggestions] = useState<CustomerLocationSuggestion[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchSequence = useRef(0);
+
+  useEffect(() => {
+    const query = searchText.trim();
+    const sequence = ++searchSequence.current;
+    if (query.length < MIN_SEARCH_LENGTH) {
+      setSuggestions([]);
+      setSearching(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setSearching(true);
+      customerAddressesApi
+        .searchLocations(query)
+        .then(found => {
+          if (sequence !== searchSequence.current) return;
+          setSuggestions(found.slice(0, MAX_SUGGESTIONS));
+          setLocationMessage(found.length === 0 ? 'No matching places. Try a nearby landmark, street or area.' : null);
+        })
+        .catch(caught => {
+          if (sequence !== searchSequence.current) return;
+          setSuggestions([]);
+          setLocationMessage(toAppApiError(caught).message);
+        })
+        .finally(() => {
+          if (sequence === searchSequence.current) setSearching(false);
+        });
+    }, SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [searchText]);
+
+  const chooseSuggestion = useCallback((suggestion: CustomerLocationSuggestion) => {
+    setDraft(existing => applyDetectedCustomerAddress(existing, suggestion));
+    setFieldErrors({});
+    setSearchText('');
+    setLocationMessage(`${suggestion.title} selected. Confirm your exact flat, house or building before saving.`);
+  }, []);
 
   const handleUseCurrentLocation = useCallback(async () => {
     if (locating) return;
@@ -209,6 +256,47 @@ export function CustomerAddressEditorModal({mode, address, addresses, onClose}: 
                 style={styles.locationButton}
                 variant="outline"
               />
+              <InputField
+                accessibilityHint="Searches places by name when location access is off or not exact."
+                autoCapitalize="words"
+                helperText="No location access? Search for your area, street or building."
+                label="Search for your address"
+                maxLength={160}
+                onChangeText={setSearchText}
+                returnKeyType="search"
+                testID="customer-address-search"
+                value={searchText}
+              />
+              {searching ? (
+                <Text accessibilityLiveRegion="polite" style={styles.searchStatus}>
+                  Searching…
+                </Text>
+              ) : null}
+              {suggestions.length > 0 ? (
+                <View style={styles.suggestions}>
+                  {suggestions.map(suggestion => (
+                    <Pressable
+                      accessibilityHint="Fills the address and map pin from this place."
+                      accessibilityLabel={suggestion.subtitle ? `${suggestion.title}, ${suggestion.subtitle}` : suggestion.title}
+                      accessibilityRole="button"
+                      key={suggestion.id}
+                      onPress={() => chooseSuggestion(suggestion)}
+                      style={({pressed}) => [styles.suggestion, pressed && styles.pressed]}>
+                      <Icon name="location" color={colors.flameRed} size={iconSize.sm} />
+                      <View style={styles.suggestionText}>
+                        <Text numberOfLines={1} style={styles.suggestionTitle}>
+                          {suggestion.title}
+                        </Text>
+                        {suggestion.subtitle ? (
+                          <Text numberOfLines={1} style={styles.suggestionSubtitle}>
+                            {suggestion.subtitle}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
               {locationMessage ? (
                 <View accessibilityRole="alert" style={styles.notice}>
                   <Text style={styles.noticeText}>{locationMessage}</Text>
@@ -275,6 +363,12 @@ const styles = StyleSheet.create({
   labelOptionText: {color: colors.textSecondary, fontSize: typography.small, fontWeight: fontWeight.semibold},
   labelOptionTextSelected: {color: colors.flameRed},
   locationButton: {marginBottom: spacing.md},
+  searchStatus: {color: colors.textSecondary, fontSize: typography.small, marginTop: spacing.xs},
+  suggestions: {marginTop: spacing.xs, marginBottom: spacing.md, borderRadius: radius.md, borderWidth: borderWidth.standard, borderColor: colors.border, overflow: 'hidden'},
+  suggestion: {minHeight: touchTarget.minimum, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: borderWidth.standard, borderBottomColor: colors.border, backgroundColor: colors.white},
+  suggestionText: {flex: 1},
+  suggestionTitle: {color: colors.textPrimary, fontSize: typography.body, fontWeight: fontWeight.semibold},
+  suggestionSubtitle: {color: colors.textSecondary, fontSize: typography.small},
   notice: {padding: spacing.md, marginBottom: spacing.md, borderRadius: radius.md, backgroundColor: colors.white},
   noticeText: {color: colors.textPrimary, fontSize: typography.small},
   fields: {gap: spacing.md},

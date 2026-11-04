@@ -44,7 +44,7 @@ craves:
     signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
     caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
     enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
-    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/api/v1/catalog/internal/**=order}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/api/v1/catalog/internal/**=order;/internal/v1/account-erasure/**=auth}
   http-client:
     connect-timeout: ${CRAVES_HTTP_CLIENT_CONNECT_TIMEOUT:2s}
     read-timeout: ${CRAVES_HTTP_CLIENT_READ_TIMEOUT:30s}

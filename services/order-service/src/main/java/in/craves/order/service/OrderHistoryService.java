@@ -103,6 +103,7 @@ public class OrderHistoryService {
         Map<UUID, List<OrderItemResponse>> itemsByOrder = loadItems(pageRows);
         List<OrderResponse> orders = pageRows.stream()
             .map(order -> attachItems(order, itemsByOrder.getOrDefault(order.id(), List.of())))
+            .map(order -> chef ? order.forChef() : order)
             .toList();
 
         String nextCursor = null;

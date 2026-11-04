@@ -10,6 +10,7 @@ import in.craves.advanced.platform.data.Sql;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -94,18 +95,35 @@ class OrderAmendmentRepository {
      * number of rows touched (each once).
      */
     int erase(UUID person, UUID erased, Instant now) {
+        return erase(person, erased, now, true);
+    }
+
+    /**
+     * Only the person's own orders, as the customer: their proposals and the answers they gave to the kitchen's. Where they were the
+     * chef (they proposed or answered on someone else's order) the amendment is left alone, ids and notes included.
+     */
+    int eraseCustomerSide(UUID person, UUID erased, Instant now) {
+        return erase(person, erased, now, false);
+    }
+
+    private int erase(UUID person, UUID erased, Instant now, boolean chefSide) {
         int deleted = jdbc.update("DELETE FROM adv_order_amendments.amendment WHERE customer_id = ? AND status <> 'ACCEPTED'", person);
         // One statement, so a row is counted once; every CASE reads the row as it was before this update.
+        // Customer side only: the person is the proposer when the customer proposed, and the one who answered when the chef proposed.
+        String proposer = chefSide ? "proposer_id = ?" : "proposer_id = ? AND proposed_by = 'CUSTOMER'";
+        String answered = chefSide ? "answered_by = ?" : "answered_by = ? AND proposed_by = 'CHEF'";
+        String where = chefSide ? "customer_id = ? OR proposer_id = ? OR answered_by = ?" : "customer_id = ?";
+        List<Object> args = new ArrayList<>(List.of(person, person, person, person, erased, person, erased, person, erased, Sql.ts(now), person));
+        if (chefSide) args.addAll(List.of(person, person));
         int unlinked = jdbc.update("UPDATE adv_order_amendments.amendment SET "
                         + "note = CASE WHEN customer_id = ? THEN NULL ELSE note END, "
                         + "answer_note = CASE WHEN customer_id = ? THEN NULL ELSE answer_note END, "
                         + "changes = CASE WHEN customer_id = ? THEN (SELECT coalesce(jsonb_agg(item - 'note' ORDER BY idx), '[]'::jsonb) "
                         + "FROM jsonb_array_elements(changes) WITH ORDINALITY AS line(item, idx)) ELSE changes END, "
                         + "customer_id = CASE WHEN customer_id = ? THEN ? ELSE customer_id END, "
-                        + "proposer_id = CASE WHEN proposer_id = ? THEN ? ELSE proposer_id END, "
-                        + "answered_by = CASE WHEN answered_by = ? THEN ? ELSE answered_by END, "
-                        + "updated_at = ? WHERE customer_id = ? OR proposer_id = ? OR answered_by = ?",
-                person, person, person, person, erased, person, erased, person, erased, Sql.ts(now), person, person, person);
+                        + "proposer_id = CASE WHEN " + proposer + " THEN ? ELSE proposer_id END, "
+                        + "answered_by = CASE WHEN " + answered + " THEN ? ELSE answered_by END, "
+                        + "updated_at = ? WHERE " + where, args.toArray());
         return deleted + unlinked;
     }
 

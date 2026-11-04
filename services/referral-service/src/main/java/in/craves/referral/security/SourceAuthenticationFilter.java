@@ -19,6 +19,8 @@ import static in.craves.referral.ReferralProblem.require;
 public final class SourceAuthenticationFilter extends OncePerRequestFilter {
     public static final String BODY_ATTRIBUTE=SourceAuthenticationFilter.class.getName()+".rawBody";
     public static final int MAX_BODY_BYTES=131072;
+    /** The deletion coordinator in auth-service is the only caller of these. */
+    private static final List<String> ERASURE_PATHS=List.of("/internal/v1/account-erasure/blockers","/internal/v1/account-erasure/prepare","/internal/v1/account-erasure");
     private final ReferralSettings settings;
     private final Clock clock;
     public SourceAuthenticationFilter(ReferralSettings settings,Clock clock) { this.settings=settings; this.clock=clock; }
@@ -26,7 +28,7 @@ public final class SourceAuthenticationFilter extends OncePerRequestFilter {
         try {
             require("POST".equals(request.getMethod()) && request.getQueryString()==null,405,"SIGNED_POST_REQUIRED");
             String path=request.getRequestURI();
-            require(List.of("/internal/v1/referrals/events","/internal/v1/referrals/operations","/internal/v1/referrals/outbox/claim","/internal/v1/referrals/outbox/ack","/internal/v1/referrals/lookup").contains(path),404,"SOURCE_ROUTE_NOT_FOUND");
+            require(List.of("/internal/v1/referrals/events","/internal/v1/referrals/operations","/internal/v1/referrals/outbox/claim","/internal/v1/referrals/outbox/ack","/internal/v1/referrals/lookup").contains(path) || ERASURE_PATHS.contains(path),404,"SOURCE_ROUTE_NOT_FOUND");
             require(request.getContentType()!=null && request.getContentType().matches("(?i)application/json(?:;\\s*charset=utf-8)?"),415,"JSON_REQUIRED");
             require(request.getHeader("Authorization")==null,401,"SOURCE_AUTHORIZATION_SCHEME_CONFLICT");
             String source=single(request,"X-Referral-Source"), keyId=single(request,"X-Referral-Key-Id");
@@ -35,6 +37,7 @@ public final class SourceAuthenticationFilter extends OncePerRequestFilter {
             byte[] body=request.getInputStream().readNBytes(MAX_BODY_BYTES+1);
             require(body.length<=MAX_BODY_BYTES,413,"SOURCE_BODY_TOO_LARGE");
             SourceSignatures.verify(settings.key(source,keyId),source,keyId,timestamp,request.getMethod(),path,body,signature,clock);
+            require(!ERASURE_PATHS.contains(path) || "auth".equals(source),403,"SOURCE_ROUTE_FORBIDDEN");
             var context=SecurityContextHolder.createEmptyContext();
             context.setAuthentication(new UsernamePasswordAuthenticationToken(source,null,List.of(new SimpleGrantedAuthority("SOURCE_"+source))));
             SecurityContextHolder.setContext(context); request.setAttribute(BODY_ATTRIBUTE,body);

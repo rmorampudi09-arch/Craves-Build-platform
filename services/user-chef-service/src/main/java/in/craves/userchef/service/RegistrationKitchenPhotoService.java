@@ -7,7 +7,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * The two kitchen photos of an APPROVED chef application, for the catalog to publish. Only KITCHEN_PHOTO_1 and
+ * The two kitchen photos of an APPROVED chef application that was not erased, for the catalog to publish. Only KITCHEN_PHOTO_1 and
  * KITCHEN_PHOTO_2 are reachable here; every other document type (ID proofs, FSSAI) stays private.
  */
 @Service
@@ -31,6 +31,7 @@ public class RegistrationKitchenPhotoService {
                 JOIN chef_kyc_document d ON d.application_id = a.id
                 WHERE a.identity_id = ?
                   AND a.status = 'APPROVED'
+                  AND a.erased_at IS NULL
                   AND d.document_type = ?
                   AND d.removed_at IS NULL
                   AND d.status <> 'REJECTED'

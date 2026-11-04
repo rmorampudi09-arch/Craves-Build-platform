@@ -305,6 +305,14 @@ public class TrustService implements PersonalDataContributor {
         });
     }
 
+    @Override
+    public int eraseCustomerSide(UUID person) {
+        return tx.execute(status -> {
+            repository.lockPerson(person);
+            return repository.eraseCustomerSide(person, ERASED, clock.instant());
+        });
+    }
+
     private Set<UUID> kitchensOf(String chefToken) {
         return catalog.chefMenuItems(chefToken).values().stream().map(MenuItem::kitchenId).filter(Objects::nonNull).collect(Collectors.toSet());
     }

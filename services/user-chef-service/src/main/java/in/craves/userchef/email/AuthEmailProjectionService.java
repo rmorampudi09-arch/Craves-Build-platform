@@ -43,7 +43,8 @@ public class AuthEmailProjectionService {
                 "ON CONFLICT (identity_id) DO UPDATE SET email=EXCLUDED.email,email_revision=EXCLUDED.email_revision,verified_at=EXCLUDED.verified_at,updated_at=now()",
                 event.identityId(), event.email(), event.emailRevision(), Timestamp.from(event.verifiedAt()));
             jdbc.update("UPDATE customer_profile SET email = ?, updated_at = now() WHERE identity_id = ?", event.email(), event.identityId());
-            jdbc.update("UPDATE chef_application SET email = ?, updated_at = now() WHERE identity_id = ?", event.email(), event.identityId());
+            // An erased application stays anonymised: its email is never refilled, so it cannot match a verified email again.
+            jdbc.update("UPDATE chef_application SET email = ?, updated_at = now() WHERE identity_id = ? AND erased_at IS NULL", event.email(), event.identityId());
             revision = event.emailRevision(); result = "APPLIED";
         }
         jdbc.update("INSERT INTO auth_email_projection_receipt(event_id,identity_id,request_fingerprint,event_revision,result_revision,result) VALUES (?,?,?,?,?,?)",

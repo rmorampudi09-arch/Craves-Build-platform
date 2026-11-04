@@ -5,6 +5,7 @@ in.craves.integration.admin.AdminCustomerFinancialsController
 in.craves.integration.admin.AdminDeliveryProviderReadinessController
 in.craves.integration.admin.AdminHyperlocalProviderContractReadinessController
 in.craves.integration.admin.AdminIntegrationInvestigationController
+in.craves.integration.admin.deadletters.AdminDeadLetterController
 in.craves.integration.admin.deliveryexceptions.AdminDeliveryExceptionController
 in.craves.integration.admin.deliveryintelligence.AdminDeliveryIntelligenceController
 in.craves.integration.delivery.PickupLocationProvisioningController

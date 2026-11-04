@@ -310,6 +310,22 @@ public final class ApiDtos {
                 statusHistory, deliveryPartner, chefHandedOverAt);
         }
 
+        /**
+         * The chef's copy: the customer's name, phone and address only while the chef answers, cooks or hands over the order
+         * (the same window the web shows them in); afterwards, and for refused or cancelled orders, they stay private.
+         */
+        public OrderResponse forChef() {
+            if (status != null && CHEF_CONTACT_WINDOW.contains(status)) return this;
+            return new OrderResponse(id, checkoutId, customerIdentityId, kitchenId, kitchenName, status, currency,
+                foodSubtotal, platformFee, taxAmount, deliveryFee, grandTotal, chefResponseNote, prepTimeMinutes,
+                null, pickupAddress, items, createdAt, updatedAt, chefAcceptanceExpiresAt, customerNote,
+                statusHistory, deliveryPartner, chefHandedOverAt);
+        }
+
+        private static final java.util.Set<OrderStatus> CHEF_CONTACT_WINDOW = java.util.EnumSet.of(
+            OrderStatus.CHEF_ACCEPTANCE_PENDING, OrderStatus.CHEF_ACCEPTED, OrderStatus.PREPARING,
+            OrderStatus.READY_FOR_PICKUP, OrderStatus.OUT_FOR_DELIVERY);
+
         public OrderResponse withStatusHistory(List<OrderStatusHistoryEntry> history) {
             return new OrderResponse(id, checkoutId, customerIdentityId, kitchenId, kitchenName, status, currency,
                 foodSubtotal, platformFee, taxAmount, deliveryFee, grandTotal, chefResponseNote, prepTimeMinutes,

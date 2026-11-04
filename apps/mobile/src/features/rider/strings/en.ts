@@ -281,6 +281,8 @@ export const en = {
       `Fair turns: among the free riders who can reach the kitchen within ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} of the soonest (by Craves's travel-time estimate), the one who has earned the least per online hour today hears first. If two have earned the same, the one who has waited longest goes first.`,
     rulesRounds: (rounds: number) => `If a rider passes or the time runs out, the next rider hears, in up to ${rounds} rounds.`,
     rulesRadius: (km: string) => `Only riders within ${km} of the kitchen hear of an order.`,
+    rulesJoint: 'Orders near each other are shared out among the free riders nearby together, not one by one.',
+    rulesNextOrder: 'You may hear of your next order before this one ends. It waits for you.',
     rulesFree: 'Declining or missing an offer is free. Your acceptance rate and ratings never decide who gets an order.',
     rulesWhy: 'Each offer says why it came to you.',
     rulesThen: 'How you get orders then',

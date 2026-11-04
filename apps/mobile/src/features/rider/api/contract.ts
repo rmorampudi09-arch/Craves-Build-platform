@@ -149,6 +149,10 @@ export interface OfferRules {
    * fair band counts minutes (bandMinutes); left out: by distance.
    */
   byTravelTime?: boolean;
+  /** Policy 2026-11-v2 (app 1.3.3), present only when true: orders near each other are shared out together, not one by one. */
+  jointMatching?: boolean;
+  /** Policy 2026-11-v2 (app 1.3.3), present only when true: a rider may hear of the next order before this one ends. */
+  nextOrderOffers?: boolean;
 }
 
 /** Why this rider heard of this order, stored with the offer: the rider and ops see the same reason. */

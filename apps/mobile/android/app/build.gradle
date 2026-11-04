@@ -151,7 +151,7 @@ android {
             manifestPlaceholders += [riderMapsApiKey: riderMapsApiKey]
             buildConfigField "boolean", "RIDER_MAPS_KEY", riderMapsApiKey.isEmpty() ? "false" : "true"
             // Keep in step with RIDER_APP_VERSION in src/features/rider/riderConfig.ts; rider-apk.yml fails the build otherwise.
-            versionName "1.3.2"
+            versionName "1.3.3"
             buildConfigField "String", "CRAVES_APP", "\"rider\""
             // react-native-config looks up BuildConfig by applicationId unless told the namespace.
             resValue "string", "build_config_package", "com.cravesapp"

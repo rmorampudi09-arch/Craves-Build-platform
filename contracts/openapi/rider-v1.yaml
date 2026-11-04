@@ -415,6 +415,8 @@ components:
         radiusM: {type: integer, description: 'Only riders this close to the kitchen (straight line) hear of an order'}
         fairBandM: {type: integer, minimum: 0, maximum: 5000, description: '0: the nearest free rider hears first. Above 0: among the free riders within this many metres of the nearest, the one who has earned the least per online hour today hears first (ties: free the longest)'}
         byTravelTime: {type: boolean, description: 'Phase 5, present only when true: the free rider who can reach the kitchen soonest by Craves''s travel-time estimate hears first (the nearest when there is no estimate), and a fair band counts minutes, max(1, round(fairBandM x 3 / 1000)), its metres at 20 km/h. Left out: by straight-line distance.'}
+        jointMatching: {type: boolean, description: 'Policy 2026-11-v2 (app 1.3.3), present only when true: orders near each other are shared out among the free riders nearby together, not one by one. A rule riders are shown; the dispatcher acts on it in a later release.'}
+        nextOrderOffers: {type: boolean, description: 'Policy 2026-11-v2 (app 1.3.3), present only when true: a rider may hear of the next order before the current one ends. A rule riders are shown; the dispatcher acts on it in a later release.'}
     OfferReason:
       type: object
       description: 'Why this rider heard of this order (Phase 4): stored with the offer, so the rider and ops see the same reason. Each round ranks the riders not yet asked.'

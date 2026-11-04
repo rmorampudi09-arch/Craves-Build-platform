@@ -83,14 +83,14 @@ public class DeletionNotices {
     }
 
     /**
-     * One POST per channel. A whole-account request's in-app and push notices go to both roles, one per role with the
-     * role in the request key. The body is built lazily so that a missing date is logged like any other failure.
+     * One POST per channel. A whole-account request's in-app notice goes to both roles, one per role with the role in
+     * the request key; its push goes once. The body is built lazily so that a missing date is logged like any other failure.
      */
     private void tell(DeletionRequest request, String event, String[] channels, String address, String title,
                       Supplier<String> body) {
         for (String channel : channels) {
-            boolean perRole = request.scope() == Scope.ALL && ("IN_APP".equals(channel) || "PUSH".equals(channel));
-            // The in-app inbox is filtered by role; address notices (email) ignore it.
+            boolean perRole = request.scope() == Scope.ALL && "IN_APP".equals(channel);
+            // The inboxes are per role. Push is once: one token per device serves both sides. Email ignores the role.
             for (String role : perRole ? List.of("CUSTOMER", "CHEF") : List.of(request.scope() == Scope.CHEF ? "CHEF" : "CUSTOMER")) {
                 try {
                     String text = body.get();

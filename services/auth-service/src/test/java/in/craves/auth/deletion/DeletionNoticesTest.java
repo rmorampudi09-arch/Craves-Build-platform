@@ -78,15 +78,16 @@ class DeletionNoticesTest {
 
     /**
      * Takes what the server has received so far as "CHANNEL|ROLE|title|body" lines after checking the fields every notice
-     * shares. {@code perRole} is whether the request key carries the role (whole-account in-app and push notices only).
+     * shares. {@code wholeAccount}: only its in-app notices have the role in the request key (one per role).
      */
-    List<String> drain(String event, boolean perRole) {
+    List<String> drain(String event, boolean wholeAccount) {
         List<String> lines = new ArrayList<>();
         for (JsonNode post : posts) {
             String channel = post.get("channel").asText();
             String role = post.get("userRole").asText();
             String type = "ACCOUNT_DELETION_" + event.toUpperCase();
-            assertEquals("account-deletion:" + requestId + ":" + event + ":" + channel + (perRole ? ":" + role : ""),
+            assertEquals("account-deletion:" + requestId + ":" + event + ":" + channel
+                    + (wholeAccount && channel.equals("IN_APP") ? ":" + role : ""),
                 post.get("requestKey").asText());
             assertEquals("auth", post.get("sourceService").asText());
             assertEquals(type, post.get("eventType").asText());
@@ -163,27 +164,30 @@ class DeletionNoticesTest {
         }
     }
 
-    @Test void wholeAccountNoticesGoToBothRolesWithOneKeyPerRole() {
+    @Test void wholeAccountInAppGoesToBothRolesAndPushOnce() {
         String scheduled = "Your Craves account will be deleted on 3 Dec. Open the app and tap Keep my account to stop it.";
         String sent = "Craves will finish it once your payouts are settled.";
         String reminder = "Your Craves account will be deleted on 3 Dec. Tap Keep my account if you want to keep it.";
         String note = "Please settle your payouts first.";
 
         notices.requested(request(Scope.ALL, null), false);
-        assertBothRoles(drain("requested", true), "Account deletion scheduled", scheduled);
+        assertWholeAccount(drain("requested", true), "Account deletion scheduled", scheduled);
         notices.requested(request(Scope.ALL, null), true);
-        assertBothRoles(drain("requested", true), "Deletion request sent", sent);
+        assertWholeAccount(drain("requested", true), "Deletion request sent", sent);
         notices.approved(request(Scope.ALL, null));
-        assertBothRoles(drain("approved", true), "Account deletion scheduled", scheduled);
+        assertWholeAccount(drain("approved", true), "Account deletion scheduled", scheduled);
         notices.rejected(request(Scope.ALL, note));
-        assertBothRoles(drain("rejected", true), "Deletion request not approved", note);
+        assertWholeAccount(drain("rejected", true), "Deletion request not approved", note);
         notices.reminder(request(Scope.ALL, null));
-        assertBothRoles(drain("reminder", true), "Account deletion in 7 days", reminder);
+        assertWholeAccount(drain("reminder", true), "Account deletion in 7 days", reminder);
     }
 
-    /** One notice per channel and role, so the request keys are all different. */
-    static void assertBothRoles(List<String> lines, String title, String body) {
-        assertEquals(List.of("IN_APP|CUSTOMER|", "IN_APP|CHEF|", "PUSH|CUSTOMER|", "PUSH|CHEF|").stream().map(l -> l + title + "|" + body).toList(),
+    /**
+     * In-app once per role (the inboxes are per role, so the keys differ); push once, for the customer role, because
+     * the app has one push token per device for both sides.
+     */
+    static void assertWholeAccount(List<String> lines, String title, String body) {
+        assertEquals(List.of("IN_APP|CUSTOMER|", "IN_APP|CHEF|", "PUSH|CUSTOMER|").stream().map(l -> l + title + "|" + body).toList(),
             lines);
     }
 

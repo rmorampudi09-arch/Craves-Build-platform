@@ -187,7 +187,7 @@ public class AdminSessionService {
         if (seconds < 1) throw rejected("ADMIN_SESSION_EXPIRED");
         String access = jwt.issueAccessToken(identity, currentRoles, accessEnd, family, end.minus(ABSOLUTE_WINDOW));
         return AuthTokenResponse.create(access, seconds, token, end, new IdentityResponse(identity.getId(), identity.getFirebaseUid(),
-            identity.getPhoneNumber(), identity.getEmail(), identity.isEmailVerified(), identity.getDisplayName(), identity.getStatus(), currentRoles, identity.getLastLoginAt()));
+            identity.getPhoneNumber(), identity.getEmail(), identity.isEmailVerified(), identity.getDisplayName(), identity.getStatus(), currentRoles, identity.getLastLoginAt(), null));
     }
 
     private Session session(String hash) {

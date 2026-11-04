@@ -33,10 +33,20 @@ public class CravesJwtService {
     }
 
     public String issueAccessToken(AuthIdentity identity, List<String> roles) {
-        return issueAccessToken(identity, roles, clock.instant().plus(jwtProperties.getAccessTokenTtl()), null, null);
+        return issueAccessToken(identity, roles, (String) null);
     }
 
+    /** Consumer token; {@code deletionPending} is the scope of the person's open deletion request, or null for none. */
+    public String issueAccessToken(AuthIdentity identity, List<String> roles, String deletionPending) {
+        return issue(identity, roles, clock.instant().plus(jwtProperties.getAccessTokenTtl()), null, null, deletionPending);
+    }
+
+    /** Admin session token: never carries the deletion claim. */
     public String issueAccessToken(AuthIdentity identity, List<String> roles, Instant expiresAt, UUID adminSessionId, Instant authenticatedAt) {
+        return issue(identity, roles, expiresAt, adminSessionId, authenticatedAt, null);
+    }
+
+    private String issue(AuthIdentity identity, List<String> roles, Instant expiresAt, UUID adminSessionId, Instant authenticatedAt, String deletionPending) {
         try {
             Instant now = clock.instant();
 
@@ -55,6 +65,9 @@ public class CravesJwtService {
             claims.put("phone_number", identity.getPhoneNumber());
             claims.put("roles", roles);
             claims.put("token_version", identity.getTokenVersion());
+            if (deletionPending != null) {
+                claims.put("deletion_pending", deletionPending);
+            }
             if (adminSessionId != null) {
                 claims.put("admin_sid", adminSessionId.toString());
                 claims.put("auth_time", authenticatedAt.getEpochSecond());

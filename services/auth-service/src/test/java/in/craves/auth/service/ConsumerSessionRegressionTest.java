@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import in.craves.auth.api.FirebaseExchangeRequest;
 import in.craves.auth.config.JwtProperties;
+import in.craves.auth.deletion.AccountDeletionService;
 import in.craves.auth.domain.AuthIdentity;
 import in.craves.auth.domain.RefreshSession;
 import in.craves.auth.repository.*;
@@ -40,9 +41,9 @@ class ConsumerSessionRegressionTest {
         when(identities.findById(id)).thenReturn(Optional.of(identity));
         when(roles.findRoleCodesByIdentityId(id)).thenReturn(List.of("CUSTOMER", "CHEF", "PLATFORM_ADMIN"));
         when(generator.generate()).thenReturn("synthetic-replacement");
-        when(jwt.issueAccessToken(identity, List.of("CUSTOMER", "CHEF"))).thenReturn("synthetic-access");
+        when(jwt.issueAccessToken(identity, List.of("CUSTOMER", "CHEF"), (String) null)).thenReturn("synthetic-access");
         var service = new AuthService(null, new JwtProperties(), identities, mock(AuthRoleRepository.class), roles,
-            refreshes, mock(LoginAttemptRepository.class), mock(AuthAuditRepository.class), jwt, generator, hash, admin);
+            refreshes, mock(LoginAttemptRepository.class), mock(AuthAuditRepository.class), jwt, generator, hash, admin, mock(AccountDeletionService.class));
         Instant before = Instant.now();
         var response = service.refresh("synthetic-old", null, new MockHttpServletRequest());
         assertEquals(900, response.expiresIn());

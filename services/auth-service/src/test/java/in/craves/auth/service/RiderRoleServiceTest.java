@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.auth.config.JwtProperties;
+import in.craves.auth.deletion.AccountDeletionService;
 import in.craves.auth.domain.AuthAudit;
 import in.craves.auth.domain.AuthIdentity;
 import in.craves.auth.domain.AuthIdentityRole;
@@ -65,7 +66,8 @@ class RiderRoleServiceTest {
         properties.setAllowGeneratedLocalKeys(true);
         jwt = new CravesJwtService(properties, new RsaKeyProvider(properties), new ObjectMapper(), Clock.systemUTC());
         service = new AuthService(null, properties, identities, roleCatalog, roles, refreshes,
-            mock(LoginAttemptRepository.class), audits, jwt, generator, hasher, mock(AdminSessionService.class));
+            mock(LoginAttemptRepository.class), audits, jwt, generator, hasher, mock(AdminSessionService.class),
+            mock(AccountDeletionService.class));
     }
 
     @Test

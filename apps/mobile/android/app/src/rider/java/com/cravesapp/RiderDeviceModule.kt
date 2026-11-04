@@ -34,9 +34,6 @@ class RiderDeviceModule(private val reactContext: ReactApplicationContext) :
 
   override fun getName(): String = "CravesRiderDevice"
 
-  /** mapsKeyPresent: the build has a Google Maps key, so the offer may draw its map preview (RiderOfferMap). */
-  override fun getConstants(): Map<String, Any> = mapOf("mapsKeyPresent" to BuildConfig.RIDER_MAPS_KEY)
-
   @ReactMethod
   fun getDeviceState(promise: Promise) {
     try {

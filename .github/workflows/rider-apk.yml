@@ -210,8 +210,6 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
           MODE: ${{ steps.mode.outputs.mode }}
           PLAY_BUNDLE: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && steps.mode.outputs.mode == 'live' }}
-          # Optional: the offer's map preview (android/app/build.gradle, rider flavor). Without it the offer is text only.
-          RIDER_MAPS_API_KEY: ${{ secrets.RIDER_MAPS_API_KEY }}
         run: |
           set -euo pipefail
           cd android

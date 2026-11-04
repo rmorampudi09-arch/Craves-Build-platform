@@ -33,7 +33,7 @@ translations were written with the app, and wait for the P2-08 native-speaker re
 | R-05 | The trip as drawn: order title and "₹61 locked · kitchen" line, Ride to / Deliver to, rows (distance with minutes, food ready, hand over, pay for this trip), Navigate and Call, "Calls go through Craves" only with `features.maskedCalls` (off by default); at the kitchen the espresso card with "0BDE 0101", "Waiting since", the free-wait card and two ticks that never hold up Picked up; the hand-over with its "If Anil isn't answering" card and "Delivered is enabled once all 4 digits match"; Trip complete with the green header, the server's lines, "Your pay", the rate card and "Offer said at least ₹X", today's trips and online time. The server now sends `rateCardVersion`, `offerPayPaise`, both offer distances, `pickedUpAt` and `finishedAt`. | ToKitchen, AtKitchen, ToCustomer, Handover, TripComplete |
 | R-04 | The foreground notification per step (`RiderTripNotice`, unit-tested): "To Lakshmi's Kitchen · order 0BDE 0101", one line, and Back to Craves, the step's action and SOS. A tapped action opens the app, which posts the step only while the trip screen shows that step; SOS opens the SOS screen. No new permission: it is the online service's own notification, redrawn. | MapsNotification |
 | R-03 | "Reached <kitchen>?": the Kotlin service asks once the phone has been within 50 m of the kitchen for 20 s on TO_KITCHEN (`RiderReached`, a pure state machine with its own unit test). In the app it is the sheet as drawn; with Google Maps in front it is a heads-up with Yes and Not yet. Yes posts arrived-pickup; Not yet keeps quiet until the phone moves and stands still again. | ReachedPrompt |
-| R-02 | The offer's map preview: Google Maps in lite mode through the rider flavor's own view (`RiderOfferMap.kt`), the kitchen pinned, the rider as a dot from the online service's last fix, the customer's area as a shaded 300 m circle on its centre, never the door. Only with the `RIDER_MAPS_API_KEY` secret in the build; without it the offer stays text rows and the app logs that once. The server now sends `kitchenName`, `pickupMinutes`, `kitchenAt` and `customerAreaAt` on every offer. | Offer |
+| R-02 | The offer's map preview: Ola tiles through the Craves proxy on MapLibre, the same map and the same `features/maps/olaMapTiles` helpers the customer app uses, so no map key ships in the app. The kitchen pinned, the rider as a dot from the online service's last fix, the customer's area as a shaded 300 m circle on its centre, never the door; nothing to tap. The server now sends `kitchenName`, `pickupMinutes`, `kitchenAt` and `customerAreaAt` on every offer. | Offer |
 | R-01 | The offer as drawn: kitchen name, pay first, the trip in rows (to the kitchen, kitchen to customer, food ready in, whole trip), why it came and "only you", "Not this one", "Saying no is free. Nothing is counted." A next-order offer shows the current trip on top and starts after its drop. New optional `Offer` fields: `kitchenName`, `pickupMinutes`, `foodReadyInMinutes`, `afterTrip`. | Offer, OfferNext |
 
 R-02 to R-09 are added to this table as they land.
@@ -45,10 +45,11 @@ R-02 to R-09 are added to this table as they land.
   numbers on screen. The seconds read "24s left", as before, not "24 s". The old item count and "Madhapur to Kondapur"
   line are gone (the canvas has neither; the rider sees the items at the kitchen). When the server sends no
   `kitchenName`, the title shows the kitchen's area instead ("New order · Madhapur"), so the area is never lost.
-- **R-02:** the canvas's map shows "Kitchen", "Customer area" and "You" captions on the picture; lite mode draws no
-  text, so the map is an image with one accessibility label and the rows under it carry the words. The customer area's
-  centre is the drop rounded to a 0.005° cell (`shortcut:` in `FleetTripModels.areaCentre`), not a locality centroid.
-  The native view could not be compiled here (no Android SDK): `build-rider-apk` in CI is the first build of it.
+- **R-02:** the canvas's map shows "Kitchen", "Customer area" and "You" captions on the picture; the map draws no
+  text, so it is an image with one accessibility label and the rows under it carry the words. It is Ola Maps, not Google
+  (Craves has an Ola key and no Google one; the customer app already draws Ola tiles through the proxy, with no key in
+  the app). The customer area's centre is the drop rounded to a 0.005° cell (`shortcut:` in `FleetTripModels.areaCentre`),
+  not a locality centroid.
 - **R-03:** the sheet's "Food ready" row is R-05's (it needs the chef's ready time on the trip, shown there too). Demo
   (mock) builds have no geofence: the JS loop never asks, riders tap "I've reached the kitchen". GPS error is not added
   to the 50 m, and a fix without a speed counts as moving (both `shortcut:` comments in `RiderReached.kt`). Kotlin was

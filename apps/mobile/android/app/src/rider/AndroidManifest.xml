@@ -20,8 +20,6 @@
     <!-- riderLabel: "Craves Riders", or "Craves Riders Demo" for a demo build (build.gradle, cravesRiderDemo). -->
     <application android:label="${riderLabel}" tools:replace="android:label">
         <activity android:name=".MainActivity" android:label="${riderLabel}" tools:replace="android:label" />
-        <!-- The offer's map preview (RiderOfferMap). riderMapsApiKey comes from build.gradle (the RIDER_MAPS_API_KEY secret); empty without it. -->
-        <meta-data android:name="com.google.android.geo.API_KEY" android:value="${riderMapsApiKey}" />
         <service
             android:name=".RiderOnlineService"
             android:exported="false"

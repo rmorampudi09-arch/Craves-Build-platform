@@ -117,6 +117,15 @@ public class CatalogService {
                 socialLinks
             );
         } else {
+            // Handbook 008: while staff hold the kitchen suspended, a save keeps SUSPENDED and its status becomes what reinstating restores.
+            // Lock the kitchen row first so a suspension cannot commit between this check and the update.
+            boolean held = jdbcTemplate.queryForList(
+                "SELECT h.prior_status FROM catalog_schema.kitchen_profile k LEFT JOIN catalog_schema.kitchen_suspension_hold h ON h.kitchen_id = k.id WHERE k.id = ? FOR UPDATE OF k",
+                String.class, existingId.get()).stream().anyMatch(java.util.Objects::nonNull);
+            if (held) {
+                jdbcTemplate.update("UPDATE catalog_schema.kitchen_suspension_hold SET prior_status = ? WHERE kitchen_id = ?", status.name(), existingId.get());
+                status = KitchenStatus.SUSPENDED;
+            }
             jdbcTemplate.update(
                 "UPDATE catalog_schema.kitchen_profile SET kitchen_name = ?, display_name = ?, description = ?, phone_number = ?, email = ?, address_line1 = ?, address_line2 = ?, landmark = ?, area_name = ?, city = ?, state = ?, postal_code = ?, latitude = ?, longitude = ?, status = ?, cuisines = COALESCE(CAST(? AS jsonb), cuisines), service_areas = COALESCE(CAST(? AS jsonb), service_areas), social_links = COALESCE(CAST(? AS jsonb), social_links), updated_at = now() WHERE identity_id = ?",
                 request.kitchenName(),

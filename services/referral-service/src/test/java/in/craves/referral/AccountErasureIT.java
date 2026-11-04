@@ -62,11 +62,11 @@ class AccountErasureIT {
         assertTrue(erasure.blockers(owner.id(),Scope.ALL).isEmpty());
         assertTrue(erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL).done());
     }
-    @Test void eraseForfeitsCustomerCreditsWithOneJournalEntry() {
+    @Test void eraseAllForfeitsTheCreditWithOneJournalEntry() {
         var owner=memberWithCredit();
         var before=r.db.rows("SELECT * FROM referral_schema.journal ORDER BY id");long wallet=r.balance(owner,"pending_paise");
-        var result=erasure.erase(UUID.randomUUID(),owner.id(),Scope.CUSTOMER);
-        assertTrue(result.done());assertEquals(Map.of("journal",1,"member",0),result.counts());
+        var result=erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL);
+        assertTrue(result.done());assertEquals(Map.of("journal",1,"member",1),result.counts());
         assertEquals(0,r.balance(owner,"available_paise"));assertEquals(wallet,r.balance(owner,"pending_paise"));
         var after=r.db.rows("SELECT * FROM referral_schema.journal ORDER BY id");
         assertEquals(before.size()+1,after.size());
@@ -76,19 +76,20 @@ class AccountErasureIT {
         assertEquals(0,number(entry,"pending_delta")+number(entry,"reserved_delta"));assertTrue(entry.get("event_key").toString().startsWith("forfeit:"));
         assertEquals(1,r.db.count("SELECT count(*) FROM referral_schema.outbox WHERE event_key=?","journal:"+number(entry,"id")),"finance still gets the entry");
     }
-    @Test void aCashOutThatIsNotFinishedBlocksCustomerAndAllAndNothingChanges() {
+    @Test void aCashOutThatIsNotFinishedBlocksAllOnlyAndNothingChanges() {
         var owner=memberWithCredit();r.assess(owner);UUID cashout=UUID.randomUUID();
         r.cashouts.request(owner.id(),cashout,1500);
         assertEquals(500,r.balance(owner,"available_paise"));assertEquals(1500,r.balance(owner,"reserved_paise"));
         long journal=journalRows();var reservation=r.db.rows("SELECT * FROM referral_schema.reservation");String member=memberJson(owner.id());
-        for(Scope scope:List.of(Scope.CUSTOMER,Scope.ALL)) {
-            var blockers=erasure.blockers(owner.id(),scope);
-            assertEquals(List.of("CASH_OUT_IN_FLIGHT"),codes(blockers));assertFalse(blockers.getFirst().detail().isBlank());
-            var result=erasure.erase(UUID.randomUUID(),owner.id(),scope);
-            assertFalse(result.done());assertEquals(blockers,result.blockers());
+        var blockers=erasure.blockers(owner.id(),Scope.ALL);
+        assertEquals(List.of("CASH_OUT_IN_FLIGHT"),codes(blockers));assertFalse(blockers.getFirst().detail().isBlank());
+        var result=erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL);
+        assertFalse(result.done());assertEquals(blockers,result.blockers());
+        // One side only never touches the shared wallet, so a cash-out in flight is not its concern.
+        for(Scope scope:List.of(Scope.CUSTOMER,Scope.CHEF)) {
+            assertTrue(erasure.blockers(owner.id(),scope).isEmpty(),scope.name());
+            assertAllZero(erasure.erase(UUID.randomUUID(),owner.id(),scope));
         }
-        assertTrue(erasure.blockers(owner.id(),Scope.CHEF).isEmpty());
-        assertAllZero(erasure.erase(UUID.randomUUID(),owner.id(),Scope.CHEF));
         assertEquals(500,r.balance(owner,"available_paise"));assertEquals(1500,r.balance(owner,"reserved_paise"));
         assertEquals(journal,journalRows());assertEquals(reservation,r.db.rows("SELECT * FROM referral_schema.reservation"));assertEquals(member,memberJson(owner.id()));
         r.cashouts.cancel(owner.id(),cashout);
@@ -108,7 +109,7 @@ class AccountErasureIT {
         for(String[] step:steps) {
             if(step[1]!=null) r.db.update(step[1],cashout);
             assertEquals(step[0],r.db.one("SELECT status FROM referral_schema.reservation WHERE id=?",cashout).get("status"));
-            assertEquals(step[0].equals("PAID")?List.of():List.of("CASH_OUT_IN_FLIGHT"),codes(erasure.blockers(owner.id(),Scope.CUSTOMER)),step[0]);
+            assertEquals(step[0].equals("PAID")?List.of():List.of("CASH_OUT_IN_FLIGHT"),codes(erasure.blockers(owner.id(),Scope.ALL)),step[0]);
         }
     }
     @Test void aPendingRewardBlocksAllButNotCustomerOrChef() {
@@ -124,12 +125,13 @@ class AccountErasureIT {
         assertTrue(erasure.blockers(owner.id(),Scope.CHEF).isEmpty());assertTrue(erasure.blockers(owner.id(),Scope.CUSTOMER).isEmpty());
         assertAllZero(erasure.erase(UUID.randomUUID(),owner.id(),Scope.CHEF));
         var rewards=r.db.rows("SELECT * FROM referral_schema.reward ORDER BY id");
-        assertEquals(Map.of("journal",1,"member",0),erasure.erase(UUID.randomUUID(),owner.id(),Scope.CUSTOMER).counts());
-        assertEquals(0,r.balance(owner,"available_paise"));assertEquals(2000,r.balance(owner,"pending_paise"));
+        assertAllZero(erasure.erase(UUID.randomUUID(),owner.id(),Scope.CUSTOMER));
+        assertEquals(2000,r.balance(owner,"available_paise"));assertEquals(2000,r.balance(owner,"pending_paise"));
         assertEquals(rewards,r.db.rows("SELECT * FROM referral_schema.reward ORDER BY id"));assertTrue(active(owner));
         // Once the reward is credited it is available balance, which ALL forfeits.
         r.mature(order,0);
         assertEquals(0,r.db.count("SELECT count(*) FROM referral_schema.reward WHERE beneficiary_id=? AND status='PENDING'",owner.id()));
+        assertEquals(4000,r.balance(owner,"available_paise"));
         assertTrue(erasure.blockers(owner.id(),Scope.ALL).isEmpty());
         assertEquals(Map.of("journal",1,"member",1),erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL).counts());
         assertEquals(0,r.balance(owner,"available_paise"));assertFalse(active(owner));
@@ -172,11 +174,14 @@ class AccountErasureIT {
         assertEquals(member,memberJson(owner.id()));
         assertEquals(journal,journalRows());assertEquals(audit,r.db.count("SELECT count(*) FROM referral_schema.audit"));
     }
-    @Test void customerScopeKeepsTheCodeAndChefScopeChangesNothing() {
-        var owner=memberWithCredit();long journal=journalRows();
-        assertAllZero(erasure.erase(UUID.randomUUID(),owner.id(),Scope.CHEF));
-        assertEquals(2000,r.balance(owner,"available_paise"));assertEquals(journal,journalRows());assertTrue(active(owner));
-        assertEquals(Map.of("journal",1,"member",0),erasure.erase(UUID.randomUUID(),owner.id(),Scope.CUSTOMER).counts());
+    @Test void oneSideOnlyLeavesTheWalletAndTheCodeAlone() {
+        // The legacy wallet also holds withdrawable chef (UPLINE) earnings, so only a whole-account erase forfeits it.
+        var owner=memberWithCredit();long journal=journalRows();String member=memberJson(owner.id());
+        for(Scope scope:List.of(Scope.CHEF,Scope.CUSTOMER)) {
+            assertAllZero(erasure.erase(UUID.randomUUID(),owner.id(),scope));
+            assertEquals(2000,r.balance(owner,"available_paise"),scope.name());assertEquals(journal,journalRows(),scope.name());
+            assertEquals(member,memberJson(owner.id()),scope.name());
+        }
         assertTrue(active(owner));assertNotNull(r.member(owner),"the code of a one-side erase still works");
     }
     @Test void aCreditThatReturnsAfterEraseIsForfeitedUnderItsOwnKey() {
@@ -184,7 +189,7 @@ class AccountErasureIT {
         erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL);
         r.db.journal("spend-refund:test:1",owner.id(),0,300,0,"CHECKOUT_CLEARING",null,UUID.randomUUID());
         assertEquals(300,r.balance(owner,"available_paise"));
-        assertEquals(1,erasure.erase(UUID.randomUUID(),owner.id(),Scope.CUSTOMER).counts().get("journal"));
+        assertEquals(1,erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL).counts().get("journal"));
         assertEquals(0,r.balance(owner,"available_paise"));
         assertEquals(2,r.db.count("SELECT count(*) FROM referral_schema.journal WHERE event_key LIKE 'forfeit:%'"));
     }

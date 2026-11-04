@@ -16,16 +16,16 @@ import static in.craves.referral.infra.Store.number;
  * which stay on purpose: they stop a deleted person from joining again to claim the new-user offer. The journal is
  * append-only, so a forfeiture is a new entry, never an edit.
  *
- * <p>CUSTOMER forfeits the unused credit in the legacy referral wallet (owner decision 7): one journal entry that takes the
- * available balance to zero. Money still in flight (a cash-out reservation, a pending reward) is not unused credit and is left,
- * so the erase waits for it instead (CASH_OUT_IN_FLIGHT, REWARD_PENDING).
+ * <p>Referral is erased only with the whole account (ALL). ALL forfeits the unused credit in the legacy referral wallet (owner
+ * decision 7): one journal entry that takes the available balance to zero. Money still in flight (a cash-out reservation, a
+ * pending reward) is not unused credit and is left, so the erase waits for it instead (CASH_OUT_IN_FLIGHT, REWARD_PENDING).
  * The entry's counterparty is CHECKOUT_CLEARING because the finance mirror in integration-service accepts only the existing
- * counterparties; a dedicated forfeiture account needs a change there first.
+ * counterparties; a dedicated forfeiture account needs a change there first. ALL also retires the member's code: the member
+ * row is flagged inactive, which the registration path already refuses as a parent, and its source version is pinned to the
+ * maximum so no later auth status event can switch it back on.
  *
- * <p>ALL also retires the member's code: the member row is flagged inactive, which the registration path already refuses as a
- * parent, and its source version is pinned to the maximum so no later auth status event can switch it back on. The member row
- * is shared by both sides of a login that stays after a one-side erase (and by chef commissions), so CUSTOMER and CHEF alone
- * never retire it. CHEF has nothing of its own to erase here: chef cash earnings are reported as owed by integration-service.
+ * <p>CUSTOMER and CHEF leave the wallet and the member alone (DONE, zero counts): the wallet also holds withdrawable chef
+ * (UPLINE) earnings, and the member row is shared by both sides of a login that stays after a one-side erase.
  */
 @Service
 public class AccountErasureService {
@@ -45,8 +45,8 @@ public class AccountErasureService {
 
     /**
      * FRAUD_CASE_OPEN belongs to the person, not to one side, so every scope sees it; a reviewed case (cleared or confirmed) is history.
-     * CASH_OUT_IN_FLIGHT (CUSTOMER, ALL): a cash-out that is not PAID or RELEASED; its reserved money would be stranded, as the
-     * forfeiture leaves it alone. REWARD_PENDING (ALL only): a PENDING reward of a member that is still active and could still be
+     * CASH_OUT_IN_FLIGHT (ALL only, the scope that forfeits): a cash-out that is not PAID or RELEASED; its reserved money would be
+     * stranded, as the forfeiture leaves it alone. REWARD_PENDING (ALL only): a PENDING reward of a member that is still active and could still be
      * credited, which ALL is about to retire so that it never would be; with one side only the member stays, so the reward still
      * credits it. A member with a CONFIRMED fraud case is held for good (ProgramService.held), so its reward never settles and
      * must not block forever. The unfinished-cash-out statuses are the ones CashoutService counts as open.
@@ -59,7 +59,7 @@ public class AccountErasureService {
         if (db.count("SELECT count(*) FROM referral_schema.fraud_case WHERE user_id=? AND status='OPEN'", identity) > 0) {
             found.add(new Blocker("FRAUD_CASE_OPEN", "A referral fraud case for this person is still open; staff must review it before the account can be deleted"));
         }
-        if (scope != Scope.CHEF && db.count("SELECT count(*) FROM referral_schema.reservation WHERE user_id=? AND kind='CASHOUT' "
+        if (scope == Scope.ALL && db.count("SELECT count(*) FROM referral_schema.reservation WHERE user_id=? AND kind='CASHOUT' "
                 + "AND status IN ('RESERVED','APPROVED','SUBMITTED','UNKNOWN')", identity) > 0) {
             found.add(new Blocker("CASH_OUT_IN_FLIGHT", "A cash-out of this person's referral balance is not finished; it must be paid or released before the account can be deleted"));
         }
@@ -85,7 +85,7 @@ public class AccountErasureService {
             if (!blockers.isEmpty()) {
                 return new Result(false, null, blockers);
             }
-            int journal = scope == Scope.CHEF || wallet.isEmpty() ? 0 : forfeit(identity, requestId, number(wallet.getFirst(), "available_paise"));
+            int journal = scope != Scope.ALL || wallet.isEmpty() ? 0 : forfeit(identity, requestId, number(wallet.getFirst(), "available_paise"));
             int member = scope != Scope.ALL ? 0 : db.update(
                 "UPDATE referral_schema.member SET is_active=false,source_version=? WHERE user_id=? AND (is_active OR source_version<?)",
                 RETIRED_VERSION, identity, RETIRED_VERSION);

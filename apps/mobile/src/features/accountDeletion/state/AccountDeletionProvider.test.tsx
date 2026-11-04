@@ -6,6 +6,7 @@ import {AppApiError} from '../../../core/http/apiError';
 import {sessionManager} from '../../auth/api/sessionManager';
 import {accountDeletionApi} from '../api/accountDeletionApi';
 import {AccountDeletionProvider, useAccountDeletion} from './AccountDeletionProvider';
+import {useDeletionStripVisible} from './useDeletionStripVisible';
 
 let mockIdentity: Record<string, unknown> | null;
 
@@ -33,10 +34,12 @@ let tree: renderer.ReactTestRenderer;
 let deletion: ReturnType<typeof useAccountDeletion>;
 let insetsTop: number;
 let childMounts: number;
+let stripVisible: boolean;
 
 function Child() {
   deletion = useAccountDeletion();
   insetsTop = useSafeAreaInsets().top;
+  stripVisible = useDeletionStripVisible();
   React.useEffect(() => {
     childMounts += 1;
   }, []);
@@ -119,6 +122,24 @@ describe('AccountDeletionProvider', () => {
     expect(tree.root.findByType(StatusBar).props.barStyle).toBe('dark-content');
   });
 
+  it('tells the screens whether the strip is showing, so they can keep their status bar icons dark', async () => {
+    mockIdentity = identity({pendingDeletion: null});
+    mount();
+    expect(stripVisible).toBe(false);
+    mockIdentity = identity();
+    rerender();
+    expect(stripVisible).toBe(true);
+    // a notice keeps the strip up after the request is gone
+    mockIdentity = identity();
+    keep.mockResolvedValue({} as never);
+    await pressKeep();
+    mockIdentity = identity({pendingDeletion: null});
+    rerender();
+    expect(stripVisible).toBe(true);
+    act(() => jest.advanceTimersByTime(4000));
+    expect(stripVisible).toBe(false);
+  });
+
   it('does not rebuild the screens when the strip comes and goes', () => {
     mockIdentity = identity({pendingDeletion: null});
     mount();
@@ -198,6 +219,20 @@ describe('AccountDeletionProvider', () => {
     expect(await pressKeep()).toBe('failed');
     expect(await pressKeep()).toBe('kept');
     expect(keep).toHaveBeenCalledTimes(2);
+  });
+
+  it('reads as no strip outside the provider', () => {
+    function Probe() {
+      stripVisible = useDeletionStripVisible();
+      return null;
+    }
+    stripVisible = true;
+    let probe!: renderer.ReactTestRenderer;
+    act(() => {
+      probe = renderer.create(<Probe />);
+    });
+    expect(stripVisible).toBe(false);
+    act(() => probe.unmount());
   });
 
   it('can only be used inside the provider', () => {

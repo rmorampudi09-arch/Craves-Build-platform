@@ -93,6 +93,7 @@ import {
   useCustomerKitchenProfileQuery,
 } from '../query/kitchenProfileQueries';
 import {menuCategoryLabel} from '../../../shared/catalog/menuCategories';
+import {useDeletionStripVisible} from '../../accountDeletion/state/useDeletionStripVisible';
 
 type KitchenProfileRoute = RouteProp<
   CustomerDishDetailStackParamList,
@@ -169,6 +170,7 @@ export function CustomerKitchenProfileScreen() {
   const {width: windowWidth} = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const screenFocused = useIsFocused();
+  const stripVisible = useDeletionStripVisible();
   const photoTarget = useRef<View | null>(null);
 
   const profile = profileQuery.data;
@@ -501,7 +503,7 @@ export function CustomerKitchenProfileScreen() {
       backgroundColor={colors.white}
       edges={['bottom']}
       keyboardAvoiding={false}
-      statusBarStyle={onPhoto ? 'light-content' : 'dark-content'}
+      statusBarStyle={onPhoto && !stripVisible ? 'light-content' : 'dark-content'}
       testID="customer-kitchen-profile">
       <View style={styles.screen}>
         <ScrollView

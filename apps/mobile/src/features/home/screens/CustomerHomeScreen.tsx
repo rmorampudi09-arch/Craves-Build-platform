@@ -107,6 +107,7 @@ import {
   formatDishPrice,
 } from '../homePresentation';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
+import {useDeletionStripVisible} from '../../accountDeletion/state/useDeletionStripVisible';
 import {launchAlertErrorText, useLaunchAlert} from '../api/launchAlertApi';
 import {HomeComingSoonPage} from '../components/HomeComingSoonPage';
 import {TOP_KITCHENS_PAGE_SIZE} from '../components/HomePromoAndKitchens';
@@ -621,7 +622,9 @@ export function CustomerHomeScreen() {
   const launchAlert = useLaunchAlert(selectedLocation, noKitchensHere);
 
   // The coming-soon page is white, so it takes the dark status bar icons like the white header.
-  const darkStatusBar = headerWhite || noKitchensHere;
+  // The delete-request strip is pale amber, so it takes them too.
+  const stripVisible = useDeletionStripVisible();
+  const darkStatusBar = headerWhite || noKitchensHere || stripVisible;
   headerWhiteRef.current = darkStatusBar;
   useEffect(() => {
     if (homeFocusedRef.current) applyStatusBar(darkStatusBar);

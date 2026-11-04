@@ -25,6 +25,7 @@ import {deletionCopy} from '../domain/deletionCopy';
 import {bannerFor, keptNoticeFor} from '../domain/deletionModel';
 import type {PendingDeletion} from '../domain/deletionTypes';
 import {refreshAfterDeletionChange} from './refreshAfterDeletionChange';
+import {DeletionStripVisibleContext} from './useDeletionStripVisible';
 
 export type KeepOutcome = 'kept' | 'inProgress' | 'failed';
 
@@ -118,19 +119,21 @@ export function AccountDeletionProvider({children}: PropsWithChildren) {
 
   return (
     <AccountDeletionContext.Provider value={value}>
-      <View style={styles.fill}>
-        {showStrip ? <StatusBar barStyle="dark-content" /> : null}
-        <AccountDeletionBanner banner={banner} notice={notice} keeping={keeping} onKeep={keep} />
-        {/*
-          The strip pads the status bar, so the screens below start under it. Their own safe-area
-          provider measures its frame (it begins below the strip), which is why they get no top inset.
-          initialMetrics only covers the first frame; without a strip it inherits the parent's metrics.
-        */}
-        <SafeAreaProvider
-          initialMetrics={showStrip ? {frame, insets: {...insets, top: 0}} : undefined}>
-          {children}
-        </SafeAreaProvider>
-      </View>
+      <DeletionStripVisibleContext.Provider value={showStrip}>
+        <View style={styles.fill}>
+          {showStrip ? <StatusBar barStyle="dark-content" /> : null}
+          <AccountDeletionBanner banner={banner} notice={notice} keeping={keeping} onKeep={keep} />
+          {/*
+            The strip pads the status bar, so the screens below start under it. Their own safe-area
+            provider measures its frame (it begins below the strip), which is why they get no top inset.
+            initialMetrics only covers the first frame; without a strip it inherits the parent's metrics.
+          */}
+          <SafeAreaProvider
+            initialMetrics={showStrip ? {frame, insets: {...insets, top: 0}} : undefined}>
+            {children}
+          </SafeAreaProvider>
+        </View>
+      </DeletionStripVisibleContext.Provider>
     </AccountDeletionContext.Provider>
   );
 }

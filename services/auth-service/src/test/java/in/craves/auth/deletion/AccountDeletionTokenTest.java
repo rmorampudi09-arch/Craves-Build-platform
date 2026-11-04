@@ -83,7 +83,7 @@ class AccountDeletionTokenTest {
         jwt = new CravesJwtService(properties, new RsaKeyProvider(properties), mapper, Clock.systemUTC());
         var enabled = new AccountDeletionProperties();
         enabled.setEnabled(true);
-        deletionService = new AccountDeletionService(deletions, identities, roles, mock(DeletionNotices.class), enabled,
+        deletionService = new AccountDeletionService(deletions, identities, roles, mock(DeletionNotices.class), mock(AccountErasureClient.class), enabled,
             mock(PlatformTransactionManager.class), Clock.fixed(NOW, java.time.ZoneOffset.UTC), Runnable::run);
         authService = new AuthService(null, properties, identities, mock(AuthRoleRepository.class), roles, refreshes,
             mock(LoginAttemptRepository.class), mock(AuthAuditRepository.class), jwt, generator, hasher,

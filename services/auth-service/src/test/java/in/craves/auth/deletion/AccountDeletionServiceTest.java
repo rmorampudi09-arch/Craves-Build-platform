@@ -52,6 +52,7 @@ class AccountDeletionServiceTest {
     final AuthIdentityRepository identities = mock(AuthIdentityRepository.class);
     final AuthIdentityRoleRepository roles = mock(AuthIdentityRoleRepository.class);
     final DeletionNotices notices = mock(DeletionNotices.class);
+    final AccountErasureClient client = mock(AccountErasureClient.class);
     final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
     final AccountDeletionProperties properties = new AccountDeletionProperties();
     final List<Runnable> queued = new ArrayList<>();
@@ -69,7 +70,7 @@ class AccountDeletionServiceTest {
     }
 
     AccountDeletionService serviceWith(Executor executor) {
-        return new AccountDeletionService(deletions, identities, roles, notices, properties, transactions,
+        return new AccountDeletionService(deletions, identities, roles, notices, client, properties, transactions,
             Clock.fixed(NOW, ZoneOffset.UTC), executor);
     }
 

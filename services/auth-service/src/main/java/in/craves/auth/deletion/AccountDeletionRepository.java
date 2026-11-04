@@ -230,6 +230,16 @@ public class AccountDeletionRepository {
         return jdbc.query(sql.toString(), REQUEST, args.toArray());
     }
 
+    /**
+     * One auth_audit row for a staff read or decision. {@code identityId} is the person the request belongs to (null for the
+     * queue). {@code details} holds ids, codes and counts only: never a phone, email, name or typed text.
+     */
+    public void audit(UUID identityId, String action, UUID actorIdentityId, String details, UUID correlationId) {
+        jdbc.update("INSERT INTO auth_audit (id, identity_id, action, actor_identity_id, details, correlation_id, created_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, now())",
+            UUID.randomUUID(), identityId, action, actorIdentityId, details, correlationId.toString());
+    }
+
     private Optional<DeletionRequest> one(String where, Object... args) {
         return jdbc.query("SELECT " + REQUEST_COLUMNS + " FROM account_deletion_request WHERE " + where, REQUEST, args)
             .stream().findFirst();

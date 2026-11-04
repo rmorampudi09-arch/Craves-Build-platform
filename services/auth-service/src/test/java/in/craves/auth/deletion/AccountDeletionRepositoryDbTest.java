@@ -340,4 +340,21 @@ class AccountDeletionRepositoryDbTest {
         assertEquals(List.of(c.id()), next.stream().map(DeletionRequest::id).toList());
         assertEquals(List.of(b.id()), repo.page(RequestStatus.CANCELLED, null, null, 10).stream().map(DeletionRequest::id).toList());
     }
+
+    @Test void auditWritesOneAuthAuditRowForAPersonOrForTheQueue() {
+        UUID actor = identity(), person = identity(), correlation = UUID.randomUUID();
+
+        repo.audit(person, "ACCOUNT_DELETION_APPROVED", actor, "requestId=r;scope=CHEF", correlation);
+        repo.audit(null, "ACCOUNT_DELETION_READ", actor, "status=ANY;count=2", correlation);
+
+        var rows = jdbc.queryForList("SELECT identity_id, action, actor_identity_id, details FROM auth_audit WHERE correlation_id = ? ORDER BY action",
+            correlation.toString());
+        assertEquals(2, rows.size());
+        assertEquals(person, rows.get(0).get("identity_id"));
+        assertEquals("ACCOUNT_DELETION_APPROVED", rows.get(0).get("action"));
+        assertEquals(actor, rows.get(0).get("actor_identity_id"));
+        assertEquals("requestId=r;scope=CHEF", rows.get(0).get("details"));
+        assertNull(rows.get(1).get("identity_id"));
+        assertEquals("status=ANY;count=2", rows.get(1).get("details"));
+    }
 }

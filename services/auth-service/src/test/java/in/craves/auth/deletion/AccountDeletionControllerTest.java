@@ -107,7 +107,7 @@ class AccountDeletionControllerTest {
     void switchedOffAnswers503BeforeTheBodyIsRead() {
         var off = new AccountDeletionController(new AccountDeletionService(mock(AccountDeletionRepository.class),
             mock(AuthIdentityRepository.class), mock(AuthIdentityRoleRepository.class), mock(DeletionNotices.class),
-            new AccountDeletionProperties(), mock(PlatformTransactionManager.class), Clock.systemUTC(), Runnable::run),
+            mock(AccountErasureClient.class), new AccountDeletionProperties(), mock(PlatformTransactionManager.class), Clock.systemUTC(), Runnable::run),
             new ObjectMapper());
 
         for (var call : List.<Runnable>of(

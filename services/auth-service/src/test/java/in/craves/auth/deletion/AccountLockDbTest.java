@@ -158,7 +158,7 @@ class AccountLockDbTest {
         var generator = mock(RefreshTokenGenerator.class);
         when(generator.generate()).thenReturn("synthetic-refresh");
         var accountDeletions = new AccountDeletionService(new AccountDeletionRepository(jdbc), identities, roleRows, mock(DeletionNotices.class),
-            new AccountDeletionProperties(), transactions, Clock.fixed(NOW, ZoneOffset.UTC), Runnable::run);
+            mock(AccountErasureClient.class), new AccountDeletionProperties(), transactions, Clock.fixed(NOW, ZoneOffset.UTC), Runnable::run);
         FirebaseApp app = mock(FirebaseApp.class);
         var auth = new AuthService(app, new JwtProperties(), identities, roleCatalog, roleRows, mock(RefreshSessionRepository.class),
             mock(LoginAttemptRepository.class), mock(AuthAuditRepository.class), jwt, generator, new TokenHasher(),

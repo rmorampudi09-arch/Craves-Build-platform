@@ -6,6 +6,7 @@ in.craves.auth.admin.AdminAccountInterventionController
 in.craves.auth.admin.InternalAdminRoleController
 in.craves.auth.admin.explorer.AdminExplorerController
 in.craves.auth.deletion.AccountDeletionController
+in.craves.auth.deletion.AdminAccountDeletionController
 in.craves.auth.email.EmailVerificationController
 in.craves.auth.referrals.ReferralAccessController
 in.craves.auth.referrals.ReferralEnrollmentController

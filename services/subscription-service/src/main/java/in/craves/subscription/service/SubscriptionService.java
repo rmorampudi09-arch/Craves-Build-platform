@@ -125,6 +125,9 @@ public class SubscriptionService {
         CurrentUser user
     ) {
         requireRole(user, "CUSTOMER");
+        if (user.deletionPendingFor("CUSTOMER")) {
+            throw ApiException.conflict("ACCOUNT_DELETION_PENDING", "Your account is set to be deleted. Tap Keep my account to start a meal plan.");
+        }
         String normalizedKey = normalizeIdempotencyKey(idempotencyKey);
 
         SubscriptionResponse existing = repository.findSubscriptionByEnrollmentKey(user.identityId(), normalizedKey)

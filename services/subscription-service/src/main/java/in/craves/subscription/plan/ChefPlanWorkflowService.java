@@ -120,6 +120,9 @@ public class ChefPlanWorkflowService {
 
     public ChefPlanResponse setAcceptingSubscribers(UUID planId, boolean accepting, CurrentUser user) {
         requireChef(user);
+        if (accepting && user.deletionPendingFor("CHEF")) {
+            throw ApiException.conflict("ACCOUNT_DELETION_PENDING", "Your account is set to be deleted. Tap Keep my account to take new subscribers.");
+        }
         ChefPlanResponse plan = repository.requireOwned(planId, user.identityId());
         if (!"ACTIVE".equals(plan.status())) {
             throw ApiException.conflict("PLAN_NOT_ACTIVE", "Only active meal plans can change whether they accept new subscribers");

@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Account deletion. CUSTOMER: plans are cancelled at request (prepare); erase waits while any still runs, then blanks the
  * customer's free text. CHEF: plans stop taking subscribers at request and are deactivated at erase. Invoices and day
- * credits are never changed. Every step is safe to repeat.
+ * credits are never changed. Release (the person kept the account) reopens the plans prepare closed. Every step is safe to repeat.
  */
 @Service
 public class AccountErasureService {
@@ -30,6 +30,14 @@ public class AccountErasureService {
     public static final String DELETION_CANCEL_REASON = "Account deletion requested";
     private static final Logger LOGGER = LoggerFactory.getLogger(AccountErasureService.class);
     private static final String SCHEMA = "subscription_schema.";
+    /** The reason on the audit row prepare writes when it closes a plan; release finds the plans to reopen by it. */
+    private static final String CLOSED_REASON = "Chef account deletion requested";
+    private static final String REOPENED_REASON = "Account deletion cancelled";
+    /** A checkout still unpaid after a day counts as abandoned, the same window as order-service; a payment that lands later finds an anonymised subscription. */
+    static final int PENDING_PAYMENT_PAYABLE_HOURS = 24;
+    /** The first checkout of a plan (alias cs) that nobody paid in time: it blocks nothing and is anonymised like a cancelled one. */
+    private static final String ABANDONED_CHECKOUT = "(cs.status = 'PENDING_PAYMENT' AND cs.created_at <= now() - interval '"
+        + PENDING_PAYMENT_PAYABLE_HOURS + " hours')";
 
     private final JdbcTemplate db;
     private final SubscriptionLifecycleService lifecycle;
@@ -44,9 +52,12 @@ public class AccountErasureService {
         if (scope != Scope.CHEF) {
             // Anything not finished waits, even if it started after prepare cancelled the plans (a bill paid during the 30 days).
             addIfAny(blockers, "SUBSCRIPTION_STILL_ACTIVE", "meal plan subscription(s) are still running", count(
-                "customer_subscription WHERE customer_identity_id = ? AND status NOT IN ('CANCELLED', 'EXPIRED')", identityId));
+                "customer_subscription cs WHERE cs.customer_identity_id = ? AND cs.status NOT IN ('CANCELLED', 'EXPIRED') AND NOT "
+                    + ABANDONED_CHECKOUT, identityId));
             addIfAny(blockers, "SUBSCRIPTION_UNPAID_INVOICE", "meal plan bill(s) are still waiting for payment", count(
-                "subscription_invoice WHERE customer_identity_id = ? AND status IN ('PAYMENT_REQUESTED', 'PAYMENT_PENDING')", identityId));
+                "subscription_invoice i JOIN " + SCHEMA + "customer_subscription cs ON cs.id = i.subscription_id "
+                    + "WHERE i.customer_identity_id = ? AND i.status IN ('PAYMENT_REQUESTED', 'PAYMENT_PENDING') AND NOT "
+                    + ABANDONED_CHECKOUT, identityId));
             addIfAny(blockers, "DAY_CREDIT_CHOICE_PENDING", "refund-or-extend choice(s) for missed or paused days are still open", count(
                 "subscription_day_credit dc JOIN " + SCHEMA + "customer_subscription cs ON cs.id = dc.subscription_id "
                     + "WHERE cs.customer_identity_id = ? AND dc.status = 'PENDING_CHOICE'", identityId));
@@ -71,6 +82,12 @@ public class AccountErasureService {
             counts.put("customer_subscription", cancelSubscriptions(identityId));
         }
         return ErasureResponse.done(counts);
+    }
+
+    /** The person kept their account: chef plans go back to taking subscribers. Customer plans were cancelled for good and stay so. */
+    public ErasureResponse release(UUID identityId, Scope scope, UUID requestId) {
+        int reopened = scope == Scope.CUSTOMER ? 0 : reopenPlans(identityId);
+        return ErasureResponse.done(Map.of("subscription_plan", reopened));
     }
 
     @Transactional
@@ -132,8 +149,23 @@ public class AccountErasureService {
             "WITH closed AS (UPDATE " + SCHEMA + "subscription_plan SET accepting_subscribers = FALSE, updated_at = now() "
                 + "WHERE chef_identity_id = ? AND accepting_subscribers RETURNING id, status) "
                 + "INSERT INTO " + SCHEMA + "subscription_plan_audit (id, plan_id, actor_identity_id, action, old_status, new_status, reason, created_at) "
-                + "SELECT gen_random_uuid(), id, ?, 'CHEF_ACCEPTING_OFF', status, status, 'Chef account deletion requested', now() FROM closed",
-            chefId, chefId);
+                + "SELECT gen_random_uuid(), id, ?, 'CHEF_ACCEPTING_OFF', status, status, ?, now() FROM closed",
+            chefId, chefId, CLOSED_REASON);
+    }
+
+    /**
+     * One statement. Only a plan whose latest accepting change is prepare's close comes back: one the chef closed themselves,
+     * or closed again after prepare, stays closed; so does a plan an admin has since retired.
+     */
+    private int reopenPlans(UUID chefId) {
+        return db.update(
+            "WITH reopened AS (UPDATE " + SCHEMA + "subscription_plan p SET accepting_subscribers = TRUE, updated_at = now() "
+                + "WHERE p.chef_identity_id = ? AND p.status = 'ACTIVE' AND NOT p.accepting_subscribers "
+                + "AND (SELECT a.reason FROM " + SCHEMA + "subscription_plan_audit a WHERE a.plan_id = p.id "
+                + "AND a.action IN ('CHEF_ACCEPTING_ON', 'CHEF_ACCEPTING_OFF') ORDER BY a.created_at DESC LIMIT 1) = ? RETURNING p.id) "
+                + "INSERT INTO " + SCHEMA + "subscription_plan_audit (id, plan_id, actor_identity_id, action, old_status, new_status, reason, created_at) "
+                + "SELECT gen_random_uuid(), id, ?, 'CHEF_ACCEPTING_ON', 'ACTIVE', 'ACTIVE', ?, now() FROM reopened",
+            chefId, CLOSED_REASON, chefId, REOPENED_REASON);
     }
 
     /** INACTIVE is the status an admin gives a retired plan; the old status is read from the row as it was before the update. */

@@ -8,9 +8,11 @@ ALTER TABLE fleet_schema.dispatch_policy
 -- Before any policy is published (a fresh install) the two lines join the draft riders are shown and no version is spent.
 -- Once a policy is published, the one riders are shown is copied as 2026-11-v2, published, starting 14 days from the
 -- deploy (the notice riders are owed). GOPI: the copy takes its timers from whatever policy is shown at deploy time.
+-- A policy already published to start later than now (ops scheduled a change) is never overtaken: then nothing is
+-- copied, a NOTICE says so, and ops sets the next version with the lines.
 DO $$
 DECLARE
-    source VARCHAR(40);
+    copy fleet_schema.dispatch_policy%ROWTYPE;
 BEGIN
     IF EXISTS (SELECT 1 FROM fleet_schema.dispatch_policy WHERE version = '2026-11-v2' OR joint_matching) THEN
         RETURN;
@@ -20,25 +22,24 @@ BEGIN
         WHERE version = (SELECT version FROM fleet_schema.dispatch_policy WHERE status = 'DRAFT' ORDER BY created_at DESC LIMIT 1);
         RETURN;
     END IF;
-    SELECT version INTO source FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED' AND withdrawn_at IS NULL
-    ORDER BY CASE WHEN effective_from <= now() THEN 0 ELSE 1 END,
-             CASE WHEN effective_from <= now() THEN effective_from END DESC NULLS LAST,
-             effective_from ASC
-    LIMIT 1;
-    IF source IS NULL THEN
+    IF EXISTS (SELECT 1 FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED' AND withdrawn_at IS NULL AND effective_from > now()) THEN
+        RAISE NOTICE 'V184: a dispatch policy is already published to start later; 2026-11-v2 was not created. Set the next version with the lines.';
         RETURN;
     END IF;
-    CREATE TEMP TABLE policy_copy ON COMMIT DROP AS SELECT * FROM fleet_schema.dispatch_policy WHERE version = source;
-    UPDATE policy_copy SET
-        version = '2026-11-v2',
-        status = 'PUBLISHED',
-        published_at = now(),
-        published_by = NULL,
-        effective_from = now() + INTERVAL '14 days',
-        withdrawn_at = NULL,
-        withdrawn_by = NULL,
-        created_at = now(),
-        joint_matching = true,
-        next_order_offers = true;
-    INSERT INTO fleet_schema.dispatch_policy SELECT * FROM policy_copy;
+    SELECT * INTO copy FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED' AND withdrawn_at IS NULL AND effective_from <= now()
+    ORDER BY effective_from DESC, created_at DESC LIMIT 1;
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
+    copy.version := '2026-11-v2';
+    copy.status := 'PUBLISHED';
+    copy.published_at := now();
+    copy.published_by := NULL;
+    copy.effective_from := now() + INTERVAL '14 days';
+    copy.withdrawn_at := NULL;
+    copy.withdrawn_by := NULL;
+    copy.created_at := now();
+    copy.joint_matching := true;
+    copy.next_order_offers := true;
+    INSERT INTO fleet_schema.dispatch_policy VALUES (copy.*);
 END $$;

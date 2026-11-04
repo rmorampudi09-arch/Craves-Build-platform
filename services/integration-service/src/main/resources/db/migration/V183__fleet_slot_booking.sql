@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS fleet_schema.slot_booking (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS slot_booking_one_per_rider ON fleet_schema.slot_booking (capacity_id, rider_id) WHERE status = 'BOOKED';
 CREATE INDEX IF NOT EXISTS slot_booking_rider ON fleet_schema.slot_booking (rider_id, booked_at);
+-- The 5-minute no-show job joins open bookings to their rider_slot.
+CREATE INDEX IF NOT EXISTS slot_booking_open_slot ON fleet_schema.slot_booking (rider_slot_id) WHERE status = 'BOOKED';
 
 CREATE TABLE IF NOT EXISTS fleet_schema.slot_standby (
     id                  UUID PRIMARY KEY,
@@ -67,16 +69,21 @@ CREATE TABLE IF NOT EXISTS fleet_schema.slot_standby (
     promoted_booking_id UUID        REFERENCES fleet_schema.slot_booking (id),
     UNIQUE (capacity_id, rider_id)
 );
+-- /slots reads a rider's open standbys.
+CREATE INDEX IF NOT EXISTS slot_standby_rider_open ON fleet_schema.slot_standby (rider_id) WHERE promoted_booking_id IS NULL;
 
 -- The slot rules as riders' terms. Before the first rate card is published (a fresh install, the pilot not yet live) the
 -- three slot lines join the current draft's summary, so ops publishes them with the first card and no version is spent.
 -- Once a card is published, the card riders see now is copied as 2026-11-v1 with the lines added, published 14 days ahead
 -- (riders get the notice as Terms.upcoming, the 14-day rule from REDESIGN.md).
 -- GOPI: if the first rate card was published before this lands, this copies it and the copy starts 14 days after the deploy.
+-- A card already published to start later than now (ops scheduled a change) is never overtaken: then nothing is copied,
+-- a NOTICE says so, and ops adds the slot lines to that card by hand.
 DO $$
 DECLARE
     source    VARCHAR(40);
     anyPub    BOOLEAN;
+    copy      fleet_schema.rate_card%ROWTYPE;
     slotLines JSONB := jsonb_build_array(
         'Booked peak slots: book a lunch or dinner slot in a cluster near you from the Slots tab. Riders who completed a slot in the last 14 days book from Thursday 10 am; everyone from Friday 10 am.',
         'In a booked slot you are paid at least the slot''s hourly rate (₹60 to ₹150 an hour, shown on the slot) for the time you are online within 1.5 km of the cluster, even when orders are slow.',
@@ -90,22 +97,26 @@ BEGIN
     IF NOT anyPub THEN
         UPDATE fleet_schema.rate_card
         SET summary_of_changes = jsonb_set(summary_of_changes, '{en}', COALESCE(summary_of_changes -> 'en', '[]'::jsonb) || slotLines)
-        WHERE version = (SELECT version FROM fleet_schema.rate_card WHERE status = 'DRAFT' ORDER BY created_at DESC LIMIT 1);
+        WHERE version = (SELECT version FROM fleet_schema.rate_card WHERE status = 'DRAFT' ORDER BY created_at DESC LIMIT 1)
+          AND jsonb_typeof(summary_of_changes) = 'object';
         RETURN;
     END IF;
-    SELECT version INTO source FROM fleet_schema.rate_card WHERE status = 'PUBLISHED'
-    ORDER BY CASE WHEN effective_from <= now() THEN 0 ELSE 1 END,
-             CASE WHEN effective_from <= now() THEN effective_from END DESC NULLS LAST,
-             effective_from ASC
-    LIMIT 1;
-    CREATE TEMP TABLE slot_terms_copy ON COMMIT DROP AS SELECT * FROM fleet_schema.rate_card WHERE version = source;
-    UPDATE slot_terms_copy SET
-        version = '2026-11-v1',
-        status = 'PUBLISHED',
-        published_at = now(),
-        published_by = NULL,
-        effective_from = now() + INTERVAL '14 days',
-        created_at = now(),
-        summary_of_changes = jsonb_set(summary_of_changes, '{en}', COALESCE(summary_of_changes -> 'en', '[]'::jsonb) || slotLines);
-    INSERT INTO fleet_schema.rate_card SELECT * FROM slot_terms_copy;
+    IF EXISTS (SELECT 1 FROM fleet_schema.rate_card WHERE status = 'PUBLISHED' AND effective_from > now()) THEN
+        RAISE NOTICE 'V183: a rate card is already published to start later; the slot rules were not copied. Add them to that card.';
+        RETURN;
+    END IF;
+    SELECT * INTO copy FROM fleet_schema.rate_card WHERE status = 'PUBLISHED' AND effective_from <= now()
+    ORDER BY effective_from DESC, created_at DESC LIMIT 1;
+    IF jsonb_typeof(copy.summary_of_changes) <> 'object' THEN
+        RAISE NOTICE 'V183: rate card % has no summary object; the slot rules were not copied.', copy.version;
+        RETURN;
+    END IF;
+    copy.version := '2026-11-v1';
+    copy.status := 'PUBLISHED';
+    copy.published_at := now();
+    copy.published_by := NULL;
+    copy.effective_from := now() + INTERVAL '14 days';
+    copy.created_at := now();
+    copy.summary_of_changes := jsonb_set(copy.summary_of_changes, '{en}', COALESCE(copy.summary_of_changes -> 'en', '[]'::jsonb) || slotLines);
+    INSERT INTO fleet_schema.rate_card VALUES (copy.*);
 END $$;

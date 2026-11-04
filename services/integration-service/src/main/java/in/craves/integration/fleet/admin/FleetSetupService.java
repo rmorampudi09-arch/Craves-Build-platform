@@ -217,7 +217,11 @@ public class FleetSetupService {
             args.add(byTravelTime);
             // The 2026-11-v2 rule lines stay as riders see them. shortcut: ops cannot set them from this API, add them to
             // DispatchPolicyInput when the dispatcher acts on them.
-            DispatchRules shown = policies.dispatchRules(null);
+            // From the latest published version (one scheduled ahead included), so a version set during the 14 days before
+            // 2026-11-v2 starts does not drop its lines; before any is published, from the draft riders see.
+            DispatchRules shown = jdbc.query("SELECT joint_matching, next_order_offers FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED' "
+                + "AND withdrawn_at IS NULL ORDER BY effective_from DESC, created_at DESC LIMIT 1", (row, n) -> new DispatchRules(0, 0, 0, false,
+                row.getBoolean("joint_matching"), row.getBoolean("next_order_offers"))).stream().findFirst().orElseGet(() -> policies.dispatchRules(null));
             args.add(shown.jointMatching());
             args.add(shown.nextOrderOffers());
             args.add(admin.write(ranges));

@@ -27,6 +27,13 @@ import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import org.springframework.transaction.support.TransactionTemplate;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Future;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.CountDownLatch;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,6 +74,8 @@ class FleetSlotBookingDatabaseTest {
         settlement = new FleetSlotService(fleet.db, policies, admin, fleet.transactions);
         ravi = fleet.rider("Ravi Kumar", "+919876543210");
         priya = fleet.rider("Priya", "+919876543211");
+        // Only an active rider holds a place (as only an active rider starts a shift).
+        fleet.db.update("UPDATE fleet_schema.rider SET status = 'ACTIVE' WHERE id IN (?, ?)", ravi, priya);
     }
 
     /** perDay orders a day at the IST hour over the 14 days before now, at (lat, lng), recorded as the dispatch chain records them. */
@@ -233,6 +242,62 @@ class FleetSlotBookingDatabaseTest {
             .containsExactly("2026-10-v1");
         assertThat(cards.get(0).get("status")).isEqualTo("DRAFT");
         assertThat((String) cards.get(0).get("summary")).contains("Booked peak slots").contains("At most 6 booked hours a day");
+    }
+
+    @Test
+    void twoRidersRacingForTheLastPlaceGetOneBookingAndOneSlotFull() throws Exception {
+        UUID dinner = approvedDinner(at(2026, 11, 9, 6, 0));
+        slots.adjust(ops, UUID.randomUUID(), dinner, new CapacityInput(1, null));
+        TransactionTemplate tx = new TransactionTemplate(fleet.transactions);
+        CountDownLatch go = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        List<Future<Object>> results = new ArrayList<>();
+        for (UUID rider : List.of(ravi, priya)) {
+            results.add(pool.submit(() -> {
+                go.await();
+                try {
+                    return tx.execute(status -> slots.book(rider, dinner, FRIDAY_NOON));
+                } catch (FleetApiException refused) {
+                    return refused.code();
+                }
+            }));
+        }
+        go.countDown();
+        List<Object> outcomes = new ArrayList<>();
+        for (Future<Object> result : results) {
+            outcomes.add(result.get(30, TimeUnit.SECONDS));
+        }
+        pool.shutdown();
+        assertThat(outcomes.stream().filter(Booking.class::isInstance)).as("exactly one place").hasSize(1);
+        assertThat(outcomes).contains("SLOT_FULL");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.slot_booking WHERE capacity_id = ? AND status = 'BOOKED'", Integer.class, dinner))
+            .isEqualTo(1);
+    }
+
+    @Test
+    void onlyActiveRidersHoldPlacesStandbyNeedsNoPlaceAndAnOpsCancelFreesThePlace() {
+        UUID dinner = approvedDinner(at(2026, 11, 9, 6, 0));
+        slots.adjust(ops, UUID.randomUUID(), dinner, new CapacityInput(1, null));
+        refused(() -> slots.adjust(ops, UUID.randomUUID(), dinner, new CapacityInput(501, null)), 400, "VALIDATION_FAILED");
+        refused(() -> slots.capacities(LocalDate.of(1999, 1, 1), LocalDate.of(1999, 1, 2)), 400, "VALIDATION_FAILED");
+        fleet.db.update("UPDATE fleet_schema.rider SET status = 'SUSPENDED' WHERE id = ?", priya);
+        refused(() -> slots.book(priya, dinner, FRIDAY_NOON), 403, "RIDER_NOT_ACTIVE");
+        Booking ravis = slots.book(ravi, dinner, FRIDAY_NOON);
+        // Holding the place, Ravi cannot also queue for it; Priya, suspended, queues but is skipped when a place frees.
+        refused(() -> slots.standby(ravi, dinner, FRIDAY_NOON), 409, "SLOT_ALREADY_BOOKED");
+        slots.standby(priya, dinner, FRIDAY_NOON);
+        // Ops cancels Ravi's slot: the no-show job ends the booking and offers the place to the list (Priya is skipped).
+        fleet.db.update("UPDATE fleet_schema.rider_slot SET status = 'CANCELLED', cancelled_at = now(), cancelled_reason = 'Ops' WHERE rider_id = ?", ravi);
+        slots.markNoShows(FRIDAY_NOON.plusSeconds(60));
+        assertThat(fleet.db.queryForObject("SELECT status FROM fleet_schema.slot_booking WHERE id = ?", String.class, ravis.bookingId())).isEqualTo("CANCELLED");
+        assertThat(slots.list(ravi, FRIDAY_NOON.plusSeconds(120)).slots().get(0).placesLeft()).isEqualTo(1);
+        assertThat(fleet.db.queryForObject("SELECT promoted_booking_id FROM fleet_schema.slot_standby WHERE rider_id = ?", UUID.class, priya)).isNull();
+        // Active again, Priya books the freed place, then cancels and rejoins the list once it is full again.
+        fleet.db.update("UPDATE fleet_schema.rider SET status = 'ACTIVE' WHERE id = ?", priya);
+        Booking priyas = slots.book(priya, dinner, FRIDAY_NOON.plusSeconds(180));
+        slots.cancel(priya, priyas.bookingId(), FRIDAY_NOON.plusSeconds(240));
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.slot_booking WHERE rider_id = ? AND status = 'BOOKED'", Integer.class, priya))
+            .as("cancelling never re-books the same rider from their own standby row").isZero();
     }
 
     private static void refused(Runnable call, int status, String code) {

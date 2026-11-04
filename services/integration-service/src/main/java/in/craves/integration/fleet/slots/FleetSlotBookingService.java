@@ -28,6 +28,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -72,6 +74,7 @@ public class FleetSlotBookingService {
     static final long RATE_MIN_PAISE = 6000;
     static final long RATE_MAX_PAISE = 15000;
     static final int MAX_HOURS_PER_DAY = 6;
+    static final int MAX_PLACES = 500;
     static final int LOOKBACK_DAYS = 14;
     static final int NO_SHOW_GRACE_MINUTES = 15;
     static final int NO_SHOW_LIMIT = 2;
@@ -147,13 +150,13 @@ public class FleetSlotBookingService {
                 // The locality's name when the orders carry one; else the name the cluster already has.
                 jdbc.update("UPDATE fleet_schema.slot_cluster SET name = ?, centre_lat = ?, centre_lng = ?, cells = CAST(? AS jsonb), "
                     + "lunch_orders_per_hour = ?, dinner_orders_per_hour = ?, updated_at = now() WHERE id = ?",
-                    cluster.area() == null ? nearest.get("name") : cluster.area(), cluster.lat(), cluster.lng(), cluster.cellsJson(),
+                    clusterName(cluster, (String) nearest.get("name")), cluster.lat(), cluster.lng(), cluster.cellsJson(),
                     cluster.lunchPerHour(), cluster.dinnerPerHour(), id);
             } else {
                 int n = next++;
                 jdbc.update("INSERT INTO fleet_schema.slot_cluster (id, n, name, centre_lat, centre_lng, radius_m, cells, lunch_orders_per_hour, "
                     + "dinner_orders_per_hour) VALUES (?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?, ?)", UUID.randomUUID(), n,
-                    cluster.area() == null ? "Cluster " + n : cluster.area(), cluster.lat(), cluster.lng(), ZONE_RADIUS_M, cluster.cellsJson(),
+                    clusterName(cluster, "Cluster " + n), cluster.lat(), cluster.lng(), ZONE_RADIUS_M, cluster.cellsJson(),
                     cluster.lunchPerHour(), cluster.dinnerPerHour());
             }
         }
@@ -376,7 +379,7 @@ public class FleetSlotBookingService {
         jdbc.update("UPDATE fleet_schema.slot_booking SET status = 'CANCELLED', cancelled_at = ? WHERE id = ?", Timestamp.from(now), bookingId);
         jdbc.update("UPDATE fleet_schema.rider_slot SET status = 'CANCELLED', cancelled_at = ?, cancelled_reason = 'Cancelled by the rider' "
             + "WHERE id = ? AND status = 'BOOKED'", Timestamp.from(now), booking.get("rider_slot_id"));
-        promote((UUID) booking.get("capacity_id"), now);
+        promote((UUID) booking.get("capacity_id"), riderId, now);
         return read(bookingId);
     }
 
@@ -386,7 +389,13 @@ public class FleetSlotBookingService {
         if (capacity.booked() < capacity.places()) {
             throw FleetApiException.conflict("SLOT_HAS_PLACES", "This slot still has places: book it instead.");
         }
-        jdbc.update("INSERT INTO fleet_schema.slot_standby (id, capacity_id, rider_id) VALUES (?, ?, ?) ON CONFLICT (capacity_id, rider_id) DO NOTHING",
+        if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.slot_booking WHERE capacity_id = ? AND rider_id = ? "
+            + "AND status = 'BOOKED')", Boolean.class, capacityId, riderId))) {
+            throw FleetApiException.conflict("SLOT_ALREADY_BOOKED", "You already have this slot.");
+        }
+        // A rider promoted earlier who cancelled joins the end of the list again.
+        jdbc.update("INSERT INTO fleet_schema.slot_standby (id, capacity_id, rider_id) VALUES (?, ?, ?) ON CONFLICT (capacity_id, rider_id) "
+            + "DO UPDATE SET promoted_booking_id = NULL, created_at = now() WHERE fleet_schema.slot_standby.promoted_booking_id IS NOT NULL",
             UUID.randomUUID(), capacityId, riderId);
         int position = jdbc.queryForObject("SELECT count(*) FROM fleet_schema.slot_standby WHERE capacity_id = ? AND promoted_booking_id IS NULL "
             + "AND created_at <= (SELECT created_at FROM fleet_schema.slot_standby WHERE capacity_id = ? AND rider_id = ?)", Integer.class,
@@ -420,6 +429,13 @@ public class FleetSlotBookingService {
         }
         jdbc.update("UPDATE fleet_schema.slot_booking b SET status = 'COMPLETED' FROM fleet_schema.rider_slot s "
             + "WHERE s.id = b.rider_slot_id AND b.status = 'BOOKED' AND s.status = 'COMPLETED'");
+        // Ops cancelled the rider_slot (FleetSlotService.cancel): the booking ends and the place goes to the standby list.
+        List<UUID> freed = jdbc.queryForList("UPDATE fleet_schema.slot_booking b SET status = 'CANCELLED', cancelled_at = ? FROM fleet_schema.rider_slot s "
+            + "WHERE s.id = b.rider_slot_id AND b.status = 'BOOKED' AND s.status = 'CANCELLED' AND b.no_show_at IS NULL RETURNING b.capacity_id",
+            UUID.class, Timestamp.from(now));
+        for (UUID capacityId : new LinkedHashSet<>(freed)) {
+            promote(capacityId, null, now);
+        }
         return marked;
     }
 
@@ -428,7 +444,7 @@ public class FleetSlotBookingService {
     /** The windows starting on the IST dates from to to (at most 31 days), with bookings and standbys counted. */
     @Transactional(readOnly = true)
     public CapacityPage capacities(LocalDate from, LocalDate to) {
-        if (from == null || to == null || to.isBefore(from) || ChronoUnit.DAYS.between(from, to) > 30) {
+        if (from == null || to == null || to.isBefore(from) || ChronoUnit.DAYS.between(from, to) > 30 || from.getYear() < 2026 || to.getYear() > 2100) {
             throw FleetApiException.invalid("Choose up to 31 days, from before to.");
         }
         return new CapacityPage(jdbc.query(CAPACITY + "WHERE c.starts_at >= ? AND c.starts_at < ? ORDER BY c.starts_at, k.n LIMIT 1000",
@@ -454,8 +470,9 @@ public class FleetSlotBookingService {
     /** Ops sets the places and the rate; the rate stays inside the rate card's declared range and ₹60 to ₹150. */
     @Transactional
     public Object adjust(Admin by, UUID key, UUID capacityId, CapacityInput input) {
-        if (input == null || (input.places() == null && input.ratePerHourPaise() == null) || (input.places() != null && input.places() < 0)) {
-            throw FleetApiException.invalid("Give the places (0 or more), the rate, or both.");
+        if (input == null || (input.places() == null && input.ratePerHourPaise() == null)
+            || (input.places() != null && (input.places() < 0 || input.places() > MAX_PLACES))) {
+            throw FleetApiException.invalid("Give the places (0 to " + MAX_PLACES + "), the rate, or both.");
         }
         if (input.ratePerHourPaise() != null) {
             long rate = input.ratePerHourPaise();
@@ -481,8 +498,7 @@ public class FleetSlotBookingService {
 
     /** The capacity, row-locked, once it is approved, in the future and open to this rider's wave. */
     private Capacity lockedCapacity(UUID capacityId, UUID riderId, Instant now) {
-        Capacity capacity = jdbc.query(CAPACITY + "WHERE c.id = ? FOR UPDATE OF c", (row, n) -> capacity(row), capacityId).stream().findFirst()
-            .orElseThrow(() -> FleetApiException.notFound("CAPACITY_NOT_FOUND", "No such slot."));
+        Capacity capacity = lockAndRead(capacityId).orElseThrow(() -> FleetApiException.notFound("CAPACITY_NOT_FOUND", "No such slot."));
         if (capacity.approvedAt() == null) {
             throw FleetApiException.notFound("CAPACITY_NOT_FOUND", "No such slot.");
         }
@@ -500,8 +516,10 @@ public class FleetSlotBookingService {
     /** Books riderId into a capacity that has a place: the hours and overlap rules, then the rider_slot and the booking. */
     private Booking bookInto(Capacity capacity, UUID riderId, Instant now) {
         // The rider row lock serialises one rider's bookings, as FleetSlotService does for ops slots.
-        if (jdbc.queryForList("SELECT 1 FROM fleet_schema.rider WHERE id = ? FOR UPDATE", riderId).isEmpty()) {
-            throw FleetApiException.notFound("RIDER_NOT_FOUND", "No such rider.");
+        String status = jdbc.queryForList("SELECT status FROM fleet_schema.rider WHERE id = ? FOR UPDATE", String.class, riderId).stream().findFirst()
+            .orElseThrow(() -> FleetApiException.notFound("RIDER_NOT_FOUND", "No such rider."));
+        if (!"ACTIVE".equals(status)) {
+            throw new FleetApiException(403, "RIDER_NOT_ACTIVE", "Your account can't book slots right now. Open your account page to see why.");
         }
         if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.slot_booking WHERE capacity_id = ? AND rider_id = ? "
             + "AND status = 'BOOKED')", Boolean.class, capacity.capacityId(), riderId))) {
@@ -532,11 +550,11 @@ public class FleetSlotBookingService {
     }
 
     /** The first riders on standby, in order, who still fit, until the places are taken. */
-    private void promote(UUID capacityId, Instant now) {
-        Capacity capacity = jdbc.query(CAPACITY + "WHERE c.id = ? FOR UPDATE OF c", (row, n) -> capacity(row), capacityId).stream().findFirst().orElseThrow();
+    private void promote(UUID capacityId, UUID except, Instant now) {
+        Capacity capacity = lockAndRead(capacityId).orElseThrow();
         int free = capacity.places() - capacity.booked();
         for (Map<String, Object> waiting : jdbc.queryForList("SELECT id, rider_id FROM fleet_schema.slot_standby WHERE capacity_id = ? "
-            + "AND promoted_booking_id IS NULL ORDER BY created_at", capacityId)) {
+            + "AND promoted_booking_id IS NULL AND rider_id IS DISTINCT FROM ? ORDER BY created_at", capacityId, except)) {
             if (free <= 0) {
                 return;
             }
@@ -558,6 +576,23 @@ public class FleetSlotBookingService {
             (row, n) -> new Booking(row.getObject("id", UUID.class), row.getObject("capacity_id", UUID.class), row.getString("status"),
                 row.getString("name"), row.getTimestamp("starts_at").toInstant(), row.getTimestamp("ends_at").toInstant(),
                 row.getLong("guaranteed_per_hour_paise")), bookingId);
+    }
+
+    /**
+     * Row-locks the capacity, then counts its bookings in a second statement: a count taken by the locking statement itself
+     * is from a snapshot before the lock wait, so two riders racing for the last place would both see it free.
+     */
+    private Optional<Capacity> lockAndRead(UUID capacityId) {
+        if (jdbc.queryForList("SELECT id FROM fleet_schema.slot_capacity WHERE id = ? FOR UPDATE", capacityId).isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(readCapacity(capacityId));
+    }
+
+    /** The orders' area as the cluster's name, cut to the column; else the fallback. */
+    static String clusterName(Cluster cluster, String fallback) {
+        String area = cluster.area() == null ? "" : cluster.area().trim();
+        return area.isEmpty() ? fallback : area.length() > 120 ? area.substring(0, 120) : area;
     }
 
     private Capacity readCapacity(UUID capacityId) {

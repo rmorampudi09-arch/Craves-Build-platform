@@ -32,7 +32,7 @@ class BoundaryValidationTest {
     static String encoded(String value) { return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8)); }
     static ReferralSettings settings(String pem,String auth,String order,String finance,String previousAuth) {
         return new ReferralSettings(true,true,true,true,true,true,"https://craves.in","https://api.craves.in/auth","craves-api",pem,
-            auth,order,finance,previousAuth,"","",1000,10000000,100000000,900);
+            auth,order,finance,previousAuth,"","",1000,10000000,100000000,900,new ReferralSettings.Erasure(false));
     }
     static ReferralSettings settings() { return settings("",AUTH,ORDER,FINANCE,""); }
     @Test void rejectsMultipleJsonDocumentsAndTrailingGarbage() {

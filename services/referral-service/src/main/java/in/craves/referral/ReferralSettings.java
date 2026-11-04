@@ -13,7 +13,9 @@ public record ReferralSettings(boolean enabled, boolean workersEnabled, boolean 
         String authKey, String orderKey, String financeKey,
         String previousAuthKey, String previousOrderKey, String previousFinanceKey,
         long cashoutMinimumPaise, long annualKycThresholdPaise, long lifetimeReviewPaise,
-        long reconciliationFreshnessSeconds) {
+        long reconciliationFreshnessSeconds, Erasure erasure) {
+    /** Whole-account erase forfeits a referral balance only after finance approves a forfeiture account; until then it waits. */
+    public record Erasure(boolean forfeitEnabled) { }
     public void requireEnabled() {
         if (!enabled) throw new ReferralProblem(503, "REFERRALS_DISABLED");
     }

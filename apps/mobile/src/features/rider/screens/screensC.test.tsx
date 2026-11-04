@@ -125,6 +125,11 @@ const offline = () => new AppApiError('NETWORK_ERROR', 'No internet connection.'
 let tree: renderer.ReactTestRenderer;
 
 async function render(node: React.ReactElement, seed: Array<[readonly unknown[], unknown]> = []) {
+  // A test that renders twice unmounts the first tree: a mounted screen keeps its query observers (and the slots
+  // screens' refetch interval) alive after the run, and Jest never exits.
+  if (tree) {
+    await act(async () => tree.unmount());
+  }
   const client = new QueryClient({defaultOptions: {queries: {retry: false, staleTime: Infinity}}});
   // The app shows these screens only once /me has answered for a rider (RiderNavigator); the rider role gates their queries.
   client.setQueryData(riderKeys.me, me);

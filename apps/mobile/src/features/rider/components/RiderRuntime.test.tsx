@@ -156,9 +156,10 @@ describe('RiderRuntime trip notification tap (R-04)', () => {
       listeners.push(cb);
       return {remove: jest.fn()};
     });
+    let tree!: renderer.ReactTestRenderer;
     try {
       await act(async () => {
-        renderer.create(
+        tree = renderer.create(
           <QueryClientProvider client={new QueryClient()}>
             <RiderRuntime riderId="r1" openOffer={jest.fn()} openTap={openTap} />
           </QueryClientProvider>,
@@ -172,6 +173,8 @@ describe('RiderRuntime trip notification tap (R-04)', () => {
       await act(async () => listeners.forEach(cb => cb('active')));
       expect(openTap).toHaveBeenCalledTimes(2);
     } finally {
+      // Unmounted, the runtime clears its flush interval; a mounted tree keeps Jest alive after the run.
+      await act(async () => tree.unmount());
       (AppState as {addEventListener: unknown}).addEventListener = addListener;
     }
   });

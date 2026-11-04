@@ -396,6 +396,39 @@ class AccountErasureDatabaseTest {
         assertFalse(accepting(plan));
     }
 
+    @Test
+    void releaseReopensADraftPlanPrepareClosedAndAuditsItsOwnStatus() {
+        // A new plan is a DRAFT that already accepts subscribers, so prepare closes it like any other.
+        UUID draft = UUID.randomUUID();
+        addPlan(draft, chef, "DRAFT", true);
+        service.prepare(chef, Scope.CHEF, request);
+        assertFalse(accepting(draft));
+
+        assertEquals(2, service.release(chef, Scope.CHEF, request).counts().get("subscription_plan"));
+
+        assertTrue(accepting(draft));
+        assertTrue(accepting(plan));
+        assertEquals(1, count("subscription_schema.subscription_plan_audit WHERE plan_id=? AND action='CHEF_ACCEPTING_ON' "
+            + "AND old_status='DRAFT' AND new_status='DRAFT' AND reason='Account deletion cancelled'", draft));
+        assertEquals(1, count("subscription_schema.subscription_plan_audit WHERE plan_id=? AND action='CHEF_ACCEPTING_ON' "
+            + "AND old_status='ACTIVE' AND new_status='ACTIVE' AND reason='Account deletion cancelled'", plan));
+    }
+
+    @Test
+    void anAbandonedCheckoutOnAChefsPlanNoLongerBlocksTheChef() {
+        UUID stale = subscribe(customer, plan, "PENDING_PAYMENT", null);
+        ageCheckout(stale, 25);
+
+        assertEquals(List.of(), service.blockers(chef, Scope.CHEF));
+        assertEquals(List.of(), service.blockers(chef, Scope.ALL));
+
+        UUID fresh = subscribe(UUID.randomUUID(), plan, "PENDING_PAYMENT", null);
+        ageCheckout(fresh, 1);
+
+        assertEquals(List.of("PLAN_HAS_ACTIVE_SUBSCRIBERS"), codes(service.blockers(chef, Scope.CHEF)));
+        assertEquals("1 subscription(s) are still running on this chef's meal plans", service.blockers(chef, Scope.CHEF).get(0).detail());
+    }
+
     void ageCheckout(UUID subscription, int hours) {
         db.update("UPDATE subscription_schema.customer_subscription SET created_at = now() - make_interval(hours => ?) WHERE id=?", hours, subscription);
     }

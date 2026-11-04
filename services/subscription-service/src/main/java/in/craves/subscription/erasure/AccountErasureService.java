@@ -34,7 +34,7 @@ public class AccountErasureService {
     private static final String CLOSED_REASON = "Chef account deletion requested";
     private static final String REOPENED_REASON = "Account deletion cancelled";
     /** A checkout still unpaid after a day counts as abandoned, the same window as order-service; a payment that lands later finds an anonymised subscription. */
-    static final int PENDING_PAYMENT_PAYABLE_HOURS = 24;
+    private static final int PENDING_PAYMENT_PAYABLE_HOURS = 24;
     /** The first checkout of a plan (alias cs) that nobody paid in time: it blocks nothing and is anonymised like a cancelled one. */
     private static final String ABANDONED_CHECKOUT = "(cs.status = 'PENDING_PAYMENT' AND cs.created_at <= now() - interval '"
         + PENDING_PAYMENT_PAYABLE_HOURS + " hours')";
@@ -66,7 +66,7 @@ public class AccountErasureService {
             // PAYMENT_FAILED can still be paid and come back, so only cancelled and expired subscriptions are finished.
             addIfAny(blockers, "PLAN_HAS_ACTIVE_SUBSCRIBERS", "subscription(s) are still running on this chef's meal plans", count(
                 "customer_subscription cs JOIN " + SCHEMA + "subscription_plan p ON p.id = cs.plan_id "
-                    + "WHERE p.chef_identity_id = ? AND cs.status NOT IN ('CANCELLED', 'EXPIRED')", identityId));
+                    + "WHERE p.chef_identity_id = ? AND cs.status NOT IN ('CANCELLED', 'EXPIRED') AND NOT " + ABANDONED_CHECKOUT, identityId));
         }
         return blockers;
     }
@@ -155,16 +155,17 @@ public class AccountErasureService {
 
     /**
      * One statement. Only a plan whose latest accepting change is prepare's close comes back: one the chef closed themselves,
-     * or closed again after prepare, stays closed; so does a plan an admin has since retired.
+     * or closed again after prepare, stays closed; so does a plan an admin has since retired. Prepare closes plans of any status
+     * (a new DRAFT already accepts), so release reopens them whatever their status.
      */
     private int reopenPlans(UUID chefId) {
         return db.update(
             "WITH reopened AS (UPDATE " + SCHEMA + "subscription_plan p SET accepting_subscribers = TRUE, updated_at = now() "
-                + "WHERE p.chef_identity_id = ? AND p.status = 'ACTIVE' AND NOT p.accepting_subscribers "
+                + "WHERE p.chef_identity_id = ? AND p.status <> 'INACTIVE' AND NOT p.accepting_subscribers "
                 + "AND (SELECT a.reason FROM " + SCHEMA + "subscription_plan_audit a WHERE a.plan_id = p.id "
-                + "AND a.action IN ('CHEF_ACCEPTING_ON', 'CHEF_ACCEPTING_OFF') ORDER BY a.created_at DESC LIMIT 1) = ? RETURNING p.id) "
+                + "AND a.action IN ('CHEF_ACCEPTING_ON', 'CHEF_ACCEPTING_OFF') ORDER BY a.created_at DESC LIMIT 1) = ? RETURNING p.id, p.status) "
                 + "INSERT INTO " + SCHEMA + "subscription_plan_audit (id, plan_id, actor_identity_id, action, old_status, new_status, reason, created_at) "
-                + "SELECT gen_random_uuid(), id, ?, 'CHEF_ACCEPTING_ON', 'ACTIVE', 'ACTIVE', ?, now() FROM reopened",
+                + "SELECT gen_random_uuid(), id, ?, 'CHEF_ACCEPTING_ON', status, status, ?, now() FROM reopened",
             chefId, CLOSED_REASON, chefId, REOPENED_REASON);
     }
 

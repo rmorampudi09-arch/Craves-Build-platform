@@ -19,6 +19,7 @@ import in.craves.subscription.credit.DayCreditService;
 import in.craves.subscription.exception.ApiException;
 import in.craves.subscription.lifecycle.SubscriptionLifecycleRepository;
 import in.craves.subscription.occurrence.OccurrenceRepository;
+import in.craves.subscription.plan.ChefPlanModels.ChefPlanInput;
 import in.craves.subscription.plan.ChefPlanModels.ChefPlanResponse;
 import in.craves.subscription.plan.ChefPlanRepository;
 import in.craves.subscription.plan.ChefPlanScheduleService;
@@ -102,5 +103,25 @@ class SubscriptionDeletionGuardTest {
         when(plans.setAcceptingSubscribers(PLAN_ID, PERSON, true)).thenReturn(activePlan(true));
         assertThatCode(() -> chefPlans.setAcceptingSubscribers(PLAN_ID, false, user("CHEF", "ALL"))).doesNotThrowAnyException();
         assertThatCode(() -> chefPlans.setAcceptingSubscribers(PLAN_ID, true, user("CHEF", "CUSTOMER"))).doesNotThrowAnyException();
+    }
+
+    @Test
+    void creatingAMealPlanIsRefusedWhileChefSideDeletionIsPending() {
+        ChefPlanInput input = new ChefPlanInput("Weekly lunches", null, "WEEKLY", new BigDecimal("1200.00"), "INR");
+        for (String scope : new String[]{"CHEF", "ALL"}) {
+            assertThatThrownBy(() -> chefPlans.create(input, user("CHEF", scope)))
+                .isInstanceOfSatisfying(ApiException.class, error -> {
+                    assertThat(error.getStatus()).isEqualTo(409);
+                    assertThat(error.getCode()).isEqualTo("ACCOUNT_DELETION_PENDING");
+                    assertThat(error.getMessage()).isEqualTo("Your account is set to be deleted. Tap Keep my account to create meal plans.");
+                });
+        }
+        verifyNoInteractions(plans);
+
+        // A customer-only deletion, or none, leaves plan creation alone.
+        when(plans.create(any(), any(String.class), any(ChefPlanInput.class))).thenReturn(activePlan(true));
+        for (String scope : new String[]{"CUSTOMER", null}) {
+            assertThatCode(() -> chefPlans.create(input, user("CHEF", scope))).doesNotThrowAnyException();
+        }
     }
 }

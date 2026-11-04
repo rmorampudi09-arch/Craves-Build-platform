@@ -73,6 +73,10 @@ public class ChefPlanWorkflowService {
     @Transactional
     public ChefPlanResponse create(ChefPlanInput input, CurrentUser user) {
         requireChef(user);
+        // A new plan accepts subscribers from the start, which prepare has just stopped for this chef.
+        if (user.deletionPendingFor("CHEF")) {
+            throw ApiException.conflict("ACCOUNT_DELETION_PENDING", "Your account is set to be deleted. Tap Keep my account to create meal plans.");
+        }
         ChefPlanInput normalized = normalize(input);
         String planCode = "MEAL-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase(Locale.ROOT);
         ChefPlanResponse created = repository.create(user.identityId(), planCode, normalized);

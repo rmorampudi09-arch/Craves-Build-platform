@@ -78,4 +78,26 @@ class OrderResponsePrivacyTest {
         assertThat(json).doesNotContain("private-kitchen@example.com");
         assertThat(json).doesNotContain("+919876543210");
     }
+
+    @Test
+    void chefsSeeTheCustomersContactOnlyWhileTheyAnswerCookOrHandOver() {
+        CustomerAddressSnapshotResponse dropoff = new CustomerAddressSnapshotResponse(UUID.randomUUID(), "Customer", "+918019166645",
+            "Customer address", null, null, "Madhapur", "Hyderabad", "Telangana", "500081", new BigDecimal("17.4483000"), new BigDecimal("78.3915000"));
+        for (OrderStatus status : OrderStatus.values()) {
+            OrderResponse order = new OrderResponse(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "Home Kitchen",
+                status, "INR", new BigDecimal("250.00"), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("250.00"), null, 20,
+                dropoff, null, List.of(), Instant.parse("2026-07-16T08:00:00Z"), Instant.parse("2026-07-16T08:00:00Z"))
+                .withChefDetails(null, "No onions please", null, null);
+            boolean active = switch (status) {
+                case CHEF_ACCEPTANCE_PENDING, CHEF_ACCEPTED, PREPARING, READY_FOR_PICKUP, OUT_FOR_DELIVERY -> true;
+                default -> false;
+            };
+            OrderResponse chefCopy = order.forChef();
+            assertThat(chefCopy.deliveryAddress()).as(status.name()).isEqualTo(active ? dropoff : null);
+            // Everything else the chef needs stays.
+            assertThat(chefCopy.customerNote()).as(status.name()).isEqualTo("No onions please");
+            assertThat(chefCopy.status()).isEqualTo(status);
+            assertThat(chefCopy.prepTimeMinutes()).isEqualTo(20);
+        }
+    }
 }

@@ -40,6 +40,11 @@ The Borzo-to-Pidge handoff (integration `BorzoPidgeHandoffWorker`) adds `DELIVER
 Pidge refused or cancelled the fallback, so the order needs a person) and `DELIVERY_HANDOFF_STALLED` (the Pidge fallback
 is still unresolved about 10 minutes later; it keeps retrying). Both are logged once per order.
 
+The delivery-quote circuit breaker (integration `ProviderGuard`, handbook 104, off unless
+`CRAVES_PROVIDER_RESILIENCE_ENABLED=true`) adds `PROVIDER_CIRCUIT_OPEN`: one provider gave no answer, timed out, answered
+5xx or 429, or quoted slower than the deadline 5 times in a row, so its quotes are skipped for 30 seconds, then one probe
+is let through. It is logged once when the circuit opens; a failed probe keeps it open without another alert line.
+
 ## Tuning
 
 - `CRAVES_MONITORING_ENABLED=false` turns off the order and integration monitors.

@@ -1,5 +1,6 @@
 package in.craves.advanced.support;
 
+import in.craves.advanced.platform.clients.AccountDataGateway;
 import in.craves.advanced.platform.clients.CatalogGateway;
 import in.craves.advanced.platform.clients.MenuSearchGateway;
 import in.craves.advanced.platform.clients.OrderCartGateway;
@@ -38,6 +39,7 @@ public abstract class IntegrationTestBase {
     protected static final FakeOrders ORDERS = new FakeOrders(CATALOG, CLOCK);
     protected static final FakeSavedFeed SAVED = new FakeSavedFeed();
     protected static final FakeMenuSearch MENU_SEARCH = new FakeMenuSearch();
+    protected static final FakeAccountData ACCOUNTS = new FakeAccountData();
 
     @Autowired
     protected MockMvc mvc;
@@ -49,6 +51,7 @@ public abstract class IntegrationTestBase {
         @Bean @Primary OrderGateway testOrders() { return ORDERS; }
         @Bean @Primary SavedFeedGateway testSavedFeed() { return SAVED; }
         @Bean @Primary MenuSearchGateway testMenuSearch() { return MENU_SEARCH; }
+        @Bean @Primary AccountDataGateway testAccountData() { return ACCOUNTS; }
         @Bean @Primary Clock testClock() { return CLOCK; }
 
         /** A deliberately broken module: proves one failing feature cannot take the others down. */
@@ -81,6 +84,7 @@ public abstract class IntegrationTestBase {
         ORDERS.reset();
         SAVED.reset();
         MENU_SEARCH.reset();
+        ACCOUNTS.reset();
         CLOCK.reset();
     }
 

@@ -1,0 +1,34 @@
+components:
+  schemas: {}
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_MY_DATA_ENABLED."
+  title: Craves my-data API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/my-data/export:
+    get:
+      operationId: exportMyCravesData
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                additionalProperties:
+                  type: object
+                type: object
+          description: OK
+      tags:
+      - my-data-controller
+      x-craves-auth: user
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

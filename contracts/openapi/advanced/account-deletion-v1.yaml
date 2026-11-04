@@ -1,0 +1,299 @@
+components:
+  schemas:
+    AccountDeletionAsk:
+      properties:
+        reason:
+          maxLength: 500
+          minLength: 0
+          type: string
+      type: object
+    AccountDeletionCase:
+      properties:
+        advancedRecordsErased:
+          format: int32
+          type: integer
+        closedAt:
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        messageToPerson:
+          type: string
+        personId:
+          format: uuid
+          type: string
+        reason:
+          type: string
+        requestedAt:
+          format: date-time
+          type: string
+        roles:
+          items:
+            type: string
+          type: array
+        staffId:
+          format: uuid
+          type: string
+        status:
+          enum:
+          - REQUESTED
+          - IN_PROGRESS
+          - COMPLETED
+          - REJECTED
+          - WITHDRAWN
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          format: int64
+          type: integer
+      type: object
+    AccountDeletionCasePage:
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/AccountDeletionCase"
+          type: array
+        nextCursor:
+          type: string
+      type: object
+    AccountDeletionStaffStep:
+      properties:
+        expectedVersion:
+          format: int64
+          type: integer
+        messageToPerson:
+          maxLength: 1000
+          minLength: 0
+          type: string
+      required:
+      - expectedVersion
+      type: object
+    AccountDeletionView:
+      properties:
+        closedAt:
+          format: date-time
+          type: string
+        id:
+          format: uuid
+          type: string
+        messageToPerson:
+          type: string
+        reason:
+          type: string
+        requestedAt:
+          format: date-time
+          type: string
+        status:
+          enum:
+          - REQUESTED
+          - IN_PROGRESS
+          - COMPLETED
+          - REJECTED
+          - WITHDRAWN
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+info:
+  description: "Generated from services/advanced-features-service. Base URL https://api.craves.in.\
+    \ Errors: {timestamp, code, message, details, correlationId}. Feature switch:\
+    \ CRAVES_ADV_ACCOUNT_DELETION_ENABLED."
+  title: Craves account-deletion API
+  version: v1
+openapi: 3.0.1
+paths:
+  /api/v1/advanced/account-deletion:
+    delete:
+      operationId: withdrawAccountDeletion
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountDeletionView"
+          description: OK
+      tags:
+      - account-deletion-controller
+      x-craves-auth: user
+    get:
+      operationId: myAccountDeletion
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountDeletionView"
+          description: OK
+      tags:
+      - account-deletion-controller
+      x-craves-auth: user
+    post:
+      operationId: requestAccountDeletion
+      parameters:
+      - in: header
+        name: X-Confirm-Delete
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountDeletionAsk"
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountDeletionView"
+          description: OK
+      tags:
+      - account-deletion-controller
+      x-craves-auth: user
+  /api/v1/advanced/account-deletion/admin/requests:
+    get:
+      operationId: listAccountDeletionCases
+      parameters:
+      - in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - REQUESTED
+          - IN_PROGRESS
+          - COMPLETED
+          - REJECTED
+          - WITHDRAWN
+          type: string
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: limit
+        required: false
+        schema:
+          format: int32
+          type: integer
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountDeletionCasePage"
+          description: OK
+      tags:
+      - account-deletion-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/account-deletion/admin/requests/{id}:
+    get:
+      operationId: getAccountDeletionCase
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountDeletionCase"
+          description: OK
+      tags:
+      - account-deletion-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/account-deletion/admin/requests/{id}/complete:
+    post:
+      operationId: completeAccountDeletion
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountDeletionStaffStep"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountDeletionCase"
+          description: OK
+      tags:
+      - account-deletion-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/account-deletion/admin/requests/{id}/reject:
+    post:
+      operationId: rejectAccountDeletion
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountDeletionStaffStep"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountDeletionCase"
+          description: OK
+      tags:
+      - account-deletion-admin-controller
+      x-craves-auth: staff
+  /api/v1/advanced/account-deletion/admin/requests/{id}/start:
+    post:
+      operationId: startAccountDeletion
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountDeletionStaffStep"
+        required: true
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountDeletionCase"
+          description: OK
+      tags:
+      - account-deletion-admin-controller
+      x-craves-auth: staff
+security:
+- bearer: []
+servers:
+- url: https://api.craves.in

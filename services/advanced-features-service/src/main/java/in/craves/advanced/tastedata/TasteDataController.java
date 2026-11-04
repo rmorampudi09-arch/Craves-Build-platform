@@ -2,8 +2,6 @@ package in.craves.advanced.tastedata;
 
 import in.craves.advanced.platform.data.PersonalDataContributor;
 import in.craves.advanced.platform.data.Sql;
-import in.craves.advanced.platform.erasure.AccountErasureService;
-import in.craves.advanced.platform.module.ModuleRuntime;
 import in.craves.advanced.platform.security.CurrentUser;
 import in.craves.advanced.platform.web.ApiProblem;
 import jakarta.validation.Valid;
@@ -17,6 +15,7 @@ import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -33,16 +32,13 @@ public class TasteDataController {
     public record ErasureReceipt(UUID receiptId, int recordsErased, List<String> modules, Instant erasedAt) { }
 
     private final List<PersonalDataContributor> contributors;
-    private final ModuleRuntime runtime;
-    private final AccountErasureService erasure;
+    private final PersonalDataEraser eraser;
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
-    public TasteDataController(List<PersonalDataContributor> contributors, ModuleRuntime runtime, AccountErasureService erasure,
-                               JdbcTemplate jdbc, Clock clock) {
+    public TasteDataController(List<PersonalDataContributor> contributors, PersonalDataEraser eraser, JdbcTemplate jdbc, Clock clock) {
         this.contributors = contributors;
-        this.runtime = runtime;
-        this.erasure = erasure;
+        this.eraser = eraser;
         this.jdbc = jdbc;
         this.clock = clock;
     }
@@ -71,7 +67,7 @@ public class TasteDataController {
         export.put("exportedAt", clock.instant());
         export.put("consent", consentOf(person));
         for (PersonalDataContributor contributor : contributors) {
-            if (usable(contributor.moduleId())) export.put(contributor.moduleId(), contributor.export(person));
+            if (eraser.usable(contributor.moduleId())) export.put(contributor.moduleId(), contributor.export(person));
         }
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .header("Content-Disposition", "attachment; filename=\"craves-taste-data.json\"").body(export);
@@ -79,21 +75,16 @@ public class TasteDataController {
 
     /** Erases the caller's own data in every module. Requires the header {@code X-Confirm-Erase: ERASE}. */
     @DeleteMapping
+    @Transactional
     public ResponseEntity<ErasureReceipt> erase(@RequestHeader(value = "X-Confirm-Erase", required = false) String confirm) {
         if (!"ERASE".equals(confirm)) throw ApiProblem.badRequest("CONFIRMATION_REQUIRED", "Send X-Confirm-Erase: ERASE to erase your data");
-        AccountErasureService.Erased erased = erasure.eraseAll(CurrentUser.id(), false);
-        return ok(new ErasureReceipt(erased.receiptId(), erased.recordsErased(), erased.modules(), erased.erasedAt()));
-    }
-
-    private boolean usable(String moduleId) {
-        return runtime.modules().stream().filter(m -> m.id().equals(moduleId)).findFirst().map(module -> {
-            try {
-                runtime.ensureReady(module);
-                return true;
-            } catch (ApiProblem unavailable) {
-                return false;
-            }
-        }).orElse(false);
+        UUID person = CurrentUser.id();
+        PersonalDataEraser.Erased erased = eraser.erase(person);
+        Instant now = clock.instant();
+        UUID receipt = UUID.randomUUID();
+        jdbc.update("INSERT INTO adv_taste_data.erasure_receipt (id, person_id, records, modules, created_at) VALUES (?,?,?,?,?)",
+                receipt, person, erased.records(), erased.modules().toArray(String[]::new), Sql.ts(now));
+        return ok(new ErasureReceipt(receipt, erased.records(), erased.modules(), now));
     }
 
     private Consent consentOf(UUID person) {

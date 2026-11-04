@@ -2,6 +2,7 @@ package com.cravesapp
 
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -104,7 +105,7 @@ class RiderReached(private val nearM: Double = NEAR_M, private val holdMs: Long 
 
   private fun ask(trip: String, distance: Double): Prompt {
     phase = Phase.PROMPTED
-    return Prompt(trip, kitchenName, distance.toInt()).also { prompt = it }
+    return Prompt(trip, kitchenName, distance.roundToInt()).also { prompt = it }
   }
 
   companion object {

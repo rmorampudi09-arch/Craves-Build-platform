@@ -58,3 +58,5 @@ referral:
   annual-kyc-threshold-paise: ${CRAVES_REFERRALS_ANNUAL_KYC_THRESHOLD_PAISE:0}
   lifetime-review-paise: ${CRAVES_REFERRALS_LIFETIME_REVIEW_PAISE:0}
   reconciliation-freshness-seconds: 900
+  erasure:
+    forfeit-enabled: ${CRAVES_REFERRAL_ERASURE_FORFEIT_ENABLED:false}

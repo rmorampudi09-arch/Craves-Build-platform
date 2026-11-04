@@ -8,6 +8,7 @@ import in.craves.order.exception.OrderApiException;
 import in.craves.order.schedule.ScheduleValidation.ValidatedChefResponse;
 import in.craves.order.schedule.ScheduleValidation.ValidatedCreate;
 import in.craves.order.schedule.ScheduleValidation.ValidatedPolicy;
+import in.craves.order.security.AccountDeletionGuard;
 import in.craves.order.security.CravesPrincipal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -69,6 +70,7 @@ public class ScheduledOrderService {
         CreateScheduleRequest request
     ) {
         requireRole(principal, "CUSTOMER");
+        AccountDeletionGuard.requireNoCustomerDeletion(principal);
         Instant now = clock.instant();
         ValidatedCreate validated = ScheduleValidation.validateCreate(
             checkoutId,

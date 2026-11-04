@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Private calls from the auth-service deletion coordinator. Catalog has no blockers; prepare closes the kitchen to new orders. */
+/** Private calls from the auth-service deletion coordinator. Catalog has no blockers; prepare closes the kitchen to new orders and release reopens it. */
 @RestController
 @RequestMapping("/internal/v1/account-erasure")
 public class InternalAccountErasureController {
@@ -54,6 +54,17 @@ public class InternalAccountErasureController {
         authorizer.requireAuthorized(internalKey);
         requireFields(request, true);
         return Map.of("service", SERVICE, "status", "DONE", "counts", service.prepare(request.identityId(), request.scope(), request.requestId()));
+    }
+
+    /** The person kept the account: the kitchen goes back to how it was before prepare closed it. */
+    @PostMapping("/release")
+    public Map<String, Object> release(
+        @RequestHeader(value = InternalCatalogAuthorizer.HEADER_NAME, required = false) String internalKey,
+        @RequestBody ErasureRequest request
+    ) {
+        authorizer.requireAuthorized(internalKey);
+        requireFields(request, true);
+        return Map.of("service", SERVICE, "status", "DONE", "counts", service.release(request.identityId(), request.scope(), request.requestId()));
     }
 
     @PostMapping

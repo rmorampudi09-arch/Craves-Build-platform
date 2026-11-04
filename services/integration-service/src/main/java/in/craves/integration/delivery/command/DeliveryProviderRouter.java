@@ -55,6 +55,7 @@ public class DeliveryProviderRouter {
     private final Clock clock;
     private final BorzoProperties borzoProperties;
     private final FleetStage fleetStage;
+    private ProviderGuard providerGuard;
 
     @Autowired
     public DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
@@ -105,6 +106,12 @@ public class DeliveryProviderRouter {
                            Clock clock) {
         this(adapters, providerCatalog, intelligenceService, assignmentRepository,
             properties, quoteExecutor, clock, null);
+    }
+
+    /** Handbook 104: present only when CRAVES_PROVIDER_RESILIENCE_ENABLED=true; quotes go straight to the provider otherwise. */
+    @Autowired(required = false)
+    void setProviderGuard(ProviderGuard providerGuard) {
+        this.providerGuard = providerGuard;
     }
 
     public boolean borzoTimedPolicyReady() {
@@ -401,7 +408,9 @@ public class DeliveryProviderRouter {
     private QuoteOutcome quote(DeliveryProviderAdapter adapter, DeliveryCommandMessage command) {
         String providerId = normalize(adapter.providerId());
         try {
-            ProviderQuote quote = adapter.quote(command.deliveryRequest());
+            ProviderQuote quote = providerGuard == null
+                ? adapter.quote(command.deliveryRequest())
+                : providerGuard.quote(providerId, () -> adapter.quote(command.deliveryRequest()), properties.quoteTimeout());
             if (quote == null) {
                 return new QuoteOutcome(providerId, adapter, null, "Provider returned no quote");
             }

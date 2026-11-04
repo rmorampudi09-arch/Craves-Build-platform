@@ -7,7 +7,9 @@ import com.google.firebase.auth.FirebaseToken;
 import in.craves.auth.api.AuthTokenResponse;
 import in.craves.auth.api.FirebaseExchangeRequest;
 import in.craves.auth.api.IdentityResponse;
+import in.craves.auth.api.IdentityResponse.PendingDeletion;
 import in.craves.auth.api.InternalIdentityEmailResponse;
+import in.craves.auth.deletion.AccountDeletionService;
 import in.craves.auth.domain.AuthAudit;
 import in.craves.auth.domain.AuthIdentity;
 import in.craves.auth.domain.AuthIdentityRole;
@@ -53,6 +55,7 @@ public class AuthService {
     private final RefreshTokenGenerator refreshTokenGenerator;
     private final TokenHasher tokenHasher;
     private final AdminSessionService adminSessions;
+    private final AccountDeletionService accountDeletions;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private in.craves.auth.referrals.ReferralEnrollment referralEnrollment;
 
@@ -68,7 +71,8 @@ public class AuthService {
         CravesJwtService jwtService,
         RefreshTokenGenerator refreshTokenGenerator,
         TokenHasher tokenHasher,
-        AdminSessionService adminSessions
+        AdminSessionService adminSessions,
+        AccountDeletionService accountDeletions
     ) {
         this.firebaseApp = firebaseApp;
         this.jwtProperties = jwtProperties;
@@ -82,6 +86,7 @@ public class AuthService {
         this.refreshTokenGenerator = refreshTokenGenerator;
         this.tokenHasher = tokenHasher;
         this.adminSessions = adminSessions;
+        this.accountDeletions = accountDeletions;
     }
 
     @Transactional
@@ -191,7 +196,8 @@ public class AuthService {
             .orElseThrow(() -> AuthException.unauthorized("IDENTITY_NOT_FOUND", "Identity was not found"));
         assertActive(identity);
         List<String> roles = identityRoleRepository.findRoleCodesByIdentityId(identity.getId());
-        return toIdentityResponse(identity, roles.stream().filter(currentUser.roles()::contains).toList());
+        return toIdentityResponse(identity, roles.stream().filter(currentUser.roles()::contains).toList(),
+            accountDeletions.pending(identity.getId()).orElse(null));
     }
 
     @Transactional(readOnly = true)
@@ -226,7 +232,7 @@ public class AuthService {
         ensureRole(identity.getId(), ROLE_CHEF);
         List<String> roles = identityRoleRepository.findRoleCodesByIdentityId(identity.getId());
         saveAudit(identity.getId(), "CHEF_ROLE_GRANTED", "Chef role granted from application " + sourceApplicationId, null, null);
-        return toIdentityResponse(identity, roles);
+        return toIdentityResponse(identity, roles, null);
     }
 
     /** Idempotent; the role reaches the JWT on the next sign-in or refresh. */
@@ -238,7 +244,7 @@ public class AuthService {
         if (ensureRole(identity.getId(), ROLE_RIDER)) {
             saveAudit(identity.getId(), "RIDER_ROLE_GRANTED", "Rider role granted for rider " + riderId, null, null);
         }
-        return toIdentityResponse(identity, identityRoleRepository.findRoleCodesByIdentityId(identity.getId()));
+        return toIdentityResponse(identity, identityRoleRepository.findRoleCodesByIdentityId(identity.getId()), null);
     }
 
     /**
@@ -253,7 +259,7 @@ public class AuthService {
             identityRepository.incrementTokenVersion(identity.getId());
             saveAudit(identity.getId(), "RIDER_ROLE_REVOKED", "Rider role revoked for rider " + riderId, null, null);
         }
-        return toIdentityResponse(identity, identityRoleRepository.findRoleCodesByIdentityId(identity.getId()));
+        return toIdentityResponse(identity, identityRoleRepository.findRoleCodesByIdentityId(identity.getId()), null);
     }
 
     private AuthIdentity loadOrCreateIdentity(FirebaseToken decodedToken, String phoneNumber) {
@@ -283,6 +289,8 @@ public class AuthService {
     }
 
     private void ensureCustomerRole(UUID identityId) {
+        // The deletion lock removed it; signing in (as a chef) must not give it back before the erase completes.
+        if (accountDeletions.erasingCustomerSide(identityId)) return;
         ensureRole(identityId, ROLE_CUSTOMER);
     }
 
@@ -315,17 +323,19 @@ public class AuthService {
         // Consumer/mobile sessions keep their existing lifetime and consumer permissions.
         // Privileged roles are issued only by the bounded administrator session path.
         roles = AdminSessionService.consumerRoles(roles);
-        String accessToken = jwtService.issueAccessToken(identity, roles);
+        // Read at every issue (sign-in and refresh), so the claim drops after "keep my account" without a new sign-in.
+        Optional<PendingDeletion> pending = accountDeletions.pending(identity.getId());
+        String accessToken = jwtService.issueAccessToken(identity, roles, pending.map(PendingDeletion::scope).orElse(null));
         return AuthTokenResponse.create(
             accessToken,
             jwtProperties.getAccessTokenTtl().toSeconds(),
             refreshToken,
             refreshTokenExpiresAt,
-            toIdentityResponse(identity, roles)
+            toIdentityResponse(identity, roles, pending.orElse(null))
         );
     }
 
-    private IdentityResponse toIdentityResponse(AuthIdentity identity, List<String> roles) {
+    private IdentityResponse toIdentityResponse(AuthIdentity identity, List<String> roles, PendingDeletion pendingDeletion) {
         return new IdentityResponse(
             identity.getId(),
             identity.getFirebaseUid(),
@@ -335,7 +345,8 @@ public class AuthService {
             identity.getDisplayName(),
             identity.getStatus(),
             roles,
-            identity.getLastLoginAt()
+            identity.getLastLoginAt(),
+            pendingDeletion
         );
     }
 

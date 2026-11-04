@@ -15,6 +15,7 @@ public class WorkerSchedulingConfiguration {
     public static final String MONITOR_SCHEDULER = "monitorScheduler";
     public static final String ADMIN_INTERVENTION_SCHEDULER = "adminInterventionScheduler";
     public static final String TOKEN_REVOCATION_SCHEDULER = "tokenRevocationScheduler";
+    public static final String ACCOUNT_DELETION_SCHEDULER = "accountDeletionScheduler";
 
     // Declaring any scheduler makes Spring Boot back off its default one, so keep it for jobs added later.
     @Bean(name = "taskScheduler")
@@ -31,6 +32,11 @@ public class WorkerSchedulingConfiguration {
     @Bean(name = TOKEN_REVOCATION_SCHEDULER)
     ThreadPoolTaskScheduler tokenRevocationScheduler() {
         return pool("token-revocation-", 1);
+    }
+
+    @Bean(name = ACCOUNT_DELETION_SCHEDULER)
+    ThreadPoolTaskScheduler accountDeletionScheduler() {
+        return pool("account-deletion-", 1);
     }
 
     // CH-04: the watchdog and alert monitors get a plain pool of their own, so a stalled worker cannot silence them.

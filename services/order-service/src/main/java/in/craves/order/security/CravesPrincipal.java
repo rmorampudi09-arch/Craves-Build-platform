@@ -3,7 +3,11 @@ package in.craves.order.security;
 import java.util.Set;
 import java.util.UUID;
 
-public record CravesPrincipal(UUID identityId, String phoneNumber, Set<String> roles) {
+public record CravesPrincipal(UUID identityId, String phoneNumber, Set<String> roles, String deletionPendingScope) {
+    public CravesPrincipal(UUID identityId, String phoneNumber, Set<String> roles) {
+        this(identityId, phoneNumber, roles, null);
+    }
+
     public boolean hasRole(String role) {
         return roles != null && roles.stream().anyMatch(existing -> existing.equalsIgnoreCase(role));
     }

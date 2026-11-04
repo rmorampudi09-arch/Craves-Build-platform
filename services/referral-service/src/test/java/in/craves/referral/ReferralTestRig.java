@@ -53,9 +53,7 @@ public final class ReferralTestRig {
     public final long policy;
     public ReferralTestRig() {
         DataSource ds=TestDatabase.reset(); db=new Store(new JdbcTemplate(ds),new DataSourceTransactionManager(ds));
-        String disposableKey=Base64.getEncoder().encodeToString("disposable-referral-test-key-only-2026".getBytes(StandardCharsets.US_ASCII));
-        settings=new ReferralSettings(true,true,true,true,true,true,"https://craves.in","https://api.craves.in/auth","craves-api","",
-            disposableKey,disposableKey,disposableKey,"","","",1000,10000000,100000000,900);
+        settings=settings(false);
         program=new ProgramService(db,clock,settings); locks=new OrderLocks(db);
         reversals=new ReversalService(db,program,locks,settings);
         binding=new OrderBindingService(db,program,locks,clock); lifecycle=new OrderLifecycleService(db,program,locks,reversals,clock);
@@ -68,6 +66,11 @@ public final class ReferralTestRig {
         outbox=new OutboxService(db,settings,clock);
         policy=program.createPolicy(maker,policyBody("1",200,120,80));
         program.approvePolicy(approver,policy,clock.instant().plusSeconds(1),0); clock.advance(Duration.ofSeconds(2));
+    }
+    public static ReferralSettings settings(boolean forfeitEnabled) {
+        String key=Base64.getEncoder().encodeToString("disposable-referral-test-key-only-2026".getBytes(StandardCharsets.US_ASCII));
+        return new ReferralSettings(true,true,true,true,true,true,"https://craves.in","https://api.craves.in/auth","craves-api","",
+            key,key,key,"","","",1000,10000000,100000000,900,new ReferralSettings.Erasure(forfeitEnabled));
     }
     public JsonNode json(Object value) { return Json.MAPPER.valueToTree(value); }
     public JsonNode policyBody(String expected,int l1,int l2,int l3) {

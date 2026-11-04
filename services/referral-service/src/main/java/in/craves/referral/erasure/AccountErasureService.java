@@ -1,5 +1,6 @@
 package in.craves.referral.erasure;
 
+import in.craves.referral.ReferralSettings;
 import in.craves.referral.infra.Store;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -20,8 +21,9 @@ import static in.craves.referral.infra.Store.number;
  * decision 7): one journal entry that takes the available balance to zero. Money still in flight (a cash-out reservation, a
  * pending reward) is not unused credit and is left, so the erase waits for it instead (CASH_OUT_IN_FLIGHT, REWARD_PENDING).
  * The entry's counterparty is CHECKOUT_CLEARING because the finance mirror in integration-service accepts only the existing
- * counterparties; a dedicated forfeiture account needs a change there first. ALL also retires the member's code: the member
- * row is flagged inactive, which the registration path already refuses as a parent, and its source version is pinned to the
+ * counterparties; a dedicated forfeiture account needs a change there first, so the forfeit stays off by default
+ * (referral.erasure.forfeit-enabled) and an ALL erase with credit left waits on FORFEIT_AWAITING_FINANCE. ALL also retires
+ * the member's code: the member row is flagged inactive, which the registration path already refuses as a parent, and its source version is pinned to the
  * maximum so no later auth status event can switch it back on.
  *
  * <p>CUSTOMER and CHEF leave the wallet and the member alone (DONE, zero counts): the wallet also holds withdrawable chef
@@ -38,9 +40,11 @@ public class AccountErasureService {
     /** Auth status versions are small counters; the largest int is never sent, so this wins over any later event. */
     private static final int RETIRED_VERSION = Integer.MAX_VALUE;
     private final Store db;
+    private final ReferralSettings settings;
 
-    public AccountErasureService(Store db) {
+    public AccountErasureService(Store db, ReferralSettings settings) {
         this.db = db;
+        this.settings = settings;
     }
 
     /**
@@ -50,6 +54,8 @@ public class AccountErasureService {
      * credited, which ALL is about to retire so that it never would be; with one side only the member stays, so the reward still
      * credits it. A member with a CONFIRMED fraud case is held for good (ProgramService.held), so its reward never settles and
      * must not block forever. The unfinished-cash-out statuses are the ones CashoutService counts as open.
+     * FORFEIT_AWAITING_FINANCE (ALL only, while referral.erasure.forfeit-enabled is off): available credit would be forfeited, and
+     * finance has not yet approved the account the forfeiture is posted against; it waits, and a zero balance is not held up.
      */
     public List<Blocker> blockers(UUID identity, Scope scope) {
         List<Blocker> found = new ArrayList<>();
@@ -67,6 +73,10 @@ public class AccountErasureService {
                 + "WHERE r.beneficiary_id=? AND r.status='PENDING' AND m.is_active "
                 + "AND NOT EXISTS (SELECT 1 FROM referral_schema.fraud_case f WHERE f.user_id=r.beneficiary_id AND f.status='CONFIRMED')", identity) > 0) {
             found.add(new Blocker("REWARD_PENDING", "A referral reward for this person is still pending; it must be credited or cancelled before the whole account can be deleted"));
+        }
+        if (scope == Scope.ALL && !settings.erasure().forfeitEnabled()
+                && db.count("SELECT count(*) FROM referral_schema.wallet WHERE user_id=? AND available_paise>0", identity) > 0) {
+            found.add(new Blocker("FORFEIT_AWAITING_FINANCE", "referral balance can't be forfeited until finance approves the forfeiture account"));
         }
         return found;
     }

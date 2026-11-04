@@ -99,6 +99,6 @@ class InternalRoleControllerTest {
     }
 
     private static IdentityResponse identity(String... roles) {
-        return new IdentityResponse(IDENTITY, "synthetic-firebase", "+10000000000", null, false, null, "ACTIVE", List.of(roles), null);
+        return new IdentityResponse(IDENTITY, "synthetic-firebase", "+10000000000", null, false, null, "ACTIVE", List.of(roles), null, null);
     }
 }

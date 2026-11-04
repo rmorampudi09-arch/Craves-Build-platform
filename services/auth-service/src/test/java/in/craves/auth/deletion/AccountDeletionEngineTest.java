@@ -1,0 +1,809 @@
+package in.craves.auth.deletion;
+
+import static in.craves.auth.deletion.DeletionModel.Phase.ERASE;
+import static in.craves.auth.deletion.DeletionModel.Phase.PREPARE;
+import static in.craves.auth.deletion.DeletionModel.Phase.RELEASE;
+import static in.craves.auth.deletion.DeletionModel.Phase.SWEEP;
+import static in.craves.auth.deletion.DeletionModel.RequestStatus.CANCELLED;
+import static in.craves.auth.deletion.DeletionModel.RequestStatus.COMPLETED;
+import static in.craves.auth.deletion.DeletionModel.RequestStatus.ERASING;
+import static in.craves.auth.deletion.DeletionModel.RequestStatus.SCHEDULED;
+import static in.craves.auth.deletion.DeletionModel.RequestStatus.WAITING_ON_OPEN_ITEMS;
+import static in.craves.auth.deletion.DeletionModel.StepStatus.BLOCKED;
+import static in.craves.auth.deletion.DeletionModel.StepStatus.DONE;
+import static in.craves.auth.deletion.DeletionModel.StepStatus.PENDING;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.google.firebase.ErrorCode;
+import com.google.firebase.auth.FirebaseAuthException;
+import in.craves.auth.config.JwtProperties;
+import in.craves.auth.deletion.AccountDeletionRepository.Contact;
+import in.craves.auth.deletion.AccountErasureClient.Blocker;
+import in.craves.auth.deletion.AccountErasureClient.Outcome;
+import in.craves.auth.deletion.AccountErasureClient.ServiceCall;
+import in.craves.auth.deletion.DeletionModel.DeletionRequest;
+import in.craves.auth.deletion.DeletionModel.DeletionStep;
+import in.craves.auth.deletion.DeletionModel.Phase;
+import in.craves.auth.deletion.DeletionModel.RequestStatus;
+import in.craves.auth.deletion.DeletionModel.Scope;
+import in.craves.auth.deletion.DeletionModel.StepStatus;
+import in.craves.auth.deletion.DeletionModel.Via;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+class AccountDeletionEngineTest {
+    static final Instant NOW = Instant.parse("2026-11-04T10:00:00Z");
+    static final ServiceCall OK = new ServiceCall(Outcome.DONE, Map.of(), List.of(), null);
+    static final Instant LEASE_UNTIL = NOW.plus(Duration.ofMinutes(5));
+
+    final MutableClock clock = new MutableClock(NOW);
+    final AccountDeletionRepository deletions = mock(AccountDeletionRepository.class);
+    final DeletionNotices notices = mock(DeletionNotices.class);
+    final AccountLock lock = mock(AccountLock.class);
+    final AuthAccountEraser eraser = mock(AuthAccountEraser.class);
+    final AccountDeletionProperties properties = new AccountDeletionProperties();
+    final JwtProperties jwt = new JwtProperties();
+    final FakeTransactions transactions = new FakeTransactions();
+    final FakeClient client = new FakeClient();
+    final List<UUID> claimed = new CopyOnWriteArrayList<>();
+    final ListAppender<ILoggingEvent> logs = new ListAppender<>();
+    final Logger logger = (Logger) LoggerFactory.getLogger(AccountDeletionEngine.class);
+    AccountDeletionEngine engine;
+
+    @BeforeEach
+    void setUp() {
+        jwt.setAccessTokenTtl(Duration.ofMinutes(10));
+        engine = engine();
+        when(deletions.claimDue(any(), anyInt(), any(), any())).thenAnswer(call -> List.copyOf(claimed));
+        when(deletions.transition(any(), any(), any(), any())).thenReturn(true);
+        logs.start();
+        logger.addAppender(logs);
+        logger.setAdditive(false); // the expected alerts stay out of the test output
+    }
+
+    @AfterEach
+    void tearDown() {
+        logger.detachAppender(logs);
+        logger.setAdditive(true);
+    }
+
+    AccountDeletionEngine engine() {
+        return new AccountDeletionEngine(deletions, client, notices, lock, eraser, properties, jwt, transactions, clock);
+    }
+
+    @Test
+    void prepareStepsRunAndRetryWithBackoff() {
+        DeletionRequest request = scheduled(NOW.plus(Duration.ofDays(29)), NOW.minus(Duration.ofDays(1)));
+        given(request, List.of(
+            step(request, PREPARE, "advanced", PENDING, 6, NOW),
+            step(request, PREPARE, "catalog", PENDING, 2, NOW.minusSeconds(1)),
+            step(request, PREPARE, "integration", PENDING, 0, NOW.plusSeconds(1)),
+            step(request, PREPARE, "order", PENDING, 0, null),
+            step(request, PREPARE, "referral", PENDING, 9, NOW),
+            step(request, PREPARE, "subscription", PENDING, 0, NOW),
+            step(request, PREPARE, "user-chef", DONE, 0, null)));
+        client.answers.put("prepare advanced", failed("HTTP 500"));
+        client.answers.put("prepare catalog", failed("TIMEOUT"));
+        client.answers.put("prepare order", failed("HTTP 503"));
+        client.answers.put("prepare referral", failed("HTTP 502"));
+        client.answers.put("prepare subscription", new ServiceCall(Outcome.DONE, Map.of("plans", 2), List.of(), null));
+
+        engine.runOnce(NOW);
+
+        assertEquals(List.of("prepare advanced", "prepare catalog", "prepare order", "prepare referral", "prepare subscription"),
+            client.calls, "due steps only, never one waiting for its retry time or done");
+        UUID id = request.id();
+        // attempts + 1, retried after min(5 min x 2^(attempts - 1), 6 h)
+        verify(deletions).recordStep(id, PREPARE, "order", PENDING, null, "HTTP 503", NOW.plus(Duration.ofMinutes(5)));
+        verify(deletions).recordStep(id, PREPARE, "catalog", PENDING, null, "TIMEOUT", NOW.plus(Duration.ofMinutes(20)));
+        verify(deletions).recordStep(id, PREPARE, "advanced", PENDING, null, "HTTP 500", NOW.plus(Duration.ofMinutes(320)));
+        verify(deletions).recordStep(id, PREPARE, "referral", PENDING, null, "HTTP 502", NOW.plus(Duration.ofHours(6)));
+        verify(deletions).recordStep(id, PREPARE, "subscription", DONE, 2, null, null);
+        verify(deletions, never()).recordStep(any(), any(), eq("integration"), any(), any(), any(), any());
+        verify(deletions).releaseLease(id, LEASE_UNTIL);
+        verifyNoInteractions(lock, notices);
+    }
+
+    @Test
+    void blockedPrepareRetriesNextDay() {
+        DeletionRequest request = scheduled(NOW.plus(Duration.ofDays(29)), null);
+        given(request, List.of(
+            step(request, PREPARE, "catalog", BLOCKED, 0, NOW),
+            step(request, PREPARE, "referral", PENDING, 3, NOW)));
+        client.answers.put("prepare referral", new ServiceCall(Outcome.BLOCKED, Map.of(),
+            List.of(new Blocker("referral", "FORFEIT_AWAITING_FINANCE", "")), null));
+
+        engine.runOnce(NOW);
+
+        verify(deletions).recordStep(request.id(), PREPARE, "referral", BLOCKED, null, null, NOW.plus(Duration.ofDays(1)));
+        verify(deletions).recordStep(request.id(), PREPARE, "catalog", DONE, 0, null, null);
+        assertEquals(List.of(), alerts(), "a refusal is not a failure");
+    }
+
+    @Test
+    void alertFromTheFifthAttempt() {
+        DeletionRequest request = scheduled(NOW.plus(Duration.ofDays(29)), null);
+        given(request, List.of(
+            step(request, PREPARE, "catalog", PENDING, 4, NOW),
+            step(request, PREPARE, "order", PENDING, 3, NOW)));
+        client.answers.put("prepare catalog", failed("HTTP 503"));
+        client.answers.put("prepare order", failed("TIMEOUT"));
+
+        engine.runOnce(NOW);
+
+        assertEquals(List.of("CRAVES_ALERT alert=ACCOUNT_DELETION_STEP_FAILING requestId=" + request.id()
+            + " phase=PREPARE service=catalog attempts=5 error=HTTP 503"), alerts());
+    }
+
+    @Test
+    void dueRequestWithBlockersWaitsAndRechecksDaily() {
+        DeletionRequest request = scheduled(NOW.minusSeconds(60), NOW.minus(Duration.ofDays(7)));
+        given(request, allPrepared(request));
+        client.answers.put("blockers order", new ServiceCall(Outcome.DONE, Map.of(),
+            List.of(new Blocker("order", "ORDER_IN_PROGRESS", "1 order")), null));
+        client.answers.put("blockers catalog", failed("HTTP 503"));
+
+        engine.runOnce(NOW);
+
+        assertEquals(AccountErasureClient.ERASE_ORDER.stream().map(service -> "blockers " + service).toList(), client.calls);
+        Map<String, Object> waiting = columns(request.id(), SCHEDULED, WAITING_ON_OPEN_ITEMS);
+        assertEquals(NOW.plus(Duration.ofDays(1)), waiting.get("next_check_at"));
+        assertEquals("[{\"service\":\"order\",\"code\":\"ORDER_IN_PROGRESS\",\"detail\":\"1 order\"},"
+            + "{\"service\":\"catalog\",\"code\":\"SERVICE_UNREACHABLE\",\"detail\":\"HTTP 503\"}]", waiting.get("blockers_json"));
+        verifyNoInteractions(lock);
+        verify(deletions, never()).insertSteps(any(), any(), any(), any());
+
+        // A day later the order is delivered and catalog answers: the re-check finds nothing open.
+        Instant tomorrow = NOW.plus(Duration.ofDays(1));
+        DeletionRequest waitingRequest = with(request, WAITING_ON_OPEN_ITEMS, tomorrow);
+        given(waitingRequest, allPrepared(request));
+        client.answers.clear();
+        client.calls.clear();
+        clock.set(tomorrow);
+
+        engine.runOnce(tomorrow);
+
+        assertEquals(8, client.calls.size());
+        assertEquals(tomorrow, columns(request.id(), WAITING_ON_OPEN_ITEMS, ERASING).get("locked_at"));
+        verify(lock).lock(waitingRequest);
+    }
+
+    @Test
+    void waitingAWeekPastDueAlerts() {
+        DeletionRequest sixDays = with(scheduled(NOW.minus(Duration.ofDays(6)), NOW), WAITING_ON_OPEN_ITEMS, NOW);
+        DeletionRequest sevenDays = with(scheduled(NOW.minus(Duration.ofDays(7)), NOW), WAITING_ON_OPEN_ITEMS, NOW.minusSeconds(1));
+        DeletionRequest notYet = with(scheduled(NOW.minus(Duration.ofDays(30)), NOW), WAITING_ON_OPEN_ITEMS, NOW.plusSeconds(1));
+        for (DeletionRequest request : List.of(sixDays, sevenDays, notYet)) given(request, allPrepared(request));
+        client.answers.put("blockers referral", new ServiceCall(Outcome.DONE, Map.of(),
+            List.of(new Blocker("referral", "FORFEIT_AWAITING_FINANCE", "")), null));
+
+        engine.runOnce(NOW);
+
+        assertEquals(List.of("CRAVES_ALERT alert=ACCOUNT_DELETION_WAITING requestId=" + sevenDays.id() + " days=7"), alerts());
+        assertEquals(16, client.calls.size(), "a request whose daily re-check has not come is not checked");
+        verify(deletions, never()).transition(eq(notYet.id()), any(), any(), any());
+    }
+
+    @Test
+    void dueRequestWithAPrepareStepNotDoneWaits() {
+        DeletionRequest request = scheduled(NOW, NOW.minus(Duration.ofDays(7)));
+        given(request, allPrepared(request,
+            step(request, PREPARE, "catalog", PENDING, 2, NOW.plusSeconds(600)),
+            step(request, PREPARE, "order", BLOCKED, 0, NOW.plus(Duration.ofHours(3)))));
+
+        engine.runOnce(NOW);
+
+        assertEquals("[{\"service\":\"catalog\",\"code\":\"PREPARE_NOT_DONE\",\"detail\":\"\"},"
+            + "{\"service\":\"order\",\"code\":\"PREPARE_NOT_DONE\",\"detail\":\"\"}]",
+            columns(request.id(), SCHEDULED, WAITING_ON_OPEN_ITEMS).get("blockers_json"));
+        verifyNoInteractions(lock);
+    }
+
+    @Test
+    void dueRequestWithNothingOpenLocksAndSchedulesEraseAfterTheTokenLifetime() {
+        DeletionRequest request = scheduled(NOW.minusSeconds(1), NOW.minus(Duration.ofDays(7)));
+        given(request, allPrepared(request));
+        List<String> seen = new CopyOnWriteArrayList<>();
+        when(deletions.transition(eq(request.id()), any(), any(), any())).thenAnswer(call -> seen.add("transition " + transaction()));
+        doAnswer(call -> seen.add("lock " + transaction())).when(lock).lock(any());
+        doAnswer(call -> seen.add("insertSteps " + transaction())).when(deletions).insertSteps(any(), any(), any(), any());
+        // Kept between the claim and the check: the move to ERASING finds another status and nothing is locked.
+        DeletionRequest kept = scheduled(NOW.minusSeconds(1), NOW.minus(Duration.ofDays(7)));
+        given(kept, allPrepared(kept));
+        when(deletions.transition(eq(kept.id()), any(), any(), any())).thenReturn(false);
+
+        engine.runOnce(NOW);
+
+        assertEquals(List.of("transition active#1", "lock active#1", "insertSteps active#1"), seen,
+            "the move to ERASING, the lock and the erase steps commit together, in one transaction");
+        Map<String, Object> erasing = columns(request.id(), SCHEDULED, ERASING);
+        assertEquals(NOW, erasing.get("locked_at"));
+        assertTrue(erasing.containsKey("blockers_json"));
+        assertNull(erasing.get("blockers_json"));
+        var order = inOrder(deletions, lock);
+        order.verify(deletions).lockOpen(request.identityId()); // the identity row first, in the same order as "keep"
+        order.verify(deletions).transition(eq(request.id()), eq(SCHEDULED), eq(ERASING), any());
+        order.verify(lock).lock(request);
+        order.verify(deletions).insertSteps(request.id(), ERASE,
+            Stream.concat(AccountErasureClient.ERASE_ORDER.stream(), Stream.of("auth")).toList(),
+            NOW.plus(Duration.ofMinutes(11))); // access token lifetime (10 min here) + 1 min
+        verify(lock, never()).lock(kept);
+        verify(deletions, never()).insertSteps(eq(kept.id()), any(), any(), any());
+    }
+
+    @Test
+    void reminderIsSentOnceSevenDaysBefore() {
+        DeletionRequest due = scheduled(NOW.plus(Duration.ofDays(7)), null);
+        DeletionRequest early = scheduled(NOW.plus(Duration.ofDays(7)).plusSeconds(1), null);
+        DeletionRequest sent = scheduled(NOW.plus(Duration.ofDays(3)), NOW.minus(Duration.ofDays(4)));
+        for (DeletionRequest request : List.of(due, early, sent)) given(request, List.of());
+
+        engine.runOnce(NOW);
+
+        verify(deletions).claimDue(NOW, 10, Duration.ofMinutes(5), Duration.ofDays(7));
+        var order = inOrder(notices, deletions);
+        order.verify(notices).reminder(due);
+        order.verify(deletions).transition(eq(due.id()), eq(SCHEDULED), eq(SCHEDULED), any());
+        assertEquals(Map.of("reminder_sent_at", NOW), columns(due.id(), SCHEDULED, SCHEDULED));
+        verify(notices, never()).reminder(early);
+        verify(notices, never()).reminder(sent);
+        verify(deletions, never()).transition(eq(early.id()), any(), any(), any());
+        verify(deletions, never()).transition(eq(sent.id()), any(), any(), any());
+    }
+
+    @Test
+    void releaseStepsRunAfterKeep() {
+        DeletionRequest kept = with(request(Scope.CHEF, SCHEDULED, NOW.plus(Duration.ofDays(20)), null), CANCELLED, null);
+        given(kept, List.of(
+            step(kept, PREPARE, "catalog", PENDING, 1, NOW),
+            step(kept, PREPARE, "subscription", DONE, 0, null),
+            step(kept, RELEASE, "catalog", PENDING, 0, NOW),
+            step(kept, RELEASE, "subscription", PENDING, 0, NOW)));
+        client.answers.put("release subscription", failed("HTTP 503"));
+
+        engine.runOnce(NOW);
+
+        assertEquals(List.of("release catalog", "release subscription"), client.calls, "a kept request prepares nothing more");
+        verify(deletions).recordStep(kept.id(), RELEASE, "catalog", DONE, 0, null, null);
+        verify(deletions).recordStep(kept.id(), RELEASE, "subscription", PENDING, null, "HTTP 503", NOW.plus(Duration.ofMinutes(5)));
+        verify(deletions, never()).transition(any(), any(), any(), any());
+        verifyNoInteractions(lock, notices);
+    }
+
+    /** Two-worker exclusion itself is the SQL claim's (AccountDeletionRepositoryDbTest.claimDueSkipsLeasedRows). */
+    @Test
+    void leaseIsReleasedOnlyAfterTheStepIsRecorded() throws Exception {
+        DeletionRequest request = scheduled(NOW.plus(Duration.ofDays(29)), null);
+        given(request, List.of(step(request, PREPARE, "order", PENDING, 0, NOW)));
+        // As the SQL claim does: a leased request is not handed out again until its lease is released.
+        Set<UUID> leased = ConcurrentHashMap.newKeySet();
+        when(deletions.claimDue(any(), anyInt(), any(), any())).thenAnswer(call -> claimed.stream().filter(leased::add).toList());
+        doAnswer(call -> leased.remove(call.<UUID>getArgument(0))).when(deletions).releaseLease(any(), any());
+        CountDownLatch inCall = new CountDownLatch(1);
+        CountDownLatch secondDone = new CountDownLatch(1);
+        client.during = call -> {
+            inCall.countDown();
+            await(secondDone);
+        };
+
+        CompletableFuture<Void> first = CompletableFuture.runAsync(() -> engine.runOnce(NOW));
+        await(inCall);
+        engine().runOnce(NOW);
+        secondDone.countDown();
+        first.get(10, TimeUnit.SECONDS);
+
+        assertEquals(List.of("prepare order"), client.calls);
+        var order = inOrder(deletions);
+        order.verify(deletions).recordStep(request.id(), PREPARE, "order", DONE, 0, null, null);
+        order.verify(deletions).releaseLease(request.id(), LEASE_UNTIL);
+        assertTrue(leased.isEmpty(), "the lease is released once the work is recorded");
+    }
+
+    @Test
+    void noHttpCallInsideATransaction() {
+        DeletionRequest due = scheduled(NOW, null);
+        given(due, allPrepared(due, step(due, PREPARE, "order", PENDING, 0, NOW)), allPrepared(due));
+        DeletionRequest soon = scheduled(NOW.plus(Duration.ofDays(3)), null);
+        given(soon, List.of());
+        DeletionRequest kept = with(request(Scope.ALL, SCHEDULED, NOW.plus(Duration.ofDays(9)), null), CANCELLED, null);
+        given(kept, List.of(step(kept, RELEASE, "catalog", PENDING, 0, NOW)));
+        doAnswer(call -> {
+            assertFalse(TransactionSynchronizationManager.isActualTransactionActive(), "notice sent inside a transaction");
+            return null;
+        }).when(notices).reminder(any());
+
+        engine.runOnce(NOW);
+
+        assertTrue(client.calls.containsAll(List.of("prepare order", "blockers order", "blockers notification", "release catalog")),
+            client.calls.toString());
+        verify(notices).reminder(soon);
+        verify(lock).lock(due);
+        assertEquals(1, transactions.begun, "only the lock opens a transaction");
+    }
+
+    @Test
+    void writesUseTheTimeAfterEachCallNotTheTickStart() {
+        client.during = call -> clock.advance(Duration.ofMinutes(1)); // every call takes a minute
+        DeletionRequest failing = scheduled(NOW.plus(Duration.ofDays(29)), NOW);
+        given(failing, List.of(step(failing, PREPARE, "catalog", PENDING, 0, NOW), step(failing, PREPARE, "order", PENDING, 0, NOW)));
+        client.answers.put("prepare catalog", new ServiceCall(Outcome.BLOCKED, Map.of(), List.of(), null));
+        client.answers.put("prepare order", failed("HTTP 503"));
+        DeletionRequest clear = scheduled(NOW, NOW.minus(Duration.ofDays(7)));
+        given(clear, allPrepared(clear));
+        // The identity row can be held by a "keep" or a sign-in: the lock reads the time once it has the row.
+        when(deletions.lockOpen(clear.identityId())).thenAnswer(call -> {
+            clock.advance(Duration.ofMinutes(2));
+            return Optional.empty();
+        });
+
+        engine.runOnce(NOW);
+
+        verify(deletions).recordStep(failing.id(), PREPARE, "catalog", BLOCKED, null, null, NOW.plus(Duration.ofMinutes(1)).plus(Duration.ofDays(1)));
+        verify(deletions).recordStep(failing.id(), PREPARE, "order", PENDING, null, "HTTP 503", NOW.plus(Duration.ofMinutes(2 + 5)));
+        Instant lockedAt = NOW.plus(Duration.ofMinutes(2 + 8 + 2)); // 2 prepare calls, 8 blockers calls, the wait for the row
+        assertEquals(lockedAt, columns(clear.id(), SCHEDULED, ERASING).get("locked_at"));
+        verify(deletions).insertSteps(eq(clear.id()), eq(ERASE), any(), eq(lockedAt.plus(Duration.ofMinutes(11))));
+
+        // A later tick that still started at NOW: the re-check and the reminder are dated when their calls return.
+        claimed.clear();
+        DeletionRequest open = scheduled(NOW, NOW.minus(Duration.ofDays(7)));
+        given(open, allPrepared(open));
+        client.answers.put("blockers order", new ServiceCall(Outcome.DONE, Map.of(), List.of(new Blocker("order", "ORDER_IN_PROGRESS", "")), null));
+        DeletionRequest soon = scheduled(NOW.plus(Duration.ofDays(3)), null);
+        given(soon, List.of());
+        doAnswer(call -> clock.advance(Duration.ofMinutes(1))).when(notices).reminder(soon);
+
+        engine.runOnce(NOW);
+
+        assertEquals(lockedAt.plus(Duration.ofMinutes(8)).plus(Duration.ofDays(1)),
+            columns(open.id(), SCHEDULED, WAITING_ON_OPEN_ITEMS).get("next_check_at"));
+        assertEquals(Map.of("reminder_sent_at", lockedAt.plus(Duration.ofMinutes(9))), columns(soon.id(), SCHEDULED, SCHEDULED));
+    }
+
+    @Test
+    void blockersAnsweredWithBlockedAreKept() {
+        DeletionRequest request = scheduled(NOW, NOW.minus(Duration.ofDays(7)));
+        given(request, allPrepared(request));
+        client.answers.put("blockers referral", new ServiceCall(Outcome.BLOCKED, Map.of(),
+            List.of(new Blocker("referral", "FORFEIT_AWAITING_FINANCE", "balance")), null));
+        client.answers.put("blockers advanced", new ServiceCall(Outcome.BLOCKED, Map.of(), List.of(), null));
+
+        engine.runOnce(NOW);
+
+        assertEquals("[{\"service\":\"referral\",\"code\":\"FORFEIT_AWAITING_FINANCE\",\"detail\":\"balance\"},"
+                + "{\"service\":\"advanced\",\"code\":\"SERVICE_UNREACHABLE\",\"detail\":\"BLOCKED\"}]",
+            columns(request.id(), SCHEDULED, WAITING_ON_OPEN_ITEMS).get("blockers_json"),
+            "a refusal keeps its reasons; a refusal with none is not an answer");
+        verifyNoInteractions(lock);
+    }
+
+    @Test
+    void aRequestThatFailsAlertsAndReleasesItsLease() {
+        DeletionRequest broken = scheduled(NOW.plus(Duration.ofDays(29)), null);
+        given(broken, List.of());
+        when(deletions.steps(broken.id())).thenThrow(new IllegalStateException("synthetic +910000000000"));
+        DeletionRequest next = scheduled(NOW.plus(Duration.ofDays(29)), null);
+        given(next, List.of(step(next, PREPARE, "order", PENDING, 0, NOW)));
+
+        engine.runOnce(NOW);
+
+        assertEquals(List.of("CRAVES_ALERT alert=ACCOUNT_DELETION_REQUEST_FAILING requestId=" + broken.id() + " error=IllegalStateException"),
+            alerts(), "the exception class only, never its message");
+        verify(deletions).releaseLease(broken.id(), LEASE_UNTIL);
+        assertEquals(List.of("prepare order"), client.calls, "the rest of the batch still runs");
+    }
+
+    @Test
+    void noReminderForARequestAlreadyDue() {
+        DeletionRequest late = scheduled(NOW, null);
+        given(late, allPrepared(late));
+
+        engine.runOnce(NOW);
+
+        verifyNoInteractions(notices);
+        verify(deletions, never()).transition(eq(late.id()), eq(SCHEDULED), eq(SCHEDULED), any());
+        verify(lock).lock(late);
+    }
+
+    // --- part 2: erasing
+
+    @Test
+    void stepsRunInTheFixedOrder() throws Exception {
+        DeletionRequest request = erasing(Scope.ALL, null);
+        live(request, eraseSteps(request, 0, NOW));
+        when(deletions.contact(request.identityId())).thenReturn(new Contact("synthetic-phone", "synthetic@example.test"));
+        doAnswer(call -> {
+            assertFalse(TransactionSynchronizationManager.isActualTransactionActive(), "notice sent inside a transaction");
+            return client.calls.add("notice");
+        }).when(notices).completed(any(), any(), any());
+        when(eraser.erase(request)).thenAnswer(call -> {
+            assertFalse(TransactionSynchronizationManager.isActualTransactionActive(), "Firebase called inside a transaction");
+            client.calls.add("auth");
+            return Map.of("auth_identity", 1, "refresh_session", 2);
+        });
+
+        for (int tick = 1; tick <= AccountErasureClient.ERASE_ORDER.size(); tick++) {
+            engine.runOnce(NOW);
+            assertEquals(tick, client.calls.size(), "one erase call per tick");
+        }
+        engine.runOnce(NOW);
+
+        assertEquals(Stream.concat(AccountErasureClient.ERASE_ORDER.stream().map("erase "::concat), Stream.of("notice", "auth")).toList(),
+            client.calls, "the order of ERASE_ORDER, not the stored order; the final notice before the login is wiped");
+        verify(notices).completed(request, "synthetic-phone", "synthetic@example.test");
+        assertEquals(Map.of("final_notice_sent_at", NOW), columns(request.id(), ERASING, ERASING));
+        verify(deletions).recordStep(request.id(), ERASE, "auth", DONE, 3, null, null);
+        assertEquals(Map.of("completed_at", NOW), columns(request.id(), ERASING, COMPLETED));
+    }
+
+    @Test
+    void eraseWaitsForTheTokenLifetimeAfterLock() {
+        DeletionRequest due = scheduled(NOW, NOW.minus(Duration.ofDays(7)));
+        given(due, allPrepared(due));
+        engine.runOnce(NOW);
+        ArgumentCaptor<Instant> runAfter = ArgumentCaptor.forClass(Instant.class);
+        verify(deletions).insertSteps(eq(due.id()), eq(ERASE), any(), runAfter.capture());
+        assertEquals(NOW.plus(Duration.ofMinutes(11)), runAfter.getValue()); // access token lifetime (10 min here) + 1 min
+        DeletionRequest locked = erasing(due, null);
+        live(locked, eraseSteps(locked, 0, runAfter.getValue()));
+        client.calls.clear();
+
+        clock.set(runAfter.getValue().minusSeconds(1));
+        engine.runOnce(runAfter.getValue().minusSeconds(1));
+        assertEquals(List.of(), client.calls, "a token issued just before the lock may still be alive");
+
+        clock.set(runAfter.getValue());
+        engine.runOnce(runAfter.getValue());
+        assertEquals(List.of("erase subscription"), client.calls);
+
+        // Steps lost after the lock are re-created on the lock's schedule, and nothing is called meanwhile.
+        claimed.clear();
+        DeletionRequest lost = erasing(Scope.CHEF, null);
+        given(lost, List.of(step(lost, ERASE, "subscription", DONE, 0, null)));
+        engine.runOnce(runAfter.getValue());
+        verify(deletions).insertSteps(lost.id(), ERASE, Stream.concat(AccountErasureClient.ERASE_ORDER.stream(), Stream.of("auth")).toList(),
+            lost.lockedAt().plus(Duration.ofMinutes(11)));
+        assertEquals(List.of("erase subscription"), client.calls);
+    }
+
+    @Test
+    void aFailingStepStopsTheRunAndNeverReachesAuth() {
+        DeletionRequest request = erasing(Scope.ALL, null);
+        live(request, eraseSteps(request, 1, NOW));
+        client.answers.put("erase order", failed("HTTP 503"));
+
+        for (int day = 0; day < 6; day++) {
+            Instant at = NOW.plus(Duration.ofDays(day)); // well past each back-off
+            clock.set(at);
+            engine.runOnce(at);
+        }
+
+        assertEquals(Collections.nCopies(6, "erase order"), client.calls, "integration and every later step wait behind order");
+        String alert = "CRAVES_ALERT alert=ACCOUNT_DELETION_STEP_FAILING requestId=" + request.id() + " phase=ERASE service=order attempts=";
+        assertEquals(List.of(alert + "5 error=HTTP 503", alert + "6 error=HTTP 503"), alerts());
+        verifyNoInteractions(eraser, notices);
+        verify(deletions, never()).transition(any(), any(), any(), any()); // still ERASING
+    }
+
+    @Test
+    void aBlockedStepRetriesNextDayAndAlertsEachTime() {
+        DeletionRequest request = erasing(Scope.CHEF, null);
+        live(request, eraseSteps(request, 2, NOW));
+        client.answers.put("erase integration", new ServiceCall(Outcome.BLOCKED, Map.of(), List.of(
+            new Blocker("integration", "PAYOUT_PENDING", "synthetic +910000000000"), new Blocker("integration", "ORDER_OPEN", "")), null));
+
+        engine.runOnce(NOW);
+        Instant later = NOW.plus(Duration.ofHours(23));
+        clock.set(later);
+        engine.runOnce(later);
+        Instant nextDay = NOW.plus(Duration.ofDays(1));
+        clock.set(nextDay);
+        engine.runOnce(nextDay);
+        client.answers.clear();
+        Instant dayAfter = nextDay.plus(Duration.ofDays(1));
+        clock.set(dayAfter);
+        engine.runOnce(dayAfter);
+
+        verify(deletions).recordStep(request.id(), ERASE, "integration", BLOCKED, null, null, nextDay);
+        verify(deletions).recordStep(request.id(), ERASE, "integration", BLOCKED, null, null, dayAfter);
+        assertEquals(Collections.nCopies(3, "erase integration"), client.calls, "nothing runs past a blocked step");
+        verify(deletions).recordStep(request.id(), ERASE, "integration", DONE, 0, null, null);
+        // The account is locked and "keep" answers 409, so someone must hear of it: codes only, never the details.
+        String alert = "CRAVES_ALERT alert=ACCOUNT_DELETION_ERASE_BLOCKED requestId=" + request.id()
+            + " service=integration codes=PAYOUT_PENDING,ORDER_OPEN";
+        assertEquals(List.of(alert, alert), alerts(), "every blocked erase attempt alerts");
+    }
+
+    @Test
+    void aSweepStepForAuthIsNeverALoginWipe() {
+        DeletionRequest request = with(erasing(Scope.ALL, NOW), COMPLETED, null);
+        given(request, Stream.concat(eraseSteps(request, 9, NOW).stream(), Stream.of(step(request, SWEEP, "auth", PENDING, 0, NOW))).toList());
+
+        engine.runOnce(NOW);
+
+        verify(deletions).recordStep(request.id(), SWEEP, "auth", PENDING, null, "UNSUPPORTED_STEP", NOW.plus(Duration.ofMinutes(5)));
+        verifyNoInteractions(eraser);
+        assertEquals(List.of(), client.calls);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Scope.class)
+    void aKeptRequestsReleaseSkipsWhileANewerChefRequestIsOpen(Scope newerScope) {
+        DeletionRequest kept = with(request(Scope.CHEF, SCHEDULED, NOW.plus(Duration.ofDays(20)), null), CANCELLED, null);
+        given(kept, List.of(step(kept, RELEASE, "catalog", PENDING, 0, NOW)));
+        DeletionRequest newer = new DeletionRequest(UUID.randomUUID(), kept.identityId(), newerScope, RequestStatus.PENDING_REVIEW,
+            Via.APP, NOW, null, null, null, null, null, null, null, null, null, null, null);
+        when(deletions.findOpen(kept.identityId())).thenReturn(Optional.of(newer));
+
+        engine.runOnce(NOW);
+
+        verify(deletions).recordStep(kept.id(), RELEASE, "catalog", DONE, 0, null, null);
+        if (newerScope == Scope.CUSTOMER) {
+            assertEquals(List.of("release catalog"), client.calls, "a customer request closed no kitchen");
+        } else {
+            // The newer request's prepare kept the original state; its own release restores it.
+            assertEquals(List.of(), client.calls, "the old release would reopen what the newer request closed");
+            assertEquals(List.of("Account deletion release skipped requestId=" + kept.id() + " openRequestId=" + newer.id()
+                + " service=catalog"), logs.list.stream().map(ILoggingEvent::getFormattedMessage).toList());
+        }
+    }
+
+    @Test
+    void completedAllQueuesTheSweepADayLater() throws Exception {
+        DeletionRequest request = erasing(Scope.ALL, null);
+        given(request, eraseSteps(request, 8, NOW));
+        when(deletions.contact(request.identityId())).thenReturn(new Contact("synthetic-phone", null));
+        when(eraser.erase(request)).thenAnswer(call -> {
+            clock.advance(Duration.ofMinutes(1));
+            return Map.of();
+        });
+        List<String> seen = new CopyOnWriteArrayList<>();
+        when(deletions.transition(eq(request.id()), eq(ERASING), eq(COMPLETED), any())).thenAnswer(call -> seen.add("completed " + transaction()));
+        doAnswer(call -> seen.add("sweep " + transaction())).when(deletions).insertSteps(any(), any(), any(), any());
+
+        engine.runOnce(NOW);
+
+        Instant completedAt = NOW.plus(Duration.ofMinutes(1));
+        assertEquals(List.of("completed active#1", "sweep active#1"), seen, "the sweep commits with COMPLETED, never while ERASING");
+        assertEquals(Map.of("completed_at", completedAt), columns(request.id(), ERASING, COMPLETED));
+        verify(deletions).insertSteps(request.id(), SWEEP, List.of("notification"), completedAt.plus(Duration.ofDays(1)));
+        verify(notices).completed(request, "synthetic-phone", null);
+
+        // A day later the sweep re-runs notification's erase, which blanks the final email's row.
+        claimed.clear();
+        Instant tomorrow = completedAt.plus(Duration.ofDays(1));
+        given(with(request, COMPLETED, null), Stream.concat(eraseSteps(request, 9, NOW).stream(),
+            Stream.of(step(request, SWEEP, "notification", PENDING, 0, tomorrow))).toList());
+        clock.set(tomorrow);
+        engine.runOnce(tomorrow);
+
+        assertEquals(List.of("erase notification"), client.calls);
+        verify(deletions).recordStep(request.id(), SWEEP, "notification", DONE, 0, null, null);
+        verify(eraser).erase(any());
+        verify(notices).completed(any(), any(), any());
+    }
+
+    @Test
+    void oneSideCompletionSendsInAppAndNoSweep() throws Exception {
+        DeletionRequest request = erasing(Scope.CUSTOMER, null);
+        given(request, eraseSteps(request, 8, NOW));
+        when(deletions.contact(request.identityId())).thenReturn(new Contact("synthetic-phone", "synthetic@example.test"));
+        when(eraser.erase(request)).thenReturn(Map.of("auth_identity_role", 0, "auth_identity", 1));
+
+        engine.runOnce(NOW);
+
+        // DeletionNotices sends a one-side completion IN_APP to the remaining side (DeletionNoticesTest).
+        verify(notices).completed(request, "synthetic-phone", "synthetic@example.test");
+        verify(deletions).recordStep(request.id(), ERASE, "auth", DONE, 1, null, null);
+        assertEquals(Map.of("completed_at", NOW), columns(request.id(), ERASING, COMPLETED));
+        verify(deletions, never()).insertSteps(any(), any(), any(), any());
+    }
+
+    @Test
+    void aFailingLoginWipeIsRetriedWithoutResendingTheNotice() throws Exception {
+        DeletionRequest request = erasing(Scope.ALL, null);
+        given(request, eraseSteps(request, 8, NOW));
+        when(deletions.contact(request.identityId())).thenReturn(new Contact("synthetic-phone", "synthetic@example.test"));
+        when(eraser.erase(any())).thenThrow(new FirebaseAuthException(ErrorCode.UNAVAILABLE, "synthetic +910000000000", null, null, null))
+            .thenReturn(Map.of("auth_identity", 1));
+
+        engine.runOnce(NOW);
+
+        verify(deletions).recordStep(request.id(), ERASE, "auth", PENDING, null, "FIREBASE UNAVAILABLE", NOW.plus(Duration.ofMinutes(5)));
+        verify(deletions, never()).transition(any(), any(), eq(COMPLETED), any());
+
+        Instant retry = NOW.plus(Duration.ofMinutes(5));
+        given(erasing(request, NOW), eraseSteps(request, 8, NOW));
+        clock.set(retry);
+        engine.runOnce(retry);
+
+        verify(notices, times(1)).completed(any(), any(), any());
+        assertEquals(Map.of("completed_at", retry), columns(request.id(), ERASING, COMPLETED));
+    }
+
+    // --- helpers
+
+    /** {@code r} as the lock left it: ERASING, locked at NOW. */
+    static DeletionRequest erasing(DeletionRequest r, Instant finalNoticeSentAt) {
+        return new DeletionRequest(r.id(), r.identityId(), r.scope(), ERASING, r.via(), r.requestedAt(), r.dueAt(), r.reviewedBy(),
+            r.reviewedAt(), r.reviewNote(), null, null, NOW, r.reminderSentAt(), finalNoticeSentAt, null, null);
+    }
+
+    DeletionRequest erasing(Scope scope, Instant finalNoticeSentAt) {
+        return erasing(request(scope, SCHEDULED, NOW, NOW.minus(Duration.ofDays(7))), finalNoticeSentAt);
+    }
+
+    /** The 9 ERASE steps in the repository's order (by service): the first {@code done} of ERASE_ORDER + auth done, the rest due at {@code runAfter}. */
+    static List<DeletionStep> eraseSteps(DeletionRequest request, int done, Instant runAfter) {
+        List<String> order = Stream.concat(AccountErasureClient.ERASE_ORDER.stream(), Stream.of("auth")).toList();
+        return order.stream().sorted().map(service -> order.indexOf(service) < done
+            ? step(request, ERASE, service, DONE, 0, null) : step(request, ERASE, service, PENDING, 0, runAfter)).toList();
+    }
+
+    /** Steps held in memory like the table, so each tick sees what the ones before recorded. */
+    void live(DeletionRequest request, List<DeletionStep> steps) {
+        List<DeletionStep> stored = new CopyOnWriteArrayList<>(steps);
+        given(request, steps);
+        when(deletions.steps(request.id())).thenAnswer(call -> List.copyOf(stored));
+        doAnswer(call -> {
+            String error = call.getArgument(5);
+            stored.replaceAll(s -> s.phase() == call.<Phase>getArgument(1) && s.service().equals(call.getArgument(2)) && s.status() != DONE
+                ? new DeletionStep(s.requestId(), s.phase(), s.service(), call.getArgument(3), s.attempts() + (error == null ? 0 : 1),
+                    error, call.getArgument(4), call.getArgument(6), null)
+                : s);
+            return null;
+        }).when(deletions).recordStep(eq(request.id()), any(), any(), any(), any(), any(), any());
+    }
+
+    DeletionRequest request(Scope scope, RequestStatus status, Instant dueAt, Instant reminderSentAt) {
+        return new DeletionRequest(UUID.randomUUID(), UUID.randomUUID(), scope, status, Via.APP, NOW.minus(Duration.ofDays(30)),
+            dueAt, null, null, null, null, null, null, reminderSentAt, null, null, null);
+    }
+
+    DeletionRequest scheduled(Instant dueAt, Instant reminderSentAt) {
+        return request(Scope.CUSTOMER, SCHEDULED, dueAt, reminderSentAt);
+    }
+
+    static DeletionRequest with(DeletionRequest r, RequestStatus status, Instant nextCheckAt) {
+        return new DeletionRequest(r.id(), r.identityId(), r.scope(), status, r.via(), r.requestedAt(), r.dueAt(), r.reviewedBy(),
+            r.reviewedAt(), r.reviewNote(), r.blockersJson(), nextCheckAt, r.lockedAt(), r.reminderSentAt(), r.finalNoticeSentAt(),
+            r.completedAt(), r.cancelledAt());
+    }
+
+    static DeletionStep step(DeletionRequest request, Phase phase, String service, StepStatus status, int attempts, Instant nextAttemptAt) {
+        return new DeletionStep(request.id(), phase, service, status, attempts, null, null, nextAttemptAt, null);
+    }
+
+    /** A PREPARE step per service, in the repository's order (phase, then service): {@code instead} or else done. */
+    static List<DeletionStep> allPrepared(DeletionRequest request, DeletionStep... instead) {
+        return AccountErasureClient.ERASE_ORDER.stream().sorted().map(service -> Stream.of(instead)
+            .filter(step -> step.service().equals(service)).findFirst()
+            .orElse(step(request, PREPARE, service, DONE, 0, null))).toList();
+    }
+
+    @SafeVarargs
+    final void given(DeletionRequest request, List<DeletionStep> steps, List<DeletionStep>... later) {
+        if (!claimed.contains(request.id())) claimed.add(request.id());
+        when(deletions.find(request.id())).thenReturn(Optional.of(request));
+        when(deletions.steps(request.id())).thenReturn(steps, later);
+    }
+
+    static ServiceCall failed(String error) {
+        return new ServiceCall(Outcome.FAILED, Map.of(), List.of(), error);
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> columns(UUID id, RequestStatus from, RequestStatus to) {
+        ArgumentCaptor<Consumer<Map<String, Object>>> captor = ArgumentCaptor.forClass(Consumer.class);
+        verify(deletions).transition(eq(id), eq(from), eq(to), captor.capture());
+        Map<String, Object> columns = new HashMap<>();
+        captor.getValue().accept(columns);
+        return columns;
+    }
+
+    List<String> alerts() {
+        return logs.list.stream().filter(event -> event.getFormattedMessage().startsWith("CRAVES_ALERT"))
+            .peek(event -> assertEquals(Level.ERROR, event.getLevel()))
+            .map(ILoggingEvent::getFormattedMessage).toList();
+    }
+
+    String transaction() {
+        return (TransactionSynchronizationManager.isActualTransactionActive() ? "active#" : "none#") + transactions.begun;
+    }
+
+    static void await(CountDownLatch latch) {
+        try {
+            assertTrue(latch.await(10, TimeUnit.SECONDS));
+        } catch (InterruptedException error) {
+            throw new IllegalStateException(error);
+        }
+    }
+
+    static final class MutableClock extends Clock {
+        private volatile Instant now;
+        MutableClock(Instant now) { this.now = now; }
+        void set(Instant at) { now = at; }
+        Instant advance(Duration by) { return now = now.plus(by); }
+        @Override public Instant instant() { return now; }
+        @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+        @Override public Clock withZone(ZoneId zone) { return this; }
+    }
+
+    /** A real transaction lifecycle with no database: TransactionSynchronizationManager sees it as active. */
+    static class FakeTransactions extends AbstractPlatformTransactionManager {
+        volatile int begun;
+        @Override protected Object doGetTransaction() { return new Object(); }
+        @Override protected void doBegin(Object transaction, TransactionDefinition definition) { begun++; }
+        @Override protected void doCommit(DefaultTransactionStatus status) {}
+        @Override protected void doRollback(DefaultTransactionStatus status) {}
+    }
+
+    /** Answers from a script (default: done, nothing open) and fails the test if called inside a transaction. */
+    static class FakeClient extends AccountErasureClient {
+        final List<String> calls = new CopyOnWriteArrayList<>();
+        final Map<String, ServiceCall> answers = new ConcurrentHashMap<>();
+        volatile Consumer<String> during = call -> {};
+
+        FakeClient() {
+            super(new AccountDeletionProperties(), Clock.fixed(NOW, ZoneOffset.UTC));
+        }
+
+        ServiceCall answer(String call) {
+            assertFalse(TransactionSynchronizationManager.isActualTransactionActive(), "HTTP call inside a transaction: " + call);
+            calls.add(call);
+            during.accept(call);
+            return answers.getOrDefault(call, OK);
+        }
+
+        @Override public ServiceCall blockers(String service, UUID identityId, Scope scope) { return answer("blockers " + service); }
+        @Override public ServiceCall prepare(String service, UUID requestId, UUID identityId, Scope scope) { return answer("prepare " + service); }
+        @Override public ServiceCall erase(String service, UUID requestId, UUID identityId, Scope scope) { return answer("erase " + service); }
+        @Override public ServiceCall release(String service, UUID requestId, UUID identityId, Scope scope) { return answer("release " + service); }
+    }
+}

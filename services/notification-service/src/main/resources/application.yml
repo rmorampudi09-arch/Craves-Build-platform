@@ -35,7 +35,7 @@ craves:
     signing-key: ${CRAVES_INTERNAL_AUTH_SIGNING_KEY:}
     caller-keys: ${CRAVES_INTERNAL_AUTH_CALLER_KEYS:}
     enforced-paths: ${CRAVES_INTERNAL_AUTH_ENFORCED_PATHS:}
-    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/notifications=order|user-chef;/internal/v1/auth-email/**=auth;/internal/v1/push/**=integration;/internal/v1/ops-alerts=integration;/internal/v1/account-erasure/**=auth}
+    allowed-callers: ${CRAVES_INTERNAL_AUTH_ALLOWED_CALLERS:/internal/v1/notifications=order|user-chef|auth;/internal/v1/auth-email/**=auth;/internal/v1/push/**=integration;/internal/v1/ops-alerts=integration;/internal/v1/account-erasure/**=auth}
   jwt:
     issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
     audience: ${CRAVES_JWT_AUDIENCE:craves-api}
@@ -73,3 +73,8 @@ craves:
   notification-recovery:
     api-enabled: ${CRAVES_NOTIFICATION_RECOVERY_API_ENABLED:false}
     maximum-list-size: ${CRAVES_NOTIFICATION_RECOVERY_MAXIMUM_LIST_SIZE:100}
+
+# Handbook 099: every log line carries the request's X-Correlation-ID (MDC key correlationId, set by CorrelationIdConfiguration).
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "

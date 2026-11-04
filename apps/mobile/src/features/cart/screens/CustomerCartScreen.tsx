@@ -543,6 +543,7 @@ export function CustomerCartScreen() {
 
   const handlePaymentStatusCheck = useCallback(async () => {
     setInteractionError(null);
+    setDeletionPaused(false);
     try {
       await reconcileInterruptedPayment(false);
     } catch {
@@ -628,6 +629,7 @@ export function CustomerCartScreen() {
     (item: CartScreenItem, targetQuantity: number) => {
       const interaction = resolveCartQuantityInteraction(targetQuantity);
       setInteractionError(null);
+      setDeletionPaused(false);
       activeCheckoutRef.current = null;
       if (interaction.kind === 'INVALID') {
         setInteractionError('Choose a valid cart quantity.');
@@ -671,6 +673,7 @@ export function CustomerCartScreen() {
           style: 'destructive',
           onPress: () => {
             setInteractionError(null);
+            setDeletionPaused(false);
             setClearBusy(true);
             void dispatch(clearCart({expectedSnapshot}))
               .then(outcome => {
@@ -942,6 +945,7 @@ export function CustomerCartScreen() {
     setReviewCartModel(null);
     setPaymentNotice(null);
     setInteractionError(null);
+    setDeletionPaused(false);
     if (checkoutItems.length === 0) return true;
 
     const refreshed = await dispatch(refreshCartSnapshot());
@@ -1002,7 +1006,7 @@ export function CustomerCartScreen() {
           onCheckStatus={paymentRecoveryActive ? handlePaymentStatusCheck : undefined}
         />
       ) : null}
-      {deletionPaused ? <DeletionPausedNotice kind="orders" /> : null}
+      {deletionPaused ? <DeletionPausedNotice kind="orders" onKept={() => setDeletionPaused(false)} /> : null}
       {interactionError ? <RecoverableErrorBanner message={interactionError} /> : null}
     </>
   );

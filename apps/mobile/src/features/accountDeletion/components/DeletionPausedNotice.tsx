@@ -7,7 +7,7 @@ import {useAccountDeletion} from '../state/AccountDeletionProvider';
 import {KeepPill} from './KeepPill';
 
 /** Shown in place of a raw error when the server refuses an order or meal plan because a delete request is open. */
-export function DeletionPausedNotice({kind}: {kind: 'orders' | 'mealPlans'}) {
+export function DeletionPausedNotice({kind, onKept}: {kind: 'orders' | 'mealPlans'; onKept?: () => void}) {
   const {pending, keep, keeping} = useAccountDeletion();
   const [startedOpen] = useState(pending !== null);
   const [kept, setKept] = useState(false);
@@ -17,7 +17,12 @@ export function DeletionPausedNotice({kind}: {kind: 'orders' | 'mealPlans'}) {
     return null;
   }
   const onKeep = () => {
-    keep().then(outcome => outcome === 'kept' && setKept(true));
+    keep().then(outcome => {
+      if (outcome === 'kept') {
+        setKept(true);
+        onKept?.();
+      }
+    });
   };
   return (
     <View accessibilityLiveRegion="assertive" accessibilityRole="alert" style={styles.box}>

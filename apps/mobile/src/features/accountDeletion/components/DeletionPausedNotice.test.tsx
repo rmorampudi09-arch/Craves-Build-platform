@@ -21,9 +21,9 @@ let tree: renderer.ReactTestRenderer;
 function mockHook(pending: PendingDeletion | null, keeping = false) {
   jest.mocked(useAccountDeletion).mockReturnValue({pending, keep, keeping, notice: null});
 }
-function mount(kind: 'orders' | 'mealPlans' = 'orders') {
+function mount(kind: 'orders' | 'mealPlans' = 'orders', onKept?: () => void) {
   act(() => {
-    tree = renderer.create(<DeletionPausedNotice kind={kind} />);
+    tree = renderer.create(<DeletionPausedNotice kind={kind} onKept={onKept} />);
   });
 }
 const rerender = (kind: 'orders' | 'mealPlans' = 'orders') => act(() => tree.update(<DeletionPausedNotice kind={kind} />));
@@ -60,6 +60,20 @@ describe('DeletionPausedNotice', () => {
     });
     expect(keep).toHaveBeenCalledTimes(1);
     expect(tree.toJSON()).toBeNull();
+  });
+
+  it.each([
+    ['kept', 1],
+    ['failed', 0],
+    ['inProgress', 0],
+  ] as const)('tells the screen only when keeping ends kept (%s)', async (outcome, calls) => {
+    keep.mockResolvedValue(outcome);
+    const onKept = jest.fn();
+    mount('orders', onKept);
+    await act(async () => {
+      pill()!.props.onPress();
+    });
+    expect(onKept).toHaveBeenCalledTimes(calls);
   });
 
   it.each(['failed', 'inProgress'] as const)('stays up when keeping ends %s', async outcome => {

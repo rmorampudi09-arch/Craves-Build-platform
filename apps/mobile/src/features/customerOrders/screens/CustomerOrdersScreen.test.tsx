@@ -5,9 +5,16 @@ import type {PendingDeletion} from '../../accountDeletion/domain/deletionTypes';
 import {CustomerOrderCard} from '../components/CustomerOrderCard';
 import {CustomerOrdersScreen} from './CustomerOrdersScreen';
 
-jest.setTimeout(20_000);
-
 let mockPending: PendingDeletion | null = null;
+// One object for every render: the screen re-runs an effect when `data` changes identity.
+const mockQuery = {
+  data: {orders: []},
+  error: null,
+  isPending: false,
+  isRefetching: false,
+  isFetching: false,
+  refetch: jest.fn(),
+};
 
 jest.mock('@react-navigation/native', () => ({
   useIsFocused: () => true,
@@ -34,16 +41,7 @@ jest.mock('../presentation/customerOrdersPresentation', () => ({
   ...jest.requireActual('../presentation/customerOrdersPresentation'),
   selectCustomerOrdersTab: () => [{id: 'order-1', kitchenId: 'kitchen-1', status: 'DELIVERED'}],
 }));
-jest.mock('../query/customerOrdersQueries', () => ({
-  useCustomerOrdersQuery: () => ({
-    data: {orders: []},
-    error: null,
-    isPending: false,
-    isRefetching: false,
-    isFetching: false,
-    refetch: jest.fn(),
-  }),
-}));
+jest.mock('../query/customerOrdersQueries', () => ({useCustomerOrdersQuery: () => mockQuery}));
 
 const pendingOf = (scope: PendingDeletion['scope'], status: PendingDeletion['status'] = 'SCHEDULED'): PendingDeletion => ({
   requestId: 'request-1',

@@ -1,10 +1,11 @@
 import React from 'react';
-import {Text} from 'react-native';
+import {Text, View} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {CustomerCartScreen} from './CustomerCartScreen';
 import {cartReducer, cartActions} from '../state/cartSlice';
 import {cartApi} from '../api/cartApi';
 import {checkCartServiceability} from '../api/cartServiceabilityApi';
+import {paymentHandoffCoordinator} from '../../payment/domain/paymentHandoffCoordinator';
 import {checkoutSessionCoordinator} from '../../checkout/domain/checkoutSessionCoordinator';
 import {razorpayGateway} from '../../payment/gateway/razorpayGateway';
 import {recoverPersistedPaymentAttempt} from '../../payment/domain/persistedPaymentRecovery';
@@ -52,8 +53,9 @@ jest.mock('@react-navigation/native', () => ({useNavigation: () => ({
   addListener: (_event: string, listener: typeof mockBeforeRemove) => { mockBeforeRemove = listener; return () => undefined; },
 })}));
 jest.mock('react-native-safe-area-context', () => ({useSafeAreaInsets: () => ({top: 0, bottom: 24, left: 0, right: 0})}));
+const mockKeep = jest.fn(async () => 'kept');
 jest.mock('../../accountDeletion/state/AccountDeletionProvider', () => ({
-  useAccountDeletion: () => ({pending: null, keep: jest.fn(async () => 'kept'), keeping: false, notice: null}),
+  useAccountDeletion: () => ({pending: null, keep: mockKeep, keeping: false, notice: null}),
 }));
 jest.mock('../../../design/reducedMotion', () => ({useReducedMotionPreference: () => false}));
 jest.mock('../../../shared/components/ScreenShell', () => ({ScreenShell: 'ScreenShell'}));
@@ -124,6 +126,40 @@ describe('Cart, then Checkout, then Razorpay', () => {
     await press('Proceed to Checkout');
     expect(tree.root.findAllByType(DeletionPausedNotice)).toHaveLength(0);
     expect(button('Continue to Payment')).toBeDefined();
+  });
+  describe('when payment is refused on Checkout because a delete request is open', () => {
+    const refuse = () => jest.mocked(paymentHandoffCoordinator.prepare).mockRejectedValueOnce(
+      new AppApiError('ACCOUNT_DELETION_PENDING', 'That information changed.', 409),
+    );
+    // The component can stay mounted and draw nothing, so look for what it draws.
+    const noticeShown = () => tree.root.findAllByType(DeletionPausedNotice).some(node => node.findAllByType(View).length > 0);
+    const keepPill = () => tree.root.findAll(node => node.props.accessibilityLabel === 'Keep my account' && typeof node.props.onPress === 'function')[0];
+    const goBack = async () => {
+      await act(async () => { mockBeforeRemove!({preventDefault: jest.fn()}); await new Promise<void>(resolve => setTimeout(resolve, 0)); });
+    };
+    const refusedOnCheckout = async () => {
+      refuse();
+      await render();
+      await press('Proceed to Checkout');
+      await press('Continue to Payment');
+      expect(noticeShown()).toBe(true);
+    };
+
+    it('does not bring the notice back after Keep my account and a trip back to the cart', async () => {
+      await refusedOnCheckout();
+      await act(async () => { await keepPill().props.onPress(); });
+      expect(mockKeep).toHaveBeenCalledTimes(1);
+      expect(noticeShown()).toBe(false);
+      await goBack();
+      expect(button('Proceed to Checkout')).toBeDefined();
+      expect(noticeShown()).toBe(false);
+    });
+    it('drops the notice when the person goes back to the cart', async () => {
+      await refusedOnCheckout();
+      await goBack();
+      expect(button('Proceed to Checkout')).toBeDefined();
+      expect(noticeShown()).toBe(false);
+    });
   });
   it('still shows any other checkout failure as the plain error', async () => {
     jest.mocked(checkoutSessionCoordinator.create).mockRejectedValueOnce(new Error('Checkout could not be started.'));

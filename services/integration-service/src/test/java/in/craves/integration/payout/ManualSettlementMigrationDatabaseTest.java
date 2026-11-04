@@ -40,8 +40,8 @@ class ManualSettlementMigrationDatabaseTest {
         assertEquals("133",flyway.info().current().getVersion().getVersion());
         assertEquals(List.of("134","136","137","138","139","140","141","142","143","144","145","146","147","148","149","150","151","152","153","154","155","156","157","158","159","160","161","162","163","164","165","166","167","168","169","170","171","172","173","174","175","176","177","178","179","180","182","183","184"),Arrays.stream(flyway.info().pending()).map(m->m.getVersion().getVersion()).toList(),
                 "The combined release must test every exact source migration; this checkout has no V135");
-        assertEquals(47,flyway.migrate().migrationsExecuted);
-        assertEquals("182",flyway.info().current().getVersion().getVersion());
+        assertEquals(49,flyway.migrate().migrationsExecuted);
+        assertEquals("184",flyway.info().current().getVersion().getVersion());
         assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM payment_schema.refund_sandbox_context_review",Integer.class),
                 "New review storage must not classify or release any existing financial record");
         flyway.validate();

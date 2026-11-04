@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {AppApiError, toAppApiError} from '../../../core/http/apiError';
 import {httpClient} from '../../../core/http/httpClient';
+import {deletionCopy} from '../domain/deletionCopy';
 import type {DeletionScope, DeletionView} from '../domain/deletionTypes';
 
 export const ACCOUNT_DELETION_PATH = '/api/v1/auth/me/deletion';
@@ -27,7 +28,7 @@ function parseView(body: unknown): DeletionView {
   if (!parsed.success) {
     throw new AppApiError(
       'ACCOUNT_DELETION_INVALID_RESPONSE',
-      'We could not read your deletion request. Please try again.',
+      deletionCopy.sendErrors.invalidResponse,
     );
   }
   return parsed.data;

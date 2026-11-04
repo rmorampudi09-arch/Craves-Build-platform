@@ -76,6 +76,7 @@ export const deletionCopy = {
     notEnabled: "Deleting an account isn't available yet. Try again later.",
     scopeNotAllowed: "This account can't ask for that. Contact Craves support.",
     failed: "Your request wasn't sent. Try again.",
+    invalidResponse: "Craves couldn't read your deletion request. Try again.",
   },
   state: {
     inReviewTag: 'In review',

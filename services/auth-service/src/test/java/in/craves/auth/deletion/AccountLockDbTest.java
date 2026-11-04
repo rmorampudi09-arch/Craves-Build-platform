@@ -14,6 +14,7 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
 import in.craves.auth.api.FirebaseExchangeRequest;
+import in.craves.auth.api.IdentityResponse;
 import in.craves.auth.config.JwtProperties;
 import in.craves.auth.deletion.DeletionModel.DeletionRequest;
 import in.craves.auth.deletion.DeletionModel.RequestStatus;
@@ -119,32 +120,44 @@ class AccountLockDbTest {
         assertEquals(List.of("CHEF", "CUSTOMER"), signIn(id), "once erased, signing in starts a new customer side");
     }
 
-    /** The real sign-in path with Firebase stubbed and the role and deletion tables in PostgreSQL. */
     List<String> signIn(UUID id) throws Exception {
-        String uid = "synthetic-" + id, phone = phone(id);
-        var identity = new AuthIdentity(uid, phone);
-        ReflectionTestUtils.setField(identity, "id", id);
-        identity.setStatus("ACTIVE");
+        return signIn(jdbc, transactions, "synthetic-" + id, phone(id)).roles();
+    }
+
+    /**
+     * The real sign-in path with Firebase stubbed and the identity, role and deletion tables in PostgreSQL.
+     * A phone and uid found in no identity sign up a new one.
+     */
+    static IdentityResponse signIn(JdbcTemplate jdbc, DataSourceTransactionManager transactions, String uid, String phone) throws Exception {
         var identities = mock(AuthIdentityRepository.class);
-        when(identities.findByFirebaseUid(uid)).thenReturn(Optional.of(identity));
-        when(identities.findByPhoneNumber(phone)).thenReturn(Optional.of(identity));
-        when(identities.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(identities.findByFirebaseUid(anyString())).thenAnswer(call -> stored(jdbc, "firebase_uid", call.getArgument(0)));
+        when(identities.findByPhoneNumber(anyString())).thenAnswer(call -> stored(jdbc, "phone_number", call.getArgument(0)));
+        when(identities.save(any())).thenAnswer(call -> {
+            AuthIdentity identity = call.getArgument(0);
+            if (identity.getId() == null) {
+                ReflectionTestUtils.setField(identity, "id", UUID.randomUUID());
+                jdbc.update("INSERT INTO auth_identity (id, firebase_uid, phone_number) VALUES (?, ?, ?)",
+                    identity.getId(), identity.getFirebaseUid(), identity.getPhoneNumber());
+            }
+            return identity;
+        });
         var roleCatalog = mock(AuthRoleRepository.class);
         when(roleCatalog.existsById(anyString())).thenReturn(true);
         var roleRows = mock(AuthIdentityRoleRepository.class);
+        String roles = "SELECT role_code FROM auth_identity_role WHERE identity_id = ? ORDER BY role_code";
         when(roleRows.existsByIdentityIdAndRoleCode(any(), anyString())).thenAnswer(call ->
-            roles(call.getArgument(0)).contains(call.<String>getArgument(1)));
+            jdbc.queryForList(roles, String.class, call.<UUID>getArgument(0)).contains(call.<String>getArgument(1)));
         when(roleRows.save(any())).thenAnswer(call -> {
             AuthIdentityRole row = call.getArgument(0);
             jdbc.update("INSERT INTO auth_identity_role (identity_id, role_code) VALUES (?, ?)", row.getIdentityId(), row.getRoleCode());
             return row;
         });
-        when(roleRows.findRoleCodesByIdentityId(any())).thenAnswer(call -> roles(call.getArgument(0)));
+        when(roleRows.findRoleCodesByIdentityId(any())).thenAnswer(call -> jdbc.queryForList(roles, String.class, call.<UUID>getArgument(0)));
         var jwt = mock(CravesJwtService.class);
         when(jwt.issueAccessToken(any(AuthIdentity.class), anyList(), nullable(String.class))).thenReturn("synthetic-access");
         var generator = mock(RefreshTokenGenerator.class);
         when(generator.generate()).thenReturn("synthetic-refresh");
-        var accountDeletions = new AccountDeletionService(deletions, identities, roleRows, mock(DeletionNotices.class),
+        var accountDeletions = new AccountDeletionService(new AccountDeletionRepository(jdbc), identities, roleRows, mock(DeletionNotices.class),
             new AccountDeletionProperties(), transactions, Clock.fixed(NOW, ZoneOffset.UTC), Runnable::run);
         FirebaseApp app = mock(FirebaseApp.class);
         var auth = new AuthService(app, new JwtProperties(), identities, roleCatalog, roleRows, mock(RefreshSessionRepository.class),
@@ -158,8 +171,17 @@ class AccountLockDbTest {
         try (var firebaseAuth = mockStatic(FirebaseAuth.class)) {
             firebaseAuth.when(() -> FirebaseAuth.getInstance(app)).thenReturn(firebase);
             return auth.exchangeFirebaseToken(new FirebaseExchangeRequest("synthetic-id-token", false), new MockHttpServletRequest())
-                .identity().roles();
+                .identity();
         }
+    }
+
+    static Optional<AuthIdentity> stored(JdbcTemplate jdbc, String column, String value) {
+        return jdbc.query("SELECT id, firebase_uid, phone_number, status FROM auth_identity WHERE " + column + " = ?", (rs, n) -> {
+            var identity = new AuthIdentity(rs.getString("firebase_uid"), rs.getString("phone_number"));
+            ReflectionTestUtils.setField(identity, "id", rs.getObject("id", UUID.class));
+            identity.setStatus(rs.getString("status"));
+            return identity;
+        }, value).stream().findFirst();
     }
 
     static UUID identity(String... roles) {

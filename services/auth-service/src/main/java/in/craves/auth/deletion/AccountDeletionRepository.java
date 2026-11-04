@@ -196,6 +196,14 @@ public class AccountDeletionRepository {
         }
     }
 
+    /** Where the final notice goes: the phone and the email if verified, else null. Read before auth's erase step wipes them. */
+    public record Contact(String phone, String verifiedEmail) {}
+
+    public Contact contact(UUID identityId) {
+        return jdbc.queryForObject("SELECT phone_number, CASE WHEN email_verified THEN email END AS email FROM auth_identity WHERE id = ?",
+            (rs, n) -> new Contact(rs.getString("phone_number"), rs.getString("email")), identityId);
+    }
+
     /** True while the customer side of this person is being erased: sign-in must not give the customer role back. */
     public boolean hasErasingCustomerSide(UUID identityId) {
         return Boolean.TRUE.equals(jdbc.queryForObject(

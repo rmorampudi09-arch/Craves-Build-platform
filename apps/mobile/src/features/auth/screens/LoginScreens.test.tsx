@@ -9,6 +9,7 @@ import { AuthRoleCards } from '../components/AuthRoleCards';
 import { AuthActionButton } from '../components/AuthActionButton';
 import { AuthTextField } from '../components/AuthTextField';
 import { AuthOtpInput } from '../components/AuthOtpInput';
+import { AppApiError } from '../../../core/http/apiError';
 import { authService } from '../state/authService';
 import { authTransitionMemory } from '../state/authTransitionMemory';
 import type { AuthRole } from '../domain/types';
@@ -186,7 +187,25 @@ describe('reference login styling preserves auth contracts', () => {
       'password123',
     );
     expect(mockDispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'auth/authenticated' }),
+      expect.objectContaining({ type: 'auth/signedInFresh' }),
+    );
+  });
+  it('shows the account is not available when email sign-in is refused as not active', async () => {
+    (authService.emailLogin as jest.Mock).mockRejectedValueOnce(
+      new AppApiError('IDENTITY_NOT_ACTIVE', 'Not active', 403),
+    );
+    render(<EmailSignInScreen {...props()} />);
+    const fields = () => tree.root.findAllByType(AuthTextField);
+    act(() => fields()[0].props.onChangeText('user@example.com'));
+    act(() => fields()[1].props.onChangeText('password123'));
+    await act(async () => {
+      await button('Log in as Customer').props.onPress();
+    });
+    expect(navigation.navigate).toHaveBeenCalledWith('AccountUnavailable', {
+      signedIn: false,
+    });
+    expect(mockDispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'auth/signedInFresh' }),
     );
   });
   it('renders six digits through one native autofill input without changing the pending role', async () => {
@@ -210,6 +229,45 @@ describe('reference login styling preserves auth contracts', () => {
     });
     expect(authService.confirmOtp).toHaveBeenCalledWith('123456');
     expect(authTransitionMemory.getPendingPhone()).toBeNull();
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'auth/signedInFresh',
+      payload: { uid: 'verified-user' },
+    });
+  });
+  it.each(['IDENTITY_INACTIVE', 'IDENTITY_NOT_ACTIVE'])(
+    'shows the account is not available when OTP sign-in is refused with %s',
+    async code => {
+      (authService.confirmOtp as jest.Mock).mockRejectedValueOnce(
+        new AppApiError(code, 'Not active', 403),
+      );
+      authTransitionMemory.setPendingPhone('+919876541234');
+      render(<OtpVerificationScreen {...props()} />);
+      act(() => tree.root.findByType(AuthOtpInput).props.onChangeText('123456'));
+      await act(async () => {
+        await button('Verify & continue').props.onPress();
+      });
+      expect(navigation.navigate).toHaveBeenCalledWith('AccountUnavailable', {
+        signedIn: false,
+      });
+      expect(mockDispatch).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'auth/signedInFresh' }),
+      );
+    },
+  );
+  it('keeps showing other OTP failures on the screen', async () => {
+    (authService.confirmOtp as jest.Mock).mockRejectedValueOnce(
+      new AppApiError('INVALID_OTP', 'That verification code is not correct.'),
+    );
+    authTransitionMemory.setPendingPhone('+919876541234');
+    render(<OtpVerificationScreen {...props()} />);
+    act(() => tree.root.findByType(AuthOtpInput).props.onChangeText('123456'));
+    await act(async () => {
+      await button('Verify & continue').props.onPress();
+    });
+    expect(navigation.navigate).not.toHaveBeenCalled();
+    expect(tree.root.findByType(AuthOtpInput).props.error).toBe(
+      'That verification code is not correct.',
+    );
   });
   it('fills and verifies the code from the OTP SMS once the user allows it', async () => {
     authTransitionMemory.setPendingPhone('+919876541234');

@@ -17,6 +17,7 @@ export type RootStackParamList = {
   OtpVerification: {role: AuthRole};
   ForgotPassword: {role: AuthRole};
   PasswordResetSent: {role: AuthRole};
+  AccountUnavailable: {signedIn: boolean};
   AccountRouter: undefined;
   CustomerRegistration: undefined;
   CustomerAccountStatus: undefined;
@@ -35,6 +36,7 @@ export type AuthStackParamList = Pick<
   | 'OtpVerification'
   | 'ForgotPassword'
   | 'PasswordResetSent'
+  | 'AccountUnavailable'
   | 'StartupError'
 >;
 

@@ -4,6 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../app/navigation/types';
 import { useAppDispatch } from '../../../app/store/hooks';
 import { toAppApiError } from '../../../core/http/apiError';
+import { isAccountUnavailable } from '../../accountDeletion/domain/deletionModel';
 import { VideoAuthLayout } from '../components/VideoAuthLayout';
 import { AuthOtpInput } from '../components/AuthOtpInput';
 import { AuthActionButton } from '../components/AuthActionButton';
@@ -137,9 +138,14 @@ export function OtpVerificationScreen({ navigation, route }: Props) {
         return;
       }
       authTransitionMemory.clearPendingPhone();
-      dispatch(authActions.authenticated(tokens.identity));
+      dispatch(authActions.signedInFresh(tokens.identity));
     } catch (caught) {
-      if (mounted.current) {
+      if (!mounted.current) {
+        return;
+      }
+      if (isAccountUnavailable(toAppApiError(caught).code)) {
+        navigation.navigate('AccountUnavailable', { signedIn: false });
+      } else {
         applyFailureRecovery(caught);
       }
     } finally {

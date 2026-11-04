@@ -10,7 +10,7 @@ export const activeRolePersistence: Middleware<{}, {auth: AuthState}> = api => n
   if (authActions.signedOut.match(action) && previous.identity) {
     void activeRoleStorage.clear(previous.identity.id);
   } else if (
-    (authActions.authenticated.match(action) ||
+    (authActions.authenticated.match(action) || authActions.signedInFresh.match(action) ||
       authActions.roleSelected.match(action) || authActions.accountResolved.match(action)) &&
     auth.bootstrapStatus === 'authenticated' && auth.identity
   ) {

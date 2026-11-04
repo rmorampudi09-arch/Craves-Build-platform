@@ -9,9 +9,11 @@ import {AccountDeletionProvider, useAccountDeletion} from './AccountDeletionProv
 import {useDeletionStripVisible} from './useDeletionStripVisible';
 
 let mockIdentity: Record<string, unknown> | null;
+let mockKeepItPending = false;
 
 jest.mock('../../../app/store/hooks', () => ({
-  useAppSelector: (select: (state: unknown) => unknown) => select({auth: {identity: mockIdentity}}),
+  useAppSelector: (select: (state: unknown) => unknown) =>
+    select({auth: {identity: mockIdentity, keepItPending: mockKeepItPending}}),
 }));
 jest.mock('../../auth/api/sessionManager', () => ({sessionManager: {refresh: jest.fn()}}));
 jest.mock('../api/accountDeletionApi', () => ({accountDeletionApi: {keep: jest.fn()}}));
@@ -76,6 +78,7 @@ describe('AccountDeletionProvider', () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     childMounts = 0;
+    mockKeepItPending = false;
     mockIdentity = identity();
     refresh.mockResolvedValue(null);
   });
@@ -138,6 +141,21 @@ describe('AccountDeletionProvider', () => {
     expect(stripVisible).toBe(true);
     act(() => jest.advanceTimersByTime(4000));
     expect(stripVisible).toBe(false);
+  });
+
+  it('shows no strip, and lets the screen set its own status bar, while Keep it? asks', () => {
+    mockKeepItPending = true;
+    mount();
+    expect(lines()).toEqual(['screen']);
+    expect(tree.root.findAllByType(StatusBar)).toHaveLength(0);
+    expect(stripVisible).toBe(false);
+    expect(insetsTop).toBe(24);
+    expect(deletion.pending).toMatchObject({scope: 'ALL', status: 'SCHEDULED'});
+    mockKeepItPending = false;
+    rerender();
+    expect(lines()).toContain('Account deleted on 5 Dec');
+    expect(stripVisible).toBe(true);
+    expect(childMounts).toBe(1);
   });
 
   it('does not rebuild the screens when the strip comes and goes', () => {

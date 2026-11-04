@@ -19,6 +19,11 @@ export function isOpenStatus(status: DeletionStatus): boolean {
   return OPEN_STATUSES.includes(status);
 }
 
+/** A sign-in refused for an erased or suspended account: OTP verify says INACTIVE, the token exchange and /me NOT_ACTIVE. */
+export function isAccountUnavailable(code: string): boolean {
+  return code === 'IDENTITY_INACTIVE' || code === 'IDENTITY_NOT_ACTIVE';
+}
+
 export function formatDeletionDate(
   iso: string,
   style: 'short' | 'long',

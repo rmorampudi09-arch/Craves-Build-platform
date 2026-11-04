@@ -50,6 +50,7 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'OtpVerification',
   'ForgotPassword',
   'PasswordResetSent',
+  'AccountUnavailable',
   'AccountRouter',
   'CustomerRegistration',
   'CustomerAccountStatus',

@@ -1,4 +1,5 @@
 import {createSlice, PayloadAction} from '@reduxjs/toolkit';
+import {isOpenStatus} from '../../accountDeletion/domain/deletionModel';
 import type {
   AccountResolution,
   AuthRole,
@@ -14,6 +15,8 @@ export interface AuthState {
   identity: Identity | null;
   accountResolution: AccountResolution | null;
   lastErrorCode: string | null;
+  /** A fresh sign-in (OTP or email) found an open delete request: ask "Keep it?" once before the app. */
+  keepItPending: boolean;
 }
 
 const initialState: AuthState = {
@@ -22,7 +25,16 @@ const initialState: AuthState = {
   identity: null,
   accountResolution: null,
   lastErrorCode: null,
+  keepItPending: false,
 };
+
+function acceptIdentity(state: AuthState, identity: Identity, keepItPending: boolean) {
+  state.bootstrapStatus = 'authenticated';
+  state.identity = identity;
+  state.accountResolution = null;
+  state.lastErrorCode = null;
+  state.keepItPending = keepItPending;
+}
 
 const authSlice = createSlice({
   name: 'auth',
@@ -43,11 +55,18 @@ const authSlice = createSlice({
       state.identity = null;
       state.accountResolution = null;
     },
+    // A restored session: never asks Keep it?.
     authenticated(state, action: PayloadAction<Identity>) {
-      state.bootstrapStatus = 'authenticated';
-      state.identity = action.payload;
-      state.accountResolution = null;
-      state.lastErrorCode = null;
+      acceptIdentity(state, action.payload, false);
+    },
+    // A sign-in the person just made on the OTP or email screen.
+    signedInFresh(state, action: PayloadAction<Identity>) {
+      const pending = action.payload.pendingDeletion;
+      // Once erasing has started there is nothing left to keep.
+      acceptIdentity(state, action.payload, pending != null && isOpenStatus(pending.status) && pending.status !== 'ERASING');
+    },
+    keepItDismissed(state) {
+      state.keepItPending = false;
     },
     // A token rotation brings a fresh identity; the role and resolved account stay as they are.
     identityRefreshed(state, action: PayloadAction<Identity>) {
@@ -97,6 +116,7 @@ const authSlice = createSlice({
       state.identity = null;
       state.accountResolution = null;
       state.lastErrorCode = null;
+      state.keepItPending = false;
     },
   },
 });

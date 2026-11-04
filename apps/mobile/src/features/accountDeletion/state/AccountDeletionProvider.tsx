@@ -57,6 +57,7 @@ export function useAccountDeletion(): AccountDeletionValue {
  */
 export function AccountDeletionProvider({children}: PropsWithChildren) {
   const identity = useAppSelector(state => state.auth.identity);
+  const keepItPending = useAppSelector(state => state.auth.keepItPending);
   const pending = identity?.pendingDeletion ?? null;
   const identityRef = useRef(identity);
   identityRef.current = identity;
@@ -113,7 +114,8 @@ export function AccountDeletionProvider({children}: PropsWithChildren) {
   );
 
   const banner = bannerFor(pending);
-  const showStrip = banner !== null || notice !== null;
+  // Keep it? asks the same question full screen, so the strip waits until it is answered.
+  const showStrip = (banner !== null || notice !== null) && !keepItPending;
   const insets = useSafeAreaInsets();
   const frame = useSafeAreaFrame();
 
@@ -122,7 +124,9 @@ export function AccountDeletionProvider({children}: PropsWithChildren) {
       <DeletionStripVisibleContext.Provider value={showStrip}>
         <View style={styles.fill}>
           {showStrip ? <StatusBar barStyle="dark-content" /> : null}
-          <AccountDeletionBanner banner={banner} notice={notice} keeping={keeping} onKeep={keep} />
+          {showStrip ? (
+            <AccountDeletionBanner banner={banner} notice={notice} keeping={keeping} onKeep={keep} />
+          ) : null}
           {/*
             The strip pads the status bar, so the screens below start under it. Their own safe-area
             provider measures its frame (it begins below the strip), which is why they get no top inset.

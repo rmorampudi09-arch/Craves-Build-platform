@@ -9,14 +9,17 @@ let mockAuth: Record<string, unknown>;
 function mockStub() {
   return new Proxy({__esModule: true} as Record<string, unknown>, {get: (target, key) => (key in target ? target[key as string] : () => null)});
 }
-jest.mock('../store/hooks', () => ({useAppSelector: (select: (state: unknown) => unknown) => select({auth: mockAuth})}));
+jest.mock('../store/hooks', () => ({useAppDispatch: () => jest.fn(), useAppSelector: (select: (state: unknown) => unknown) => select({auth: mockAuth})}));
 jest.mock('../../features/auth/hooks/useBootstrap', () => ({useBootstrap: () => 'authenticated'}));
 jest.mock('../../features/auth/hooks/useSessionLifecycle', () => ({useSessionLifecycle: () => undefined}));
 jest.mock('../../features/accountDeletion/state/useIdentitySync', () => ({useIdentitySync: () => undefined}));
 jest.mock('../../features/accountDeletion/state/AccountDeletionProvider', () => {
   const {Text: T} = require('react-native');
   const R = require('react');
-  return {AccountDeletionProvider: ({children}: {children: React.ReactNode}) => R.createElement(R.Fragment, null, R.createElement(T, null, 'STRIP PROVIDER'), children)};
+  return {
+    AccountDeletionProvider: ({children}: {children: React.ReactNode}) => R.createElement(R.Fragment, null, R.createElement(T, null, 'STRIP PROVIDER'), children),
+    useAccountDeletion: () => ({pending: {requestId: 'r1', scope: 'ALL', status: 'PENDING_REVIEW', dueAt: null}, keep: jest.fn(), keeping: false, notice: null}),
+  };
 });
 jest.mock('./CustomerRootNavigator', () => ({CustomerRootNavigator: () => require('react').createElement(require('react-native').Text, null, 'CUSTOMER HOME')}));
 jest.mock('./ChefRootNavigator', () => ({ChefRootNavigator: () => require('react').createElement(require('react-native').Text, null, 'CHEF HOME')}));
@@ -63,6 +66,17 @@ describe('AppNavigator delete-request strip', () => {
   it('mounts for a chef', async () => {
     await mount({bootstrapStatus: 'authenticated', accountResolution: {flow: 'CHEF', onboardingStatus: 'APPROVED', authorizedRole: 'CHEF'}});
     expect(shown()).toEqual(expect.arrayContaining(['STRIP PROVIDER', 'CHEF HOME']));
+  });
+
+  it('asks Keep it? inside the strip provider, in place of the product screens, right after a fresh sign-in', async () => {
+    await mount({
+      bootstrapStatus: 'authenticated',
+      keepItPending: true,
+      identity: {pendingDeletion: {requestId: 'r1', scope: 'ALL', status: 'PENDING_REVIEW', dueAt: null}},
+      accountResolution: {flow: 'CUSTOMER', onboardingStatus: 'READY', authorizedRole: 'CUSTOMER'},
+    });
+    expect(shown()).toEqual(expect.arrayContaining(['STRIP PROVIDER', 'Do you want to keep your account?']));
+    expect(shown()).not.toContain('CUSTOMER HOME');
   });
 
   it('does not mount on the sign-in screens', async () => {

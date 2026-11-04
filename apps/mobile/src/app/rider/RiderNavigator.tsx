@@ -29,6 +29,8 @@ import {HelpScreen} from '../../features/rider/screens/HelpScreen';
 import {HomeScreen} from '../../features/rider/screens/HomeScreen';
 import {NoticeScreen} from '../../features/rider/screens/NoticeScreen';
 import {RulesScreen} from '../../features/rider/screens/RulesScreen';
+import {SlotNowScreen} from '../../features/rider/screens/SlotNowScreen';
+import {SlotsScreen} from '../../features/rider/screens/SlotsScreen';
 import {OfferScreen} from '../../features/rider/screens/OfferScreen';
 import {PayoutsScreen} from '../../features/rider/screens/PayoutsScreen';
 import {PhoneSetupScreen} from '../../features/rider/screens/PhoneSetupScreen';
@@ -52,6 +54,7 @@ const DEMO_PANEL = isDemo || __DEV__;
 type TabIconProps = {color: string};
 const homeIcon = ({color}: TabIconProps) => <Icon name="home-outline" color={color} size={iconSize.lg} surface={false} />;
 const walletIcon = ({color}: TabIconProps) => <Icon name="wallet" color={color} size={iconSize.lg} surface={false} />;
+const slotsIcon = ({color}: TabIconProps) => <Icon name="calendar-blank-outline" color={color} size={iconSize.lg} surface={false} />;
 const accountIcon = ({color}: TabIconProps) => <Icon name="account-outline" color={color} size={iconSize.lg} surface={false} />;
 
 /** 64 dp above the system bar, a 1 dp top line, no shadow; the active tab is red (docs/riders/SCREENS.md 0.6). */
@@ -79,6 +82,7 @@ function RiderTabs() {
         component={HomeScreen}
         options={{title: strings.tabs.home, tabBarIcon: homeIcon}}
       />
+      <Tabs.Screen name="Slots" component={SlotsScreen} options={{title: strings.tabs.slots, tabBarIcon: slotsIcon}} />
       <Tabs.Screen
         name="Earnings"
         component={EarningsScreen}
@@ -185,6 +189,7 @@ function SignedIn() {
             <Stack.Screen name="GoOnline" component={GoOnlineScreen} options={{presentation: 'fullScreenModal'}} />
             <Stack.Screen name="Help" component={HelpScreen} />
             <Stack.Screen name="Notice" component={NoticeScreen} />
+            <Stack.Screen name="SlotNow" component={SlotNowScreen} />
             <Stack.Screen name="AccountStatus" component={AccountStatusScreen} navigationKey={gate.kind} />
             <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} navigationKey={gate.kind} />
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />

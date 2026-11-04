@@ -21,12 +21,16 @@ export type RiderStackParamList = {
   Notice: undefined;
   /** How you get orders (app 1.3.3, R-06). */
   Rules: undefined;
+  /** The booked slot running now (app 1.3.3, R-08). */
+  SlotNow: undefined;
   Sos: {tripId?: string};
   DevPanel: undefined;
 };
 
 export type RiderTabParamList = {
   Home: undefined;
+  /** Booked peak slots (app 1.3.3, R-08). */
+  Slots: undefined;
   Earnings: undefined;
   Profile: undefined;
 };

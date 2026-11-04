@@ -335,6 +335,68 @@ export interface PayoutsPage {
   payouts: Payout[];
 }
 
+/** GET /slots (app 1.3.3, R-07): booked peak slots. */
+export interface SlotsPage {
+  clusters: SlotCluster[];
+  slots: SlotOffer[];
+  /** The booked slot running now, if any. */
+  running?: RunningSlot;
+  maxHoursPerDay: number;
+  /** This rider books from Thursday 10:00 IST (a slot completed in the last 14 days, no two no-shows). */
+  earlyWave: boolean;
+}
+
+export interface SlotCluster {
+  clusterId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radiusM: number;
+}
+
+export interface SlotOffer {
+  capacityId: string;
+  clusterId: string;
+  clusterName: string;
+  startsAt: string;
+  endsAt: string;
+  /** The guarantee an hour while online inside the cluster. */
+  ratePerHourPaise: Paise;
+  places: number;
+  placesLeft: number;
+  /** When this rider may book it (their wave). */
+  opensAt: string;
+  /** Present when this rider holds a place. */
+  bookingId?: string;
+  standby: boolean;
+}
+
+export interface RunningSlot {
+  bookingId: string;
+  clusterName: string;
+  startsAt: string;
+  endsAt: string;
+  ratePerHourPaise: Paise;
+  inZoneMinutes: number;
+  /** The guarantee the minutes so far cover. */
+  coveredPaise: Paise;
+}
+
+export interface SlotBooking {
+  bookingId: string;
+  capacityId: string;
+  status: 'BOOKED' | 'CANCELLED' | 'NO_SHOW' | 'COMPLETED';
+  clusterName: string;
+  startsAt: string;
+  endsAt: string;
+  ratePerHourPaise: Paise;
+}
+
+export interface SlotStandby {
+  capacityId: string;
+  position: number;
+}
+
 /** POST /shift/start. The credential is opaque: the native online service keeps it, JS never stores it. */
 export interface ShiftStart {
   shiftCredential: string;

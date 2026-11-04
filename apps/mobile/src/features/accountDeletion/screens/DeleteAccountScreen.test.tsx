@@ -236,6 +236,8 @@ describe('DeleteAccountScreen', () => {
       });
 
       expect(request).toHaveBeenCalledTimes(1);
+      // The sheet shows the spinner state, not just one request.
+      expect(ui.byLabel('Close kitchen and send')!.props.accessibilityState.busy).toBe(true);
     });
 
     it('does not say the customer side stays when the chef has no customer role', async () => {
@@ -280,6 +282,28 @@ describe('DeleteAccountScreen', () => {
       await sendFromSheet('Delete my account');
       expect(request).toHaveBeenCalledWith('CUSTOMER');
     });
+  });
+
+  it('sends the side the person picked even when the chef role is lost while the summary is open', async () => {
+    mockRoles = ['CUSTOMER', 'CHEF'];
+    await mount('CUSTOMER');
+    await ui.press('Only my customer side');
+    await ui.press('Continue');
+
+    // The scope plan would now be "direct ALL"; the person's pick still wins.
+    mockRoles = ['CUSTOMER'];
+    await act(async () => {
+      tree.update(
+        <QueryClientProvider client={queryClient}>
+          <DeleteAccountScreen mode="CUSTOMER" Scaffold={Scaffold} />
+        </QueryClientProvider>,
+      );
+    });
+    await ui.press('Delete my account');
+    await sendFromSheet('Delete my account');
+
+    expect(request).toHaveBeenCalledWith('CUSTOMER');
+    expect(request).not.toHaveBeenCalledWith('ALL');
   });
 
   describe('after sending', () => {

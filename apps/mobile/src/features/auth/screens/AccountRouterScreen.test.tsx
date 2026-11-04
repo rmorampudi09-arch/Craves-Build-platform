@@ -24,8 +24,8 @@ const button = (label: string) =>
   tree.root.findAll(n => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function')[0];
 const erasing = (scope: string) => ({requestId: 'r1', scope, status: 'ERASING', dueAt: null});
 
-async function mount(selectedRole: string, pendingDeletion: unknown = null) {
-  mockAuth = {selectedRole, identity: {id: 'u1', pendingDeletion}};
+async function mount(selectedRole: string, pendingDeletion: unknown = null, roles: string[] = ['CUSTOMER', 'CHEF']) {
+  mockAuth = {selectedRole, identity: {id: 'u1', roles, pendingDeletion}};
   await act(async () => {
     tree = renderer.create(<AccountRouterScreen />);
   });
@@ -66,6 +66,20 @@ describe('AccountRouterScreen', () => {
     expect(lines()).toEqual(['Your chef side is being deleted', "This can't be stopped now.", 'Go to customer side']);
     act(() => button('Go to customer side').props.onPress());
     expect(mockDispatch).toHaveBeenCalledWith({type: 'auth/roleSelected', payload: 'CUSTOMER'});
+  });
+
+  it('moves a chef who lost the customer role to chef mode instead of resolving the customer account', async () => {
+    await mount('CUSTOMER', null, ['CHEF']);
+    expect(resolve).not.toHaveBeenCalled();
+    expect(mockDispatch).toHaveBeenCalledWith({type: 'auth/roleSelected', payload: 'CHEF'});
+    expect(lines()).not.toContain('We could not verify your account');
+  });
+
+  it('still resolves the customer account for someone with no chef role, and for chef mode', async () => {
+    resolve.mockReturnValue(new Promise(() => undefined));
+    await mount('CUSTOMER', null, ['CUSTOMER']);
+    expect(resolve).toHaveBeenCalledWith('CUSTOMER');
+    expect(mockDispatch).not.toHaveBeenCalled();
   });
 
   it('resolves chef mode as before when only the customer side is being deleted', async () => {

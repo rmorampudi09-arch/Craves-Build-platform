@@ -82,7 +82,10 @@ test('an unreadable date reads as empty and the banner falls back to the in-revi
 
 test('keptNoticeFor says what comes back for the side that was cancelled', () => {
   expect(keptNoticeFor('CHEF', ['CUSTOMER', 'CHEF'])).toBe('Your account is kept. Your kitchen reopens as it was within a minute.');
-  expect(keptNoticeFor('ALL', ['CUSTOMER', 'CHEF'])).toBe('Your account is kept. Your kitchen reopens as it was within a minute.');
+  // ALL also ended the customer meal plan, so both lines apply.
+  expect(keptNoticeFor('ALL', ['CUSTOMER', 'CHEF'])).toBe(
+    'Your account is kept. Your kitchen reopens as it was within a minute. Meal plans that ended when you asked stay ended.',
+  );
   expect(keptNoticeFor('ALL', ['CUSTOMER'])).toBe('Your account is kept. Meal plans that ended when you asked stay ended.');
   expect(keptNoticeFor('CUSTOMER', ['CUSTOMER', 'CHEF'])).toBe('Your account is kept. Meal plans that ended when you asked stay ended.');
   expect(keptNoticeFor(undefined, [])).toBe('Your account is kept.');

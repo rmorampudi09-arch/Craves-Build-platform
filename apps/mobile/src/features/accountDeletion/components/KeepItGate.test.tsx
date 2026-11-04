@@ -86,6 +86,11 @@ describe('KeepItGate', () => {
     expect(lines()[0]).toBe('Your delete request is with Craves');
   });
 
+  it('falls back to the whole-account title for a scope this app does not know', () => {
+    mount(authActions.signedInFresh(identity({...scheduled, scope: 'EVERYTHING' as never})));
+    expect(lines()[0]).toBe('Your account will be deleted on 5 Dec');
+  });
+
   it('keeps the account, then goes into the app', async () => {
     let finish!: () => void;
     keep.mockReturnValue(new Promise(resolve => (finish = () => resolve('kept'))));

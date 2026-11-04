@@ -28,6 +28,11 @@ const initialState: AuthState = {
   keepItPending: false,
 };
 
+/** An open request that has not started erasing: the only kind Keep it? can still save. */
+function canStillKeep(pending: Identity['pendingDeletion']) {
+  return pending != null && isOpenStatus(pending.status) && pending.status !== 'ERASING';
+}
+
 function acceptIdentity(state: AuthState, identity: Identity, keepItPending: boolean) {
   state.bootstrapStatus = 'authenticated';
   state.identity = identity;
@@ -61,9 +66,8 @@ const authSlice = createSlice({
     },
     // A sign-in the person just made on the OTP or email screen.
     signedInFresh(state, action: PayloadAction<Identity>) {
-      const pending = action.payload.pendingDeletion;
       // Once erasing has started there is nothing left to keep.
-      acceptIdentity(state, action.payload, pending != null && isOpenStatus(pending.status) && pending.status !== 'ERASING');
+      acceptIdentity(state, action.payload, canStillKeep(action.payload.pendingDeletion));
     },
     keepItDismissed(state) {
       state.keepItPending = false;
@@ -72,6 +76,10 @@ const authSlice = createSlice({
     identityRefreshed(state, action: PayloadAction<Identity>) {
       if (state.bootstrapStatus === 'authenticated') {
         state.identity = action.payload;
+        // Only ever true to false: a refresh never starts the question, but it ends it when the request ends.
+        if (!canStillKeep(action.payload.pendingDeletion)) {
+          state.keepItPending = false;
+        }
       }
     },
     accountResolved(

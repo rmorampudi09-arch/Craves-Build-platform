@@ -138,7 +138,7 @@ export function bannerFor(
   }
 }
 
-/** What the strip says after Keep my account: the kitchen comes back for the chef side, ended meal plans stay ended for the customer side. */
+/** What the strip says after Keep my account: the kitchen comes back for the chef side, ended meal plans stay ended for the customer side, and the whole account says both. */
 export function keptNoticeFor(
   scope: DeletionScope | undefined,
   roles: readonly string[],
@@ -147,8 +147,13 @@ export function keptNoticeFor(
   if (!scope) {
     return kept;
   }
-  const chefSide = scope === 'CHEF' || (scope === 'ALL' && roles.includes('CHEF'));
-  return `${kept} ${chefSide ? kitchen : mealPlans}`;
+  const lines =
+    scope === 'CHEF'
+      ? [kitchen]
+      : scope === 'ALL' && roles.includes('CHEF')
+        ? [kitchen, mealPlans]
+        : [mealPlans];
+  return [kept, ...lines].join(' ');
 }
 
 /** The Delete row shows only when the server answered the status call (200, or 404 with no request yet). */

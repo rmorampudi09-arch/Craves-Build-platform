@@ -14,6 +14,10 @@ export function AccountRouterScreen() {
   const dispatch = useAppDispatch();
   const requestedRole = useAppSelector(state => state.auth.selectedRole);
   const pendingDeletion = useAppSelector(state => state.auth.identity?.pendingDeletion);
+  const roles = useAppSelector(state => state.auth.identity?.roles);
+  // A restored session can still ask for CUSTOMER after the customer side was deleted; a chef keeps CHEF.
+  const customerRoleLost =
+    requestedRole === 'CUSTOMER' && roles?.includes('CHEF') === true && !roles.includes('CUSTOMER');
   // Chef mode has nothing to open while the chef side is erased; the customer side still works.
   const chefSideErasing =
     requestedRole === 'CHEF' && pendingDeletion?.scope === 'CHEF' && pendingDeletion.status === 'ERASING';
@@ -56,10 +60,12 @@ export function AccountRouterScreen() {
   }, [dispatch, requestedRole]);
 
   useEffect(() => {
-    if (!chefSideErasing) {
+    if (customerRoleLost) {
+      dispatch(authActions.roleSelected('CHEF'));
+    } else if (!chefSideErasing) {
       resolveAccount();
     }
-  }, [resolveAccount, chefSideErasing]);
+  }, [dispatch, resolveAccount, chefSideErasing, customerRoleLost]);
 
   const signOut = async () => {
     if (signingOut || requestInFlight.current) {

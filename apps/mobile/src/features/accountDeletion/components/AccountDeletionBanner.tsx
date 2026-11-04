@@ -34,7 +34,7 @@ export function AccountDeletionBanner({banner, notice, keeping, onKeep}: Props) 
       ]}>
       <View style={styles.row}>
         <Icon name={kept ? 'check' : 'clock'} size={iconSize.sm} surface={false} color={ink} />
-        <Text accessibilityRole="alert" style={[styles.text, {color: ink}]}>
+        <Text accessibilityLiveRegion="polite" accessibilityRole="alert" style={[styles.text, {color: ink}]}>
           {notice?.text ?? banner?.text}
         </Text>
         {banner?.canKeep && !kept ? (

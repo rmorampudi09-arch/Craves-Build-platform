@@ -8,6 +8,7 @@ import React, {
   useState,
   type PropsWithChildren,
 } from 'react';
+import {useQueryClient} from '@tanstack/react-query';
 import {StatusBar, StyleSheet, View} from 'react-native';
 import {
   SafeAreaProvider,
@@ -24,6 +25,7 @@ import {
 import {deletionCopy} from '../domain/deletionCopy';
 import {bannerFor, keptNoticeFor} from '../domain/deletionModel';
 import type {PendingDeletion} from '../domain/deletionTypes';
+import {accountDeletionQueryKey} from '../query/accountDeletionQueryKey';
 import {refreshAfterDeletionChange} from './refreshAfterDeletionChange';
 import {DeletionStripVisibleContext} from './useDeletionStripVisible';
 
@@ -56,6 +58,7 @@ export function useAccountDeletion(): AccountDeletionValue {
  * It stays mounted whether or not the strip shows, so the screens below are never rebuilt when it comes and goes.
  */
 export function AccountDeletionProvider({children}: PropsWithChildren) {
+  const queryClient = useQueryClient();
   const identity = useAppSelector(state => state.auth.identity);
   const keepItPending = useAppSelector(state => state.auth.keepItPending);
   const pending = identity?.pendingDeletion ?? null;
@@ -93,8 +96,12 @@ export function AccountDeletionProvider({children}: PropsWithChildren) {
       // 404: the request had already ended, so the refresh alone brings the strip down.
     }
     await refreshAfterDeletionChange();
+    // The Delete account screen may be open below the strip: its status must not outlive the request.
+    if (before) {
+      queryClient.invalidateQueries({queryKey: accountDeletionQueryKey(before.id)});
+    }
     return outcome;
-  }, [say]);
+  }, [queryClient, say]);
 
   const keep = useCallback((): Promise<KeepOutcome> => {
     // A second tap before the first renders must not send a second request.

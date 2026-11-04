@@ -41,6 +41,8 @@ describe('AccountDeletionBanner', () => {
     mount({banner: scheduled});
     expect(lines()).toContain('Account deleted on 5 Dec');
     expect(tree.root.findAllByType(Text)[0].props.accessibilityRole).toBe('alert');
+    // The strip stays up, so a notice that replaces its text is read out politely (TalkBack needs this).
+    expect(tree.root.findAllByType(Text)[0].props.accessibilityLiveRegion).toBe('polite');
     expect(strip().backgroundColor).toBe(colors.warningSoft);
     expect(strip().paddingTop).toBeGreaterThanOrEqual(30);
   });

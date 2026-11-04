@@ -22,7 +22,7 @@ export function KeepItScreen() {
   };
 
   const due = pending?.dueAt ? formatDeletionDate(pending.dueAt, 'short') : '';
-  const title = pending && due ? copy.title[pending.scope](due) : copy.reviewTitle;
+  const title = pending && due ? (copy.title[pending.scope] ?? copy.title.ALL)(due) : copy.reviewTitle;
 
   return (
     <View style={styles.page}>

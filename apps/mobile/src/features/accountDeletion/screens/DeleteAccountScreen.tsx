@@ -136,7 +136,8 @@ function DeletionStart({mode, Scaffold, refetch}: Props & {refetch: () => void})
   const closeSheet = useCallback(() => setConfirming(false), []);
   const {send, sending, error, clearError} = useSendDeletion(refetch, closeSheet);
 
-  const scope = plan.kind === 'direct' ? plan.scope : chosen;
+  // The person's pick wins over a plan recomputed from roles that may have changed since.
+  const scope = chosen ?? (plan.kind === 'direct' ? plan.scope : null);
   if (scope === null) {
     return plan.kind === 'choose' ? <ScopeStep onContinue={setChosen} plan={plan} Scaffold={Scaffold} /> : null;
   }

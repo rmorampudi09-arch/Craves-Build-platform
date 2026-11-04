@@ -2,9 +2,11 @@ import React from 'react';
 import {StatusBar, Text} from 'react-native';
 import renderer, {act, type ReactTestInstance} from 'react-test-renderer';
 import {SafeAreaProvider, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
 import {sessionManager} from '../../auth/api/sessionManager';
 import {accountDeletionApi} from '../api/accountDeletionApi';
+import {accountDeletionQueryKey} from '../query/accountDeletionQueryKey';
 import {AccountDeletionProvider, useAccountDeletion} from './AccountDeletionProvider';
 import {useDeletionStripVisible} from './useDeletionStripVisible';
 
@@ -33,6 +35,8 @@ const identity = (over: Record<string, unknown> = {}) => ({
 });
 
 let tree: renderer.ReactTestRenderer;
+let queryClient: QueryClient;
+let invalidate: jest.SpyInstance;
 let deletion: ReturnType<typeof useAccountDeletion>;
 let insetsTop: number;
 let childMounts: number;
@@ -48,11 +52,13 @@ function Child() {
   return <Text>screen</Text>;
 }
 const app = () => (
-  <SafeAreaProvider initialMetrics={metrics}>
-    <AccountDeletionProvider>
-      <Child />
-    </AccountDeletionProvider>
-  </SafeAreaProvider>
+  <QueryClientProvider client={queryClient}>
+    <SafeAreaProvider initialMetrics={metrics}>
+      <AccountDeletionProvider>
+        <Child />
+      </AccountDeletionProvider>
+    </SafeAreaProvider>
+  </QueryClientProvider>
 );
 const mount = () =>
   act(() => {
@@ -78,6 +84,8 @@ describe('AccountDeletionProvider', () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     childMounts = 0;
+    queryClient = new QueryClient();
+    invalidate = jest.spyOn(queryClient, 'invalidateQueries');
     mockKeepItPending = false;
     mockIdentity = identity();
     refresh.mockResolvedValue(null);
@@ -191,6 +199,26 @@ describe('AccountDeletionProvider', () => {
     expect(deletion.notice).toBe('Your account is kept. Meal plans that ended when you asked stay ended.');
     expect(lines()).toContain(deletion.notice);
     expect(pill()).toBeUndefined();
+  });
+
+  it.each([
+    ['kept', () => keep.mockResolvedValue({} as never), 'kept'],
+    ['already ended (404)', () => keep.mockRejectedValue(new AppApiError('NO_DELETION_REQUEST', 'x', 404)), 'kept'],
+    ['already erasing (409)', () => keep.mockRejectedValue(new AppApiError('ACCOUNT_DELETION_IN_PROGRESS', 'x', 409)), 'inProgress'],
+  ])('refetches the Delete account status after the request is %s, so that screen stops offering Keep', async (_name, arrange, outcome) => {
+    arrange();
+    mount();
+    expect(await pressKeep()).toBe(outcome);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith({queryKey: accountDeletionQueryKey('u1')});
+    expect(refresh.mock.invocationCallOrder[0]).toBeLessThan(invalidate.mock.invocationCallOrder[0]);
+  });
+
+  it('leaves the Delete account status alone when keeping failed', async () => {
+    keep.mockRejectedValue(new AppApiError('NETWORK_ERROR', 'x'));
+    mount();
+    expect(await pressKeep()).toBe('failed');
+    expect(invalidate).not.toHaveBeenCalled();
   });
 
   it('says the kitchen reopens when the chef side was cancelled, and drops the notice after 4 seconds', async () => {

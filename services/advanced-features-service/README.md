@@ -30,6 +30,8 @@ container app (`ca-craves-advanced-prod`, resource group `rg-craves-advanced-pro
 | Conversational AI search (E08) | `aisearch` | `adv_ai_search` (no tables) | `/api/v1/advanced/ai-search` | `ai-search-v1.yaml` | `CRAVES_ADV_AI_SEARCH_ENABLED` (needs `CRAVES_ADV_AI_SEARCH_URL`, `_MODEL`, `_KEY`) |
 | Live order activity (E39) | `liveactivities` | `adv_live_activities` | `/api/v1/advanced/live-activities` | `live-activities-v1.yaml` | `CRAVES_ADV_LIVE_ACTIVITIES_ENABLED` |
 | Policies: serviceability, cancellation/refund, provider ranking, notification frequency (015, 062, 072, 088) | `policies` | `adv_policies` | `/api/v1/advanced/policies` | `policies-v1.yaml` | `CRAVES_ADV_POLICIES_ENABLED` |
+| Account deletion requests (privacy) | `accountdeletion` | `adv_account_deletion` | `/api/v1/advanced/account-deletion` | `account-deletion-v1.yaml` | `CRAVES_ADV_ACCOUNT_DELETION_ENABLED` |
+| Download my data (privacy) | `mydata` | `adv_my_data` (no tables) | `/api/v1/advanced/my-data` | `my-data-v1.yaml` | `CRAVES_ADV_MY_DATA_ENABLED` |
 | Private taste data (E40) | `tastedata` | `adv_taste_data` | `/api/v1/advanced/my-taste-data` | `taste-data-v1.yaml` | `CRAVES_ADV_TASTE_DATA_ENABLED` |
 | Feature switches | `platform.module` | – | `/api/v1/advanced/features` (public), `/modules` (staff) | `advanced-v1.yaml` | – |
 
@@ -52,6 +54,10 @@ only that module answers `503 FEATURE_UNAVAILABLE` / `FEATURE_DISABLED`; the res
 RS256 JWTs verified exactly like the other services (issuer, audience, UUID subject, `roles`, `token_version`), staff tokens
 re-checked live with Auth (`X-Craves-Admin-Session: verified-v1`), deny-by-default routes, ownership checks in every service
 method, no-store responses, share tokens stored only as SHA-256, chef ownership confirmed with Catalog using the chef's own token.
+
+The one exception to deny-by-default is `POST /internal/v1/account-erasure` (and `/blockers`, `/prepare`), called by the auth-service deletion
+coordinator: no token, but the header `X-Craves-Internal-Secret` must equal `CRAVES_INTERNAL_SERVICE_SECRET` (401 otherwise; 503 while the secret is unset).
+It erases the person in every module, including switched-off ones whose schema was migrated once; `my-taste-data` erase still skips switched-off modules.
 
 ## Build and test
 

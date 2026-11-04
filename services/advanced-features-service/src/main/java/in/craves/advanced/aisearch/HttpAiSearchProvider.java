@@ -5,19 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import in.craves.advanced.aisearch.AiSearchDtos.AiChatMessage;
-import java.io.ByteArrayOutputStream;
+import in.craves.advanced.platform.clients.CappedBody;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.Flow;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -126,7 +123,7 @@ public class HttpAiSearchProvider implements AiSearchProvider {
                     .header("Accept", "application/json").POST(HttpRequest.BodyPublishers.ofByteArray(json.writeValueAsBytes(body)));
             request.header(keyHeader, "authorization".equalsIgnoreCase(keyHeader) ? "Bearer " + key : key);
             // The request timeout covers only the headers; this deadline covers the whole answer, body included.
-            call = client.sendAsync(request.build(), capped(MAX_BODY));
+            call = client.sendAsync(request.build(), CappedBody.handler(MAX_BODY));
             HttpResponse<byte[]> response = call.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (response.statusCode() != 200 || response.body() == null) {
                 // Status only: the body may echo the conversation.
@@ -154,50 +151,5 @@ public class HttpAiSearchProvider implements AiSearchProvider {
             if (call != null) call.cancel(true);
             permits.release();
         }
-    }
-
-    /** Collects at most max bytes; a longer answer stops the download and gives a null body. */
-    static HttpResponse.BodyHandler<byte[]> capped(int max) {
-        return info -> new HttpResponse.BodySubscriber<>() {
-            private final ByteArrayOutputStream out = new ByteArrayOutputStream();
-            private final CompletableFuture<byte[]> result = new CompletableFuture<>();
-            private Flow.Subscription subscription;
-
-            @Override
-            public CompletionStage<byte[]> getBody() {
-                return result;
-            }
-
-            @Override
-            public void onSubscribe(Flow.Subscription subscription) {
-                this.subscription = subscription;
-                subscription.request(Long.MAX_VALUE);
-            }
-
-            @Override
-            public void onNext(List<ByteBuffer> buffers) {
-                if (result.isDone()) return;
-                for (ByteBuffer buffer : buffers) {
-                    if (out.size() + buffer.remaining() > max) {
-                        subscription.cancel();
-                        result.complete(null);
-                        return;
-                    }
-                    byte[] chunk = new byte[buffer.remaining()];
-                    buffer.get(chunk);
-                    out.write(chunk, 0, chunk.length);
-                }
-            }
-
-            @Override
-            public void onError(Throwable error) {
-                result.completeExceptionally(error);
-            }
-
-            @Override
-            public void onComplete() {
-                result.complete(out.toByteArray());
-            }
-        };
     }
 }

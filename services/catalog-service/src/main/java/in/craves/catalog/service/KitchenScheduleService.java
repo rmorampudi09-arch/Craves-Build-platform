@@ -38,6 +38,7 @@ public class KitchenScheduleService {
     private static final int MAX_WEEKLY_WINDOWS = 56;
     private static final int MAX_WINDOWS_PER_OVERRIDE = 8;
     private static final int MAX_REASON_LENGTH = 160;
+    static final String ACCOUNT_DELETION_REASON = "ACCOUNT_DELETION";
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
@@ -94,6 +95,22 @@ public class KitchenScheduleService {
         KitchenScheduleResponse newState = readSchedule(kitchenId);
         audit(kitchenId, principal.identityId(), "WEEKLY_SCHEDULE_REPLACED", oldState, newState);
         return newState;
+    }
+
+    /** Account deletion: stops new orders to every kitchen of this person (no pause date, so nothing reopens it). Returns how many changed. */
+    @Transactional
+    public int closeForAccountDeletion(UUID identityId) {
+        int changed = 0;
+        for (UUID kitchenId : jdbcTemplate.queryForList("SELECT id FROM catalog_schema.kitchen_profile WHERE identity_id = ?", UUID.class, identityId)) {
+            ensureConfig(kitchenId);
+            changed += jdbcTemplate.update(
+                "UPDATE catalog_schema.kitchen_schedule_config " +
+                    "SET accepting_orders = false, paused_until = NULL, pause_reason = ?, updated_at = now() " +
+                    "WHERE kitchen_id = ? AND (accepting_orders OR paused_until IS NOT NULL OR pause_reason IS DISTINCT FROM ?)",
+                ACCOUNT_DELETION_REASON, kitchenId, ACCOUNT_DELETION_REASON
+            );
+        }
+        return changed;
     }
 
     @Transactional

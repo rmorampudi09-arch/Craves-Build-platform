@@ -4,6 +4,7 @@
 in.craves.catalog.banners.AdminHomeBannerController
 in.craves.catalog.banners.PublicHomeBannerController
 in.craves.catalog.web.FavoriteHomeFeedController
+in.craves.catalog.web.InternalAccountErasureController
 in.craves.catalog.web.InternalCatalogController
 in.craves.catalog.web.KitchenController
 in.craves.catalog.web.KitchenScheduleController

@@ -25,6 +25,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Spring's error page: without it every server error reached the app as an empty 403.
                 .requestMatchers("/error").permitAll()
+                // Private calls from the auth-service deletion coordinator: InternalCatalogAuthorizer checks the key in the controller.
+                .requestMatchers("/internal/v1/account-erasure/**").permitAll()
                 .requestMatchers(
                     "/actuator/health",
                     "/actuator/health/**",

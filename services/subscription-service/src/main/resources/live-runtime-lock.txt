@@ -3,6 +3,7 @@
 # See docs/runbooks/live-runtime-safety.md.
 in.craves.subscription.capacity.CapacityController
 in.craves.subscription.credit.DayCreditController
+in.craves.subscription.erasure.AccountErasureController
 in.craves.subscription.order.OccurrenceOrderInternalController
 in.craves.subscription.plan.ChefPlanWorkflowController
 in.craves.subscription.policy.SubscriptionPolicyController

@@ -39,6 +39,8 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/subscriptions/plans", "/api/v1/subscriptions/plans/**").permitAll()
                 .requestMatchers(ORDER_INTERNAL_CALLBACKS).permitAll()
+                // Private deletion calls from auth-service: no bearer token; the controller checks the internal secret.
+                .requestMatchers(HttpMethod.POST, "/internal/v1/account-erasure/**").permitAll()
                 // CH-03: metrics and prometheus are not for signed-in customers; only health stays reachable.
                 .requestMatchers("/actuator/**").denyAll()
                 .anyRequest().authenticated()

@@ -163,6 +163,14 @@ public class OrderAmendmentService implements PersonalDataContributor {
         });
     }
 
+    @Override
+    public int eraseCustomerSide(UUID person) {
+        return tx.execute(status -> {
+            repository.lockCustomer(person);
+            return repository.eraseCustomerSide(person, ERASED, clock.instant());
+        });
+    }
+
     private OrderAmendmentView propose(AmendmentParty party, UUID actor, Order order, OrderAmendmentRequest request) {
         Set<String> allowed = party == AmendmentParty.CUSTOMER ? OrderAmendmentRules.CUSTOMER_MAY_PROPOSE : OrderAmendmentRules.CHEF_MAY_PROPOSE;
         if (!allowed.contains(order.status())) throw notAmendable(order);

@@ -197,12 +197,17 @@ class TrustRepository {
      * are not theirs to erase here.
      */
     int erase(UUID person, UUID erased, Instant now) {
+        return eraseCustomerSide(person, erased, now)
+                + jdbc.update("UPDATE adv_trust.dispute SET chef_id = ?, updated_at = ? WHERE chef_id = ?", erased, Sql.ts(now), person);
+    }
+
+    /** Everything {@link #erase} does except unlinking the person as the chef of a dispute, so a chef keeps their statements and ids. */
+    int eraseCustomerSide(UUID person, UUID erased, Instant now) {
         return jdbc.update("DELETE FROM adv_trust.report WHERE reporter_id = ? AND status = 'DISMISSED'", person)
                 + jdbc.update("UPDATE adv_trust.report SET reporter_id = ?, order_id = NULL, updated_at = ? WHERE reporter_id = ?", erased, Sql.ts(now), person)
                 + jdbc.update("UPDATE adv_trust.dispute SET customer_id = ?, description = NULL, "
                         + "status = CASE WHEN status = 'OPEN' THEN 'WITHDRAWN' ELSE status END, version = version + 1, updated_at = ? WHERE customer_id = ?",
-                erased, Sql.ts(now), person)
-                + jdbc.update("UPDATE adv_trust.dispute SET chef_id = ?, updated_at = ? WHERE chef_id = ?", erased, Sql.ts(now), person);
+                erased, Sql.ts(now), person);
     }
 
     private static StaffTrustReport report(ResultSet rs, int i) throws SQLException {

@@ -48,6 +48,10 @@ management:
   health:
     db:
       enabled: false
+craves:
+  internal:
+    # Shared secret of the auth-service deletion coordinator (X-Craves-Internal-Secret). Empty = the internal erase endpoints answer 503.
+    service-secret: ${CRAVES_INTERNAL_SERVICE_SECRET:}
 advanced:
   jwt-issuer: ${CRAVES_JWT_ISSUER:https://api.craves.in/auth}
   jwt-audience: ${CRAVES_JWT_AUDIENCE:craves-api}

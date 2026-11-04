@@ -32,6 +32,7 @@ import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {useBootstrap} from '../../features/auth/hooks/useBootstrap';
 import {useSessionLifecycle} from '../../features/auth/hooks/useSessionLifecycle';
+import {AccountDeletionProvider} from '../../features/accountDeletion/state/AccountDeletionProvider';
 import {useIdentitySync} from '../../features/accountDeletion/state/useIdentitySync';
 import {SplashScreen} from '../../features/auth/screens/SplashScreen';
 import {SplashDoneContext} from '../../features/auth/components/CravesWordmark';
@@ -550,7 +551,14 @@ export function AppNavigator({restoreLastScreen = false}: {restoreLastScreen?: b
             onReady={handleNavigationReadyOrChange}
             onStateChange={handleNavigationReadyOrChange}>
             {auth.bootstrapStatus === 'authenticated' ? (
-              <AuthenticatedNavigator resolution={auth.accountResolution} />
+              // The delete-request strip belongs to the resolved product screens, never to sign-in or account resolution.
+              auth.accountResolution ? (
+                <AccountDeletionProvider>
+                  <AuthenticatedNavigator resolution={auth.accountResolution} />
+                </AccountDeletionProvider>
+              ) : (
+                <AuthenticatedNavigator resolution={null} />
+              )
             ) : (
               <AuthNavigator />
             )}

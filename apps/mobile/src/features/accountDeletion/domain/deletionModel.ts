@@ -24,12 +24,17 @@ export function formatDeletionDate(
   style: 'short' | 'long',
   timeZone?: string,
 ): string {
+  const date = new Date(iso);
+  // A bad date from the server must not crash the banner on every screen; callers treat '' as no date.
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
   return new Intl.DateTimeFormat('en-IN', {
     day: 'numeric',
     month: 'short',
     ...(style === 'long' ? {year: 'numeric'} : {}),
     timeZone,
-  }).format(new Date(iso));
+  }).format(date);
 }
 
 export type EntryState =
@@ -108,22 +113,37 @@ export function bannerFor(
   switch (pending.status) {
     case 'PENDING_REVIEW':
       return {text: banner.inReview, canKeep: true};
-    case 'SCHEDULED':
-      return {
-        text: pending.dueAt
-          ? banner.scheduled[pending.scope](
-              formatDeletionDate(pending.dueAt, 'short', timeZone),
-            )
-          : banner.inReview,
-        canKeep: true,
-      };
+    case 'SCHEDULED': {
+      const date = pending.dueAt
+        ? formatDeletionDate(pending.dueAt, 'short', timeZone)
+        : '';
+      // A scope the app does not know falls back to the whole-account text.
+      const scheduled = banner.scheduled[pending.scope] ?? banner.scheduled.ALL;
+      return {text: date ? scheduled(date) : banner.inReview, canKeep: true};
+    }
     case 'WAITING_ON_OPEN_ITEMS':
       return {text: banner.waiting, canKeep: true};
     case 'ERASING':
-      return {text: banner.erasing[pending.scope], canKeep: false};
+      return {
+        text: banner.erasing[pending.scope] ?? banner.erasing.ALL,
+        canKeep: false,
+      };
     default:
       return null;
   }
+}
+
+/** What the strip says after Keep my account: the kitchen comes back for the chef side, ended meal plans stay ended for the customer side. */
+export function keptNoticeFor(
+  scope: DeletionScope | undefined,
+  roles: readonly string[],
+): string {
+  const {kept, kitchen, mealPlans} = deletionCopy.keep;
+  if (!scope) {
+    return kept;
+  }
+  const chefSide = scope === 'CHEF' || (scope === 'ALL' && roles.includes('CHEF'));
+  return `${kept} ${chefSide ? kitchen : mealPlans}`;
 }
 
 /** The Delete row shows only when the server answered the status call (200, or 404 with no request yet). */

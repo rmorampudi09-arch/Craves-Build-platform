@@ -5,6 +5,7 @@ import {
   entryStateFor,
   formatDeletionDate,
   isDeletionPaused,
+  keptNoticeFor,
   pausedOrderText,
   scopePlanFor,
   shouldShowDeleteRow,
@@ -63,6 +64,27 @@ test('bannerFor covers every open state and nothing else', () => {
   expect(bannerFor(pending({status: 'WAITING_ON_OPEN_ITEMS'}), tz)).toEqual({text: 'Deleting once open items are settled', canKeep: true});
   expect(bannerFor(pending({status: 'ERASING', scope: 'CHEF'}), tz)).toEqual({text: 'Chef side being deleted', canKeep: false});
   expect(bannerFor(pending({status: 'CANCELLED'}), tz)).toBeNull();
+});
+
+test('bannerFor never throws on a scope the app does not know', () => {
+  const odd = {scope: 'SOMETHING_NEW'} as unknown as Partial<PendingDeletion>;
+  expect(bannerFor(pending(odd), 'Asia/Kolkata')?.text).toBe('Account deleted on 5 Dec');
+  expect(bannerFor(pending({...odd, status: 'ERASING'}))).toEqual({text: 'Account being deleted', canKeep: false});
+});
+
+test('an unreadable date reads as empty and the banner falls back to the in-review text', () => {
+  expect(formatDeletionDate('not a date', 'short')).toBe('');
+  expect(formatDeletionDate('', 'long')).toBe('');
+  expect(bannerFor(pending({dueAt: 'not a date'}))).toEqual({text: 'Delete request with Craves', canKeep: true});
+  expect(pausedOrderText(pending({dueAt: 'not a date'}), 'orders')).toBe('Your account is set to be deleted, so new orders are paused.');
+});
+
+test('keptNoticeFor says what comes back for the side that was cancelled', () => {
+  expect(keptNoticeFor('CHEF', ['CUSTOMER', 'CHEF'])).toBe('Your account is kept. Your kitchen reopens as it was within a minute.');
+  expect(keptNoticeFor('ALL', ['CUSTOMER', 'CHEF'])).toBe('Your account is kept. Your kitchen reopens as it was within a minute.');
+  expect(keptNoticeFor('ALL', ['CUSTOMER'])).toBe('Your account is kept. Meal plans that ended when you asked stay ended.');
+  expect(keptNoticeFor('CUSTOMER', ['CUSTOMER', 'CHEF'])).toBe('Your account is kept. Meal plans that ended when you asked stay ended.');
+  expect(keptNoticeFor(undefined, [])).toBe('Your account is kept.');
 });
 
 test('shouldShowDeleteRow only after a 200 or a 404 NO_DELETION_REQUEST', () => {

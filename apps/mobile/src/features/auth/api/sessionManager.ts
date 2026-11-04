@@ -19,9 +19,11 @@ export type SessionInvalidationReason =
   | 'refresh_persistence_failed';
 
 type SessionInvalidationListener = (reason: SessionInvalidationReason) => void;
+type TokensRotatedListener = (tokens: AuthTokenResponse) => void;
 
 let refreshPromise: Promise<AuthTokenResponse | null> | null = null;
 const invalidationListeners = new Set<SessionInvalidationListener>();
+const rotationListeners = new Set<TokensRotatedListener>();
 
 function isRefreshSessionUsable(session: StoredRefreshSession): boolean {
   const expiresAtMs = Date.parse(session.expiresAt);
@@ -31,6 +33,16 @@ function isRefreshSessionUsable(session: StoredRefreshSession): boolean {
 function notifyInvalidated(reason: SessionInvalidationReason): void {
   trackSessionEvent('session_invalidated', {reason});
   invalidationListeners.forEach(listener => listener(reason));
+}
+
+function notifyRotated(tokens: AuthTokenResponse): void {
+  rotationListeners.forEach(listener => {
+    try {
+      listener(tokens);
+    } catch {
+      // A broken listener must not fail a refresh that already succeeded.
+    }
+  });
 }
 
 function isTerminalRefreshFailure(error: unknown): boolean {
@@ -133,6 +145,7 @@ async function rotateRefreshToken(): Promise<AuthTokenResponse | null> {
     tokenMemory.set(tokens.accessToken, tokens.expiresIn);
     trackSessionEvent('session_refresh_succeeded');
     trace.end('success');
+    notifyRotated(tokens);
     return tokens;
   } catch (error) {
     await invalidateSession('refresh_persistence_failed');
@@ -171,6 +184,12 @@ export const sessionManager = {
     invalidationListeners.add(listener);
     return () => {
       invalidationListeners.delete(listener);
+    };
+  },
+  onTokensRotated(listener: TokensRotatedListener): () => void {
+    rotationListeners.add(listener);
+    return () => {
+      rotationListeners.delete(listener);
     };
   },
   async clearLocal(): Promise<void> {

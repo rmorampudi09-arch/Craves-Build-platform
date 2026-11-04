@@ -166,4 +166,106 @@ describe('auth role selection and account resolution state', () => {
     expect(signedOut.identity).toBeNull();
     expect(signedOut.accountResolution).toBeNull();
   });
+
+  it('refreshes the identity without touching the role or the resolved account', () => {
+    const resolved = authReducer(
+      authReducer(undefined, authActions.authenticated(chefIdentity)),
+      authActions.accountResolved({identity: chefIdentity, resolution: chefResolution}),
+    );
+    const refreshed = {
+      ...chefIdentity,
+      pendingDeletion: {
+        requestId: 'req-1',
+        scope: 'ALL' as const,
+        status: 'SCHEDULED' as const,
+        dueAt: null,
+      },
+    };
+
+    const state = authReducer(resolved, authActions.identityRefreshed(refreshed));
+
+    expect(state.identity).toEqual(refreshed);
+    expect(state.accountResolution).toEqual(chefResolution);
+    expect(state.selectedRole).toBe(resolved.selectedRole);
+    expect(state.bootstrapStatus).toBe('authenticated');
+  });
+
+  describe('Keep it? after a fresh sign-in', () => {
+    const withRequest = (status: 'PENDING_REVIEW' | 'SCHEDULED' | 'WAITING_ON_OPEN_ITEMS' | 'ERASING' | 'CANCELLED') => ({
+      ...chefIdentity,
+      pendingDeletion: {requestId: 'req-1', scope: 'ALL' as const, status, dueAt: '2026-12-05T12:00:00Z'},
+    });
+
+    it.each(['PENDING_REVIEW', 'SCHEDULED', 'WAITING_ON_OPEN_ITEMS'] as const)(
+      'asks after a sign-in with a %s request, and signs in as authenticated does',
+      status => {
+        const state = authReducer(undefined, authActions.signedInFresh(withRequest(status)));
+
+        expect(state.keepItPending).toBe(true);
+        expect(state.bootstrapStatus).toBe('authenticated');
+        expect(state.identity).toEqual(withRequest(status));
+        expect(state.accountResolution).toBeNull();
+        expect(state.lastErrorCode).toBeNull();
+      },
+    );
+
+    it('does not ask once erasing has started, after an ended request, or without one', () => {
+      for (const identity of [
+        withRequest('ERASING'),
+        withRequest('CANCELLED'),
+        {...chefIdentity, pendingDeletion: null},
+        chefIdentity,
+      ]) {
+        expect(authReducer(undefined, authActions.signedInFresh(identity)).keepItPending).toBe(false);
+      }
+    });
+
+    it('never asks when the app restores a saved session', () => {
+      const asked = authReducer(undefined, authActions.signedInFresh(withRequest('SCHEDULED')));
+
+      expect(authReducer(undefined, authActions.authenticated(withRequest('SCHEDULED'))).keepItPending).toBe(false);
+      expect(authReducer(asked, authActions.authenticated(withRequest('SCHEDULED'))).keepItPending).toBe(false);
+    });
+
+    it('stops asking after an answer or a sign out', () => {
+      const asked = authReducer(undefined, authActions.signedInFresh(withRequest('SCHEDULED')));
+
+      expect(authReducer(asked, authActions.keepItDismissed()).keepItPending).toBe(false);
+      expect(authReducer(asked, authActions.signedOut()).keepItPending).toBe(false);
+    });
+  });
+
+  describe('keepItPending on a refreshed identity', () => {
+    const request = (status: 'SCHEDULED' | 'ERASING' | 'CANCELLED') => ({
+      ...chefIdentity,
+      pendingDeletion: {requestId: 'req-1', scope: 'ALL' as const, status, dueAt: '2026-12-05T12:00:00Z'},
+    });
+    const asked = () => authReducer(undefined, authActions.signedInFresh(request('SCHEDULED')));
+
+    it.each([
+      ['the request has ended', request('CANCELLED')],
+      ['there is no request', {...chefIdentity, pendingDeletion: null}],
+      ['erasing has started', request('ERASING')],
+    ])('stops asking when %s', (_name, refreshed) => {
+      expect(authReducer(asked(), authActions.identityRefreshed(refreshed)).keepItPending).toBe(false);
+    });
+
+    it('keeps asking while the request is still open', () => {
+      expect(authReducer(asked(), authActions.identityRefreshed(request('SCHEDULED'))).keepItPending).toBe(true);
+    });
+
+    it('never starts asking from a refresh', () => {
+      const restored = authReducer(undefined, authActions.authenticated(chefIdentity));
+      expect(authReducer(restored, authActions.identityRefreshed(request('SCHEDULED'))).keepItPending).toBe(false);
+    });
+  });
+
+  it('ignores a refreshed identity while nobody is signed in', () => {
+    const anonymous = authReducer(undefined, authActions.bootstrapAnonymous());
+
+    const state = authReducer(anonymous, authActions.identityRefreshed(chefIdentity));
+
+    expect(state.identity).toBeNull();
+    expect(state.bootstrapStatus).toBe('anonymous');
+  });
 });

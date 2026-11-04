@@ -32,6 +32,10 @@ import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {useBootstrap} from '../../features/auth/hooks/useBootstrap';
 import {useSessionLifecycle} from '../../features/auth/hooks/useSessionLifecycle';
+import {AccountDeletionProvider} from '../../features/accountDeletion/state/AccountDeletionProvider';
+import {KeepItGate} from '../../features/accountDeletion/components/KeepItGate';
+import {AccountUnavailableScreen} from '../../features/accountDeletion/screens/AccountUnavailableScreen';
+import {useIdentitySync} from '../../features/accountDeletion/state/useIdentitySync';
 import {SplashScreen} from '../../features/auth/screens/SplashScreen';
 import {SplashDoneContext} from '../../features/auth/components/CravesWordmark';
 import {RoleSelectionScreen} from '../../features/auth/screens/RoleSelectionScreen';
@@ -88,7 +92,7 @@ function AuthNavigator() {
   return (
     <View style={authCanvasStyles.root}>
       <AuthVideoBackground
-        enabled={authScene !== 'ForgotPassword' && authScene !== 'PasswordResetSent'} />
+        enabled={authScene !== 'ForgotPassword' && authScene !== 'PasswordResetSent' && authScene !== 'AccountUnavailable'} />
       {fontsReady ? <AuthStack.Navigator
         screenOptions={screenOptions}
         initialRouteName="RoleSelection"
@@ -101,6 +105,9 @@ function AuthNavigator() {
         <AuthStack.Screen name="OtpVerification" component={OtpVerificationScreen} options={authVideoOptions} />
         <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <AuthStack.Screen name="PasswordResetSent" component={PasswordResetSentScreen} />
+        <AuthStack.Screen name="AccountUnavailable">
+          {({route}) => <AccountUnavailableScreen signedIn={route.params.signedIn} />}
+        </AuthStack.Screen>
       </AuthStack.Navigator> : null}
     </View>
   );
@@ -324,6 +331,7 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
 export function AppNavigator({restoreLastScreen = false}: {restoreLastScreen?: boolean}) {
   const status = useBootstrap();
   useSessionLifecycle();
+  useIdentitySync();
   const auth = useAppSelector(state => state.auth);
   const [splashDismissed, setSplashDismissed] = React.useState(false);
   const authRef = React.useRef(auth);
@@ -548,7 +556,16 @@ export function AppNavigator({restoreLastScreen = false}: {restoreLastScreen?: b
             onReady={handleNavigationReadyOrChange}
             onStateChange={handleNavigationReadyOrChange}>
             {auth.bootstrapStatus === 'authenticated' ? (
-              <AuthenticatedNavigator resolution={auth.accountResolution} />
+              // The delete-request strip belongs to the resolved product screens, never to sign-in or account resolution.
+              auth.accountResolution ? (
+                <AccountDeletionProvider>
+                  <KeepItGate>
+                    <AuthenticatedNavigator resolution={auth.accountResolution} />
+                  </KeepItGate>
+                </AccountDeletionProvider>
+              ) : (
+                <AuthenticatedNavigator resolution={null} />
+              )
             ) : (
               <AuthNavigator />
             )}

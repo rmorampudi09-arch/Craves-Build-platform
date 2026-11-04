@@ -1,6 +1,8 @@
+import type {PendingDeletion} from '../../accountDeletion/domain/deletionTypes';
+
 export type AuthRole = 'CUSTOMER' | 'CHEF';
 export type IdentityStatus = 'ACTIVE' | 'SUSPENDED';
-export type IdentityRole = 'CUSTOMER' | 'CHEF' | 'ADMIN';
+export type IdentityRole = 'CUSTOMER' | 'CHEF' | 'ADMIN' | 'RIDER';
 
 export interface Identity {
   id: string;
@@ -12,6 +14,7 @@ export interface Identity {
   status: IdentityStatus;
   roles: IdentityRole[];
   lastLoginAt: string | null;
+  pendingDeletion?: PendingDeletion | null;
 }
 
 export interface AuthTokenResponse {

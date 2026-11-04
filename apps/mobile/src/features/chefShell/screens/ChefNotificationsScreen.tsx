@@ -85,7 +85,10 @@ export function ChefNotificationsScreen() {
       state.markNotificationRead(notice.id);
     }
     const category = categoryOf(notice);
-    if (category === 'orders' && notice.targetId) {
+    // Checked first: the notice type can carry words like PAYOUT that categoryOf would send elsewhere.
+    if (notice.targetType?.trim().toUpperCase() === 'ACCOUNT_DELETION') {
+      navigation.navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefDeleteAccount', initial: false}});
+    } else if (category === 'orders' && notice.targetId) {
       navigation.navigate('ChefOrderDetail', {orderId: notice.targetId});
     } else if (category === 'money') {
       navigation.navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefPayoutHistory', initial: false}});

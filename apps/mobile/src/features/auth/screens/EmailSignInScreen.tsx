@@ -4,6 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../app/navigation/types';
 import { useAppDispatch } from '../../../app/store/hooks';
 import { toAppApiError } from '../../../core/http/apiError';
+import { isAccountUnavailable } from '../../accountDeletion/domain/deletionModel';
 import { VideoAuthLayout } from '../components/VideoAuthLayout';
 import { AuthTextField } from '../components/AuthTextField';
 import { AuthActionButton } from '../components/AuthActionButton';
@@ -78,7 +79,7 @@ export function EmailSignInScreen({ navigation, route }: Props) {
         submission.email,
         submission.password,
       );
-      dispatch(authActions.authenticated(tokens.identity));
+      dispatch(authActions.signedInFresh(tokens.identity));
     } catch (error) {
       const mapped = toAppApiError(error);
       if (mapped.code === 'PHONE_VERIFICATION_REQUIRED') {
@@ -86,6 +87,10 @@ export function EmailSignInScreen({ navigation, route }: Props) {
           'PhoneSignIn',
           createEmailAuthRoleContext(submission.role),
         );
+        return;
+      }
+      if (isAccountUnavailable(mapped.code)) {
+        navigation.navigate('AccountUnavailable', { signedIn: false });
         return;
       }
       setRequestError(mapped.message);

@@ -26,6 +26,7 @@ jest.mock('./CustomerBottomNavController', () => ({
   CustomerBottomTabButton: () => null,
   useCustomerBottomNavReveal: () => () => undefined,
 }));
+jest.mock('../../features/accountDeletion/screens/CustomerDeleteAccountScreen', () => mockScreenModule('CustomerDeleteAccountScreen'));
 jest.mock('../../features/cart/components/KitchenSwitchDialog', () => mockScreenModule('KitchenSwitchHost'));
 jest.mock('../../features/cart/screens/CustomerCartScreen', () => mockScreenModule('CustomerCartScreen'));
 jest.mock('../../features/chefDiscovery/screens/DiscoverHomeChefsRouteScreen', () => mockScreenModule('DiscoverHomeChefsRouteScreen'));
@@ -106,6 +107,11 @@ describe('CustomerRootNavigator', () => {
   it('opens the support chat from an order with that order', () => {
     navigate('Profile', {screen: 'CustomerSupportChat', params: {orderId: 'order-1'}});
     expect(allText()).toContain('SCREEN:CustomerSupportChat:order-1');
+  });
+
+  it('opens Delete account from Privacy & security inside the Profile stack', () => {
+    navigate('Profile', {screen: 'CustomerSettingsDeleteAccount'});
+    expect(allText()).toContain('SCREEN:CustomerDeleteAccountScreen');
   });
 
   it('keeps the existing Profile routes, Help & support included', () => {

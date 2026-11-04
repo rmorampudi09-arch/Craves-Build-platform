@@ -46,6 +46,7 @@ jest.mock('../../features/chefDashboard/screens/ChefDashboardScreen', () => {
     },
   };
 });
+jest.mock('../../features/accountDeletion/screens/ChefDeleteAccountScreen', () => mockScreenModule('ChefDeleteAccountScreen'));
 jest.mock('../../features/chefBusinessInformation/screens/ChefBusinessInformationScreen', () => mockScreenModule('ChefBusinessInformationScreen'));
 jest.mock('../../features/chefMenu/screens/ChefAddMenuItemScreen', () => mockScreenModule('ChefAddMenuItemScreen'));
 jest.mock('../../features/chefMenu/screens/ChefEditMenuItemScreen', () => mockScreenModule('ChefEditMenuItemScreen'));
@@ -172,6 +173,14 @@ describe('ChefRootNavigator', () => {
     act(() => tab('Home').props.onPress());
     navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefReviews', initial: false}});
     expect(allText()).toContain('SCREEN:ChefReviewsScreen');
+    act(() => navigationRef.goBack());
+    expect(allText()).toContain('SCREEN:ChefProfileScreen');
+  });
+
+  it('opens Delete my account from Login & security as a full page, and Back returns to Profile home', () => {
+    navigate('ChefTabs', {screen: 'Profile', params: {screen: 'ChefDeleteAccount', initial: false}});
+    expect(allText()).toContain('SCREEN:ChefDeleteAccountScreen');
+    expect(tab('Home')).toBeUndefined();
     act(() => navigationRef.goBack());
     expect(allText()).toContain('SCREEN:ChefProfileScreen');
   });

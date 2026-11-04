@@ -39,6 +39,7 @@ import {
   useChefToast,
 } from '../../chefShell/components/ui';
 import {formatRupeesExact} from '../../chefShell/domain/chefFormat';
+import {chefFailureText} from '../../chefShell/domain/sellingNotReady';
 import {RadioMark} from '../../customerSubscription/components/MealPlanUi';
 import {billingUnit, formatServiceTime, mealSlotLabel} from '../../mealPlans/domain/mealPlanSchedule';
 import {resolveApiImageUrl} from '../../mealPlans/domain/resolveApiImageUrl';
@@ -404,7 +405,9 @@ function MealPlanEditor({
       setLeaving(true);
     } catch (cause) {
       setServerError(
-        cause instanceof AppApiError ? cause.message : 'The meal plan could not be saved. Try again.',
+        cause instanceof AppApiError
+          ? chefFailureText(cause, cause.message)
+          : 'The meal plan could not be saved. Try again.',
       );
     } finally {
       // A finished save keeps the lock: re-rendering the form while Android removes the screen crashed the app.

@@ -28,6 +28,7 @@ import {SkeletonBlock} from '../../../shared/components/Skeleton';
 import {getChefMenuPrimaryImageUrl} from '../../chefMenu/domain/chefMenuPresentation';
 import {useChefMenuModel} from '../../chefMenu/state/useChefMenuModel';
 import {ChefActionButton, ChefCard, ChefTopBar, ChipTap, EmptyState, StatusChip, chipTapOverlap} from '../../chefShell/components/ui';
+import {chefFailureText} from '../../chefShell/domain/sellingNotReady';
 import {summarizeSchedule, type ScheduleItemLike} from '../../mealPlans/domain/mealPlanSchedule';
 import {resolveApiImageUrl} from '../../mealPlans/domain/resolveApiImageUrl';
 import type {ChefMealPlan} from '../api/chefSubscriptionApi';
@@ -111,7 +112,7 @@ function PlanCard({
     setChosen(next);
     setToggleError(null);
     setAccepting(plan.id, next)
-      .catch(error => setToggleError(toAppApiError(error).message))
+      .catch(error => setToggleError(chefFailureText(error, toAppApiError(error).message)))
       .finally(() => setChosen(null));
   };
 

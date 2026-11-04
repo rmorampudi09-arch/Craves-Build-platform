@@ -130,6 +130,34 @@ describe('ChefNotificationsScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('ChefTabs', {screen: 'Menu', params: {segment: 'plans'}});
   });
 
+  it.each(['ACCOUNT_DELETION', 'account_deletion'])(
+    'opens Delete my account on the Profile tab for a %s notice, and marks it read',
+    async targetType => {
+      mockState.notices = [
+        notice(6, {
+          title: 'Your chef side is scheduled for deletion',
+          body: 'Tap to see the date',
+          // The word PAYOUT in the type must not send it to Payout history.
+          noticeType: 'ACCOUNT_DELETION_PAYOUT_SETTLED',
+          targetType,
+          targetId: id(5),
+        }),
+      ];
+      await mount();
+      await press(label => label.startsWith('Your chef side is scheduled for deletion'));
+      expect(mockMarkRead).toHaveBeenCalledWith(id(6));
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('ChefTabs', {screen: 'Profile', params: {screen: 'ChefDeleteAccount', initial: false}});
+    },
+  );
+
+  it('opens Delete my account even when the deletion notice has no target id', async () => {
+    mockState.notices = [notice(6, {title: 'Deletion update', targetType: 'ACCOUNT_DELETION', targetId: null})];
+    await mount();
+    await press(label => label.startsWith('Deletion update'));
+    expect(mockNavigate).toHaveBeenCalledWith('ChefTabs', {screen: 'Profile', params: {screen: 'ChefDeleteAccount', initial: false}});
+  });
+
   it('does not mark an already read notice again', async () => {
     await mount();
     await press(label => label.startsWith('Document verified'));

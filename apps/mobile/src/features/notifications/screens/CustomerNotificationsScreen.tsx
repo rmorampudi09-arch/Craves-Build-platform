@@ -9,14 +9,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useCustomerBottomNavScroll} from '../../../app/navigation/CustomerBottomNavController';
 import {
   inboundRouteDedupe,
   type InboundRouteDestination,
 } from '../../../app/navigation/inboundRouting';
-import type {CustomerProfileStackParamList} from '../../../app/navigation/types';
+import type {CustomerProfileStackParamList, CustomerTabParamList} from '../../../app/navigation/types';
 import {
   borderWidth,
   colors,
@@ -189,6 +189,13 @@ export function CustomerNotificationsScreen() {
 
         const destination = resolveCustomerNotificationDestination(notice);
         if (!destination) {
+          return;
+        }
+        if (destination.route === 'CustomerSettingsDeleteAccount') {
+          // Delete account lives in the Profile tab's stack, which this inbox may not be part of.
+          navigation
+            .getParent<NavigationProp<CustomerTabParamList>>()
+            ?.navigate('Profile', {screen: 'CustomerSettingsDeleteAccount', initial: false});
           return;
         }
 

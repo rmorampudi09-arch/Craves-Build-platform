@@ -1,5 +1,7 @@
 import React, {useCallback, useMemo, useRef, useState} from 'react';
+import {useNavigation, type NavigationProp} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
+import type {ChefProfileStackParamList, CustomerSettingsChildStackParamList} from '../../../app/navigation/types';
 import {useAppSelector} from '../../../app/store/hooks';
 import {toAppApiError, type AppApiError} from '../../../core/http/apiError';
 import {TerminalState} from '../../../shared/components/LifecycleStates';
@@ -7,7 +9,7 @@ import {LoadingIndicator} from '../../../shared/components/LoadingIndicator';
 import {ChefActionButton} from '../../chefShell/components/ui';
 import {accountDeletionApi} from '../api/accountDeletionApi';
 import {DeletionConfirmSheet} from '../components/DeletionConfirmSheet';
-import {DeletionStateHeading} from '../components/DeletionStateHeading';
+import {DeletionStateView} from '../components/DeletionStateView';
 import {DeletionSummary} from '../components/DeletionSummary';
 import {ScopeChooser} from '../components/ScopeChooser';
 import {deletionCopy} from '../domain/deletionCopy';
@@ -183,6 +185,10 @@ function DeletionStart({mode, Scaffold, refetch}: Props & {refetch: () => void})
 /** Delete account: the start flow when nothing is open, otherwise where the request stands. */
 export function DeleteAccountScreen({mode, Scaffold}: Props) {
   const {latest, status, refetch} = useLatestDeletion();
+  const navigation = useNavigation<NavigationProp<CustomerSettingsChildStackParamList & ChefProfileStackParamList>>();
+  // The declined request the person chose to ask again after; a newer request shows its own state.
+  const [askedAgainAfter, setAskedAgainAfter] = useState<string | null>(null);
+  const identity = useAppSelector(state => state.auth.identity);
   const entry = entryStateFor(latest);
   const title = mode === 'CUSTOMER' ? deletionCopy.customerSummary.title : deletionCopy.chefSummary.titleAll;
 
@@ -206,11 +212,17 @@ export function DeleteAccountScreen({mode, Scaffold}: Props) {
       </Scaffold>
     );
   }
-  if (entry.kind !== 'start') {
+  if (entry.kind !== 'start' && !(entry.kind === 'declined' && entry.view.requestId === askedAgainAfter)) {
     return (
-      <Scaffold title={title}>
-        <DeletionStateHeading entry={entry} />
-      </Scaffold>
+      <DeletionStateView
+        Scaffold={Scaffold}
+        onAskAgain={() => setAskedAgainAfter(entry.view.requestId)}
+        onContactSupport={() => navigation.navigate(mode === 'CUSTOMER' ? 'CustomerSettingsSupport' : 'ChefSupport')}
+        onKept={refetch}
+        roles={identity?.roles ?? []}
+        state={entry}
+        title={title}
+      />
     );
   }
   return <DeletionStart Scaffold={Scaffold} mode={mode} refetch={refetch} />;

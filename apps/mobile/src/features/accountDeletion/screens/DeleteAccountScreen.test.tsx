@@ -17,9 +17,11 @@ jest.setTimeout(20_000);
 
 let mockRoles: string[];
 const mockGoBack = jest.fn();
+const mockNavigate = jest.fn();
+const mockKeep = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({navigate: jest.fn(), goBack: mockGoBack}),
+  useNavigation: () => ({navigate: mockNavigate, goBack: mockGoBack}),
   useFocusEffect: (effect: () => void) => require('react').useEffect(effect, [effect]),
 }));
 jest.mock('react-native-safe-area-context', () => ({
@@ -36,6 +38,9 @@ jest.mock('../api/accountDeletionApi', () => ({
   accountDeletionApi: {getLatest: jest.fn(), request: jest.fn()},
 }));
 jest.mock('../../auth/api/sessionManager', () => ({sessionManager: {refresh: jest.fn()}}));
+jest.mock('../state/AccountDeletionProvider', () => ({
+  useAccountDeletion: () => ({pending: null, keep: mockKeep, keeping: false, notice: null}),
+}));
 
 const getLatest = accountDeletionApi.getLatest as jest.Mock;
 const request = accountDeletionApi.request as jest.Mock;
@@ -88,6 +93,7 @@ describe('DeleteAccountScreen', () => {
     getLatest.mockResolvedValue(null);
     request.mockResolvedValue(sent);
     refresh.mockResolvedValue(null);
+    mockKeep.mockResolvedValue('kept');
   });
   afterEach(() => {
     act(() => tree.unmount());
@@ -410,6 +416,81 @@ describe('DeleteAccountScreen', () => {
       expect(ui.has(title)).toBe(true);
       expect(ui.has('Deleted on 5 Dec 2026')).toBe(false);
       expect(ui.byLabel('Delete my account')).toBeUndefined();
+    });
+
+    describe('the buttons on a state', () => {
+      const declined = {requestId: 'declined-1', status: 'REJECTED', scope: 'ALL', reviewNote: 'Open payout'} as const;
+
+      it('Ask again shows the start flow although the latest request is still declined', async () => {
+        getLatest.mockResolvedValue(open(declined));
+        await mount('CUSTOMER');
+        expect(ui.has("Craves couldn't delete your account yet")).toBe(true);
+        expect(ui.has('Open payout')).toBe(true);
+
+        await ui.press('Ask again');
+
+        expect(ui.has('Deleted on 5 Dec 2026')).toBe(true);
+        expect(ui.has("Craves couldn't delete your account yet")).toBe(false);
+        expect(getLatest).toHaveBeenCalledTimes(1);
+      });
+
+      it('sending again from there shows the new request, not the old decline', async () => {
+        getLatest.mockResolvedValue(open(declined));
+        await mount('CUSTOMER');
+        await ui.press('Ask again');
+        await ui.press('Delete my account');
+        await sendFromSheet('Delete my account');
+        expect(request).toHaveBeenCalledWith('ALL');
+        expect(ui.has('Request sent')).toBe(true);
+        expect(ui.has("Craves couldn't delete your account yet")).toBe(false);
+      });
+
+      it('a second decline starts from the decline again, not from the start flow', async () => {
+        getLatest.mockResolvedValue(open(declined));
+        await mount('CUSTOMER');
+        await ui.press('Ask again');
+        await act(async () => {
+          queryClient.setQueryData(accountDeletionQueryKey('user-1'), open({...declined, requestId: 'declined-2', reviewNote: 'Still open'}));
+        });
+        await ui.settle();
+        expect(ui.has('Still open')).toBe(true);
+        expect(ui.has('Deleted on 5 Dec 2026')).toBe(false);
+      });
+
+      it.each([
+        ['customer', 'CUSTOMER', ['CUSTOMER'], 'CustomerSettingsSupport'],
+        ['chef', 'CHEF', ['CUSTOMER', 'CHEF'], 'ChefSupport'],
+      ] as const)('%s: Contact support opens its support page', async (_name, mode, roles, route) => {
+        mockRoles = [...roles];
+        getLatest.mockResolvedValue(open(declined));
+        await mount(mode);
+        await ui.press('Contact support');
+        expect(mockNavigate).toHaveBeenCalledWith(route);
+      });
+
+      it('Keep my account on a scheduled request shows the start flow once the screen has looked again', async () => {
+        getLatest.mockResolvedValueOnce(open({status: 'SCHEDULED', scope: 'ALL', dueAt: '2026-12-05T08:00:00Z'})).mockResolvedValue(open({status: 'CANCELLED', scope: 'ALL'}));
+        await mount('CUSTOMER');
+        expect(ui.has('Your account will be deleted on 5 Dec 2026')).toBe(true);
+
+        await ui.press('Keep my account');
+        await ui.settle();
+
+        expect(mockKeep).toHaveBeenCalledTimes(1);
+        expect(getLatest).toHaveBeenCalledTimes(2);
+        expect(ui.has('Deleted on 5 Dec 2026')).toBe(true);
+        expect(ui.has('Your account will be deleted on 5 Dec 2026')).toBe(false);
+      });
+
+      it('Keep my account that failed stays on the state and does not look again', async () => {
+        mockKeep.mockResolvedValue('failed');
+        getLatest.mockResolvedValue(open({status: 'SCHEDULED', scope: 'ALL', dueAt: '2026-12-05T08:00:00Z'}));
+        await mount('CUSTOMER');
+        await ui.press('Keep my account');
+        await ui.settle();
+        expect(getLatest).toHaveBeenCalledTimes(1);
+        expect(ui.has('Your account will be deleted on 5 Dec 2026')).toBe(true);
+      });
     });
 
     it.each(['CANCELLED', 'COMPLETED'] as const)('starts again after a %s request', async status => {

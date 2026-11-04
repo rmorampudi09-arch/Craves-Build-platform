@@ -224,7 +224,9 @@ public class ChefApplicationService {
         if (status == null || status == ChefApplicationStatus.NOT_SUBMITTED) {
             return findApplications("WHERE (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", new Object[]{});
         }
-        return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND (d.fssai_reviewed_at IS NULL OR d.fssai_reviewed_number IS DISTINCT FROM d.details->>'fssaiNumber' OR EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.removed_at IS NULL AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED'))))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))", status.name(), status.name());
+        // An erased application can not be acted on (every review action is 409), so it never waits in the pending queue.
+        String notErased = status == ChefApplicationStatus.PENDING ? " AND erased_at IS NULL" : "";
+        return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND (d.fssai_reviewed_at IS NULL OR d.fssai_reviewed_number IS DISTINCT FROM d.details->>'fssaiNumber' OR EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.removed_at IS NULL AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED'))))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))" + notErased, status.name(), status.name());
     }
 
     @Transactional(readOnly = true)

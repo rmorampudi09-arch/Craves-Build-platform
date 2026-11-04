@@ -19,6 +19,7 @@ import in.craves.userchef.security.InternalRequestAuthorizer;
 import in.craves.userchef.service.AccountErasureService.Scope;
 import in.craves.userchef.service.BlobDocumentStorageService.StoredDocument;
 import in.craves.userchef.service.BlobDocumentStorageService.StoredDocumentBytes;
+import in.craves.userchef.web.ApiDtos.ChefApplicationStatus;
 import in.craves.userchef.web.ApiDtos.KycDocumentType;
 import in.craves.userchef.web.InternalChefKitchenPhotoController;
 import java.math.BigDecimal;
@@ -577,6 +578,20 @@ class AccountErasureDatabaseTest {
         assertEquals(0, count("admin_chef_decision_audit WHERE application_id=?", applicationId));
         assertEquals(draftVersion, jdbc.queryForObject("SELECT version FROM chef_onboarding_draft WHERE identity_id=?", Long.class, person.identityId()));
         assertEquals("PENDING", text("SELECT review_status FROM chef_onboarding_draft WHERE identity_id=?", person.identityId()), "no review action got through");
+    }
+
+    @Test void anErasedApplicationLeavesTheAdminPendingQueue() {
+        chefApplicant();
+        long version = onboarding.mine(person).version();
+        run(() -> onboarding.submit(person, new ChefOnboardingController.SubmitRequest(version, true, ChefOnboardingService.TERMS_VERSION), "Bearer test"));
+        UUID applicationId = jdbc.queryForObject("SELECT id FROM chef_application WHERE identity_id=?", UUID.class, person.identityId());
+        assertTrue(run(() -> applications.listApplications(admin, ChefApplicationStatus.PENDING)).stream().anyMatch(a -> a.id().equals(applicationId)));
+
+        erase(Scope.CHEF);
+
+        assertEquals("PENDING", text("SELECT status FROM chef_application WHERE id=?", applicationId), "the row keeps its status");
+        assertFalse(run(() -> applications.listApplications(admin, ChefApplicationStatus.PENDING)).stream().anyMatch(a -> a.id().equals(applicationId)),
+            "staff cannot act on an erased application, so it is not in their queue");
     }
 
     @Test void anErasedApplicationsDocumentsCannotBeApprovedOrRejectedAndItsRowsStayAsTheyWere() {

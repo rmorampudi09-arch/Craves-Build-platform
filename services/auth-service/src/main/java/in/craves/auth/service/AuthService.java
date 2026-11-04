@@ -289,6 +289,8 @@ public class AuthService {
     }
 
     private void ensureCustomerRole(UUID identityId) {
+        // The deletion lock removed it; signing in (as a chef) must not give it back before the erase completes.
+        if (accountDeletions.erasingCustomerSide(identityId)) return;
         ensureRole(identityId, ROLE_CUSTOMER);
     }
 

@@ -42,11 +42,20 @@ import org.springframework.transaction.support.TransactionTemplate;
 class AccountDeletionRepositoryDbTest {
     static final String SCHEMA = "account_deletion_test";
     static final Instant NOW = Instant.parse("2026-11-04T10:00:00Z");
+    static final Duration LEAD = Duration.ofDays(7);
     static JdbcTemplate jdbc;
     static TransactionTemplate tx;
     static AccountDeletionRepository repo;
 
     @BeforeAll static void database() {
+        var source = migratedSchema(SCHEMA);
+        jdbc = new JdbcTemplate(source);
+        tx = new TransactionTemplate(new DataSourceTransactionManager(source));
+        repo = new AccountDeletionRepository(jdbc);
+    }
+
+    /** A freshly migrated schema on the disposable CI database; anything else is refused. Callers hold the resource lock. */
+    static DriverManagerDataSource migratedSchema(String schema) {
         String url = System.getenv("EMAIL_TEST_DB_URL");
         URI uri = URI.create(url.substring("jdbc:".length()));
         if (!("true".equals(System.getenv("GITHUB_ACTIONS")) || "True".equalsIgnoreCase(System.getenv("TF_BUILD"))) || !"true".equals(System.getenv("EMAIL_TEST_DISPOSABLE")) || !"postgresql".equals(uri.getScheme()) ||
@@ -59,13 +68,11 @@ class AccountDeletionRepositoryDbTest {
         admin.execute("DROP TABLE IF EXISTS public.admin_explorer_admission CASCADE");
         admin.execute("DROP TABLE IF EXISTS public.admin_explorer_audit CASCADE");
         admin.execute("DROP FUNCTION IF EXISTS public.reject_admin_explorer_audit_mutation()");
-        admin.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE");
-        admin.execute("CREATE SCHEMA " + SCHEMA);
-        var source = new DriverManagerDataSource(url + "?currentSchema=" + SCHEMA, System.getenv("EMAIL_TEST_DB_USER"), System.getenv("EMAIL_TEST_DB_PASSWORD"));
-        Flyway.configure().dataSource(source).schemas(SCHEMA).defaultSchema(SCHEMA).load().migrate();
-        jdbc = new JdbcTemplate(source);
-        tx = new TransactionTemplate(new DataSourceTransactionManager(source));
-        repo = new AccountDeletionRepository(jdbc);
+        admin.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
+        admin.execute("CREATE SCHEMA " + schema);
+        var source = new DriverManagerDataSource(url + "?currentSchema=" + schema, System.getenv("EMAIL_TEST_DB_USER"), System.getenv("EMAIL_TEST_DB_PASSWORD"));
+        Flyway.configure().dataSource(source).schemas(schema).defaultSchema(schema).load().migrate();
+        return source;
     }
 
     @BeforeEach void clean() {
@@ -127,19 +134,21 @@ class AccountDeletionRepositoryDbTest {
         scheduled(NOW.minus(1, ChronoUnit.DAYS), NOW.plus(29, ChronoUnit.DAYS)); // not due, reminder not due either
         Duration lease = Duration.ofMinutes(5);
 
-        List<UUID> a = repo.claimDue(NOW, 2, lease), b = repo.claimDue(NOW, 2, lease);
+        List<UUID> a = repo.claimDue(NOW, 2, lease, LEAD), b = repo.claimDue(NOW, 2, lease, LEAD);
         assertEquals(2, a.size());
         assertEquals(2, b.size());
         assertTrue(new HashSet<>(a).stream().noneMatch(b::contains), "claimers must get disjoint ids");
-        assertTrue(repo.claimDue(NOW.plusSeconds(60), 10, lease).isEmpty(), "leased rows are skipped");
-        assertEquals(4, repo.claimDue(NOW.plus(6, ChronoUnit.MINUTES), 10, lease).size(), "an expired lease is claimable again");
+        assertTrue(repo.claimDue(NOW.plusSeconds(60), 10, lease, LEAD).isEmpty(), "leased rows are skipped");
+        repo.releaseLease(a.get(0));
+        assertEquals(List.of(a.get(0)), repo.claimDue(NOW.plusSeconds(60), 10, lease, LEAD), "a released lease is claimable at once");
+        assertEquals(4, repo.claimDue(NOW.plus(6, ChronoUnit.MINUTES), 10, lease, LEAD).size(), "an expired lease is claimable again");
 
         // A row another transaction holds locked is skipped, not waited for: a busy request never stalls the worker.
         jdbc.execute("UPDATE account_deletion_request SET lease_until = NULL");
         UUID busy = jdbc.queryForObject("SELECT id FROM account_deletion_request WHERE due_at < ? LIMIT 1", UUID.class, Timestamp.from(NOW));
         List<UUID> others = tx.execute(s -> {
             jdbc.queryForList("SELECT id FROM account_deletion_request WHERE id = ? FOR UPDATE", busy);
-            return CompletableFuture.supplyAsync(() -> repo.claimDue(NOW, 10, lease)).orTimeout(10, TimeUnit.SECONDS).join();
+            return CompletableFuture.supplyAsync(() -> repo.claimDue(NOW, 10, lease, LEAD)).orTimeout(10, TimeUnit.SECONDS).join();
         });
         assertEquals(3, others.size());
         assertFalse(others.contains(busy));
@@ -157,11 +166,13 @@ class AccountDeletionRepositoryDbTest {
         UUID stepLater = scheduled(NOW.minus(1, ChronoUnit.DAYS), NOW.plus(29, ChronoUnit.DAYS)).id();
         repo.insertSteps(stepLater, Phase.PREPARE, List.of("order"), NOW.plusSeconds(600));
 
-        assertEquals(new HashSet<>(List.of(reminder, withStep)), new HashSet<>(repo.claimDue(NOW, 10, lease)));
+        assertEquals(List.of(withStep), repo.claimDue(NOW, 10, lease, Duration.ofDays(5)), "the reminder lead is the caller's");
+        jdbc.execute("UPDATE account_deletion_request SET lease_until = NULL");
+        assertEquals(new HashSet<>(List.of(reminder, withStep)), new HashSet<>(repo.claimDue(NOW, 10, lease, LEAD)));
         // The worker has handled both; later: the daily re-check of a blocked request and a step after its backoff.
         repo.transition(reminder, RequestStatus.SCHEDULED, RequestStatus.SCHEDULED, m -> m.put("reminder_sent_at", NOW));
         repo.recordStep(withStep, Phase.PREPARE, "order", StepStatus.DONE, null, null, null);
-        assertEquals(new HashSet<>(List.of(waiting.id(), stepLater)), new HashSet<>(repo.claimDue(NOW.plusSeconds(3601 + 600), 10, lease)));
+        assertEquals(new HashSet<>(List.of(waiting.id(), stepLater)), new HashSet<>(repo.claimDue(NOW.plusSeconds(3601 + 600), 10, lease, LEAD)));
     }
 
     @Test void claimDueFindsErasingRequestsThatNoStepWillWake() {
@@ -177,7 +188,7 @@ class AccountDeletionRepositoryDbTest {
         repo.insertSteps(waitingOnBlocked, Phase.ERASE, List.of("order"), NOW.plusSeconds(600));
         repo.recordStep(waitingOnBlocked, Phase.ERASE, "order", StepStatus.BLOCKED, null, null, NOW.plus(1, ChronoUnit.DAYS));
 
-        assertEquals(new HashSet<>(List.of(allDone, noSteps)), new HashSet<>(repo.claimDue(NOW, 10, lease)),
+        assertEquals(new HashSet<>(List.of(allDone, noSteps)), new HashSet<>(repo.claimDue(NOW, 10, lease, LEAD)),
             "crashed after the last step or before the first one: claimed; a step that is merely waiting: not");
     }
 
@@ -188,7 +199,7 @@ class AccountDeletionRepositoryDbTest {
         DeletionRequest nullCheck = scheduled(NOW.minus(40, ChronoUnit.DAYS), NOW.minus(1, ChronoUnit.DAYS));
         repo.transition(nullCheck.id(), RequestStatus.SCHEDULED, RequestStatus.WAITING_ON_OPEN_ITEMS, m -> {});
 
-        assertEquals(new HashSet<>(List.of(nullStep, nullCheck.id())), new HashSet<>(repo.claimDue(NOW, 10, lease)));
+        assertEquals(new HashSet<>(List.of(nullStep, nullCheck.id())), new HashSet<>(repo.claimDue(NOW, 10, lease, LEAD)));
     }
 
     @Test void closedRequestsKeepOnlyReleaseAndSweepWorkClaimable() {
@@ -199,7 +210,7 @@ class AccountDeletionRepositoryDbTest {
         closed(RequestStatus.REJECTED, Phase.PREPARE, StepStatus.BLOCKED);
         closed(RequestStatus.COMPLETED, Phase.ERASE, StepStatus.PENDING);
 
-        assertEquals(new HashSet<>(List.of(cancelledRelease, completedSweep)), new HashSet<>(repo.claimDue(NOW, 10, lease)));
+        assertEquals(new HashSet<>(List.of(cancelledRelease, completedSweep)), new HashSet<>(repo.claimDue(NOW, 10, lease, LEAD)));
     }
 
     UUID erasing() {

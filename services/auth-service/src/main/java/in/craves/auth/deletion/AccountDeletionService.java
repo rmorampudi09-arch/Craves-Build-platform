@@ -122,6 +122,11 @@ public class AccountDeletionService {
             .map(request -> new PendingDeletion(request.id(), request.scope().name(), request.status().name(), request.dueAt()));
     }
 
+    /** True while this person's customer side is being erased. Read whether or not the switch is on: the worker may be. */
+    public boolean erasingCustomerSide(UUID identityId) {
+        return deletions.hasErasingCustomerSide(identityId);
+    }
+
     void requireEnabled() {
         if (!properties.isEnabled()) {
             throw new AuthException(HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_DELETION_NOT_ENABLED", "Account deletion is not available yet");

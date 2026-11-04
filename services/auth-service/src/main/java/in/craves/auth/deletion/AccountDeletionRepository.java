@@ -30,8 +30,6 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class AccountDeletionRepository {
-    /** The reminder is due this long before due_at (Global Constraints: 7 days). */
-    static final Duration REMINDER_LEAD = Duration.ofDays(7);
     private static final String OPEN = "('PENDING_REVIEW', 'SCHEDULED', 'WAITING_ON_OPEN_ITEMS', 'ERASING')";
     private static final String REQUEST_COLUMNS =
         "id, identity_id, scope, status, requested_via, requested_at, due_at, reviewed_by, reviewed_at, review_note, "
@@ -163,11 +161,16 @@ public class AccountDeletionRepository {
      * a step not DONE whose next_attempt_at has come (PREPARE and ERASE only while the request is open; RELEASE and SWEEP
      * outlive it, so they count in any status); an ERASING request with no step left to run (a crash after the last step or
      * before the first one: the worker finishes or re-creates them); the day-30 check or a reminder of a SCHEDULED request;
-     * the daily re-check of a waiting request. Least recently touched first.
+     * the daily re-check of a waiting request. Least recently touched first. The reminder is due {@code reminderLead} before due_at.
      */
-    public List<UUID> claimDue(Instant now, int limit, Duration lease) {
+    public List<UUID> claimDue(Instant now, int limit, Duration lease, Duration reminderLead) {
         Timestamp at = ts(now);
-        return jdbc.queryForList(CLAIM_DUE, UUID.class, ts(now.plus(lease)), at, at, at, ts(now.plus(REMINDER_LEAD)), at, limit);
+        return jdbc.queryForList(CLAIM_DUE, UUID.class, ts(now.plus(lease)), at, at, at, ts(now.plus(reminderLead)), at, limit);
+    }
+
+    /** Ends a claim once its work is recorded, so the next due work is picked up at the next tick, not when the lease runs out. */
+    public void releaseLease(UUID requestId) {
+        jdbc.update("UPDATE account_deletion_request SET lease_until = NULL WHERE id = ?", requestId);
     }
 
     /**

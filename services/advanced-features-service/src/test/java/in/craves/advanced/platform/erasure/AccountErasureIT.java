@@ -13,7 +13,10 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.http.MediaType;
@@ -127,6 +130,28 @@ class AccountErasureIT extends IntegrationTestBase {
                 .andExpect(jsonPath("$.counts.taste-memory").value(0)).andExpect(jsonPath("$.counts.food-lists").value(0))
                 .andExpect(jsonPath("$.counts.taste-data").value(0));
         assertThat(count("SELECT count(*) FROM adv_taste_data.erasure_receipt WHERE person_id = ?", person)).isEqualTo(1);
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void aStaleSwitchedOffSchemaStillFailsTheEraseButSaysWhichModule(CapturedOutput output) throws Exception {
+        migrate("adv_taste_memory", "taste_memory");
+        UUID person = UUID.randomUUID();
+        UUID request = UUID.randomUUID();
+        makeFoodList(person);
+        // The switched-off module's schema no longer matches its code (stale or partly migrated).
+        jdbc.execute("ALTER TABLE adv_taste_memory.profile RENAME COLUMN person_id TO person_id_stale");
+        try {
+            internal(BASE, "{\"requestId\":\"" + request + "\",\"identityId\":\"" + person + "\",\"scope\":\"CUSTOMER\"}")
+                    .andExpect(status().isInternalServerError());
+        } finally {
+            jdbc.execute("ALTER TABLE adv_taste_memory.profile RENAME COLUMN person_id_stale TO person_id");
+        }
+
+        assertThat(output.getOut().lines().filter(line -> line.contains("WARN") && line.contains("module=taste-memory")
+                && line.contains("requestId=" + request))).hasSize(1);
+        // Still all or nothing: the module erased before the failing one is rolled back.
+        assertThat(foodLists(person)).isEqualTo(1);
     }
 
     @Test

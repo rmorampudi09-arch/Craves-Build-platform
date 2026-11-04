@@ -7,6 +7,7 @@ import {
   isDeletionPaused,
   keptNoticeFor,
   pausedOrderText,
+  pausesCustomerOrders,
   scopePlanFor,
   shouldShowDeleteRow,
   summaryKindFor,
@@ -100,4 +101,13 @@ test('pausedOrderText and isDeletionPaused', () => {
   expect(isDeletionPaused(new AppApiError('CART_EMPTY', 'x', 409))).toBe(false);
   expect(pausedOrderText(pending({dueAt: '2026-12-05T05:00:00Z'}), 'orders')).toMatch(/^Your account is set to be deleted on \d+ Dec, so new orders are paused\.$/);
   expect(pausedOrderText(null, 'mealPlans')).toBe('Your account is set to be deleted, so new meal plans are paused.');
+});
+
+test('pausesCustomerOrders only for an open request that covers the customer side', () => {
+  expect(pausesCustomerOrders(pending({scope: 'ALL'}))).toBe(true);
+  expect(pausesCustomerOrders(pending({scope: 'CUSTOMER', status: 'PENDING_REVIEW'}))).toBe(true);
+  expect(pausesCustomerOrders(pending({scope: 'CHEF'}))).toBe(false);
+  expect(pausesCustomerOrders(pending({scope: 'ALL', status: 'CANCELLED'}))).toBe(false);
+  expect(pausesCustomerOrders(null)).toBe(false);
+  expect(pausesCustomerOrders(undefined)).toBe(false);
 });

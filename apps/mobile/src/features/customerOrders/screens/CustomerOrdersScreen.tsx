@@ -34,6 +34,7 @@ import {sessionManager} from '../../auth/api/sessionManager';
 import {refreshCartSnapshot} from '../../cart/state/cartRefresh';
 import {reorderCart} from '../../cart/state/cartMutations';
 import {isDefinitiveCartRejection} from '../../cart/domain/cartWriteRejection';
+import {pausesCustomerOrders} from '../../accountDeletion/domain/deletionModel';
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
 import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {CustomerBellButton} from '../../notifications/components/CustomerBellButton';
@@ -82,6 +83,7 @@ export function CustomerOrdersScreen() {
     >();
   const dispatch = useAppDispatch();
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
+  const ordersPaused = useAppSelector(state => pausesCustomerOrders(state.auth.identity?.pendingDeletion));
   const focused = useIsFocused();
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   const active = focused && appActive && Boolean(identityId);
@@ -509,7 +511,7 @@ export function CustomerOrdersScreen() {
             onReorder={confirmReorder}
             reorderPending={reorderingOrderId === item.id}
             reorderDisabled={
-              Boolean(reorderingOrderId) || uncertainReorder || !active
+              Boolean(reorderingOrderId) || uncertainReorder || !active || ordersPaused
             }
           />
         )}

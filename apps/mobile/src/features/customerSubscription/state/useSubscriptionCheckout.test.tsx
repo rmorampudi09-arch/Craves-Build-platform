@@ -208,6 +208,18 @@ describe('useSubscriptionCheckout', () => {
     });
   });
 
+  it('flags a create refused because a delete request is open', async () => {
+    api.create.mockRejectedValue(
+      new AppApiError('ACCOUNT_DELETION_PENDING', 'Your account is set to be deleted.', 409),
+    );
+    expect(await pay(() => checkout.payNew(input))).toEqual({
+      kind: 'not-completed',
+      subscriptionId: null,
+      deletionPaused: true,
+      message: 'Your account is set to be deleted.',
+    });
+  });
+
   it('joins a second tap to the checkout already open', async () => {
     let first: Promise<unknown> | undefined;
     let second: Promise<unknown> | undefined;

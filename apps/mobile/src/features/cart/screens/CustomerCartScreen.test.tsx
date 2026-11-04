@@ -9,7 +9,10 @@ import {checkoutSessionCoordinator} from '../../checkout/domain/checkoutSessionC
 import {razorpayGateway} from '../../payment/gateway/razorpayGateway';
 import {recoverPersistedPaymentAttempt} from '../../payment/domain/persistedPaymentRecovery';
 import {pendingPaymentAttemptStore} from '../../payment/storage/pendingPaymentAttemptStore';
+import {AppApiError} from '../../../core/http/apiError';
 import {Button} from '../../../shared/components/Button';
+import {DeletionPausedNotice} from '../../accountDeletion/components/DeletionPausedNotice';
+import {RecoverableErrorBanner} from '../../../shared/components/LifecycleStates';
 import type {CartSnapshot} from '../domain/cartTypes';
 import type {CheckoutSession} from '../../checkout/domain/checkoutTypes';
 
@@ -49,6 +52,9 @@ jest.mock('@react-navigation/native', () => ({useNavigation: () => ({
   addListener: (_event: string, listener: typeof mockBeforeRemove) => { mockBeforeRemove = listener; return () => undefined; },
 })}));
 jest.mock('react-native-safe-area-context', () => ({useSafeAreaInsets: () => ({top: 0, bottom: 24, left: 0, right: 0})}));
+jest.mock('../../accountDeletion/state/AccountDeletionProvider', () => ({
+  useAccountDeletion: () => ({pending: null, keep: jest.fn(async () => 'kept'), keeping: false, notice: null}),
+}));
 jest.mock('../../../design/reducedMotion', () => ({useReducedMotionPreference: () => false}));
 jest.mock('../../../shared/components/ScreenShell', () => ({ScreenShell: 'ScreenShell'}));
 jest.mock('../../../app/navigation/CustomerBottomNavController', () => ({useCustomerBottomNavScroll: () => ({onScroll: jest.fn(), scrollEventThrottle: 16})}));
@@ -105,6 +111,26 @@ describe('Cart, then Checkout, then Razorpay', () => {
     await press('Continue to Payment');
     expect(checkoutSessionCoordinator.create).toHaveBeenCalledTimes(1);
     expect(razorpayGateway.open).toHaveBeenCalledTimes(1);
+  });
+  it('explains a refused checkout while a delete request is open instead of the raw error', async () => {
+    jest.mocked(checkoutSessionCoordinator.create).mockRejectedValueOnce(
+      new AppApiError('ACCOUNT_DELETION_PENDING', 'That information changed.', 409),
+    );
+    await render();
+    await press('Proceed to Checkout');
+    expect(tree.root.findAllByType(DeletionPausedNotice).map(node => node.props.kind)).toEqual(['orders']);
+    expect(tree.root.findAllByType(RecoverableErrorBanner)).toHaveLength(0);
+    // Trying again clears the notice, so Keep my account then Proceed works.
+    await press('Proceed to Checkout');
+    expect(tree.root.findAllByType(DeletionPausedNotice)).toHaveLength(0);
+    expect(button('Continue to Payment')).toBeDefined();
+  });
+  it('still shows any other checkout failure as the plain error', async () => {
+    jest.mocked(checkoutSessionCoordinator.create).mockRejectedValueOnce(new Error('Checkout could not be started.'));
+    await render();
+    await press('Proceed to Checkout');
+    expect(tree.root.findAllByType(DeletionPausedNotice)).toHaveLength(0);
+    expect(tree.root.findAllByType(RecoverableErrorBanner)).toHaveLength(1);
   });
   it('does not create duplicate checkouts for rapid presses', async () => {
     let release!: (checkout: CheckoutSession) => void;

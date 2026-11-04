@@ -1,9 +1,9 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, Text, View} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {colors, fontWeight, iconSize, radius, spacing, typography} from '../../../design/tokens';
+import {colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
 import {Icon} from '../../../shared/components/Icon';
-import {deletionCopy} from '../domain/deletionCopy';
+import {KeepPill} from './KeepPill';
 
 /** A short message that takes the strip's place for a few seconds. */
 export interface StripNotice {
@@ -38,16 +38,7 @@ export function AccountDeletionBanner({banner, notice, keeping, onKeep}: Props) 
           {notice?.text ?? banner?.text}
         </Text>
         {banner?.canKeep && !kept ? (
-          <Pressable
-            accessibilityLabel={deletionCopy.banner.keep}
-            accessibilityRole="button"
-            accessibilityState={{disabled: keeping, busy: keeping}}
-            disabled={keeping}
-            hitSlop={{top: 8, bottom: 8, left: 4, right: 4}}
-            onPress={onKeep}
-            style={[styles.pill, keeping && styles.pillBusy]}>
-            <Text style={styles.pillText}>{deletionCopy.banner.keep}</Text>
-          </Pressable>
+          <KeepPill keeping={keeping} onPress={onKeep} />
         ) : null}
       </View>
     </View>
@@ -66,18 +57,6 @@ const styles = StyleSheet.create({
   },
   text: {
     flex: 1,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  pill: {
-    backgroundColor: colors.white,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xxs + 2,
-  },
-  pillBusy: {opacity: 0.6},
-  pillText: {
-    color: colors.flameRedAccessible,
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
   },

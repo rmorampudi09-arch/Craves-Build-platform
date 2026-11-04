@@ -39,6 +39,8 @@ import {
   TerminalState,
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {DeletionPausedNotice} from '../../accountDeletion/components/DeletionPausedNotice';
+import {isDeletionPaused} from '../../accountDeletion/domain/deletionModel';
 import {CustomerEmptyState} from '../../customerEmptyStates/components/CustomerEmptyState';
 import {customerEmptyStateAdapters} from '../../customerEmptyStates/customerEmptyStateAdapters';
 import {CustomerLocationSelector} from '../../customerShell/components/CustomerLocationSelector';
@@ -403,6 +405,7 @@ export function CustomerCartScreen() {
   const bottomNavScroll = useCustomerBottomNavScroll();
   const [locationSelectorVisible, setLocationSelectorVisible] = useState(false);
   const [interactionError, setInteractionError] = useState<string | null>(null);
+  const [deletionPaused, setDeletionPaused] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [serviceability, setServiceability] = useState<ServiceabilityState>('IDLE');
@@ -691,6 +694,7 @@ export function CustomerCartScreen() {
     if ((!pay && !model) || !addressId || checkoutInFlightRef.current) return;
     checkoutInFlightRef.current = true;
     setInteractionError(null);
+    setDeletionPaused(false);
     setCheckoutBusy(true);
     try {
       const interrupted = await reconcileInterruptedPayment(false);
@@ -894,9 +898,13 @@ export function CustomerCartScreen() {
         throw paymentError;
       }
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Checkout could not be started.';
-      setInteractionError(message);
+      if (isDeletionPaused(error)) {
+        setDeletionPaused(true);
+      } else {
+        setInteractionError(
+          error instanceof Error ? error.message : 'Checkout could not be started.',
+        );
+      }
     } finally {
       checkoutInFlightRef.current = false;
       setCheckoutBusy(false);
@@ -994,6 +1002,7 @@ export function CustomerCartScreen() {
           onCheckStatus={paymentRecoveryActive ? handlePaymentStatusCheck : undefined}
         />
       ) : null}
+      {deletionPaused ? <DeletionPausedNotice kind="orders" /> : null}
       {interactionError ? <RecoverableErrorBanner message={interactionError} /> : null}
     </>
   );

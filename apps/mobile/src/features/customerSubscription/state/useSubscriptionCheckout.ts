@@ -3,6 +3,7 @@ import {Alert, AppState} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import {toAppApiError} from '../../../core/http/apiError';
+import {isDeletionPaused} from '../../accountDeletion/domain/deletionModel';
 import {customerProfileApi} from '../../customerProfile/api/customerProfileApi';
 import {openRazorpayCheckout} from '../../payment/gateway/razorpayGateway';
 import {customerSubscriptionApi} from '../api/customerSubscriptionApi';
@@ -18,7 +19,7 @@ import {
 export type CheckoutOutcome =
   | {kind: 'paid'; subscriptionId: string; payment: SubscriptionPayment}
   | {kind: 'processing'; subscriptionId: string}
-  | {kind: 'not-completed'; subscriptionId: string | null; message: string}
+  | {kind: 'not-completed'; subscriptionId: string | null; message: string; deletionPaused?: true}
   | {kind: 'profile-incomplete'};
 
 export interface NewSubscriptionCheckout {
@@ -232,6 +233,7 @@ export function useSubscriptionCheckout(): {
               message: rejected
                 ? error.message
                 : 'Your request was not confirmed. Please retry with the same details.',
+              ...(isDeletionPaused(error) && {deletionPaused: true as const}),
             };
           }
         }

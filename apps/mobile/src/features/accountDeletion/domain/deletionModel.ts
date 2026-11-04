@@ -164,3 +164,10 @@ export function pausedOrderText(
   const short = pending?.dueAt ? formatDeletionDate(pending.dueAt, 'short') : null;
   return deletionCopy.paused[kind](short);
 }
+
+/** The server refuses new customer orders and meal plans while a request for the customer side or the whole account is open. */
+export function pausesCustomerOrders(pending: PendingDeletion | null | undefined): boolean {
+  return Boolean(
+    pending && isOpenStatus(pending.status) && (pending.scope === 'CUSTOMER' || pending.scope === 'ALL'),
+  );
+}

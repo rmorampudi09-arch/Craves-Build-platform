@@ -60,6 +60,9 @@ jest.mock('../../customerAddresses/query/customerAddressQueries', () => ({
 jest.mock('../../customerAddresses/screens/CustomerAddressEditorModal', () => ({
   CustomerAddressEditorModal: jest.fn(() => null),
 }));
+jest.mock('../../accountDeletion/state/AccountDeletionProvider', () => ({
+  useAccountDeletion: () => ({pending: null, keep: jest.fn(), keeping: false, notice: null}),
+}));
 
 const {CustomerAddressEditorModal: mockEditor} = jest.requireMock(
   '../../customerAddresses/screens/CustomerAddressEditorModal',
@@ -670,6 +673,21 @@ describe('MealPlanPaymentScreen', () => {
     await pay(root);
     expect(texts(root)).toContain('Payment not completed. Closed.');
     expect(navigation.replace).not.toHaveBeenCalled();
+  });
+
+  it('explains a paused meal plan, with Keep my account, instead of the raw error', async () => {
+    given({addresses: [address('home')]});
+    payNew.mockResolvedValue({
+      kind: 'not-completed',
+      subscriptionId: null,
+      deletionPaused: true,
+      message: 'Your account is set to be deleted.',
+    });
+    const root = renderPayment();
+    await pay(root);
+    expect(texts(root)).toContain('Your account is set to be deleted, so new meal plans are paused.');
+    expect(texts(root)).not.toContain('Your account is set to be deleted.');
+    expect(byLabel(root, 'Keep my account')).toBeDefined();
   });
 
   it('pays an existing subscription and hides the footnote when cancelling is off', async () => {

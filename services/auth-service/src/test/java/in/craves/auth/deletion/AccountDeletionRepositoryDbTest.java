@@ -139,9 +139,15 @@ class AccountDeletionRepositoryDbTest {
         assertEquals(2, b.size());
         assertTrue(new HashSet<>(a).stream().noneMatch(b::contains), "claimers must get disjoint ids");
         assertTrue(repo.claimDue(NOW.plusSeconds(60), 10, lease, LEAD).isEmpty(), "leased rows are skipped");
-        repo.releaseLease(a.get(0));
+        repo.releaseLease(a.get(0), NOW.plus(lease));
         assertEquals(List.of(a.get(0)), repo.claimDue(NOW.plusSeconds(60), 10, lease, LEAD), "a released lease is claimable at once");
-        assertEquals(4, repo.claimDue(NOW.plus(6, ChronoUnit.MINUTES), 10, lease, LEAD).size(), "an expired lease is claimable again");
+        Instant later = NOW.plus(6, ChronoUnit.MINUTES);
+        assertEquals(4, repo.claimDue(later, 10, lease, LEAD).size(), "an expired lease is claimable again");
+        // The first worker overran its lease and releases late: the second worker's newer lease stands.
+        repo.releaseLease(b.get(0), NOW.plus(lease));
+        assertTrue(repo.claimDue(later.plusSeconds(60), 10, lease, LEAD).isEmpty(), "a stale release frees nothing");
+        repo.releaseLease(b.get(0), later.plus(lease));
+        assertEquals(List.of(b.get(0)), repo.claimDue(later.plusSeconds(60), 10, lease, LEAD));
 
         // A row another transaction holds locked is skipped, not waited for: a busy request never stalls the worker.
         jdbc.execute("UPDATE account_deletion_request SET lease_until = NULL");
@@ -263,6 +269,20 @@ class AccountDeletionRepositoryDbTest {
         assertEquals(StepStatus.PENDING, step(id, Phase.ERASE, "order").status(), "same service, other phase is untouched");
         assertThrows(IllegalStateException.class, () -> repo.recordStep(id, Phase.SWEEP, "order", StepStatus.DONE, null, null, null));
         assertThrows(Exception.class, () -> repo.insertSteps(id, Phase.PREPARE, List.of("nonsense"), NOW));
+    }
+
+    @Test void recordStepNeverUndoesADoneStep() {
+        UUID id = scheduled(NOW, NOW.plus(30, ChronoUnit.DAYS)).id();
+        repo.insertSteps(id, Phase.PREPARE, List.of("order"), NOW);
+        repo.recordStep(id, Phase.PREPARE, "order", StepStatus.DONE, 7, null, null);
+        DeletionStep done = step(id, Phase.PREPARE, "order");
+
+        // A worker that overran its lease records its late answer after another worker finished the step.
+        repo.recordStep(id, Phase.PREPARE, "order", StepStatus.PENDING, null, "HTTP 503", NOW.plus(5, ChronoUnit.MINUTES));
+        repo.recordStep(id, Phase.PREPARE, "order", StepStatus.BLOCKED, null, null, NOW.plus(1, ChronoUnit.DAYS));
+        repo.recordStep(id, Phase.PREPARE, "order", StepStatus.DONE, 9, null, null);
+
+        assertEquals(done, step(id, Phase.PREPARE, "order"));
     }
 
     static DeletionStep step(UUID id, Phase phase, String service) {

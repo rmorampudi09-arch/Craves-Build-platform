@@ -14,6 +14,7 @@ import in.craves.auth.deletion.DeletionModel.DeletionStep;
 import in.craves.auth.deletion.DeletionModel.Phase;
 import in.craves.auth.deletion.DeletionModel.RequestStatus;
 import in.craves.auth.deletion.DeletionModel.StepStatus;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -57,10 +58,11 @@ public class AccountDeletionEngine {
     private final AccountDeletionProperties properties;
     private final JwtProperties jwt;
     private final TransactionTemplate tx;
+    private final Clock clock;
 
     public AccountDeletionEngine(AccountDeletionRepository deletions, AccountErasureClient client, DeletionNotices notices,
                                  AccountLock lock, AccountDeletionProperties properties, JwtProperties jwt,
-                                 PlatformTransactionManager transactions) {
+                                 PlatformTransactionManager transactions, Clock clock) {
         this.deletions = deletions;
         this.client = client;
         this.notices = notices;
@@ -68,34 +70,43 @@ public class AccountDeletionEngine {
         this.properties = properties;
         this.jwt = jwt;
         this.tx = new TransactionTemplate(transactions);
+        this.clock = clock;
     }
 
-    /** Claims up to 10 requests with work due and does it, releasing each claim once its work is recorded. */
+    /**
+     * Claims up to 10 requests with work due at {@code now} (the tick start) and does it, releasing each claim afterwards.
+     * {@code now} decides only what was due at the claim; every time written is read from the clock when it is written,
+     * because one slow tick can take many minutes.
+     */
     public void runOnce(Instant now) {
+        Instant leaseUntil = now.plus(LEASE);
         for (UUID id : deletions.claimDue(now, BATCH, LEASE, reminderLead())) {
             try {
                 deletions.find(id).ifPresent(request -> process(request, now));
-                deletions.releaseLease(id);
             } catch (RuntimeException error) {
-                // The lease is kept, so a request that keeps failing is retried when it runs out, not at every tick.
-                LOGGER.error("Account deletion work failed requestId={} error={}", id, error.getClass().getSimpleName());
+                // The class only: a message can carry row values.
+                LOGGER.error("CRAVES_ALERT alert=ACCOUNT_DELETION_REQUEST_FAILING requestId={} error={}", id, error.getClass().getSimpleName());
             }
+            deletions.releaseLease(id, leaseUntil);
         }
     }
 
     private void process(DeletionRequest request, Instant now) {
         for (DeletionStep step : deletions.steps(request.id())) {
             if (step.status() != StepStatus.DONE && due(step.nextAttemptAt(), now) && runsIn(step.phase(), request.status())) {
-                run(request, step, now);
+                run(request, step);
             }
         }
-        if (request.status() == SCHEDULED && request.reminderSentAt() == null && due(request.dueAt().minus(reminderLead()), now)) {
+        // A request already due gets no "in 7 days" notice: this same pass goes straight to the due-date check.
+        if (request.status() == SCHEDULED && request.reminderSentAt() == null && request.dueAt().isAfter(now)
+            && due(request.dueAt().minus(reminderLead()), now)) {
             notices.reminder(request);
-            deletions.transition(request.id(), SCHEDULED, SCHEDULED, columns -> columns.put("reminder_sent_at", now));
+            Instant sentAt = clock.instant();
+            deletions.transition(request.id(), SCHEDULED, SCHEDULED, columns -> columns.put("reminder_sent_at", sentAt));
         }
         if ((request.status() == SCHEDULED && due(request.dueAt(), now))
             || (request.status() == WAITING_ON_OPEN_ITEMS && due(request.nextCheckAt(), now))) {
-            check(request, now);
+            check(request);
         }
     }
 
@@ -108,13 +119,14 @@ public class AccountDeletionEngine {
         };
     }
 
-    private void run(DeletionRequest request, DeletionStep step, Instant now) {
+    private void run(DeletionRequest request, DeletionStep step) {
         UUID id = request.id();
         ServiceCall call = switch (step.phase()) {
             case PREPARE -> client.prepare(step.service(), id, request.identityId(), request.scope());
             case RELEASE -> client.release(step.service(), id, request.identityId(), request.scope());
             case ERASE, SWEEP -> client.erase(step.service(), id, request.identityId(), request.scope());
         };
+        Instant now = clock.instant(); // when the answer came, which can be well after the tick started
         switch (call.outcome()) {
             case DONE -> deletions.recordStep(id, step.phase(), step.service(), StepStatus.DONE, call.erasedCount(), null, null);
             case BLOCKED -> deletions.recordStep(id, step.phase(), step.service(), StepStatus.BLOCKED, null, null, now.plus(RECHECK));
@@ -136,7 +148,7 @@ public class AccountDeletionEngine {
     }
 
     /** The due-date check: erasing starts only when every PREPARE step is done and no service reports anything open. */
-    private void check(DeletionRequest request, Instant now) {
+    private void check(DeletionRequest request) {
         List<Blocker> blockers = new ArrayList<>();
         for (DeletionStep step : deletions.steps(request.id())) {
             if (step.phase() == Phase.PREPARE && step.status() != StepStatus.DONE) {
@@ -145,31 +157,36 @@ public class AccountDeletionEngine {
         }
         for (String service : AccountErasureClient.ERASE_ORDER) {
             ServiceCall answer = client.blockers(service, request.identityId(), request.scope());
-            if (answer.outcome() == Outcome.DONE) blockers.addAll(answer.blockers());
+            // A refusal (BLOCKED) keeps its reasons; only a failed call, or a refusal giving none, counts as no answer.
+            boolean answered = answer.outcome() == Outcome.DONE || (answer.outcome() == Outcome.BLOCKED && !answer.blockers().isEmpty());
+            if (answered) blockers.addAll(answer.blockers());
             else blockers.add(new Blocker(service, "SERVICE_UNREACHABLE", Objects.requireNonNullElse(answer.error(), answer.outcome().name())));
         }
-        if (blockers.isEmpty()) lockAndScheduleErase(request, now);
-        else waitOn(request, blockers, now);
+        if (blockers.isEmpty()) lockAndScheduleErase(request);
+        else waitOn(request, blockers);
     }
 
     /** One transaction: the move to ERASING, the lock and the ERASE steps commit together or not at all (plan Decision 2). */
-    private void lockAndScheduleErase(DeletionRequest request, Instant now) {
-        Instant eraseAfter = now.plus(jwt.getAccessTokenTtl()).plus(Duration.ofMinutes(1));
-        boolean locked = Boolean.TRUE.equals(tx.execute(status -> {
+    private void lockAndScheduleErase(DeletionRequest request) {
+        Instant eraseAfter = tx.execute(status -> {
             // The identity row first, as "keep" takes it, so the two never deadlock; a keep committed meanwhile fails the move.
             deletions.lockOpen(request.identityId());
+            // Read once the row is held: tokens issued until this moment must all expire before the first erase call.
+            Instant lockedAt = clock.instant();
             if (!deletions.transition(request.id(), request.status(), ERASING, columns -> {
-                columns.put("locked_at", now);
+                columns.put("locked_at", lockedAt);
                 columns.put("blockers_json", null);
-            })) return false;
+            })) return null;
             lock.lock(request);
-            deletions.insertSteps(request.id(), Phase.ERASE, ERASE_STEPS, eraseAfter);
-            return true;
-        }));
-        if (locked) LOGGER.info("Account deletion locked requestId={} scope={} eraseAfter={}", request.id(), request.scope(), eraseAfter);
+            Instant runAfter = lockedAt.plus(jwt.getAccessTokenTtl()).plus(Duration.ofMinutes(1));
+            deletions.insertSteps(request.id(), Phase.ERASE, ERASE_STEPS, runAfter);
+            return runAfter;
+        });
+        if (eraseAfter != null) LOGGER.info("Account deletion locked requestId={} scope={} eraseAfter={}", request.id(), request.scope(), eraseAfter);
     }
 
-    private void waitOn(DeletionRequest request, List<Blocker> blockers, Instant now) {
+    private void waitOn(DeletionRequest request, List<Blocker> blockers) {
+        Instant now = clock.instant(); // after the blockers calls
         String json = JSON.valueToTree(blockers).toString();
         if (!deletions.transition(request.id(), request.status(), WAITING_ON_OPEN_ITEMS, columns -> {
             columns.put("blockers_json", json);

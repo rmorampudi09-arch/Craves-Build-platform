@@ -168,24 +168,30 @@ public class AccountDeletionRepository {
         return jdbc.queryForList(CLAIM_DUE, UUID.class, ts(now.plus(lease)), at, at, at, ts(now.plus(reminderLead)), at, limit);
     }
 
-    /** Ends a claim once its work is recorded, so the next due work is picked up at the next tick, not when the lease runs out. */
-    public void releaseLease(UUID requestId) {
-        jdbc.update("UPDATE account_deletion_request SET lease_until = NULL WHERE id = ?", requestId);
+    /**
+     * Ends a claim once its work is recorded, so the next due work is picked up at the next tick, not when the lease runs out.
+     * {@code leaseUntil} is the claim's own lease ({@code now + lease} of {@link #claimDue}): a worker that overran it and
+     * releases late leaves the newer lease of the worker that claimed the request since.
+     */
+    public void releaseLease(UUID requestId, Instant leaseUntil) {
+        jdbc.update("UPDATE account_deletion_request SET lease_until = NULL WHERE id = ? AND lease_until = ?", requestId, ts(leaseUntil));
     }
 
     /**
      * Records one call's result. A non-null {@code error} is a failed attempt: attempts + 1. BLOCKED and DONE leave attempts alone.
      * The error is cut to the column size; callers pass codes (HTTP 503, TIMEOUT), never body text.
+     * A step already DONE is never changed: a late answer from a worker that overran its lease cannot undo it.
      */
     public void recordStep(UUID requestId, Phase phase, String service, StepStatus status, Integer erasedCount, String error, Instant nextAttemptAt) {
         String completedAt = status == StepStatus.DONE ? "now()" : "NULL";
         int updated = jdbc.update(
             "UPDATE account_deletion_step SET status = ?, attempts = attempts + ?, last_error = ?, erased_count = ?, "
                 + "next_attempt_at = ?, completed_at = " + completedAt + ", updated_at = now() "
-                + "WHERE request_id = ? AND phase = ? AND service = ?",
+                + "WHERE request_id = ? AND phase = ? AND service = ? AND status <> 'DONE'",
             status.name(), error == null ? 0 : 1, error == null || error.length() <= 300 ? error : error.substring(0, 300),
             erasedCount, ts(nextAttemptAt), requestId, phase.name(), service);
-        if (updated != 1) {
+        if (updated == 0 && jdbc.queryForObject("SELECT count(*) FROM account_deletion_step WHERE request_id = ? AND phase = ? "
+                + "AND service = ?", Integer.class, requestId, phase.name(), service) == 0) {
             throw new IllegalStateException("Deletion step not found: " + requestId + " " + phase + " " + service);
         }
     }

@@ -43,6 +43,7 @@ import in.craves.auth.deletion.DeletionModel.Via;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
@@ -70,7 +71,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 class AccountDeletionEngineTest {
     static final Instant NOW = Instant.parse("2026-11-04T10:00:00Z");
     static final ServiceCall OK = new ServiceCall(Outcome.DONE, Map.of(), List.of(), null);
+    static final Instant LEASE_UNTIL = NOW.plus(Duration.ofMinutes(5));
 
+    final MutableClock clock = new MutableClock(NOW);
     final AccountDeletionRepository deletions = mock(AccountDeletionRepository.class);
     final DeletionNotices notices = mock(DeletionNotices.class);
     final AccountLock lock = mock(AccountLock.class);
@@ -101,7 +104,7 @@ class AccountDeletionEngineTest {
     }
 
     AccountDeletionEngine engine() {
-        return new AccountDeletionEngine(deletions, client, notices, lock, properties, jwt, transactions);
+        return new AccountDeletionEngine(deletions, client, notices, lock, properties, jwt, transactions, clock);
     }
 
     @Test
@@ -133,7 +136,7 @@ class AccountDeletionEngineTest {
         verify(deletions).recordStep(id, PREPARE, "referral", PENDING, null, "HTTP 502", NOW.plus(Duration.ofHours(6)));
         verify(deletions).recordStep(id, PREPARE, "subscription", DONE, 2, null, null);
         verify(deletions, never()).recordStep(any(), any(), eq("integration"), any(), any(), any(), any());
-        verify(deletions).releaseLease(id);
+        verify(deletions).releaseLease(id, LEASE_UNTIL);
         verifyNoInteractions(lock, notices);
     }
 
@@ -192,6 +195,7 @@ class AccountDeletionEngineTest {
         given(waitingRequest, allPrepared(request));
         client.answers.clear();
         client.calls.clear();
+        clock.set(tomorrow);
 
         engine.runOnce(tomorrow);
 
@@ -302,14 +306,15 @@ class AccountDeletionEngineTest {
         verifyNoInteractions(lock, notices);
     }
 
+    /** Two-worker exclusion itself is the SQL claim's (AccountDeletionRepositoryDbTest.claimDueSkipsLeasedRows). */
     @Test
-    void twoWorkersNeverRunTheSameRequest() throws Exception {
+    void leaseIsReleasedOnlyAfterTheStepIsRecorded() throws Exception {
         DeletionRequest request = scheduled(NOW.plus(Duration.ofDays(29)), null);
         given(request, List.of(step(request, PREPARE, "order", PENDING, 0, NOW)));
         // As the SQL claim does: a leased request is not handed out again until its lease is released.
         Set<UUID> leased = ConcurrentHashMap.newKeySet();
         when(deletions.claimDue(any(), anyInt(), any(), any())).thenAnswer(call -> claimed.stream().filter(leased::add).toList());
-        doAnswer(call -> leased.remove(call.<UUID>getArgument(0))).when(deletions).releaseLease(any());
+        doAnswer(call -> leased.remove(call.<UUID>getArgument(0))).when(deletions).releaseLease(any(), any());
         CountDownLatch inCall = new CountDownLatch(1);
         CountDownLatch secondDone = new CountDownLatch(1);
         client.during = call -> {
@@ -326,7 +331,7 @@ class AccountDeletionEngineTest {
         assertEquals(List.of("prepare order"), client.calls);
         var order = inOrder(deletions);
         order.verify(deletions).recordStep(request.id(), PREPARE, "order", DONE, 0, null, null);
-        order.verify(deletions).releaseLease(request.id());
+        order.verify(deletions).releaseLease(request.id(), LEASE_UNTIL);
         assertTrue(leased.isEmpty(), "the lease is released once the work is recorded");
     }
 
@@ -334,6 +339,8 @@ class AccountDeletionEngineTest {
     void noHttpCallInsideATransaction() {
         DeletionRequest due = scheduled(NOW, null);
         given(due, allPrepared(due, step(due, PREPARE, "order", PENDING, 0, NOW)), allPrepared(due));
+        DeletionRequest soon = scheduled(NOW.plus(Duration.ofDays(3)), null);
+        given(soon, List.of());
         DeletionRequest kept = with(request(Scope.ALL, SCHEDULED, NOW.plus(Duration.ofDays(9)), null), CANCELLED, null);
         given(kept, List.of(step(kept, RELEASE, "catalog", PENDING, 0, NOW)));
         doAnswer(call -> {
@@ -345,9 +352,93 @@ class AccountDeletionEngineTest {
 
         assertTrue(client.calls.containsAll(List.of("prepare order", "blockers order", "blockers notification", "release catalog")),
             client.calls.toString());
-        verify(notices).reminder(due);
+        verify(notices).reminder(soon);
         verify(lock).lock(due);
         assertEquals(1, transactions.begun, "only the lock opens a transaction");
+    }
+
+    @Test
+    void writesUseTheTimeAfterEachCallNotTheTickStart() {
+        client.during = call -> clock.advance(Duration.ofMinutes(1)); // every call takes a minute
+        DeletionRequest failing = scheduled(NOW.plus(Duration.ofDays(29)), NOW);
+        given(failing, List.of(step(failing, PREPARE, "catalog", PENDING, 0, NOW), step(failing, PREPARE, "order", PENDING, 0, NOW)));
+        client.answers.put("prepare catalog", new ServiceCall(Outcome.BLOCKED, Map.of(), List.of(), null));
+        client.answers.put("prepare order", failed("HTTP 503"));
+        DeletionRequest clear = scheduled(NOW, NOW.minus(Duration.ofDays(7)));
+        given(clear, allPrepared(clear));
+        // The identity row can be held by a "keep" or a sign-in: the lock reads the time once it has the row.
+        when(deletions.lockOpen(clear.identityId())).thenAnswer(call -> {
+            clock.advance(Duration.ofMinutes(2));
+            return Optional.empty();
+        });
+
+        engine.runOnce(NOW);
+
+        verify(deletions).recordStep(failing.id(), PREPARE, "catalog", BLOCKED, null, null, NOW.plus(Duration.ofMinutes(1)).plus(Duration.ofDays(1)));
+        verify(deletions).recordStep(failing.id(), PREPARE, "order", PENDING, null, "HTTP 503", NOW.plus(Duration.ofMinutes(2 + 5)));
+        Instant lockedAt = NOW.plus(Duration.ofMinutes(2 + 8 + 2)); // 2 prepare calls, 8 blockers calls, the wait for the row
+        assertEquals(lockedAt, columns(clear.id(), SCHEDULED, ERASING).get("locked_at"));
+        verify(deletions).insertSteps(eq(clear.id()), eq(ERASE), any(), eq(lockedAt.plus(Duration.ofMinutes(11))));
+
+        // A later tick that still started at NOW: the re-check and the reminder are dated when their calls return.
+        claimed.clear();
+        DeletionRequest open = scheduled(NOW, NOW.minus(Duration.ofDays(7)));
+        given(open, allPrepared(open));
+        client.answers.put("blockers order", new ServiceCall(Outcome.DONE, Map.of(), List.of(new Blocker("order", "ORDER_IN_PROGRESS", "")), null));
+        DeletionRequest soon = scheduled(NOW.plus(Duration.ofDays(3)), null);
+        given(soon, List.of());
+        doAnswer(call -> clock.advance(Duration.ofMinutes(1))).when(notices).reminder(soon);
+
+        engine.runOnce(NOW);
+
+        assertEquals(lockedAt.plus(Duration.ofMinutes(8)).plus(Duration.ofDays(1)),
+            columns(open.id(), SCHEDULED, WAITING_ON_OPEN_ITEMS).get("next_check_at"));
+        assertEquals(Map.of("reminder_sent_at", lockedAt.plus(Duration.ofMinutes(9))), columns(soon.id(), SCHEDULED, SCHEDULED));
+    }
+
+    @Test
+    void blockersAnsweredWithBlockedAreKept() {
+        DeletionRequest request = scheduled(NOW, NOW.minus(Duration.ofDays(7)));
+        given(request, allPrepared(request));
+        client.answers.put("blockers referral", new ServiceCall(Outcome.BLOCKED, Map.of(),
+            List.of(new Blocker("referral", "FORFEIT_AWAITING_FINANCE", "balance")), null));
+        client.answers.put("blockers advanced", new ServiceCall(Outcome.BLOCKED, Map.of(), List.of(), null));
+
+        engine.runOnce(NOW);
+
+        assertEquals("[{\"service\":\"referral\",\"code\":\"FORFEIT_AWAITING_FINANCE\",\"detail\":\"balance\"},"
+                + "{\"service\":\"advanced\",\"code\":\"SERVICE_UNREACHABLE\",\"detail\":\"BLOCKED\"}]",
+            columns(request.id(), SCHEDULED, WAITING_ON_OPEN_ITEMS).get("blockers_json"),
+            "a refusal keeps its reasons; a refusal with none is not an answer");
+        verifyNoInteractions(lock);
+    }
+
+    @Test
+    void aRequestThatFailsAlertsAndReleasesItsLease() {
+        DeletionRequest broken = scheduled(NOW.plus(Duration.ofDays(29)), null);
+        given(broken, List.of());
+        when(deletions.steps(broken.id())).thenThrow(new IllegalStateException("synthetic +910000000000"));
+        DeletionRequest next = scheduled(NOW.plus(Duration.ofDays(29)), null);
+        given(next, List.of(step(next, PREPARE, "order", PENDING, 0, NOW)));
+
+        engine.runOnce(NOW);
+
+        assertEquals(List.of("CRAVES_ALERT alert=ACCOUNT_DELETION_REQUEST_FAILING requestId=" + broken.id() + " error=IllegalStateException"),
+            alerts(), "the exception class only, never its message");
+        verify(deletions).releaseLease(broken.id(), LEASE_UNTIL);
+        assertEquals(List.of("prepare order"), client.calls, "the rest of the batch still runs");
+    }
+
+    @Test
+    void noReminderForARequestAlreadyDue() {
+        DeletionRequest late = scheduled(NOW, null);
+        given(late, allPrepared(late));
+
+        engine.runOnce(NOW);
+
+        verifyNoInteractions(notices);
+        verify(deletions, never()).transition(eq(late.id()), eq(SCHEDULED), eq(SCHEDULED), any());
+        verify(lock).lock(late);
     }
 
     // --- helpers
@@ -414,6 +505,16 @@ class AccountDeletionEngineTest {
         } catch (InterruptedException error) {
             throw new IllegalStateException(error);
         }
+    }
+
+    static final class MutableClock extends Clock {
+        private volatile Instant now;
+        MutableClock(Instant now) { this.now = now; }
+        void set(Instant at) { now = at; }
+        Instant advance(Duration by) { return now = now.plus(by); }
+        @Override public Instant instant() { return now; }
+        @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+        @Override public Clock withZone(ZoneId zone) { return this; }
     }
 
     /** A real transaction lifecycle with no database: TransactionSynchronizationManager sees it as active. */

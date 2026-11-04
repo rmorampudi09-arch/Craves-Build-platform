@@ -27,6 +27,7 @@ var logAlerts = [
   { code: 'DELIVERY_COMMAND_STALLED', severity: 1, text: '#5 Delivery command WAITING_FOR_PROVIDER for more than 10 minutes' }
   { code: 'DELIVERY_HANDOFF_NO_COURIER', severity: 1, text: 'Borzo was cancelled and Pidge refused or cancelled the fallback booking: the order has no courier until ops books one or cancels it' }
   { code: 'DELIVERY_HANDOFF_STALLED', severity: 1, text: 'Borzo was cancelled and the Pidge fallback booking is still unresolved about 10 minutes later (it keeps retrying)' }
+  { code: 'PROVIDER_CIRCUIT_OPEN', severity: 2, text: 'Handbook 104: a delivery provider failed 5 quotes in a row, so its quotes are skipped for 30 seconds (integration ProviderGuard)' }
   { code: 'PAYOUT_STALLED', severity: 1, text: '#7 Chef payout RESERVED for more than 10 minutes' }
   { code: 'LEDGER_OUTBOX_BACKLOG', severity: 3, text: '#8 ledger_outbox rows unpublished for over an hour (no publisher exists yet)' }
   { code: 'SCHEDULER_LAG', severity: 1, text: '#10 A worker job stopped ticking for more than 3 intervals' }

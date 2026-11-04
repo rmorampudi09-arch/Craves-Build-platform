@@ -88,6 +88,8 @@ class AccountErasureDatabaseTest {
     private static final Set<String> COUNT_KEYS = Set.of(
         "payment_order", "payment_attempt", "payment_event", "webhook_inbox", "cashfree_webhook_delivery", "fleet_trip", "fleet_trip_event",
         "delivery_command", "delivery_assignment", "delivery_assignment_candidate", "delivery_job", "delivery_event", "delivery_webhook_inbox");
+    /** CHEF and ALL also replace the kitchen's contact on the chef's own finished trips. */
+    private static final String KITCHEN_KEY = "fleet_trip_kitchen";
 
     static JdbcTemplate jdbc;
     static TransactionTemplate tx;
@@ -186,11 +188,17 @@ class AccountErasureDatabaseTest {
 
     /** One fleet trip for a checkout; the customer's name, phone and drop-off are the columns under test, the rider's are not. */
     private static UUID trip(UUID checkout, String state, UUID chefSubOrder, String landmark) {
+        return trip(checkout, state, chefSubOrder, landmark, UUID.randomUUID());
+    }
+
+    /** The same, cooked by the given chef; the kitchen's address, landmark, position and the chef's phone are the chef's. */
+    private static UUID trip(UUID checkout, String state, UUID chefSubOrder, String landmark, UUID chefId) {
         UUID id = UUID.randomUUID();
         seed("INSERT INTO fleet_schema.trip(id,chef_sub_order_id,order_id,chef_id,order_code,state,items_count,kitchen_name,kitchen_area,kitchen_address,"
-            + "kitchen_lat,kitchen_lng,chef_phone,customer_first_name,customer_phone,drop_area,drop_address,drop_landmark,drop_lat,drop_lng)"
-            + " VALUES (?,?,?,?,'#ABCDEF12',?,2,'Kitchen','Area','Kitchen road',17.4,78.4,'8888888888','Real','9876543210','Drop area',"
-            + "'12 Real Street, Flat 4',?,17.4412345,78.3912345)", id, chefSubOrder, checkout, UUID.randomUUID(), state, landmark);
+            + "kitchen_landmark,kitchen_lat,kitchen_lng,chef_phone,customer_first_name,customer_phone,drop_area,drop_address,drop_landmark,drop_lat,drop_lng)"
+            + " VALUES (?,?,?,?,'#ABCDEF12',?,2,'Kitchen','Area','Kitchen road',?,17.4612345,78.3654321,'8888888888','Real','9876543210','Drop area',"
+            + "'12 Real Street, Flat 4',?,17.4412345,78.3912345)", id, chefSubOrder, checkout, chefId, state, landmark == null ? null : "Opposite the park",
+            landmark);
         return id;
     }
 
@@ -525,16 +533,18 @@ class AccountErasureDatabaseTest {
 
         Map<String, Integer> expected = new java.util.HashMap<>();
         COUNT_KEYS.forEach(k -> expected.put(k, 0));
+        expected.put(KITCHEN_KEY, 0);
         expected.putAll(Map.of("payment_order", 1, "payment_attempt", 1, "payment_event", 1, "webhook_inbox", 1,
             "cashfree_webhook_delivery", 1, "fleet_trip", 1));
         assertEquals(expected, first.counts());
         assertEquals("DONE", second.status());
-        assertAllZero(second);
+        assertEquals(expected.keySet(), second.counts().keySet());
+        assertTrue(second.counts().values().stream().allMatch(n -> n == 0), second.counts().toString());
         assertEquals(afterFirst, snapshots(ALL_TABLES));
         // Same for a person this service never saw (worker retry after a timeout).
         UUID stranger = UUID.randomUUID();
         assertAllZero(erase(stranger, Scope.CUSTOMER));
-        assertEquals(Map.of(), erase(stranger, Scope.CHEF).counts());
+        assertEquals(Map.of(KITCHEN_KEY, 0), erase(stranger, Scope.CHEF).counts());
     }
 
     @Test
@@ -559,7 +569,7 @@ class AccountErasureDatabaseTest {
         ErasureResponse response = erase(chef, Scope.CHEF);
 
         assertEquals("DONE", response.status());
-        assertEquals(Map.of(), response.counts());
+        assertEquals(Map.of(KITCHEN_KEY, 0), response.counts(), "the chef has no trips of their own here");
         assertEquals(before, snapshots(ALL_TABLES), "row contents, not only counts");
         ALL_TABLES.forEach(t -> assertEquals(counts.get(t),
             jdbc.queryForObject("SELECT count(*) FROM " + (t.contains(".") ? t : "payment_schema." + t), Long.class), t));
@@ -657,7 +667,7 @@ class AccountErasureDatabaseTest {
         UUID tripEventFinished, tripEventActive;
         // Rows that must stay as they are: still being handled.
         List<UUID> inFlightInbox() {
-            return List.of(inboxReceived, inboxPending);
+            return List.of(inboxReceived);
         }
     }
 
@@ -788,18 +798,17 @@ class AccountErasureDatabaseTest {
     }
 
     @Test
-    void eraseScrubsPaymentAttemptAndEventPayloadsOfFinishedOrders() {
+    void eraseScrubsPaymentAttemptAndEventPayloadsWhateverTheOrderStatus() {
         Scene mine = scene(customer);
         Scene other = scene(UUID.randomUUID());
         Map<String, String> before = new java.util.HashMap<>();
-        for (UUID id : List.of(mine.attemptPaid, mine.attemptRazor)) {
+        // A payment order has no expiry, so an abandoned one (still PAYMENT_PENDING) is scrubbed like a paid one.
+        for (UUID id : List.of(mine.attemptPaid, mine.attemptRazor, mine.attemptPending)) {
             before.put(id.toString(), column("payment_schema.payment_attempt", "raw_payload", id));
         }
-        for (UUID id : List.of(mine.eventPaid, mine.eventRazor)) {
+        for (UUID id : List.of(mine.eventPaid, mine.eventRazor, mine.eventPending)) {
             before.put(id.toString(), column("payment_schema.payment_event", "raw_payload", id));
         }
-        String attemptPendingBefore = row("payment_schema.payment_attempt", mine.attemptPending);
-        String eventPendingBefore = row("payment_schema.payment_event", mine.eventPending);
         String otherAttemptBefore = row("payment_schema.payment_attempt", other.attemptPaid);
         String otherEventBefore = row("payment_schema.payment_event", other.eventPaid);
         String attemptMoneyBefore = jdbc.queryForObject("SELECT concat_ws('|',cf_payment_id,payment_status,payment_amount,payment_currency,provider,payment_order_id)"
@@ -807,12 +816,12 @@ class AccountErasureDatabaseTest {
 
         ErasureResponse response = erase(customer, Scope.CUSTOMER);
 
-        assertEquals(2, response.counts().get("payment_attempt"));
-        assertEquals(2, response.counts().get("payment_event"));
-        for (UUID id : List.of(mine.attemptPaid, mine.attemptRazor)) {
+        assertEquals(3, response.counts().get("payment_attempt"));
+        assertEquals(3, response.counts().get("payment_event"));
+        for (UUID id : List.of(mine.attemptPaid, mine.attemptRazor, mine.attemptPending)) {
             assertErased("payment_schema.payment_attempt", "raw_payload", id, before.get(id.toString()));
         }
-        for (UUID id : List.of(mine.eventPaid, mine.eventRazor)) {
+        for (UUID id : List.of(mine.eventPaid, mine.eventRazor, mine.eventPending)) {
             assertErased("payment_schema.payment_event", "raw_payload", id, before.get(id.toString()));
         }
         assertEquals(attemptMoneyBefore, jdbc.queryForObject("SELECT concat_ws('|',cf_payment_id,payment_status,payment_amount,payment_currency,provider,payment_order_id)"
@@ -823,8 +832,6 @@ class AccountErasureDatabaseTest {
             "SELECT raw_payload->'payload'->'payment'->'entity'->>'vpa' FROM payment_schema.payment_event WHERE id=?", String.class, mine.eventRazor));
         assertEquals("1234", jdbc.queryForObject(
             "SELECT raw_payload->'payload'->'payment'->'entity'->'card'->>'last4' FROM payment_schema.payment_event WHERE id=?", String.class, mine.eventRazor), "masked card digits stay");
-        assertEquals(attemptPendingBefore, row("payment_schema.payment_attempt", mine.attemptPending), "the order is still being paid");
-        assertEquals(eventPendingBefore, row("payment_schema.payment_event", mine.eventPending), "the order is still being paid");
         assertEquals(otherAttemptBefore, row("payment_schema.payment_attempt", other.attemptPaid));
         assertEquals(otherEventBefore, row("payment_schema.payment_event", other.eventPaid));
         ErasureResponse second = erase(customer, Scope.CUSTOMER);
@@ -832,18 +839,21 @@ class AccountErasureDatabaseTest {
     }
 
     @Test
-    void eraseScrubsFinishedWebhookRowsOnly() {
+    void eraseScrubsProcessedWebhookRowsOnly() {
         Scene mine = scene(customer);
         Scene other = scene(UUID.randomUUID());
         Map<UUID, String> before = new java.util.HashMap<>();
+        // Processed rows go whatever the payment order's status: an abandoned order never finishes.
         List<UUID> inboxToScrub = new ArrayList<>(mine.inboxFinished);
         inboxToScrub.add(mine.inboxRazor);
+        inboxToScrub.add(mine.inboxPending);
         inboxToScrub.forEach(id -> before.put(id, column("payment_schema.webhook_inbox", "raw_payload", id)));
-        mine.deliveryFinished.forEach(id -> before.put(id, column("payment_schema.cashfree_webhook_delivery", "raw_payload", id)));
+        List<UUID> deliveryToScrub = new ArrayList<>(mine.deliveryFinished);
+        deliveryToScrub.add(mine.deliveryPending);
+        deliveryToScrub.forEach(id -> before.put(id, column("payment_schema.cashfree_webhook_delivery", "raw_payload", id)));
         Map<UUID, String> untouched = new java.util.HashMap<>();
         mine.inFlightInbox().forEach(id -> untouched.put(id, row("payment_schema.webhook_inbox", id)));
         mine.deliveryInFlight.forEach(id -> untouched.put(id, row("payment_schema.cashfree_webhook_delivery", id)));
-        untouched.put(mine.deliveryPending, row("payment_schema.cashfree_webhook_delivery", mine.deliveryPending));
         other.inboxFinished.forEach(id -> untouched.put(id, row("payment_schema.webhook_inbox", id)));
         other.deliveryFinished.forEach(id -> untouched.put(id, row("payment_schema.cashfree_webhook_delivery", id)));
         String statusBefore = jdbc.queryForObject("SELECT string_agg(concat_ws('|',id,provider,event_identity,processing_status),',' ORDER BY id) FROM payment_schema.webhook_inbox",
@@ -851,14 +861,13 @@ class AccountErasureDatabaseTest {
 
         ErasureResponse response = erase(customer, Scope.CUSTOMER);
 
-        assertEquals(5, response.counts().get("webhook_inbox"), "four finished statuses and the Razorpay row");
-        assertEquals(2, response.counts().get("cashfree_webhook_delivery"), "COMPLETED and DEAD_LETTER");
+        assertEquals(6, response.counts().get("webhook_inbox"), "four processed statuses, the Razorpay row and the pending order's row");
+        assertEquals(3, response.counts().get("cashfree_webhook_delivery"), "COMPLETED and DEAD_LETTER, and the pending order's COMPLETED row");
         inboxToScrub.forEach(id -> assertErased("payment_schema.webhook_inbox", "raw_payload", id, before.get(id)));
-        mine.deliveryFinished.forEach(id -> assertErased("payment_schema.cashfree_webhook_delivery", "raw_payload", id, before.get(id)));
-        // RECEIVED, PROCESSING and FAILED are still being handled (FAILED is retried); a pending order's rows wait.
+        deliveryToScrub.forEach(id -> assertErased("payment_schema.cashfree_webhook_delivery", "raw_payload", id, before.get(id)));
+        // RECEIVED, PROCESSING and FAILED are still being handled (FAILED is retried).
         mine.inFlightInbox().forEach(id -> assertEquals(untouched.get(id), row("payment_schema.webhook_inbox", id)));
         mine.deliveryInFlight.forEach(id -> assertEquals(untouched.get(id), row("payment_schema.cashfree_webhook_delivery", id)));
-        assertEquals(untouched.get(mine.deliveryPending), row("payment_schema.cashfree_webhook_delivery", mine.deliveryPending));
         other.inboxFinished.forEach(id -> assertEquals(untouched.get(id), row("payment_schema.webhook_inbox", id)));
         other.deliveryFinished.forEach(id -> assertEquals(untouched.get(id), row("payment_schema.cashfree_webhook_delivery", id)));
         assertEquals(statusBefore, jdbc.queryForObject("SELECT string_agg(concat_ws('|',id,provider,event_identity,processing_status),',' ORDER BY id) FROM payment_schema.webhook_inbox",
@@ -1003,7 +1012,7 @@ class AccountErasureDatabaseTest {
     }
 
     @Test
-    void aTripHandedBackToACourierIsNotScrubbedWhileTheOrderIsStillBeingBooked() {
+    void aTripHandedBackToACourierBlocksForAWeekAndIsThenScrubbedAsFinished() {
         UUID checkout = UUID.randomUUID();
         UUID chefSubOrder = UUID.randomUUID();
         payment(customer, checkout, "PAID", "{}", null);
@@ -1022,26 +1031,94 @@ class AccountErasureDatabaseTest {
         String jobBefore = row("delivery_schema.delivery_job", job);
         String eventBefore = row("delivery_schema.delivery_event", event2);
 
-        ErasureResponse open = erase(customer, Scope.CUSTOMER);
-
-        assertAllZero(open);
+        // The order is still being booked: the customer side waits (the coordinator asks again the next day).
+        for (Scope scope : List.of(Scope.CUSTOMER, Scope.ALL)) {
+            assertEquals(Set.of("DELIVERY_IN_PROGRESS"), codes(service.blockers(customer, scope)), scope.name());
+            assertEquals("BLOCKED", erase(customer, scope).status(), scope.name());
+        }
+        assertTrue(service.blockers(customer, Scope.CHEF).isEmpty(), "a customer's delivery is not a chef matter");
         assertEquals(tripBefore, row("fleet_schema.trip", trip), "the order is still being booked");
         assertEquals(tripEventBefore, row("fleet_schema.trip_event", event));
         assertEquals(commandBefore, row("delivery_schema.delivery_command", command));
         assertEquals(jobBefore, row("delivery_schema.delivery_job", job));
         assertEquals(eventBefore, row("delivery_schema.delivery_event", event2));
 
-        // Once the stage is closed nothing is left going: everything is scrubbed.
-        closeStage(stage);
-        ErasureResponse closed = erase(customer, Scope.CUSTOMER);
+        // A stage left open for a week is abandoned: it no longer blocks and the delivery counts as finished.
+        seed("UPDATE fleet_schema.trip_stage SET opened_at = now() - interval '7 days 1 minute', deadline_at = now() - interval '7 days' WHERE id = ?", stage);
+        assertTrue(service.blockers(customer, Scope.ALL).isEmpty());
+        ErasureResponse stale = erase(customer, Scope.CUSTOMER);
 
-        assertEquals(1, closed.counts().get("fleet_trip"));
-        assertEquals(1, closed.counts().get("fleet_trip_event"));
-        assertEquals(1, closed.counts().get("delivery_command"));
-        assertEquals(1, closed.counts().get("delivery_job"));
-        assertEquals(1, closed.counts().get("delivery_event"));
+        assertEquals(1, stale.counts().get("fleet_trip"));
+        assertEquals(1, stale.counts().get("fleet_trip_event"));
+        assertEquals(1, stale.counts().get("delivery_command"));
+        assertEquals(1, stale.counts().get("delivery_job"));
+        assertEquals(1, stale.counts().get("delivery_event"));
         assertEquals(AccountErasureService.ERASED_TEXT, jdbc.queryForObject("SELECT drop_address FROM fleet_schema.trip WHERE id=?", String.class, trip));
+        assertEquals("OPEN", jdbc.queryForObject("SELECT state FROM fleet_schema.trip_stage WHERE id=?", String.class, stage), "the stage itself is not touched");
         assertAllZero(erase(customer, Scope.CUSTOMER));
+    }
+
+    @Test
+    void aClosedStageIsFinished() {
+        UUID checkout = UUID.randomUUID();
+        payment(customer, checkout, "PAID", "{}", null);
+        UUID trip = trip(checkout, "CANCELLED", UUID.randomUUID(), "Near Real Temple");
+        UUID stage = stage(trip, "BORZO", "OPEN");
+        closeStage(stage);
+
+        assertTrue(service.blockers(customer, Scope.ALL).isEmpty());
+        assertEquals(1, erase(customer, Scope.CUSTOMER).counts().get("fleet_trip"));
+    }
+
+    // ---- the chef's own contact on the trips their kitchen sent out --------------------------------------------
+
+    private static String tripWithoutKitchenColumns(UUID id) {
+        return jdbc.queryForObject("SELECT (to_jsonb(t) - 'chef_phone' - 'kitchen_address' - 'kitchen_landmark' - 'kitchen_lat' - 'kitchen_lng')::text "
+            + "FROM fleet_schema.trip t WHERE id=?", String.class, id);
+    }
+
+    @Test
+    void eraseChefClearsTheKitchenContactOnTheChefsFinishedTripsOnly() {
+        UUID delivered = trip(UUID.randomUUID(), "DELIVERED", UUID.randomUUID(), "Near Real Temple", chef);
+        UUID noLandmark = trip(UUID.randomUUID(), "FAILED", UUID.randomUUID(), null, chef);
+        UUID onTheRoad = trip(UUID.randomUUID(), "PICKED_UP", UUID.randomUUID(), "Near Real Temple", chef);
+        UUID othersKitchen = trip(UUID.randomUUID(), "DELIVERED", UUID.randomUUID(), "Near Real Temple", UUID.randomUUID());
+        // The chef also ordered as a customer: that trip's kitchen is somebody else's.
+        UUID ownCheckout = UUID.randomUUID();
+        payment(chef, ownCheckout, "PAID", "{}", null);
+        UUID ownOrder = trip(ownCheckout, "DELIVERED", UUID.randomUUID(), "Near Real Temple");
+        Map<UUID, String> restBefore = Map.of(delivered, tripWithoutKitchenColumns(delivered), noLandmark, tripWithoutKitchenColumns(noLandmark));
+        Map<UUID, String> untouched = Map.of(onTheRoad, row("fleet_schema.trip", onTheRoad), othersKitchen, row("fleet_schema.trip", othersKitchen),
+            ownOrder, row("fleet_schema.trip", ownOrder));
+
+        ErasureResponse response = erase(chef, Scope.CHEF);
+
+        assertEquals(Map.of(KITCHEN_KEY, 2), response.counts());
+        for (UUID id : List.of(delivered, noLandmark)) {
+            Map<String, Object> kitchen = jdbc.queryForMap("SELECT chef_phone, kitchen_address, kitchen_landmark, kitchen_lat, kitchen_lng, kitchen_name "
+                + "FROM fleet_schema.trip WHERE id=?", id);
+            assertEquals(AccountErasureService.ERASED_PHONE, kitchen.get("chef_phone"));
+            assertEquals(AccountErasureService.ERASED_TEXT, kitchen.get("kitchen_address"));
+            assertEquals(0.0, kitchen.get("kitchen_lat"));
+            assertEquals(0.0, kitchen.get("kitchen_lng"));
+            assertEquals("Kitchen", kitchen.get("kitchen_name"), "the kitchen name stays");
+            // The customer's columns, the rider, state, version and ids are exactly as they were.
+            assertEquals(restBefore.get(id), tripWithoutKitchenColumns(id));
+        }
+        assertEquals(AccountErasureService.ERASED_TEXT, jdbc.queryForObject("SELECT kitchen_landmark FROM fleet_schema.trip WHERE id=?", String.class, delivered));
+        assertNull(jdbc.queryForObject("SELECT kitchen_landmark FROM fleet_schema.trip WHERE id=?", String.class, noLandmark), "no landmark stays no landmark");
+        untouched.forEach((id, before) -> assertEquals(before, row("fleet_schema.trip", id), "on the road, another kitchen's, or the chef's own order"));
+
+        String afterFirst = snapshot("fleet_schema.trip");
+        assertEquals(Map.of(KITCHEN_KEY, 0), erase(chef, Scope.CHEF).counts());
+        ErasureResponse all = erase(chef, Scope.ALL);
+        assertEquals(0, all.counts().get(KITCHEN_KEY));
+        assertEquals(1, all.counts().get("fleet_trip"), "ALL also clears the chef's own order as a customer");
+        assertEquals(untouched.get(onTheRoad), row("fleet_schema.trip", onTheRoad));
+        assertEquals(untouched.get(othersKitchen), row("fleet_schema.trip", othersKitchen));
+        assertEquals("8888888888", jdbc.queryForObject("SELECT chef_phone FROM fleet_schema.trip WHERE id=?", String.class, ownOrder),
+            "the other kitchen's phone on the chef's own order stays");
+        assertFalse(afterFirst.equals(snapshot("fleet_schema.trip")), "only the customer side changed on ALL");
     }
 
     @Test

@@ -22,19 +22,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Account deletion. The ledger, payables, payout instructions and the encrypted bank details are legal records behind
- * immutability triggers and are never touched. CHEF erase therefore does nothing; only its blockers matter: staff
+ * immutability triggers and are never touched. CHEF erase only replaces the chef's phone and the kitchen's address,
+ * landmark and position on the chef's finished fleet trips (the kitchen name stays); its blockers matter most: staff
  * approve a chef deletion once nothing is payable, unfinished or owed behind a hold.
  *
  * <p>CUSTOMER erase replaces the name, phone, email and UPI id of the person wherever this service keeps what the payment
  * provider was sent or sent back: payment_order (request and response payload), payment_attempt and payment_event
- * (raw provider payload), webhook_inbox and cashfree_webhook_delivery (raw webhook body). It replaces the drop-off (contact
- * name and phone, address lines, landmark, note, postcode, coordinates) in the delivery records of finished deliveries
- * (command, assignment and its candidates, job, events, webhook inbox, see {@link DropoffScrubber}) and on finished fleet
- * trips, plus rider notes on those trips. Amounts, ids, statuses, owners, the kitchen, the rider and the coarse area stay.
- * None of these tables has an immutability trigger (checked on the migrated schema by the database test), so nothing is
- * skipped. Rows still being handled (a payment not finished, a webhook not processed, a delivery or trip on the road) are
- * left for a later call. Meal-plan deliveries have no payment order or checkout quote here, so they can not be tied to a
- * customer and are left.
+ * (raw provider payload, whatever the payment order's status: an abandoned one never finishes), webhook_inbox and
+ * cashfree_webhook_delivery (raw webhook body, once processed). It replaces the drop-off (contact name and phone, address
+ * lines, landmark, note, postcode, coordinates) in the delivery records of finished deliveries (command, assignment and its
+ * candidates, job, events, webhook inbox, see {@link DropoffScrubber}) and on finished fleet trips, plus rider notes on those
+ * trips. Amounts, ids, statuses, owners, the kitchen, the rider and the coarse area stay. None of these tables has an
+ * immutability trigger (checked on the migrated schema by the database test), so nothing is skipped. A webhook not yet
+ * processed and a delivery or trip on the road are left for a later call; a delivery still being booked with a courier
+ * blocks (DELIVERY_IN_PROGRESS) for {@link #STAGE_ABANDONED_DAYS} days and then counts as finished. Meal-plan deliveries have
+ * no payment order or checkout quote here, so they can not be tied to a customer and are left.
  */
 @Service
 public class AccountErasureService {
@@ -52,9 +54,11 @@ public class AccountErasureService {
     private static final String REFUND_OPEN = "'REQUESTED', 'PROCESSING', 'RETRY', 'PENDING', 'ONHOLD'";
     // PAID, FAILED, CANCELLED (a manual reservation never sent) and REVERSED (money back, so the payable is unpaid again) are final.
     private static final String PAYOUT_FINISHED = "'PAID', 'FAILED', 'REVERSED', 'CANCELLED'";
-    private static final String PAYMENT_FINISHED = "'PAID', 'FAILED', 'CANCELLED'";
     private static final String TRIP_FINISHED = "'DELIVERED', 'FAILED', 'CANCELLED'";
     private static final String JOB_FINISHED = "'DELIVERED', 'CANCELLED', 'RETURNED', 'FAILED'";
+    /** A courier stage runs for minutes; one still open after a week was left behind, and the coordinator re-checks daily. */
+    static final int STAGE_ABANDONED_DAYS = 7;
+    private static final String STAGE_GOING = "fs.state = 'OPEN' AND fs.opened_at > now() - interval '" + STAGE_ABANDONED_DAYS + " days'";
     /** A customer's checkouts, from what they paid or were quoted; a delivery record's order_id is the checkout id. */
     private static final String CHECKOUTS = "(SELECT checkout_id FROM " + PAY + "payment_order WHERE customer_identity_id = ? "
         + "UNION SELECT checkout_id FROM " + PAY + "finance_checkout_quote WHERE customer_identity_id = ?)";
@@ -74,9 +78,9 @@ public class AccountErasureService {
         "note", ERASED_TEXT, "customerName", ERASED_NAME, "customerFirstName", ERASED_NAME, "customerPhone", ERASED_PHONE,
         "dropAddress", ERASED_TEXT, "address", ERASED_TEXT);
     private static final String JSON_STRING = "\"(?:[^\"\\\\]|\\\\.)*\"";
-    /** A provider record belongs to the person when it names the provider order id of one of their finished payments. */
-    private static final String NAMES_A_FINISHED_ORDER = "EXISTS (SELECT 1 FROM " + PAY + "payment_order po WHERE po.customer_identity_id = ? "
-        + "AND po.status IN (" + PAYMENT_FINISHED + ") AND length(po.provider_order_id) >= 8 AND position(po.provider_order_id IN raw_payload) > 0)";
+    /** A provider record belongs to the person when it names the provider order id of one of their payments. */
+    private static final String NAMES_AN_ORDER = "EXISTS (SELECT 1 FROM " + PAY + "payment_order po WHERE po.customer_identity_id = ? "
+        + "AND length(po.provider_order_id) >= 8 AND position(po.provider_order_id IN raw_payload) > 0)";
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
@@ -95,6 +99,9 @@ public class AccountErasureService {
                 "SELECT count(*) FROM " + PAY + "refund r WHERE r.status IN (" + REFUND_OPEN + ") AND (r.customer_identity_id = ? "
                     + "OR r.payment_order_id IN (SELECT id FROM " + PAY + "payment_order WHERE customer_identity_id = ?))",
                 identityId, identityId));
+            add(found, "DELIVERY_IN_PROGRESS", "%d delivery(ies) are still being booked with a courier", count(
+                "SELECT count(DISTINCT fst.chef_sub_order_id) FROM fleet_schema.trip_stage fs JOIN fleet_schema.trip fst ON fst.id = fs.trip_id "
+                    + "WHERE " + STAGE_GOING + " AND fst.order_id IN " + CHECKOUTS, identityId, identityId));
         }
         if (scope != Scope.CUSTOMER) {
             int unpaid = count(
@@ -132,15 +139,14 @@ public class AccountErasureService {
                     + "UPDATE " + PAY + "payment_order p SET request_payload = s.request, response_payload = s.response FROM s "
                     + "WHERE p.id = s.id AND (p.request_payload IS DISTINCT FROM s.request OR p.response_payload IS DISTINCT FROM s.response)",
                 identityId));
-            String finishedOrders = "payment_order_id IN (SELECT id FROM " + PAY + "payment_order WHERE customer_identity_id = ? AND status IN ("
-                + PAYMENT_FINISHED + "))";
-            counts.put("payment_attempt", scrubColumn(PAY + "payment_attempt", "raw_payload", "::jsonb", PROVIDER_KEYS, finishedOrders, identityId));
-            counts.put("payment_event", scrubColumn(PAY + "payment_event", "raw_payload", "::jsonb", PROVIDER_KEYS, finishedOrders, identityId));
+            String ownOrders = "payment_order_id IN (SELECT id FROM " + PAY + "payment_order WHERE customer_identity_id = ?)";
+            counts.put("payment_attempt", scrubColumn(PAY + "payment_attempt", "raw_payload", "::jsonb", PROVIDER_KEYS, ownOrders, identityId));
+            counts.put("payment_event", scrubColumn(PAY + "payment_event", "raw_payload", "::jsonb", PROVIDER_KEYS, ownOrders, identityId));
             counts.put("webhook_inbox", scrubColumn(PAY + "webhook_inbox", "raw_payload", "", PROVIDER_KEYS,
-                "processing_status IN ('PROCESSED', 'DUPLICATE', 'REJECTED', 'FAILED') AND " + NAMES_A_FINISHED_ORDER, identityId));
+                "processing_status IN ('PROCESSED', 'DUPLICATE', 'REJECTED', 'FAILED') AND " + NAMES_AN_ORDER, identityId));
             // A failed delivery is retried by the worker, so it is still being handled.
             counts.put("cashfree_webhook_delivery", scrubColumn(PAY + "cashfree_webhook_delivery", "raw_payload", "", PROVIDER_KEYS,
-                "processing_status IN ('COMPLETED', 'DEAD_LETTER') AND " + NAMES_A_FINISHED_ORDER, identityId));
+                "processing_status IN ('COMPLETED', 'DEAD_LETTER') AND " + NAMES_AN_ORDER, identityId));
             // A fleet trip's order_id is the checkout id; only the customer's own columns change, never the rider's.
             counts.put("fleet_trip", jdbc.update(
                 "UPDATE fleet_schema.trip tr SET customer_first_name = ?, customer_phone = ?, drop_address = ?, "
@@ -169,6 +175,16 @@ public class AccountErasureService {
                     + "WHERE j.status IN (" + JOB_FINISHED + ") AND j.order_id IN " + CHECKOUTS + " AND " + finished("j.chef_sub_order_id")
                     + " AND (j.id = t.delivery_job_id OR (j.provider_id = t.provider_id AND j.provider_delivery_id = t.provider_order_id)))",
                 identityId, identityId));
+        }
+        if (scope != Scope.CUSTOMER) {
+            // The chef's own phone and the kitchen's address on finished trips; the kitchen name and every customer column stay.
+            counts.put("fleet_trip_kitchen", jdbc.update(
+                "UPDATE fleet_schema.trip tr SET chef_phone = ?, kitchen_address = ?, "
+                    + "kitchen_landmark = CASE WHEN kitchen_landmark IS NULL THEN NULL ELSE ? END, kitchen_lat = 0, kitchen_lng = 0 "
+                    + "WHERE tr.chef_id = ? AND tr.state IN (" + TRIP_FINISHED + ") AND " + finished("tr.chef_sub_order_id")
+                    + " AND (chef_phone IS DISTINCT FROM ? OR kitchen_address IS DISTINCT FROM ? "
+                    + "OR (kitchen_landmark IS NOT NULL AND kitchen_landmark <> ?) OR kitchen_lat <> 0 OR kitchen_lng <> 0)",
+                ERASED_PHONE, ERASED_TEXT, ERASED_TEXT, identityId, ERASED_PHONE, ERASED_TEXT, ERASED_TEXT));
         }
         LOGGER.info("account erasure service=integration requestId={} scope={} counts={}", requestId, scope, counts);
         return ErasureResponse.done(counts);
@@ -199,12 +215,13 @@ public class AccountErasureService {
     /**
      * A delivery is over when no job, no current fleet trip and no open fleet stage of the chef order is still going and at
      * least one job or trip ended (or its command was given up). A rider who hands an order back leaves a CANCELLED trip and
-     * opens a Borzo or Pidge stage, so an open stage means the order is still being booked. The stored command is what a
-     * Borzo to Pidge handoff books from, so it stays until then too.
+     * opens a Borzo or Pidge stage, so an open stage means the order is still being booked (a blocker), unless it was opened
+     * {@link #STAGE_ABANDONED_DAYS} or more days ago. The stored command is what a Borzo to Pidge handoff books from, so it
+     * stays until then too.
      */
     private static String finished(String chefSubOrder) {
         return "(NOT EXISTS (SELECT 1 FROM fleet_schema.trip_stage fs JOIN fleet_schema.trip fst ON fst.id = fs.trip_id WHERE fst.chef_sub_order_id = "
-            + chefSubOrder + " AND fs.state = 'OPEN') AND NOT EXISTS (SELECT 1 FROM delivery_schema.delivery_job fj WHERE fj.chef_sub_order_id = " + chefSubOrder
+            + chefSubOrder + " AND " + STAGE_GOING + ") AND NOT EXISTS (SELECT 1 FROM delivery_schema.delivery_job fj WHERE fj.chef_sub_order_id = " + chefSubOrder
             + " AND fj.status NOT IN (" + JOB_FINISHED + ")) AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip ft WHERE ft.chef_sub_order_id = "
             + chefSubOrder + " AND ft.replaced_at IS NULL AND ft.state NOT IN (" + TRIP_FINISHED + ")) AND (EXISTS (SELECT 1 FROM delivery_schema.delivery_job fj "
             + "WHERE fj.chef_sub_order_id = " + chefSubOrder + ") OR EXISTS (SELECT 1 FROM fleet_schema.trip ft WHERE ft.chef_sub_order_id = " + chefSubOrder

@@ -10,8 +10,10 @@ import java.util.Set;
 /**
  * Replaces the customer's drop-off (contact name and phone, address lines, landmark, note, postcode, coordinates) in the
  * shapes Craves and its delivery providers keep: Craves' own {@code dropoff} stop, a Borzo order's {@code points} (point 0
- * is the kitchen and stays, the courier is the rider's), a Pidge {@code drop} list and Shiprocket's flat {@code billing_*}
- * fields. The kitchen's pickup, the rider, amounts, ids, statuses and the coarse area, city and state are never touched.
+ * is the kitchen and stays, the courier is the rider's), a Pidge booking's {@code trips[].receiver_detail} (what
+ * PidgeApiClient sends; {@code sender_detail} and {@code poc_detail} are the kitchen and stay) and its quote-style
+ * {@code drop} list, and Shiprocket's flat {@code billing_*} fields. The kitchen's pickup, the rider, amounts, ids, statuses
+ * and the coarse area, city and state are never touched.
  * Placeholders keep a text value text and a number a number, so a second pass changes nothing.
  */
 final class DropoffScrubber {
@@ -52,6 +54,12 @@ final class DropoffScrubber {
                     for (JsonNode drop : value) {
                         changed |= drop.isObject() && pidgeDrop((ObjectNode) drop);
                     }
+                } else if ("trips".equals(name) && value.isArray()) {
+                    for (JsonNode trip : value) {
+                        if (trip.get("receiver_detail") instanceof ObjectNode receiver) {
+                            changed |= pidgeContact(receiver, receiver);
+                        }
+                    }
                 } else if (SHIPROCKET.containsKey(name)) {
                     changed |= text(object, name, SHIPROCKET.get(name));
                     if (object.has("billing_customer_name")) {
@@ -88,11 +96,16 @@ final class DropoffScrubber {
     }
 
     private static boolean pidgeDrop(ObjectNode drop) {
+        return pidgeContact(drop.get("poc_detail") instanceof ObjectNode contact ? contact : null, drop);
+    }
+
+    /** A Pidge person: {@code name} and {@code mobile} on {@code contact}, the address under {@code withAddress.address} (one object in a booking). */
+    private static boolean pidgeContact(ObjectNode contact, ObjectNode withAddress) {
         boolean changed = false;
-        if (drop.get("poc_detail") instanceof ObjectNode contact) {
+        if (contact != null) {
             changed |= text(contact, "name", AccountErasureService.ERASED_NAME) | text(contact, "mobile", AccountErasureService.ERASED_PHONE);
         }
-        if (drop.get("address") instanceof ObjectNode address) {
+        if (withAddress.get("address") instanceof ObjectNode address) {
             for (String key : PIDGE_ADDRESS_TEXT) {
                 changed |= text(address, key, AccountErasureService.ERASED_TEXT);
             }

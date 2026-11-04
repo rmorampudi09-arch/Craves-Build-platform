@@ -3,10 +3,22 @@ package in.craves.integration.erasure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.integration.config.PidgeProperties;
+import in.craves.integration.delivery.pidge.PidgeApiClient;
+import in.craves.integration.delivery.pidge.PidgeBookingRepository;
+import in.craves.integration.delivery.pidge.PidgeTransport;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ShipmentItem;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
+import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /** The customer's drop-off is replaced in the shapes Craves and its delivery providers store; the pickup and the rider are not. */
@@ -98,6 +110,42 @@ class DropoffScrubberTest {
             assertFalse(after.contains(personal), personal + " in " + after);
         }
         assertTrue(after.contains("Hyderabad") && after.contains("craves-drop") && after.contains("\"name\":\"Rider\""), after);
+        assertFalse(DropoffScrubber.scrub(tree));
+    }
+
+    @Test
+    void aPidgeBookingLosesItsReceiverButKeepsTheKitchen() throws Exception {
+        // The body PidgeApiClient really builds and Craves stores: sender_detail and poc_detail are the kitchen,
+        // trips[].receiver_detail is the customer.
+        Stop kitchen = new Stop("Kitchen road 1", "Chef Kitchen", "+918888888888", new BigDecimal("17.4"), new BigDecimal("78.4"),
+            null, null, null, "Kitchen road 1", null, null, "Kondapur", "Hyderabad", "Telangana", "500084", "IN");
+        Stop customer = new Stop("12 Real Street, Flat 4", "Real Person", "+919876543210", new BigDecimal("17.4412345"),
+            new BigDecimal("78.3912345"), null, null, "Gate code 1234", "12 Real Street", "Flat 4", "Near Real Temple", "Madhapur",
+            "Hyderabad", "Telangana", "500081", "IN");
+        QuoteRequest request = new QuoteRequest("Food", 500, false, kitchen, customer,
+            List.of(new ShipmentItem(UUID.randomUUID(), "Meal", new BigDecimal("100"), 1, new BigDecimal("100"))),
+            new BigDecimal("100"), "PREPAID", UUID.randomUUID());
+        PidgeApiClient client = new PidgeApiClient(new PidgeProperties(), mock(PidgeTransport.class), mock(PidgeBookingRepository.class), json);
+        Method buildOrder = PidgeApiClient.class.getDeclaredMethod("buildOrder", String.class, QuoteRequest.class);
+        buildOrder.setAccessible(true);
+        JsonNode tree = parse(buildOrder.invoke(client, "ref-1", request).toString());
+        assertEquals("Real Person", tree.at("/trips/0/receiver_detail/name").asText(), "the fixture is the real shape");
+
+        assertTrue(DropoffScrubber.scrub(tree));
+
+        JsonNode receiver = tree.at("/trips/0/receiver_detail");
+        assertEquals(AccountErasureService.ERASED_NAME, receiver.get("name").asText());
+        assertEquals(AccountErasureService.ERASED_PHONE, receiver.get("mobile").asText());
+        String after = receiver.toString();
+        for (String personal : new String[] {"Real Person", "9876543210", "12 Real Street", "Flat 4", "Real Temple", "Gate code", "500081", "17.44", "78.39"}) {
+            assertFalse(after.contains(personal), personal + " in " + after);
+        }
+        assertEquals("Hyderabad", receiver.at("/address/city").asText());
+        assertEquals("Chef Kitchen", tree.at("/sender_detail/name").asText());
+        assertEquals("8888888888", tree.at("/sender_detail/mobile").asText());
+        assertEquals("Kitchen road 1", tree.at("/sender_detail/address/address_line_1").asText());
+        assertEquals("8888888888", tree.at("/poc_detail/mobile").asText(), "the kitchen's contact person stays");
+        assertEquals("ref-1", tree.at("/trips/0/reference_id").asText());
         assertFalse(DropoffScrubber.scrub(tree));
     }
 

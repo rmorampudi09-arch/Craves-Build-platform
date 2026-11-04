@@ -594,7 +594,7 @@ class AccountDeletionEngineTest {
 
         engine.runOnce(NOW);
 
-        // DeletionNotices sends a one-side completion IN_APP (DeletionNoticesTest).
+        // DeletionNotices sends a one-side completion IN_APP to the remaining side (DeletionNoticesTest).
         verify(notices).completed(request, "synthetic-phone", "synthetic@example.test");
         verify(deletions).recordStep(request.id(), ERASE, "auth", DONE, 1, null, null);
         assertEquals(Map.of("completed_at", NOW), columns(request.id(), ERASING, COMPLETED));

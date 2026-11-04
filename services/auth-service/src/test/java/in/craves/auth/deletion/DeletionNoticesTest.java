@@ -128,12 +128,13 @@ class DeletionNoticesTest {
         notices.reminder(request(Scope.CUSTOMER, null));
         assertEquals(inAppAndPush("CUSTOMER", "Account deletion in 7 days", reminder), drain("reminder", false));
 
+        // A one-side completion goes to the inbox of the side that remains: the erased side's inbox is gone.
         notices.completed(request(Scope.CUSTOMER, null), PHONE, EMAIL);
-        assertEquals(List.of("IN_APP|CUSTOMER|Customer details deleted|Your customer details have been deleted. Your chef account is unchanged."),
+        assertEquals(List.of("IN_APP|CHEF|Customer details deleted|Your customer details have been deleted. Your chef account is unchanged."),
             drain("completed", false));
 
         notices.completed(request(Scope.CHEF, null), PHONE, EMAIL);
-        assertEquals(List.of("IN_APP|CHEF|Chef account deleted|Your chef account has been deleted. You can still order on Craves."),
+        assertEquals(List.of("IN_APP|CUSTOMER|Chef account deleted|Your chef account has been deleted. You can still order on Craves."),
             drain("completed", false));
 
         // A refused, unreachable or unconfigured notification service never reaches the caller,

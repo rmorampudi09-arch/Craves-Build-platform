@@ -70,9 +70,10 @@ public class DeletionNotices {
                 else tell(request, "completed", new String[] {"EMAIL"}, verifiedEmailOrNull, "Craves account deleted",
                     () -> "Your Craves account has been deleted. Thank you for using Craves.");
             }
-            case CUSTOMER -> tell(request, "completed", new String[] {"IN_APP"}, null, "Customer details deleted",
+            // To the inbox of the side that remains: the erased side's inbox has just been erased.
+            case CUSTOMER -> tell(request, "completed", new String[] {"IN_APP"}, "CHEF", null, "Customer details deleted",
                 () -> "Your customer details have been deleted. Your chef account is unchanged.");
-            case CHEF -> tell(request, "completed", new String[] {"IN_APP"}, null, "Chef account deleted",
+            case CHEF -> tell(request, "completed", new String[] {"IN_APP"}, "CUSTOMER", null, "Chef account deleted",
                 () -> "Your chef account has been deleted. You can still order on Craves.");
         }
     }
@@ -82,26 +83,33 @@ public class DeletionNotices {
             "Your Craves account will be deleted on " + DAY.format(request.dueAt()) + ". Open the app and tap Keep my account to stop it.");
     }
 
-    /**
-     * One POST per channel. A whole-account request's in-app notice goes to both roles, one per role with the role in
-     * the request key; its push goes once. The body is built lazily so that a missing date is logged like any other failure.
-     */
+    /** To the side being deleted (CUSTOMER for a whole account). */
     private void tell(DeletionRequest request, String event, String[] channels, String address, String title,
+                      Supplier<String> body) {
+        tell(request, event, channels, request.scope() == Scope.CHEF ? "CHEF" : "CUSTOMER", address, title, body);
+    }
+
+    /**
+     * One POST per channel, to {@code role}. A whole-account request's in-app notice goes to both roles instead, one per role
+     * with the role in the request key; its push goes once. The body is built lazily so that a missing date is logged like
+     * any other failure.
+     */
+    private void tell(DeletionRequest request, String event, String[] channels, String role, String address, String title,
                       Supplier<String> body) {
         for (String channel : channels) {
             boolean perRole = request.scope() == Scope.ALL && "IN_APP".equals(channel);
             // The inboxes are per role. Push is once: one token per device serves both sides. Email ignores the role.
-            for (String role : perRole ? List.of("CUSTOMER", "CHEF") : List.of(request.scope() == Scope.CHEF ? "CHEF" : "CUSTOMER")) {
+            for (String inbox : perRole ? List.of("CUSTOMER", "CHEF") : List.of(role)) {
                 try {
                     String text = body.get();
                     if (text == null || text.isBlank()) text = title;
-                    send(request, event, channel, perRole, role, address, title, text);
+                    send(request, event, channel, perRole, inbox, address, title, text);
                 } catch (Exception error) {
                     if (error instanceof InterruptedException) Thread.currentThread().interrupt();
                     // Only our own codes carry a message; anything else is named by its class so no address can leak.
                     Throwable cause = error instanceof ExecutionException && error.getCause() != null ? error.getCause() : error;
                     log.warn("Account deletion notice not sent requestId={} event={} channel={} role={} error={}", request.id(), event,
-                        channel, role, cause instanceof IllegalStateException ? cause.getMessage() : cause.getClass().getSimpleName());
+                        channel, inbox, cause instanceof IllegalStateException ? cause.getMessage() : cause.getClass().getSimpleName());
                 }
             }
         }

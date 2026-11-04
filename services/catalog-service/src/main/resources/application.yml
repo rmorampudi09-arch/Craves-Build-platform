@@ -84,3 +84,8 @@ craves:
     max-attempts: ${CRAVES_PICKUP_PROVISIONING_MAX_ATTEMPTS:12}
     stale-minutes: ${CRAVES_PICKUP_PROVISIONING_STALE_MINUTES:5}
     fixed-delay-ms: ${CRAVES_PICKUP_PROVISIONING_FIXED_DELAY_MS:15000}
+
+# Handbook 099: every log line carries the request's X-Correlation-ID (MDC key correlationId, set by CorrelationIdConfiguration).
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "

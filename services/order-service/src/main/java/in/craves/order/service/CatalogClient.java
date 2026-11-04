@@ -18,6 +18,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class CatalogClient {
     private static final String INTERNAL_HEADER = "X-Craves-Internal-Key";
+    /** Catalog's PublicMenuBatchResolveService limit. */
+    static final int RESOLVE_BATCH = 100;
 
     private final RestClient restClient;
     private final String internalAccessValue;
@@ -67,13 +69,20 @@ public class CatalogClient {
             return List.of();
         }
         String internalKey = requireInternalAccess();
-        List<ResolvedCatalogMenuItem> items = restClient.post()
-            .uri("/internal/menu-items/resolve")
-            .header(INTERNAL_HEADER, internalKey)
-            .body(new ResolveMenuItemsRequest(menuItemIds))
-            .retrieve()
-            .body(new ParameterizedTypeReference<List<ResolvedCatalogMenuItem>>() { });
-        return items == null ? List.of() : List.copyOf(items);
+        // Catalog resolves at most RESOLVE_BATCH ids per call, while a cart can hold more dishes.
+        List<ResolvedCatalogMenuItem> items = new java.util.ArrayList<>();
+        for (int from = 0; from < menuItemIds.size(); from += RESOLVE_BATCH) {
+            List<ResolvedCatalogMenuItem> batch = restClient.post()
+                .uri("/internal/menu-items/resolve")
+                .header(INTERNAL_HEADER, internalKey)
+                .body(new ResolveMenuItemsRequest(menuItemIds.subList(from, Math.min(from + RESOLVE_BATCH, menuItemIds.size()))))
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<ResolvedCatalogMenuItem>>() { });
+            if (batch != null) {
+                items.addAll(batch);
+            }
+        }
+        return List.copyOf(items);
     }
 
     public CatalogKitchen getKitchen(UUID kitchenId) {

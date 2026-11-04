@@ -19,7 +19,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -77,21 +76,25 @@ class DeletionNoticesTest {
             Instant.parse("2026-11-03T10:00:00Z"), DUE, null, null, reviewNote, null, null, null, null, null, null, null);
     }
 
-    /** Takes what the server has received so far as "CHANNEL|title|body" lines after checking the fields every notice shares. */
-    List<String> drain(String event, String role) {
+    /**
+     * Takes what the server has received so far as "CHANNEL|ROLE|title|body" lines after checking the fields every notice
+     * shares. {@code perRole} is whether the request key carries the role (whole-account in-app and push notices only).
+     */
+    List<String> drain(String event, boolean perRole) {
         List<String> lines = new ArrayList<>();
         for (JsonNode post : posts) {
             String channel = post.get("channel").asText();
+            String role = post.get("userRole").asText();
             String type = "ACCOUNT_DELETION_" + event.toUpperCase();
-            assertEquals("account-deletion:" + requestId + ":" + event + ":" + channel, post.get("requestKey").asText());
+            assertEquals("account-deletion:" + requestId + ":" + event + ":" + channel + (perRole ? ":" + role : ""),
+                post.get("requestKey").asText());
             assertEquals("auth", post.get("sourceService").asText());
             assertEquals(type, post.get("eventType").asText());
             assertEquals(type + "_" + channel, post.get("templateCode").asText());
             assertEquals(identityId.toString(), post.get("userId").asText());
-            assertEquals(role, post.get("userRole").asText());
             assertEquals("ACCOUNT_DELETION", post.get("targetType").asText());
             assertEquals(requestId.toString(), post.get("targetId").asText());
-            lines.add(channel + "|" + post.get("title").asText() + "|" + post.get("body").asText());
+            lines.add(channel + "|" + role + "|" + post.get("title").asText() + "|" + post.get("body").asText());
         }
         assertEquals(posts.size(), keys.stream().filter("notification-credential"::equals).count());
         assertEquals(posts.size(), paths.stream().filter("POST /internal/v1/notifications"::equals).count());
@@ -99,38 +102,38 @@ class DeletionNoticesTest {
         return lines;
     }
 
+    static List<String> inAppAndPush(String role, String title, String body) {
+        return List.of("IN_APP|" + role + "|" + title + "|" + body, "PUSH|" + role + "|" + title + "|" + body);
+    }
+
     @Test void noticesUseTheCopyTableAndNeverThrow() throws Exception {
         String scheduled = "Your Craves account will be deleted on 3 Dec. Open the app and tap Keep my account to stop it.";
+        String sent = "Craves will finish it once your payouts are settled.";
+        String reminder = "Your Craves account will be deleted on 3 Dec. Tap Keep my account if you want to keep it.";
 
         notices.requested(request(Scope.CUSTOMER, null), false);
-        assertEquals(List.of("IN_APP|Account deletion scheduled|" + scheduled, "PUSH|Account deletion scheduled|" + scheduled),
-            drain("requested", "CUSTOMER"));
+        assertEquals(inAppAndPush("CUSTOMER", "Account deletion scheduled", scheduled), drain("requested", false));
 
         notices.requested(request(Scope.CHEF, null), true);
-        String sent = "Craves will finish it once your payouts are settled.";
-        assertEquals(List.of("IN_APP|Deletion request sent|" + sent, "PUSH|Deletion request sent|" + sent),
-            drain("requested", "CHEF"));
+        assertEquals(inAppAndPush("CHEF", "Deletion request sent", sent), drain("requested", false));
 
         notices.approved(request(Scope.CHEF, null));
-        assertEquals(List.of("IN_APP|Account deletion scheduled|" + scheduled, "PUSH|Account deletion scheduled|" + scheduled),
-            drain("approved", "CHEF"));
+        assertEquals(inAppAndPush("CHEF", "Account deletion scheduled", scheduled), drain("approved", false));
 
-        notices.rejected(request(Scope.ALL, "Please settle your payouts first."));
-        assertEquals(List.of("IN_APP|Deletion request not approved|Please settle your payouts first.",
-            "PUSH|Deletion request not approved|Please settle your payouts first."), drain("rejected", "CUSTOMER"));
+        notices.rejected(request(Scope.CUSTOMER, "Please settle your payouts first."));
+        assertEquals(inAppAndPush("CUSTOMER", "Deletion request not approved", "Please settle your payouts first."),
+            drain("rejected", false));
 
         notices.reminder(request(Scope.CUSTOMER, null));
-        String reminder = "Your Craves account will be deleted on 3 Dec. Tap Keep my account if you want to keep it.";
-        assertEquals(List.of("IN_APP|Account deletion in 7 days|" + reminder, "PUSH|Account deletion in 7 days|" + reminder),
-            drain("reminder", "CUSTOMER"));
+        assertEquals(inAppAndPush("CUSTOMER", "Account deletion in 7 days", reminder), drain("reminder", false));
 
         notices.completed(request(Scope.CUSTOMER, null), PHONE, EMAIL);
-        assertEquals(List.of("IN_APP|Customer details deleted|Your customer details have been deleted. Your chef account is unchanged."),
-            drain("completed", "CUSTOMER"));
+        assertEquals(List.of("IN_APP|CUSTOMER|Customer details deleted|Your customer details have been deleted. Your chef account is unchanged."),
+            drain("completed", false));
 
         notices.completed(request(Scope.CHEF, null), PHONE, EMAIL);
-        assertEquals(List.of("IN_APP|Chef account deleted|Your chef account has been deleted. You can still order on Craves."),
-            drain("completed", "CHEF"));
+        assertEquals(List.of("IN_APP|CHEF|Chef account deleted|Your chef account has been deleted. You can still order on Craves."),
+            drain("completed", false));
 
         // A refused, unreachable or unconfigured notification service never reaches the caller,
         // and what is logged holds the request id but no contact details.
@@ -160,17 +163,53 @@ class DeletionNoticesTest {
         }
     }
 
-    @Test void completedAllSendsSmsAndEmailOnlyWhenVerified() {
+    @Test void wholeAccountNoticesGoToBothRolesWithOneKeyPerRole() {
+        String scheduled = "Your Craves account will be deleted on 3 Dec. Open the app and tap Keep my account to stop it.";
+        String sent = "Craves will finish it once your payouts are settled.";
+        String reminder = "Your Craves account will be deleted on 3 Dec. Tap Keep my account if you want to keep it.";
+        String note = "Please settle your payouts first.";
+
+        notices.requested(request(Scope.ALL, null), false);
+        assertBothRoles(drain("requested", true), "Account deletion scheduled", scheduled);
+        notices.requested(request(Scope.ALL, null), true);
+        assertBothRoles(drain("requested", true), "Deletion request sent", sent);
+        notices.approved(request(Scope.ALL, null));
+        assertBothRoles(drain("approved", true), "Account deletion scheduled", scheduled);
+        notices.rejected(request(Scope.ALL, note));
+        assertBothRoles(drain("rejected", true), "Deletion request not approved", note);
+        notices.reminder(request(Scope.ALL, null));
+        assertBothRoles(drain("reminder", true), "Account deletion in 7 days", reminder);
+    }
+
+    /** One notice per channel and role, so the request keys are all different. */
+    static void assertBothRoles(List<String> lines, String title, String body) {
+        assertEquals(List.of("IN_APP|CUSTOMER|", "IN_APP|CHEF|", "PUSH|CUSTOMER|", "PUSH|CHEF|").stream().map(l -> l + title + "|" + body).toList(),
+            lines);
+    }
+
+    @Test void completedAllSendsEmailOnlyWhenVerifiedAndNeverSms() {
         String body = "Your Craves account has been deleted. Thank you for using Craves.";
         notices.completed(request(Scope.ALL, null), PHONE, EMAIL);
-        List<JsonNode> both = new ArrayList<>(posts);
-        assertEquals(List.of("SMS|Craves account deleted|" + body, "EMAIL|Craves account deleted|" + body),
-            drain("completed", "CUSTOMER"));
-        assertEquals(PHONE, both.get(0).get("address").asText());
-        assertEquals(EMAIL, both.get(1).get("address").asText());
+        List<JsonNode> sent = new ArrayList<>(posts);
+        assertEquals(List.of("EMAIL|CUSTOMER|Craves account deleted|" + body), drain("completed", false));
+        assertEquals(EMAIL, sent.get(0).get("address").asText());
 
-        notices.completed(request(Scope.ALL, null), PHONE, null);
-        assertEquals(List.of("SMS|Craves account deleted|" + body), drain("completed", "CUSTOMER"));
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        var logger = (Logger) LoggerFactory.getLogger(DeletionNotices.class);
+        logger.addAppender(appender);
+        logger.setAdditive(false);
+        try {
+            notices.completed(request(Scope.ALL, null), PHONE, null);
+            notices.completed(request(Scope.ALL, null), PHONE, " ");
+        } finally { logger.detachAppender(appender); logger.setAdditive(true); }
+        assertTrue(posts.isEmpty(), "no SMS, and no email without a verified address");
+        assertEquals(2, appender.list.size());
+        for (ILoggingEvent event : appender.list) {
+            assertEquals(ch.qos.logback.classic.Level.INFO, event.getLevel());
+            assertTrue(event.getFormattedMessage().contains(requestId.toString()), event.getFormattedMessage());
+            assertFalse(event.getFormattedMessage().contains(PHONE), event.getFormattedMessage());
+        }
     }
 
     static int closedPort() throws Exception {

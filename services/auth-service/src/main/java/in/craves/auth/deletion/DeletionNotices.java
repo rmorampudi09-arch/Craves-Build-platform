@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -63,10 +64,11 @@ public class DeletionNotices {
     public void completed(DeletionRequest request, String phone, String verifiedEmailOrNull) {
         switch (request.scope()) {
             case ALL -> {
-                String body = "Your Craves account has been deleted. Thank you for using Craves.";
-                tell(request, "completed", new String[] {"SMS"}, phone, "Craves account deleted", () -> body);
-                if (verifiedEmailOrNull != null)
-                    tell(request, "completed", new String[] {"EMAIL"}, verifiedEmailOrNull, "Craves account deleted", () -> body);
+                // No SMS (so phone is unused): notification-service refuses transactional SMS today; the final notice is email, if verified.
+                if (verifiedEmailOrNull == null || verifiedEmailOrNull.isBlank())
+                    log.info("Account deletion final notice not sent requestId={} no verified email", request.id());
+                else tell(request, "completed", new String[] {"EMAIL"}, verifiedEmailOrNull, "Craves account deleted",
+                    () -> "Your Craves account has been deleted. Thank you for using Craves.");
             }
             case CUSTOMER -> tell(request, "completed", new String[] {"IN_APP"}, null, "Customer details deleted",
                 () -> "Your customer details have been deleted. Your chef account is unchanged.");
@@ -80,36 +82,41 @@ public class DeletionNotices {
             "Your Craves account will be deleted on " + DAY.format(request.dueAt()) + ". Open the app and tap Keep my account to stop it.");
     }
 
-    /** One POST per channel. The body is built lazily so that a missing date is logged like any other failure. */
+    /**
+     * One POST per channel. A whole-account request's in-app and push notices go to both roles, one per role with the
+     * role in the request key. The body is built lazily so that a missing date is logged like any other failure.
+     */
     private void tell(DeletionRequest request, String event, String[] channels, String address, String title,
                       Supplier<String> body) {
         for (String channel : channels) {
-            try {
-                String text = body.get();
-                if (text == null || text.isBlank()) text = title;
-                send(request, event, channel, address, title, text);
-            } catch (Exception error) {
-                if (error instanceof InterruptedException) Thread.currentThread().interrupt();
-                // Only our own codes carry a message; anything else is named by its class so no address can leak.
-                Throwable cause = error instanceof ExecutionException && error.getCause() != null ? error.getCause() : error;
-                log.warn("Account deletion notice not sent requestId={} event={} channel={} error={}", request.id(), event, channel,
-                    cause instanceof IllegalStateException ? cause.getMessage() : cause.getClass().getSimpleName());
+            boolean perRole = request.scope() == Scope.ALL && ("IN_APP".equals(channel) || "PUSH".equals(channel));
+            // The in-app inbox is filtered by role; address notices (email) ignore it.
+            for (String role : perRole ? List.of("CUSTOMER", "CHEF") : List.of(request.scope() == Scope.CHEF ? "CHEF" : "CUSTOMER")) {
+                try {
+                    String text = body.get();
+                    if (text == null || text.isBlank()) text = title;
+                    send(request, event, channel, perRole, role, address, title, text);
+                } catch (Exception error) {
+                    if (error instanceof InterruptedException) Thread.currentThread().interrupt();
+                    // Only our own codes carry a message; anything else is named by its class so no address can leak.
+                    Throwable cause = error instanceof ExecutionException && error.getCause() != null ? error.getCause() : error;
+                    log.warn("Account deletion notice not sent requestId={} event={} channel={} role={} error={}", request.id(), event,
+                        channel, role, cause instanceof IllegalStateException ? cause.getMessage() : cause.getClass().getSimpleName());
+                }
             }
         }
     }
 
-    private void send(DeletionRequest request, String event, String channel, String address, String title, String body)
-        throws Exception {
+    private void send(DeletionRequest request, String event, String channel, boolean perRole, String role, String address,
+                      String title, String body) throws Exception {
         AccountDeletionProperties.Service notification = properties.getServices().get("notification");
         if (notification == null || notification.getBaseUrl().isBlank() || notification.getCredential().isBlank())
             throw new IllegalStateException("NOT_CONFIGURED");
         if (("SMS".equals(channel) || "EMAIL".equals(channel)) && (address == null || address.isBlank()))
             throw new IllegalStateException("NO_ADDRESS");
         String type = "ACCOUNT_DELETION_" + event.toUpperCase(Locale.ROOT);
-        // The in-app inbox is filtered by role; a whole-account request is shown in the customer inbox.
-        String role = request.scope() == Scope.CHEF ? "CHEF" : "CUSTOMER";
         byte[] json = MAPPER.writeValueAsBytes(new Notice(
-            "account-deletion:" + request.id() + ":" + event + ":" + channel, "auth", type, request.identityId(), role,
+            "account-deletion:" + request.id() + ":" + event + ":" + channel + (perRole ? ":" + role : ""), "auth", type, request.identityId(), role,
             channel, type + "_" + channel, address, title, body, "ACCOUNT_DELETION", request.id()));
         HttpRequest post = HttpRequest.newBuilder(URI.create(notification.getBaseUrl()).resolve("/internal/v1/notifications"))
             .timeout(properties.getCallTimeout()).header("Content-Type", "application/json")
@@ -119,7 +126,8 @@ public class DeletionNotices {
         try {
             int status = pending.get(properties.getCallTimeout().toMillis() + 1000, TimeUnit.MILLISECONDS).statusCode();
             if (status / 100 != 2)
-                log.warn("Account deletion notice refused requestId={} event={} channel={} status={}", request.id(), event, channel, status);
+                log.warn("Account deletion notice refused requestId={} event={} channel={} role={} status={}", request.id(), event,
+                    channel, role, status);
         } finally {
             if (!pending.isDone()) pending.cancel(true);
         }

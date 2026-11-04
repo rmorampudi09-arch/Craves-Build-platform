@@ -195,7 +195,7 @@ Notice copy (dates `d MMM` in Asia/Kolkata, e.g. "3 Dec"):
 - Rules:
   - `request`:
     - same open scope → 200 with it; another open scope → 409 `ACCOUNT_DELETION_ALREADY_REQUESTED`;
-    - `CHEF` without the CHEF role, or `ALL` with the RIDER role → 409 `ACCOUNT_DELETION_SCOPE_NOT_ALLOWED`;
+    - `CHEF` without the CHEF role, `ALL` with the RIDER role, or `CUSTOMER` with neither CHEF nor RIDER (a customer-only account asks for `ALL`; final-review ruling F4) → 409 `ACCOUNT_DELETION_SCOPE_NOT_ALLOWED`;
     - otherwise insert as `PENDING_REVIEW` (Decision 4) or as `SCHEDULED` with `due_at = now + waitDays`;
     - insert `PREPARE` steps for all 8 services (`runAfter = now`), `token_version + 1`, commit, then `notices.requested`;
     - 201.

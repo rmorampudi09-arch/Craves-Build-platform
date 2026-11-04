@@ -29,6 +29,8 @@ import {
 import {Icon} from '../../../shared/components/Icon';
 import {IconButton} from '../../../shared/components/IconButton';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {deletionCopy} from '../../accountDeletion/domain/deletionCopy';
+import {useLatestDeletion} from '../../accountDeletion/query/useLatestDeletion';
 import {firebaseAuth} from '../../auth/firebase/firebaseAuth';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
 import {CustomerReferralScreen} from '../../referralsV2/screens/CustomerReferralScreens';
@@ -179,9 +181,10 @@ export function CustomerSettingsNotificationsScreen() {
 export function CustomerSettingsPrivacySecurityScreen() {
   const navigation = useNavigation<SettingsNavigation>();
   const {loggingOut, logout} = useConfirmLogout();
+  const {showRow} = useLatestDeletion();
 
   return (
-    <ChildScaffold title="Privacy & security" subtitle="Password and sign-out">
+    <ChildScaffold title="Privacy & security" subtitle={deletionCopy.row.privacySubtitle}>
       <View style={styles.card}>
         <ActionRow
           title="Change password"
@@ -202,6 +205,21 @@ export function CustomerSettingsPrivacySecurityScreen() {
           title="Other devices"
           body="Logging out your other phones from here is coming soon."
         />
+      ) : null}
+      {showRow ? (
+        <>
+          <Text accessibilityRole="header" style={styles.sectionLabel}>
+            {deletionCopy.row.customerSection}
+          </Text>
+          <View style={styles.card}>
+            <ActionRow
+              title={deletionCopy.row.customerTitle}
+              subtitle={deletionCopy.row.customerSubtitle}
+              destructive
+              onPress={() => navigation.navigate('CustomerSettingsDeleteAccount')}
+            />
+          </View>
+        </>
       ) : null}
     </ChildScaffold>
   );
@@ -409,6 +427,7 @@ const styles = StyleSheet.create({
   rowTitle: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.semibold},
   rowSubtitle: {marginTop: 3, color: colors.textSecondary, fontSize: typography.small},
   divider: {height: borderWidth.standard, marginLeft: spacing.md, backgroundColor: colors.border},
+  sectionLabel: {color: colors.textSecondary, fontSize: typography.tiny, fontWeight: fontWeight.semibold, textTransform: 'uppercase'},
   dangerText: {color: colors.flameRedAccessible},
   notice: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
   noticeCopy: {minWidth: 0, flex: 1},

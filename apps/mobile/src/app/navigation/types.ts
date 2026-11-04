@@ -105,6 +105,7 @@ export type CustomerSettingsChildStackParamList = {
   CustomerSettingsNotifications: undefined;
   CustomerSettingsPrivacySecurity: undefined;
   CustomerSettingsChangePassword: undefined;
+  CustomerSettingsDeleteAccount: undefined;
   CustomerSettingsLanguage: undefined;
   CustomerSettingsAppearance: undefined;
   CustomerSettingsAbout: undefined;
@@ -184,6 +185,7 @@ export type ChefProfileStackParamList = {
   ChefScheduledOrders: undefined;
   ChefReviews: undefined;
   ChefSecurity: undefined;
+  ChefDeleteAccount: undefined;
   ChefBankAccount: {from?: 'earnings' | 'home'} | undefined;
   ChefEditProfile: undefined;
 };

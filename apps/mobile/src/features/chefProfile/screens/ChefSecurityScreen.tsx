@@ -1,9 +1,11 @@
 import React from 'react';
 import {StyleSheet, Text} from 'react-native';
 import {useNavigation, type NavigationProp} from '@react-navigation/native';
-import type {ChefProductStackParamList} from '../../../app/navigation/types';
+import type {ChefProfileStackParamList} from '../../../app/navigation/types';
 import {useAppSelector} from '../../../app/store/hooks';
 import {colors, spacing, textDefaults, typography} from '../../../design/tokens';
+import {deletionCopy} from '../../accountDeletion/domain/deletionCopy';
+import {useLatestDeletion} from '../../accountDeletion/query/useLatestDeletion';
 import {ChefScreen, ChefTopBar, ListGroup, ListRow, StatusChip} from '../../chefShell/components/ui';
 
 /** `+91 ••••• 43210`: the country code and the last five digits. */
@@ -21,8 +23,9 @@ function maskEmail(email: string): string {
 
 /** Login & security: what the chef logs in with, and the two account actions. */
 export function ChefSecurityScreen() {
-  const navigation = useNavigation<NavigationProp<ChefProductStackParamList>>();
+  const navigation = useNavigation<NavigationProp<ChefProfileStackParamList>>();
   const identity = useAppSelector(state => state.auth.identity);
+  const {showRow} = useLatestDeletion();
 
   return (
     <ChefScreen
@@ -55,13 +58,15 @@ export function ChefSecurityScreen() {
           subtitle="If you lost a phone or shared your login"
           title="Log out of other devices"
         />
-        <ListRow
-          destructive
-          icon="trash"
-          onPress={() => navigation.navigate('ChefSupportTicket', {topic: 'Delete my account'})}
-          subtitle="Asks Craves support to close your account"
-          title="Delete my account"
-        />
+        {showRow ? (
+          <ListRow
+            destructive
+            icon="trash"
+            onPress={() => navigation.navigate('ChefDeleteAccount')}
+            subtitle={deletionCopy.row.chefSubtitle}
+            title={deletionCopy.row.chefTitle}
+          />
+        ) : null}
       </ListGroup>
       <Text allowFontScaling={textDefaults.allowFontScaling} style={styles.note}>
         To change your mobile number, contact support. You log in with a one-time code, so there's no password to manage.

@@ -3,6 +3,7 @@
 # See docs/runbooks/live-runtime-safety.md.
 in.craves.catalog.banners.AdminHomeBannerController
 in.craves.catalog.banners.PublicHomeBannerController
+in.craves.catalog.web.AdminKitchenSuspensionController
 in.craves.catalog.web.FavoriteHomeFeedController
 in.craves.catalog.web.InternalAccountErasureController
 in.craves.catalog.web.InternalCatalogController

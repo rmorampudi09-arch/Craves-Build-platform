@@ -15,7 +15,7 @@ export const PROVIDER = /^[a-z0-9_-]{1,80}$/;
 /** The reason travels in the X-Admin-Reason header, so printable ASCII only; integration-service wants 10 to 500 characters. */
 export const ADMIN_REASON = /^[\x20-\x7E]{10,500}$/;
 // Display only, so any UUID version the database holds is accepted.
-const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+export const uuid = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 const instant = z.string().datetime({ offset: true });
 const text = (max: number) => z.string().max(max).nullable();
 
@@ -51,4 +51,22 @@ export function deadLetterError(status: number): { code: string; message: string
   const code = status === 404 ? "DEAD_LETTER_CONSOLE_OFF" : status === 401 ? "AUTHENTICATION_REQUIRED" : status === 403 ? "ADMIN_ROLE_REQUIRED"
     : status === 400 ? "INVALID_REQUEST" : "DEAD_LETTERS_UNAVAILABLE";
   return { code, message: MESSAGES[status] ?? "The integration service is unavailable. Try again shortly." };
+}
+
+/** Handbook 105 retry: only a dead-lettered delivery webhook, one more attempt (POST …/dead-letters/{id}/retry). */
+export const retryQuerySchema = z.object({ id: uuid, source: z.literal("DELIVERY_WEBHOOK") }).strict();
+
+const RETRY_MESSAGES: Record<number, string> = {
+  400: "Check the record and the reason (10 to 500 plain characters), then try again.",
+  401: "Your session has ended. Sign in again.",
+  403: "Retrying needs a platform or operations admin.",
+  // 404 for an unknown record too, but the console only offers records it has just listed.
+  404: "Retrying is switched off or not set up yet. A platform admin turns it on with CRAVES_DEAD_LETTER_RETRY_ENABLED (with CRAVES_DEAD_LETTER_CONSOLE_ENABLED) on the integration app and runs scripts/apim/configure-dead-letters-admin-apim.sh once.",
+  409: "This record cannot be retried now: it is no longer dead-lettered, or delivery webhook processing is switched off. Refresh the list.",
+};
+
+/** A fixed message per status, as for the listing. */
+export function deadLetterRetryError(status: number): { code: string; message: string } {
+  const code = status === 404 ? "DEAD_LETTER_RETRY_OFF" : status === 409 ? "RETRY_NOT_POSSIBLE" : deadLetterError(status).code;
+  return { code, message: RETRY_MESSAGES[status] ?? "The integration service is unavailable. Try again shortly." };
 }

@@ -70,6 +70,7 @@ const CURRENT_IMMERSIVE_ROUTES: ReadonlySet<RegisteredRouteName> = new Set([
   'CustomerSettings',
   'CustomerSettingsNotifications',
   'CustomerSettingsPrivacySecurity',
+  'CustomerSettingsDeleteAccount',
   'CustomerSettingsChangePassword',
   'CustomerSettingsLanguage',
   'CustomerSettingsAppearance',

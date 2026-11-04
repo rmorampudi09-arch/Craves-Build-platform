@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import {useNavigation, useRoute, type RouteProp} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {CustomerProfileStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch} from '../../../app/store/hooks';
 import {
@@ -26,6 +27,7 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
+import {getBottomActionPadding} from '../../../design/responsive';
 import {Icon} from '../../../shared/components/Icon';
 import {IconButton} from '../../../shared/components/IconButton';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
@@ -48,6 +50,8 @@ interface ChildScaffoldProps {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
+  /** Pinned white dock under the scrolling content, for the screen's main button. */
+  footer?: React.ReactNode;
 }
 
 /** Asks first, then signs this phone out. Shared by Settings and Privacy & security. */
@@ -78,8 +82,13 @@ export function useConfirmLogout() {
   return {loggingOut, logout};
 }
 
+function FooterDock({children}: {children: React.ReactNode}) {
+  const {bottom} = useSafeAreaInsets();
+  return <View style={[styles.footer, {paddingBottom: getBottomActionPadding(bottom)}]}>{children}</View>;
+}
+
 // These routes are immersive (navigationPolicy), so the bottom menu hides itself; never set tabBarStyle here.
-function ChildScaffold({title, subtitle, children}: ChildScaffoldProps) {
+export function ChildScaffold({title, subtitle, children, footer}: ChildScaffoldProps) {
   const navigation = useNavigation<SettingsNavigation>();
   return (
     <ScreenShell
@@ -104,6 +113,7 @@ function ChildScaffold({title, subtitle, children}: ChildScaffoldProps) {
             {children}
           </View>
         </ScrollView>
+        {footer ? <FooterDock>{footer}</FooterDock> : null}
       </KeyboardAvoidingView>
     </ScreenShell>
   );
@@ -414,6 +424,7 @@ const styles = StyleSheet.create({
   headerSubtitle: {color: colors.textSecondary, fontSize: typography.small},
   scrollContent: {flexGrow: 1, paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.xxl},
   content: {width: '100%', maxWidth: 640, alignSelf: 'center', gap: spacing.md},
+  footer: {gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm, backgroundColor: colors.white, borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
   card: {
     overflow: 'hidden',
     borderRadius: radius.lg,

@@ -34,6 +34,7 @@ describe('navigationPolicy', () => {
       'CustomerDishIngredients',
       'CustomerKitchenProfile',
       'CustomerSupportChat',
+      'CustomerSettingsDeleteAccount',
     ] as const) {
       expect(isCurrentImmersiveRoute(routeName)).toBe(true);
       expect(resolveRouteChromePolicy('Customer', routeName)).toEqual({

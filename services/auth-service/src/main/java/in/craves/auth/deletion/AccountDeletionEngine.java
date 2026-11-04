@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -228,11 +227,8 @@ public class AccountDeletionEngine {
             }
         }
         for (String service : AccountErasureClient.ERASE_ORDER) {
-            ServiceCall answer = client.blockers(service, request.identityId(), request.scope());
             // A refusal (BLOCKED) keeps its reasons; only a failed call, or a refusal giving none, counts as no answer.
-            boolean answered = answer.outcome() == Outcome.DONE || (answer.outcome() == Outcome.BLOCKED && !answer.blockers().isEmpty());
-            if (answered) blockers.addAll(answer.blockers());
-            else blockers.add(new Blocker(service, "SERVICE_UNREACHABLE", Objects.requireNonNullElse(answer.error(), answer.outcome().name())));
+            blockers.addAll(client.blockers(service, request.identityId(), request.scope()).asBlockers(service));
         }
         if (blockers.isEmpty()) lockAndScheduleErase(request);
         else waitOn(request, blockers);

@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -181,8 +180,8 @@ public class AccountDeletionService {
     }
 
     /**
-     * What each of the 8 services says is open for this person, in {@link AccountErasureClient#ERASE_ORDER}. A service that
-     * did not answer shows as SERVICE_UNREACHABLE, as in the worker (a refusal that gives no reasons counts as no answer). The
+     * What each of the 8 services says is open for this person, in {@link AccountErasureClient#ERASE_ORDER}, by the same rule
+     * as the worker ({@link ServiceCall#asBlockers}): a service that did not answer shows as SERVICE_UNREACHABLE. The
      * services are asked together, so a hung one costs one timeout, not eight. Never call this inside a transaction.
      */
     public List<Blocker> blockers(UUID identityId, Scope scope) {
@@ -194,13 +193,7 @@ public class AccountDeletionService {
             answers = pending.stream().map(CompletableFuture::join).toList();
         }
         List<Blocker> blockers = new ArrayList<>();
-        for (int i = 0; i < services.size(); i++) {
-            ServiceCall answer = answers.get(i);
-            boolean answered = answer.outcome() == AccountErasureClient.Outcome.DONE
-                || (answer.outcome() == AccountErasureClient.Outcome.BLOCKED && !answer.blockers().isEmpty());
-            if (answered) blockers.addAll(answer.blockers());
-            else blockers.add(new Blocker(services.get(i), "SERVICE_UNREACHABLE", Objects.requireNonNullElse(answer.error(), answer.outcome().name())));
-        }
+        for (int i = 0; i < services.size(); i++) blockers.addAll(answers.get(i).asBlockers(services.get(i)));
         return blockers;
     }
 

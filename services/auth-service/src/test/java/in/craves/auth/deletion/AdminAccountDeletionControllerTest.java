@@ -152,7 +152,7 @@ class AdminAccountDeletionControllerTest {
         var c = row(RequestStatus.PENDING_REVIEW, Scope.CHEF, UUID.randomUUID(), NOW.minusSeconds(100), null);
         when(deletions.page(null, null, null, 3)).thenReturn(List.of(a, b, c));
 
-        ResponseEntity<Page> first = controller.list(as("SUPPORT_ADMIN"), null, null, 2, REASON, correlation.toString());
+        ResponseEntity<Page> first = controller.list(as("SUPPORT_ADMIN"), null, null, 2, correlation.toString());
 
         assertThat(first.getBody().items()).extracting(AdminAccountDeletionController.Summary::requestId).containsExactly(a.id(), b.id());
         assertThat(first.getBody().items().get(1).status()).isEqualTo("SCHEDULED");
@@ -161,7 +161,7 @@ class AdminAccountDeletionControllerTest {
         assertThat(first.getHeaders().getCacheControl()).isEqualTo("no-store");
 
         when(deletions.page(null, b.requestedAt(), b.id(), 3)).thenReturn(List.of(c));
-        Page second = controller.list(as("SUPPORT_ADMIN"), null, first.getBody().nextCursor(), 2, REASON, null).getBody();
+        Page second = controller.list(as("SUPPORT_ADMIN"), null, first.getBody().nextCursor(), 2, null).getBody();
 
         assertThat(second.items()).extracting(AdminAccountDeletionController.Summary::requestId).containsExactly(c.id());
         assertThat(second.nextCursor()).isNull();
@@ -171,22 +171,20 @@ class AdminAccountDeletionControllerTest {
     void theQueueFiltersByStatusDefaultsTo25AndCapsAt100() {
         when(deletions.page(any(), any(), any(), anyInt())).thenReturn(List.of());
 
-        controller.list(as("AUDIT_ADMIN"), "WAITING_ON_OPEN_ITEMS", null, null, REASON, null);
-        controller.list(as("AUDIT_ADMIN"), null, null, 5000, REASON, null);
+        controller.list(as("AUDIT_ADMIN"), "WAITING_ON_OPEN_ITEMS", null, null, null);
+        controller.list(as("AUDIT_ADMIN"), null, null, 5000, null);
 
         verify(deletions).page(RequestStatus.WAITING_ON_OPEN_ITEMS, null, null, 26);
         verify(deletions).page(null, null, null, 101);
     }
 
     @Test
-    void theQueueRefusesBadStatusCursorAndReasonBeforeReadingAnything() {
-        assertRefused(() -> controller.list(as("AUDIT_ADMIN"), "DONE", null, null, REASON, null), HttpStatus.BAD_REQUEST, "ACCOUNT_DELETION_QUERY_INVALID");
-        assertRefused(() -> controller.list(as("AUDIT_ADMIN"), null, "not-a-cursor", null, REASON, null), HttpStatus.BAD_REQUEST, "ACCOUNT_DELETION_QUERY_INVALID");
+    void theQueueRefusesBadStatusCursorAndCorrelationIdBeforeReadingAnything() {
+        assertRefused(() -> controller.list(as("AUDIT_ADMIN"), "DONE", null, null, null), HttpStatus.BAD_REQUEST, "ACCOUNT_DELETION_QUERY_INVALID");
+        assertRefused(() -> controller.list(as("AUDIT_ADMIN"), null, "not-a-cursor", null, null), HttpStatus.BAD_REQUEST, "ACCOUNT_DELETION_QUERY_INVALID");
         String noId = Base64.getUrlEncoder().withoutPadding().encodeToString((NOW + "|nope").getBytes(StandardCharsets.UTF_8));
-        assertRefused(() -> controller.list(as("AUDIT_ADMIN"), null, noId, null, REASON, null), HttpStatus.BAD_REQUEST, "ACCOUNT_DELETION_QUERY_INVALID");
-        assertRefused(() -> controller.list(as("AUDIT_ADMIN"), null, null, null, "short", null), HttpStatus.BAD_REQUEST, "ADMIN_REASON_INVALID");
-        assertRefused(() -> controller.list(as("AUDIT_ADMIN"), null, null, null, null, null), HttpStatus.BAD_REQUEST, "ADMIN_REASON_INVALID");
-        assertRefused(() -> controller.list(as("AUDIT_ADMIN"), null, null, null, REASON, "not-a-uuid"), HttpStatus.BAD_REQUEST, "CORRELATION_ID_INVALID");
+        assertRefused(() -> controller.list(as("AUDIT_ADMIN"), null, noId, null, null), HttpStatus.BAD_REQUEST, "ACCOUNT_DELETION_QUERY_INVALID");
+        assertRefused(() -> controller.list(as("AUDIT_ADMIN"), null, null, null, "not-a-uuid"), HttpStatus.BAD_REQUEST, "CORRELATION_ID_INVALID");
         verifyNoInteractions(deletions);
     }
 
@@ -208,7 +206,7 @@ class AdminAccountDeletionControllerTest {
             default -> clear();
         });
 
-        Detail detail = controller.detail(as("COMPLIANCE_ADMIN"), request.id(), REASON, correlation.toString()).getBody();
+        Detail detail = controller.detail(as("COMPLIANCE_ADMIN"), request.id(), correlation.toString()).getBody();
 
         assertThat(detail.request().requestId()).isEqualTo(request.id());
         assertThat(detail.request().status()).isEqualTo("WAITING_ON_OPEN_ITEMS");
@@ -231,14 +229,14 @@ class AdminAccountDeletionControllerTest {
         when(deletions.contact(personId)).thenReturn(new Contact(personId.toString().replace("-", ""), null));
         when(client.blockers(anyString(), eq(personId), eq(Scope.ALL))).thenReturn(clear());
 
-        assertThat(controller.detail(as("AUDIT_ADMIN"), request.id(), REASON, null).getBody().phoneLast4()).isNull();
+        assertThat(controller.detail(as("AUDIT_ADMIN"), request.id(), null).getBody().phoneLast4()).isNull();
     }
 
     @Test
     void detailOfAnUnknownRequestIsNotFound() {
         when(deletions.find(any())).thenReturn(Optional.empty());
 
-        assertRefused(() -> controller.detail(as("AUDIT_ADMIN"), UUID.randomUUID(), REASON, null), HttpStatus.NOT_FOUND, "NO_DELETION_REQUEST");
+        assertRefused(() -> controller.detail(as("AUDIT_ADMIN"), UUID.randomUUID(), null), HttpStatus.NOT_FOUND, "NO_DELETION_REQUEST");
         verifyNoInteractions(client);
     }
 
@@ -406,14 +404,14 @@ class AdminAccountDeletionControllerTest {
         when(deletions.page(any(), any(), any(), anyInt())).thenReturn(List.of());
         when(client.blockers(anyString(), any(), any())).thenReturn(clear());
         for (String reader : List.of("PLATFORM_ADMIN", "SUPPORT_ADMIN", "COMPLIANCE_ADMIN", "AUDIT_ADMIN")) {
-            assertThat(controller.list(as(reader), null, null, null, REASON, null).getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(controller.detail(as(reader), request.id(), REASON, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(controller.list(as(reader), null, null, null, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(controller.detail(as(reader), request.id(), null).getStatusCode()).isEqualTo(HttpStatus.OK);
         }
         for (String other : List.of("CUSTOMER", "CHEF", "ADMIN", "PAYMENTS_ADMIN", "CHEF_ADMIN")) {
-            assertRefused(() -> controller.list(as(other), null, null, null, REASON, null), HttpStatus.FORBIDDEN, "ADMIN_ROLE_REQUIRED");
-            assertRefused(() -> controller.detail(as(other), request.id(), REASON, null), HttpStatus.FORBIDDEN, "ADMIN_ROLE_REQUIRED");
+            assertRefused(() -> controller.list(as(other), null, null, null, null), HttpStatus.FORBIDDEN, "ADMIN_ROLE_REQUIRED");
+            assertRefused(() -> controller.detail(as(other), request.id(), null), HttpStatus.FORBIDDEN, "ADMIN_ROLE_REQUIRED");
         }
-        assertRefused(() -> controller.list(null, null, null, null, REASON, null), HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED");
+        assertRefused(() -> controller.list(null, null, null, null, null), HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED");
         clearInvocations(client, transactions);
 
         for (String reader : List.of("SUPPORT_ADMIN", "AUDIT_ADMIN", "CHEF_ADMIN", "CUSTOMER")) {
@@ -449,9 +447,9 @@ class AdminAccountDeletionControllerTest {
         everyServiceAnswers(service -> clear());
         ArgumentCaptor<String> details = ArgumentCaptor.forClass(String.class);
 
-        controller.list(as("AUDIT_ADMIN"), "PENDING_REVIEW", null, null, REASON, correlation.toString());
+        controller.list(as("AUDIT_ADMIN"), "PENDING_REVIEW", null, null, correlation.toString());
         verify(deletions).audit(isNull(), eq("ACCOUNT_DELETION_READ"), eq(adminId), anyString(), eq(correlation));
-        controller.detail(as("SUPPORT_ADMIN"), request.id(), REASON, correlation.toString());
+        controller.detail(as("SUPPORT_ADMIN"), request.id(), correlation.toString());
         verify(deletions).audit(eq(personId), eq("ACCOUNT_DELETION_READ"), eq(adminId), anyString(), eq(correlation));
         controller.approve(as("PLATFORM_ADMIN"), request.id(), new ReviewRequest(REASON), correlation.toString());
         verify(deletions).audit(eq(personId), eq("ACCOUNT_DELETION_APPROVED"), eq(adminId), anyString(), eq(correlation));
@@ -474,7 +472,7 @@ class AdminAccountDeletionControllerTest {
         when(deletions.page(any(), any(), any(), anyInt())).thenReturn(List.of());
         ArgumentCaptor<UUID> id = ArgumentCaptor.forClass(UUID.class);
 
-        var response = controller.list(as("AUDIT_ADMIN"), null, null, null, REASON, null);
+        var response = controller.list(as("AUDIT_ADMIN"), null, null, null, null);
 
         verify(deletions).audit(isNull(), eq("ACCOUNT_DELETION_READ"), eq(adminId), anyString(), id.capture());
         assertThat(response.getHeaders().getFirst("X-Correlation-ID")).isEqualTo(id.getValue().toString());
@@ -485,8 +483,8 @@ class AdminAccountDeletionControllerTest {
         properties.setEnabled(false);
         UUID id = UUID.randomUUID();
 
-        assertRefused(() -> controller.list(as("PLATFORM_ADMIN"), null, null, null, REASON, null), HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_DELETION_NOT_ENABLED");
-        assertRefused(() -> controller.detail(as("PLATFORM_ADMIN"), id, REASON, null), HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_DELETION_NOT_ENABLED");
+        assertRefused(() -> controller.list(as("PLATFORM_ADMIN"), null, null, null, null), HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_DELETION_NOT_ENABLED");
+        assertRefused(() -> controller.detail(as("PLATFORM_ADMIN"), id, null), HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_DELETION_NOT_ENABLED");
         assertRefused(() -> controller.approve(as("PLATFORM_ADMIN"), id, new ReviewRequest(REASON), null), HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_DELETION_NOT_ENABLED");
         assertRefused(() -> controller.reject(as("PLATFORM_ADMIN"), id, new ReviewRequest(REASON), null), HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_DELETION_NOT_ENABLED");
         verifyNoInteractions(deletions, client, transactions, identities);

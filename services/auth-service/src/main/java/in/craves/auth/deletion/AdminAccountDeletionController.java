@@ -80,13 +80,11 @@ public class AdminAccountDeletionController {
         @RequestParam(required = false) String status,
         @RequestParam(required = false) String cursor,
         @RequestParam(required = false) Integer limit,
-        @RequestHeader(value = "X-Admin-Reason", required = false) String reason,
         @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader
     ) {
         service.requireEnabled();
         CurrentUser admin = require(authentication, READERS);
         UUID correlationId = correlationId(correlationHeader);
-        normalizeReason(reason);
         RequestStatus filter = status == null || status.isBlank() ? null : status(status);
         Instant afterRequestedAt = null;
         UUID afterId = null;
@@ -116,13 +114,11 @@ public class AdminAccountDeletionController {
     public ResponseEntity<Detail> detail(
         Authentication authentication,
         @PathVariable UUID id,
-        @RequestHeader(value = "X-Admin-Reason", required = false) String reason,
         @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader
     ) {
         service.requireEnabled();
         CurrentUser admin = require(authentication, READERS);
         UUID correlationId = correlationId(correlationHeader);
-        normalizeReason(reason);
         DeletionRequest request = deletions.find(id).orElseThrow(AccountDeletionService::noRequest);
         List<StepRow> steps = deletions.steps(id).stream().map(StepRow::of).toList();
         List<Blocker> blockers = service.blockers(request.identityId(), request.scope());

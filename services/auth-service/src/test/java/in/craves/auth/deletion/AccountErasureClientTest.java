@@ -228,6 +228,21 @@ class AccountErasureClientTest {
         assertEquals("NOT_CONFIGURED", blank.erase("order", requestId, identityId, Scope.CHEF).error());
     }
 
+    @Test void asBlockersIsTheOneRuleForWhatCountsAsAnAnswer() {
+        var held = List.of(new AccountErasureClient.Blocker("order", "OPEN_ORDERS", "2"));
+        // An answer, whatever it lists: DONE, or a refusal that gives its reasons.
+        assertEquals(held, new ServiceCall(Outcome.DONE, Map.of(), held, null).asBlockers("order"));
+        assertEquals(List.of(), new ServiceCall(Outcome.DONE, Map.of(), List.of(), null).asBlockers("order"));
+        assertEquals(held, new ServiceCall(Outcome.BLOCKED, Map.of(), held, null).asBlockers("order"));
+        // No answer: a failed call (its error), or a refusal with no reasons (the outcome's name).
+        assertEquals(List.of(new AccountErasureClient.Blocker("catalog", "SERVICE_UNREACHABLE", "HTTP 503")),
+            new ServiceCall(Outcome.FAILED, Map.of(), List.of(), "HTTP 503").asBlockers("catalog"));
+        assertEquals(List.of(new AccountErasureClient.Blocker("catalog", "SERVICE_UNREACHABLE", "FAILED")),
+            new ServiceCall(Outcome.FAILED, Map.of(), List.of(), null).asBlockers("catalog"));
+        assertEquals(List.of(new AccountErasureClient.Blocker("advanced", "SERVICE_UNREACHABLE", "BLOCKED")),
+            new ServiceCall(Outcome.BLOCKED, Map.of(), List.of(), null).asBlockers("advanced"));
+    }
+
     static List<String> fieldNames(JsonNode node) {
         var names = new java.util.ArrayList<String>();
         node.fieldNames().forEachRemaining(names::add);

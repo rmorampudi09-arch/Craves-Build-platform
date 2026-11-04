@@ -16,6 +16,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -39,6 +40,16 @@ public class AccountErasureClient {
     /** For {@code blockers} the answer is {@code blockers}, whatever the outcome; BLOCKED is a refusal to prepare or erase. */
     public record ServiceCall(Outcome outcome, Map<String, Integer> counts, List<Blocker> blockers, String error) {
         public int erasedCount() { return counts.values().stream().mapToInt(Integer::intValue).sum(); }
+
+        /**
+         * What this {@code blockers} call, made to {@code service}, says is open: the one rule of the worker's due-date check and
+         * of staff approval. A DONE answer, or a refusal (BLOCKED) that gives its reasons, is an answer and keeps its list. A failed
+         * call, or a refusal with no reasons, is no answer and counts as open: SERVICE_UNREACHABLE, with the error (or the outcome) as detail.
+         */
+        public List<Blocker> asBlockers(String service) {
+            boolean answered = outcome == Outcome.DONE || (outcome == Outcome.BLOCKED && !blockers.isEmpty());
+            return answered ? blockers : List.of(new Blocker(service, "SERVICE_UNREACHABLE", Objects.requireNonNullElse(error, outcome.name())));
+        }
     }
 
     private static final String SECRET = "X-Craves-Internal-Secret";

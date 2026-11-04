@@ -1,6 +1,7 @@
 package in.craves.order.service;
 
 import in.craves.order.exception.OrderApiException;
+import in.craves.order.security.AccountDeletionGuard;
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.service.CatalogClient.CatalogKitchen;
 import in.craves.order.service.CatalogClient.CatalogMenuItem;
@@ -278,6 +279,7 @@ public class OrderService {
     @Transactional
     public CheckoutResponse checkout(CravesPrincipal principal, CheckoutRequest request) {
         requireCustomer(principal);
+        AccountDeletionGuard.requireNoCustomerDeletion(principal);
         if (request == null || request.deliveryAddressId() == null) {
             throw OrderApiException.badRequest("DELIVERY_ADDRESS_REQUIRED", DELIVERY_ADDRESS_REQUIRED_MESSAGE);
         }

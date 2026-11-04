@@ -45,7 +45,7 @@ public class JwtVerifier {
             }
             Map<String, Object> payload = objectMapper.readValue(Base64.getUrlDecoder().decode(pad(parts[1])), new TypeReference<>() {});
             validateClaims(payload);
-            return new CravesPrincipal(UUID.fromString(String.valueOf(payload.get("sub"))), value(payload.get("phone_number")), roles(payload.get("roles")));
+            return new CravesPrincipal(UUID.fromString(String.valueOf(payload.get("sub"))), value(payload.get("phone_number")), roles(payload.get("roles")), value(payload.get("deletion_pending")));
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (Exception ex) {

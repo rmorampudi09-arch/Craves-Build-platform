@@ -8,10 +8,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,9 +21,14 @@ import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.catalog.config.CatalogStorageProperties;
+import in.craves.catalog.exception.ApiException;
 import in.craves.catalog.finance.CatalogFinanceEligibility;
+import in.craves.catalog.security.CravesPrincipal;
 import in.craves.catalog.service.AccountErasureService.Scope;
+import in.craves.catalog.web.KitchenScheduleDtos.KitchenScheduleUpdateRequest;
+import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -214,6 +221,122 @@ class AccountErasureDatabaseTest {
         assertEquals(Map.of(), erasure.prepare(UUID.randomUUID(), Scope.CHEF, request));
         assertEquals(before, everything());
         verify(cache, never()).invalidateAllDiscovery();
+    }
+
+    @Test void prepareSavesThePriorStateOnce() {
+        Instant tomorrow = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
+        jdbc.update("INSERT INTO catalog_schema.kitchen_schedule_config(kitchen_id, accepting_orders, paused_until, pause_reason) VALUES (?, false, ?, 'Diwali')", kitchen, Timestamp.from(tomorrow));
+
+        erasure.prepare(chef, Scope.CHEF, request);
+        erasure.prepare(chef, Scope.ALL, request);
+
+        var row = scheduleRow(kitchen);
+        assertEquals("ACCOUNT_DELETION", row.get("pause_reason"));
+        assertEquals(false, row.get("deletion_prior_accepting"));
+        assertEquals(tomorrow, ((Timestamp) row.get("deletion_prior_paused_until")).toInstant());
+        assertEquals("Diwali", row.get("deletion_prior_pause_reason"));
+        assertEquals(true, row.get("deletion_prior_saved"));
+    }
+
+    // ---- release ----
+
+    Map<String, Object> scheduleRow(UUID kitchenId) {
+        return jdbc.queryForMap("SELECT accepting_orders, paused_until, pause_reason, deletion_prior_accepting, deletion_prior_paused_until, deletion_prior_pause_reason, deletion_prior_saved"
+            + " FROM catalog_schema.kitchen_schedule_config WHERE kitchen_id = ?", kitchenId);
+    }
+
+    void assertPriorCleared(Map<String, Object> row) {
+        assertNull(row.get("deletion_prior_accepting"));
+        assertNull(row.get("deletion_prior_paused_until"));
+        assertNull(row.get("deletion_prior_pause_reason"));
+        assertEquals(false, row.get("deletion_prior_saved"));
+    }
+
+    @Test void releaseRestoresAPausedKitchenExactly() {
+        Instant tomorrow = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
+        jdbc.update("INSERT INTO catalog_schema.kitchen_schedule_config(kitchen_id, accepting_orders, paused_until, pause_reason) VALUES (?, false, ?, 'Diwali')", kitchen, Timestamp.from(tomorrow));
+        erasure.prepare(chef, Scope.CHEF, request);
+        clearInvocations(cache);
+
+        assertEquals(Map.of("kitchen_schedule_config", 1), erasure.release(chef, Scope.CHEF, request));
+
+        var row = scheduleRow(kitchen);
+        assertEquals(false, row.get("accepting_orders"));
+        assertEquals(tomorrow, ((Timestamp) row.get("paused_until")).toInstant());
+        assertEquals("Diwali", row.get("pause_reason"));
+        assertPriorCleared(row);
+        verify(cache).invalidateAllDiscovery();
+    }
+
+    @Test void releaseRestoresAnOpenKitchen() {
+        assertTrue(schedule.availability(kitchen, Instant.now()).availableNow());
+        erasure.prepare(chef, Scope.ALL, request);
+        assertFalse(schedule.availability(kitchen, Instant.now()).availableNow());
+        clearInvocations(cache);
+
+        assertEquals(Map.of("kitchen_schedule_config", 1), erasure.release(chef, Scope.ALL, request));
+
+        var row = scheduleRow(kitchen);
+        assertEquals(true, row.get("accepting_orders"));
+        assertNull(row.get("paused_until"));
+        assertNull(row.get("pause_reason"));
+        assertPriorCleared(row);
+        assertTrue(schedule.availability(kitchen, Instant.now()).availableNow());
+        verify(cache).invalidateAllDiscovery();
+    }
+
+    @Test void releaseTwiceCountsZero() {
+        erasure.prepare(chef, Scope.CHEF, request);
+        erasure.release(chef, Scope.CHEF, request);
+        clearInvocations(cache);
+        String before = dump("catalog_schema.kitchen_schedule_config");
+
+        assertEquals(Map.of("kitchen_schedule_config", 0), erasure.release(chef, Scope.CHEF, request));
+
+        assertEquals(before, dump("catalog_schema.kitchen_schedule_config"));
+        verify(cache, never()).invalidateAllDiscovery();
+    }
+
+    @Test void releaseLeavesAKitchenNotClosedForDeletionAlone() {
+        jdbc.update("INSERT INTO catalog_schema.kitchen_schedule_config(kitchen_id, accepting_orders, paused_until, pause_reason) VALUES (?, true, now() + interval '2 days', 'Festival')", kitchen);
+        erasure.prepare(otherChef, Scope.CHEF, request); // someone else's kitchen is closed for deletion; releasing this chef must not touch it
+        clearInvocations(cache);
+        String before = dump("catalog_schema.kitchen_schedule_config");
+
+        assertEquals(Map.of("kitchen_schedule_config", 0), erasure.release(chef, Scope.CHEF, request));
+
+        assertEquals(before, dump("catalog_schema.kitchen_schedule_config"));
+        verify(cache, never()).invalidateAllDiscovery();
+    }
+
+    @Test void releaseForCustomerScopeChangesNothing() {
+        erasure.prepare(chef, Scope.CHEF, request);
+        clearInvocations(cache);
+        String before = dump("catalog_schema.kitchen_schedule_config");
+
+        assertEquals(Map.of("kitchen_schedule_config", 0), erasure.release(chef, Scope.CUSTOMER, request));
+
+        assertEquals(before, dump("catalog_schema.kitchen_schedule_config"));
+        verify(cache, never()).invalidateAllDiscovery();
+    }
+
+    @Test void scheduleChangesAreRefusedWhileClosedForDeletionAndAllowedAgainAfterRelease() {
+        var principal = new CravesPrincipal(chef, null, Set.of("CHEF"));
+        var reopen = new KitchenScheduleUpdateRequest(true, null, null, List.of());
+        erasure.prepare(chef, Scope.CHEF, request);
+        String before = everything();
+
+        var refused = assertThrows(ApiException.class, () -> schedule.replaceMySchedule(principal, reopen));
+
+        assertEquals(409, refused.getStatus());
+        assertEquals("ACCOUNT_DELETION_PENDING", refused.getCode());
+        assertEquals("Your account is set to be deleted. Tap Keep my account to open your kitchen.", refused.getMessage());
+        assertEquals(before, everything());
+
+        erasure.release(chef, Scope.CHEF, request);
+        schedule.replaceMySchedule(principal, reopen);
+        assertTrue(schedule.availability(kitchen, Instant.now()).availableNow());
+        verify(cache, times(2)).invalidateAllDiscovery(); // prepare + release; the schedule change is not a deletion step
     }
 
     // ---- erase ----

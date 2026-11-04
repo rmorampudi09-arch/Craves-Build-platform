@@ -56,6 +56,13 @@ public class AccountErasureService {
         return counts;
     }
 
+    /** The person kept the account: the kitchens prepare closed go back to how they were. CUSTOMER has none. */
+    public Map<String, Integer> release(UUID identityId, Scope scope, UUID requestId) {
+        int released = scope == Scope.CUSTOMER ? 0 : schedule.releaseAccountDeletion(identityId);
+        if (released > 0) discoveryCache.invalidateAllDiscovery();
+        return Map.of("kitchen_schedule_config", released);
+    }
+
     /**
      * Photos are deleted first and outside the transaction: a blob cannot be rolled back, and the rows must keep
      * naming a photo until it is really gone. A storage failure therefore fails the whole call with the database

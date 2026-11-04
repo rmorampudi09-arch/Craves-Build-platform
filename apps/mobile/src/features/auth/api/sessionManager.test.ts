@@ -129,6 +129,69 @@ describe('sessionManager', () => {
     expect(tokenMemory.get()).toBe(rotated.accessToken);
   });
 
+  it('tells rotation listeners once per refresh, after the refresh token is saved, until they unsubscribe', async () => {
+    loadMock.mockResolvedValue({
+      refreshToken: 'old-refresh-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    const rotated = createTokenPair('new-access-token', 'new-refresh-token');
+    postMock.mockResolvedValue({data: rotated});
+    const listener = jest.fn(() => {
+      expect(saveMock).toHaveBeenCalledTimes(1);
+    });
+    const unsubscribe = sessionManager.onTokensRotated(listener);
+
+    await Promise.all([sessionManager.refresh(), sessionManager.refresh()]);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(rotated);
+
+    unsubscribe();
+    await sessionManager.refresh();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps refreshing when one rotation listener throws and still tells the others', async () => {
+    loadMock.mockResolvedValue({
+      refreshToken: 'old-refresh-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    const rotated = createTokenPair('new-access-token', 'new-refresh-token');
+    postMock.mockResolvedValue({data: rotated});
+    const broken = jest.fn(() => {
+      throw new Error('listener broke');
+    });
+    const healthy = jest.fn();
+    const offBroken = sessionManager.onTokensRotated(broken);
+    const offHealthy = sessionManager.onTokensRotated(healthy);
+
+    await expect(sessionManager.refresh()).resolves.toEqual(rotated);
+
+    expect(healthy).toHaveBeenCalledWith(rotated);
+    offBroken();
+    offHealthy();
+  });
+
+  it('does not tell rotation listeners about failed or empty refreshes', async () => {
+    const listener = jest.fn();
+    const unsubscribe = sessionManager.onTokensRotated(listener);
+
+    await expect(sessionManager.refresh()).resolves.toBeNull();
+
+    loadMock.mockResolvedValue({
+      refreshToken: 'old-refresh-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    postMock.mockRejectedValue(
+      new AppApiError('NETWORK_ERROR', 'offline', undefined, undefined, true),
+    );
+    await expect(sessionManager.refresh()).rejects.toBeDefined();
+
+    expect(listener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
   it('coalesces concurrent refresh attempts into one in-flight rotation', async () => {
     loadMock.mockResolvedValue({
       refreshToken: 'old-refresh-token',

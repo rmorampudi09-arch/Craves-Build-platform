@@ -32,6 +32,7 @@ import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {useBootstrap} from '../../features/auth/hooks/useBootstrap';
 import {useSessionLifecycle} from '../../features/auth/hooks/useSessionLifecycle';
+import {useIdentitySync} from '../../features/accountDeletion/state/useIdentitySync';
 import {SplashScreen} from '../../features/auth/screens/SplashScreen';
 import {SplashDoneContext} from '../../features/auth/components/CravesWordmark';
 import {RoleSelectionScreen} from '../../features/auth/screens/RoleSelectionScreen';
@@ -324,6 +325,7 @@ function dispatchInboundDestination(destination: InboundRouteDestination) {
 export function AppNavigator({restoreLastScreen = false}: {restoreLastScreen?: boolean}) {
   const status = useBootstrap();
   useSessionLifecycle();
+  useIdentitySync();
   const auth = useAppSelector(state => state.auth);
   const [splashDismissed, setSplashDismissed] = React.useState(false);
   const authRef = React.useRef(auth);

@@ -49,6 +49,12 @@ const authSlice = createSlice({
       state.accountResolution = null;
       state.lastErrorCode = null;
     },
+    // A token rotation brings a fresh identity; the role and resolved account stay as they are.
+    identityRefreshed(state, action: PayloadAction<Identity>) {
+      if (state.bootstrapStatus === 'authenticated') {
+        state.identity = action.payload;
+      }
+    },
     accountResolved(
       state,
       action: PayloadAction<{identity: Identity; resolution: AccountResolution}>,

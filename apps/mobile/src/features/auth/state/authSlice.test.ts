@@ -166,4 +166,36 @@ describe('auth role selection and account resolution state', () => {
     expect(signedOut.identity).toBeNull();
     expect(signedOut.accountResolution).toBeNull();
   });
+
+  it('refreshes the identity without touching the role or the resolved account', () => {
+    const resolved = authReducer(
+      authReducer(undefined, authActions.authenticated(chefIdentity)),
+      authActions.accountResolved({identity: chefIdentity, resolution: chefResolution}),
+    );
+    const refreshed = {
+      ...chefIdentity,
+      pendingDeletion: {
+        requestId: 'req-1',
+        scope: 'ALL' as const,
+        status: 'SCHEDULED' as const,
+        dueAt: null,
+      },
+    };
+
+    const state = authReducer(resolved, authActions.identityRefreshed(refreshed));
+
+    expect(state.identity).toEqual(refreshed);
+    expect(state.accountResolution).toEqual(chefResolution);
+    expect(state.selectedRole).toBe(resolved.selectedRole);
+    expect(state.bootstrapStatus).toBe('authenticated');
+  });
+
+  it('ignores a refreshed identity while nobody is signed in', () => {
+    const anonymous = authReducer(undefined, authActions.bootstrapAnonymous());
+
+    const state = authReducer(anonymous, authActions.identityRefreshed(chefIdentity));
+
+    expect(state.identity).toBeNull();
+    expect(state.bootstrapStatus).toBe('anonymous');
+  });
 });

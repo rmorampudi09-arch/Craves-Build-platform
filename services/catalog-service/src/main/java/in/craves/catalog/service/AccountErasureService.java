@@ -143,5 +143,15 @@ public class AccountErasureService {
             DELETE FROM catalog_schema.menu_item_image
              WHERE menu_item_id IN (SELECT id FROM catalog_schema.menu_item WHERE kitchen_id IN %s)
             """.formatted(MY_KITCHENS), identityId));
+        // kitchen_profile.identity_id is unique, so a chef who applies again gets this row back: the deletion lock and the
+        // kept prior state (the chef's own pause text) go, and the kitchen stays closed until the chef opens it.
+        counts.put("kitchen_schedule_config", jdbc.update("""
+            UPDATE catalog_schema.kitchen_schedule_config
+               SET accepting_orders = false, pause_reason = NULL, deletion_prior_accepting = NULL, deletion_prior_paused_until = NULL,
+                   deletion_prior_pause_reason = NULL, deletion_prior_saved = false, updated_at = now()
+             WHERE kitchen_id IN %s
+               AND (accepting_orders OR pause_reason IS NOT NULL OR deletion_prior_accepting IS NOT NULL
+                    OR deletion_prior_paused_until IS NOT NULL OR deletion_prior_pause_reason IS NOT NULL OR deletion_prior_saved)
+            """.formatted(MY_KITCHENS), identityId));
     }
 }

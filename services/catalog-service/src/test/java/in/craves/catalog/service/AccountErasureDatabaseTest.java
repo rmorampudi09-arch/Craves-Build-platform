@@ -339,6 +339,18 @@ class AccountErasureDatabaseTest {
         verify(cache, times(2)).invalidateAllDiscovery(); // prepare + release; the schedule change is not a deletion step
     }
 
+    @Test void aChefWhoReturnsAfterTheEraseOpensTheKitchenAgain() {
+        var principal = new CravesPrincipal(chef, null, Set.of("CHEF"));
+        erasure.prepare(chef, Scope.CHEF, request);
+
+        erasure.erase(chef, Scope.CHEF, request);
+
+        assertEquals(false, scheduleRow(kitchen).get("accepting_orders"), "closed until the chef opens it");
+        // kitchen_profile.identity_id is unique: a chef who applies again gets this row back, so nothing may still refuse them
+        schedule.replaceMySchedule(principal, new KitchenScheduleUpdateRequest(true, null, null, List.of()));
+        assertEquals(true, scheduleRow(kitchen).get("accepting_orders"));
+    }
+
     // ---- erase ----
 
     @Test void eraseChefAnonymisesKitchenArchivesMenuAndDeletesPhotos() {
@@ -349,7 +361,7 @@ class AccountErasureDatabaseTest {
         Map<String, Integer> counts = erasure.erase(chef, Scope.CHEF, request);
 
         assertEquals(Map.of("kitchen_profile", 1, "kitchen_pickup_location", 4, "pickup_location_provisioning_outbox", 3,
-            "menu_item", 3, "menu_item_image", 5, "media_blob", 7), counts);
+            "menu_item", 3, "menu_item_image", 5, "kitchen_schedule_config", 0, "media_blob", 7), counts);
         // kitchen: every personal column replaced, closed, still the same row of the same person
         var k = jdbc.queryForMap("SELECT * FROM catalog_schema.kitchen_profile WHERE id = ?", kitchen);
         assertEquals(chef, k.get("identity_id"));
@@ -411,14 +423,21 @@ class AccountErasureDatabaseTest {
     }
 
     @Test void eraseTwiceIsDoneWithZeroCounts() {
-        erasure.erase(chef, Scope.CHEF, request);
+        jdbc.update("INSERT INTO catalog_schema.kitchen_schedule_config(kitchen_id, accepting_orders, paused_until, pause_reason) VALUES (?, true, NULL, 'Chef note')", kitchen);
+        erasure.prepare(chef, Scope.CHEF, request);
+        assertEquals(1, erasure.erase(chef, Scope.CHEF, request).get("kitchen_schedule_config"));
+        // the deletion lock and the kept prior state (the chef's own pause text) go; the kitchen stays closed
+        var schedule = scheduleRow(kitchen);
+        assertEquals(false, schedule.get("accepting_orders"));
+        assertNull(schedule.get("pause_reason"));
+        assertPriorCleared(schedule);
         String afterFirst = everything();
         Set<String> blobsAfterFirst = new TreeSet<>(deleted);
 
         Map<String, Integer> second = erasure.erase(chef, Scope.CHEF, request);
 
         assertEquals(Map.of("kitchen_profile", 0, "kitchen_pickup_location", 0, "pickup_location_provisioning_outbox", 0,
-            "menu_item", 0, "menu_item_image", 0, "media_blob", 0), second);
+            "menu_item", 0, "menu_item_image", 0, "kitchen_schedule_config", 0, "media_blob", 0), second);
         assertEquals(afterFirst, everything());
         assertEquals(blobsAfterFirst, deleted);
     }

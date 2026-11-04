@@ -5,7 +5,7 @@ export const metadata = { title: "Dead letters | Craves Admin", robots: { index:
 
 export default function AdminDeadLettersPage() {
   return <div className="space-y-7">
-    <AdminPageIntro eyebrow="Orders & delivery" title="Dead letters" description="Delivery webhooks, Cashfree webhooks and delivery commands that failed or that the retries gave up on, with why. Read-only: nothing here retries or changes them, and every view is recorded with your reason." />
+    <AdminPageIntro eyebrow="Orders & delivery" title="Dead letters" description="Delivery webhooks, Cashfree webhooks and delivery commands that failed or that the retries gave up on, with why. Platform and operations admins can give a dead-lettered delivery webhook one more attempt; nothing else is retried or changed here. Every view and retry is recorded with your reason." />
     <DeadLettersConsole />
   </div>;
 }

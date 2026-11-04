@@ -100,3 +100,8 @@ craves:
         credential: ${CRAVES_ACCOUNT_DELETION_USER_CHEF_CREDENTIAL:}
       referral:
         base-url: ${CRAVES_ACCOUNT_DELETION_REFERRAL_BASE_URL:}
+
+# Handbook 099: every log line carries the request's X-Correlation-ID (MDC key correlationId, set by CorrelationIdConfiguration).
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "

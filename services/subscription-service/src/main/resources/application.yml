@@ -111,3 +111,8 @@ craves:
       connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
       topic-name: ${CRAVES_DOMAIN_EVENTS_TOPIC_NAME:craves-domain-events}
       internal-access-value: ${CRAVES_INTERNAL_SERVICE_SECRET:}
+
+# Handbook 099: every log line carries the request's X-Correlation-ID (MDC key correlationId, set by CorrelationIdConfiguration).
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "

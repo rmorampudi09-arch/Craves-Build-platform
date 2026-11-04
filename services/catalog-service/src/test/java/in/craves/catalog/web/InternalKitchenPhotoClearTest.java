@@ -23,7 +23,8 @@ class InternalKitchenPhotoClearTest {
 
     InternalKitchenPhotoClearTest() {
         properties.setAccessValue("internal-test-key");
-        controller = new InternalCatalogController(service, new InternalCatalogAuthorizer(properties), cache);
+        controller = new InternalCatalogController(service, new InternalCatalogAuthorizer(properties), cache,
+            mock(in.craves.catalog.service.PublicMenuBatchResolveService.class));
     }
 
     @Test

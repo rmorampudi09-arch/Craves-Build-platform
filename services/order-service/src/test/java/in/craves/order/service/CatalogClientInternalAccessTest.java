@@ -173,6 +173,32 @@ class CatalogClientInternalAccessTest {
         assertEquals(Duration.ofSeconds(5), properties.getReadTimeout());
     }
 
+    @Test
+    void resolvesALargeCartInBatchesCatalogAccepts() {
+        CatalogClientProperties properties = properties("shared-internal-secret");
+        RestClient.Builder builder = RestClient.builder().baseUrl(properties.getBaseUrl());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        CatalogClient client = new CatalogClient(properties, builder.build());
+        java.util.List<UUID> ids = java.util.stream.Stream.generate(UUID::randomUUID).limit(150).toList();
+        for (java.util.List<UUID> batch : java.util.List.of(ids.subList(0, 100), ids.subList(100, 150))) {
+            server.expect(requestTo("https://catalog.test/api/v1/catalog/internal/menu-items/resolve"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-Craves-Internal-Key", "shared-internal-secret"))
+                .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath("$.menuItemIds.length()")
+                    .value(batch.size()))
+                .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath("$.menuItemIds[0]")
+                    .value(batch.get(0).toString()))
+                .andRespond(withSuccess("[{\"id\":\"" + batch.get(0) + "\",\"kitchenId\":\"" + batch.get(0) + "\",\"itemName\":\"Dish\","
+                    + "\"price\":120.00,\"currency\":\"INR\",\"unitPackageWeightGrams\":300,\"thermoboxRequired\":false}]",
+                    MediaType.APPLICATION_JSON));
+        }
+
+        java.util.List<CatalogClient.ResolvedCatalogMenuItem> items = client.resolveActiveMenuItems(ids);
+
+        assertEquals(java.util.List.of(ids.get(0), ids.get(100)), items.stream().map(CatalogClient.ResolvedCatalogMenuItem::id).toList());
+        server.verify();
+    }
+
     private static CatalogClientProperties properties(String internalAccessValue) {
         CatalogClientProperties properties = new CatalogClientProperties();
         properties.setBaseUrl("https://catalog.test/api/v1/catalog");

@@ -73,3 +73,8 @@ craves:
   notification-recovery:
     api-enabled: ${CRAVES_NOTIFICATION_RECOVERY_API_ENABLED:false}
     maximum-list-size: ${CRAVES_NOTIFICATION_RECOVERY_MAXIMUM_LIST_SIZE:100}
+
+# Handbook 099: every log line carries the request's X-Correlation-ID (MDC key correlationId, set by CorrelationIdConfiguration).
+logging:
+  pattern:
+    correlation: "[%X{correlationId:-}] "

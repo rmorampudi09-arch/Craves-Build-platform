@@ -164,12 +164,65 @@ class AccountDeletionRepositoryDbTest {
         assertEquals(new HashSet<>(List.of(waiting.id(), stepLater)), new HashSet<>(repo.claimDue(NOW.plusSeconds(3601 + 600), 10, lease)));
     }
 
+    @Test void claimDueFindsErasingRequestsThatNoStepWillWake() {
+        Duration lease = Duration.ofMinutes(5);
+        UUID allDone = erasing();
+        repo.insertSteps(allDone, Phase.ERASE, List.of("order", "auth"), NOW);
+        repo.recordStep(allDone, Phase.ERASE, "order", StepStatus.DONE, 1, null, null);
+        repo.recordStep(allDone, Phase.ERASE, "auth", StepStatus.DONE, 1, null, null);
+        UUID noSteps = erasing();
+        UUID waitingOnBackoff = erasing();
+        repo.insertSteps(waitingOnBackoff, Phase.ERASE, List.of("order"), NOW.plusSeconds(600));
+        UUID waitingOnBlocked = erasing();
+        repo.insertSteps(waitingOnBlocked, Phase.ERASE, List.of("order"), NOW.plusSeconds(600));
+        repo.recordStep(waitingOnBlocked, Phase.ERASE, "order", StepStatus.BLOCKED, null, null, NOW.plus(1, ChronoUnit.DAYS));
+
+        assertEquals(new HashSet<>(List.of(allDone, noSteps)), new HashSet<>(repo.claimDue(NOW, 10, lease)),
+            "crashed after the last step or before the first one: claimed; a step that is merely waiting: not");
+    }
+
+    @Test void claimDueTreatsNullTimesAsDueNow() {
+        Duration lease = Duration.ofMinutes(5);
+        UUID nullStep = scheduled(NOW.minus(1, ChronoUnit.DAYS), NOW.plus(29, ChronoUnit.DAYS)).id();
+        repo.insertSteps(nullStep, Phase.PREPARE, List.of("order"), null);
+        DeletionRequest nullCheck = scheduled(NOW.minus(40, ChronoUnit.DAYS), NOW.minus(1, ChronoUnit.DAYS));
+        repo.transition(nullCheck.id(), RequestStatus.SCHEDULED, RequestStatus.WAITING_ON_OPEN_ITEMS, m -> {});
+
+        assertEquals(new HashSet<>(List.of(nullStep, nullCheck.id())), new HashSet<>(repo.claimDue(NOW, 10, lease)));
+    }
+
+    @Test void closedRequestsKeepOnlyReleaseAndSweepWorkClaimable() {
+        Duration lease = Duration.ofMinutes(5);
+        UUID cancelledRelease = closed(RequestStatus.CANCELLED, Phase.RELEASE, StepStatus.PENDING);
+        UUID completedSweep = closed(RequestStatus.COMPLETED, Phase.SWEEP, StepStatus.BLOCKED);
+        closed(RequestStatus.CANCELLED, Phase.PREPARE, StepStatus.PENDING);
+        closed(RequestStatus.REJECTED, Phase.PREPARE, StepStatus.BLOCKED);
+        closed(RequestStatus.COMPLETED, Phase.ERASE, StepStatus.PENDING);
+
+        assertEquals(new HashSet<>(List.of(cancelledRelease, completedSweep)), new HashSet<>(repo.claimDue(NOW, 10, lease)));
+    }
+
+    UUID erasing() {
+        return repo.insert(identity(), Scope.CUSTOMER, RequestStatus.ERASING, Via.APP, NOW.minus(31, ChronoUnit.DAYS), NOW.minus(1, ChronoUnit.DAYS)).id();
+    }
+
+    /** A request in a closed status with one step of the given phase, due since a minute ago. */
+    UUID closed(RequestStatus status, Phase phase, StepStatus stepStatus) {
+        UUID id = repo.insert(identity(), Scope.CUSTOMER, status, Via.APP, NOW.minus(31, ChronoUnit.DAYS), NOW.minus(1, ChronoUnit.DAYS)).id();
+        repo.insertSteps(id, phase, List.of("order"), NOW.minusSeconds(60));
+        if (stepStatus != StepStatus.PENDING) repo.recordStep(id, phase, "order", stepStatus, null, null, NOW.minusSeconds(60));
+        return id;
+    }
+
     @Test void stepsAreInsertedOnceAndRecorded() {
         UUID id = scheduled(NOW, NOW.plus(30, ChronoUnit.DAYS)).id();
         repo.insertSteps(id, Phase.PREPARE, List.of("subscription", "order"), NOW);
         repo.insertSteps(id, Phase.PREPARE, List.of("subscription", "order"), NOW.plusSeconds(99));
+        repo.insertSteps(id, Phase.SWEEP, List.of("notification"), NOW);
         repo.insertSteps(id, Phase.ERASE, List.of("order"), NOW);
-        assertEquals(3, repo.steps(id).size());
+        repo.insertSteps(id, Phase.RELEASE, List.of("catalog"), NOW);
+        assertEquals(List.of("PREPARE order", "PREPARE subscription", "ERASE order", "RELEASE catalog", "SWEEP notification"),
+            repo.steps(id).stream().map(s -> s.phase() + " " + s.service()).toList(), "lifecycle order, not alphabetical");
         DeletionStep order = step(id, Phase.PREPARE, "order");
         assertEquals(StepStatus.PENDING, order.status());
         assertEquals(0, order.attempts());

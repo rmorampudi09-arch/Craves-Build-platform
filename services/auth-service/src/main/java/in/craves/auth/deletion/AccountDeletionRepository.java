@@ -103,10 +103,12 @@ public class AccountDeletionRepository {
             });
     }
 
+    /** In lifecycle order (PREPARE, ERASE, RELEASE, SWEEP), then service: the first step not DONE is the next one to run. */
     public List<DeletionStep> steps(UUID requestId) {
         return jdbc.query(
             "SELECT request_id, phase, service, status, attempts, last_error, erased_count, next_attempt_at, completed_at "
-                + "FROM account_deletion_step WHERE request_id = ? ORDER BY phase, service",
+                + "FROM account_deletion_step WHERE request_id = ? "
+                + "ORDER BY CASE phase WHEN 'PREPARE' THEN 1 WHEN 'ERASE' THEN 2 WHEN 'RELEASE' THEN 3 ELSE 4 END, service",
             STEP, requestId);
     }
 
@@ -131,34 +133,41 @@ public class AccountDeletionRepository {
         return jdbc.update(sql.toString(), args.toArray()) == 1;
     }
 
+    private static final String CLAIM_DUE = """
+        UPDATE account_deletion_request
+           SET lease_until = ?, updated_at = now()
+         WHERE id IN (
+               SELECT r.id
+                 FROM account_deletion_request r
+                WHERE (r.lease_until IS NULL OR r.lease_until <= ?)
+                  AND (EXISTS (SELECT 1 FROM account_deletion_step s
+                                WHERE s.request_id = r.id AND s.status IN ('PENDING', 'BLOCKED')
+                                  AND (s.next_attempt_at IS NULL OR s.next_attempt_at <= ?)
+                                  AND (s.phase IN ('RELEASE', 'SWEEP') OR r.status IN %s))
+                       OR (r.status = 'ERASING'
+                           AND NOT EXISTS (SELECT 1 FROM account_deletion_step s
+                                            WHERE s.request_id = r.id AND s.status IN ('PENDING', 'BLOCKED')))
+                       OR (r.status = 'SCHEDULED'
+                           AND (r.due_at <= ? OR (r.reminder_sent_at IS NULL AND r.due_at <= ?)))
+                       OR (r.status = 'WAITING_ON_OPEN_ITEMS' AND (r.next_check_at IS NULL OR r.next_check_at <= ?)))
+                ORDER BY r.updated_at, r.id
+                LIMIT ?
+                  FOR UPDATE OF r SKIP LOCKED)
+        RETURNING id
+        """.formatted(OPEN);
+
     /**
      * Leases up to {@code limit} requests with work due at {@code now} until {@code now + lease} and returns their ids.
      * One statement with SKIP LOCKED: two workers never get the same request, and a lease that ran out is claimable again.
-     * Work due = a step not DONE whose next_attempt_at has come (any request status: RELEASE and SWEEP outlive the request),
-     * the day-30 check, a reminder, or the daily re-check of a waiting request. Least recently touched first.
+     * Work due, where a NULL time means "due now":
+     * a step not DONE whose next_attempt_at has come (PREPARE and ERASE only while the request is open; RELEASE and SWEEP
+     * outlive it, so they count in any status); an ERASING request with no step left to run (a crash after the last step or
+     * before the first one: the worker finishes or re-creates them); the day-30 check or a reminder of a SCHEDULED request;
+     * the daily re-check of a waiting request. Least recently touched first.
      */
     public List<UUID> claimDue(Instant now, int limit, Duration lease) {
         Timestamp at = ts(now);
-        return jdbc.queryForList(
-            """
-            UPDATE account_deletion_request
-               SET lease_until = ?, updated_at = now()
-             WHERE id IN (
-                   SELECT r.id
-                     FROM account_deletion_request r
-                    WHERE (r.lease_until IS NULL OR r.lease_until <= ?)
-                      AND (EXISTS (SELECT 1 FROM account_deletion_step s
-                                    WHERE s.request_id = r.id AND s.status IN ('PENDING', 'BLOCKED')
-                                      AND s.next_attempt_at <= ?)
-                           OR (r.status = 'SCHEDULED'
-                               AND (r.due_at <= ? OR (r.reminder_sent_at IS NULL AND r.due_at <= ?)))
-                           OR (r.status = 'WAITING_ON_OPEN_ITEMS' AND r.next_check_at <= ?))
-                    ORDER BY r.updated_at, r.id
-                    LIMIT ?
-                      FOR UPDATE OF r SKIP LOCKED)
-            RETURNING id
-            """,
-            UUID.class, ts(now.plus(lease)), at, at, at, ts(now.plus(REMINDER_LEAD)), at, limit);
+        return jdbc.queryForList(CLAIM_DUE, UUID.class, ts(now.plus(lease)), at, at, at, ts(now.plus(REMINDER_LEAD)), at, limit);
     }
 
     /**

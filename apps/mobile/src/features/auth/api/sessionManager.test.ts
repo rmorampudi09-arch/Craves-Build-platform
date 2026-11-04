@@ -51,6 +51,14 @@ function createTokenPair(
 }
 
 describe('sessionManager', () => {
+  // Rotation listeners are module state, so a failing assertion must not leave one behind.
+  const rotationUnsubscribes: Array<() => void> = [];
+  function listenForRotation(listener: (tokens: AuthTokenResponse) => void) {
+    const unsubscribe = sessionManager.onTokensRotated(listener);
+    rotationUnsubscribes.push(unsubscribe);
+    return unsubscribe;
+  }
+
   beforeEach(() => {
     tokenMemory.clear();
     jest.resetAllMocks();
@@ -61,6 +69,7 @@ describe('sessionManager', () => {
 
   afterEach(() => {
     tokenMemory.clear();
+    rotationUnsubscribes.splice(0).forEach(unsubscribe => unsubscribe());
   });
 
   it('persists the refresh credential before exposing the access token', async () => {
@@ -136,15 +145,17 @@ describe('sessionManager', () => {
     });
     const rotated = createTokenPair('new-access-token', 'new-refresh-token');
     postMock.mockResolvedValue({data: rotated});
+    let savesWhenNotified = -1;
     const listener = jest.fn(() => {
-      expect(saveMock).toHaveBeenCalledTimes(1);
+      savesWhenNotified = saveMock.mock.calls.length;
     });
-    const unsubscribe = sessionManager.onTokensRotated(listener);
+    const unsubscribe = listenForRotation(listener);
 
     await Promise.all([sessionManager.refresh(), sessionManager.refresh()]);
 
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith(rotated);
+    expect(savesWhenNotified).toBe(1);
 
     unsubscribe();
     await sessionManager.refresh();
@@ -163,19 +174,18 @@ describe('sessionManager', () => {
       throw new Error('listener broke');
     });
     const healthy = jest.fn();
-    const offBroken = sessionManager.onTokensRotated(broken);
-    const offHealthy = sessionManager.onTokensRotated(healthy);
+    listenForRotation(broken);
+    listenForRotation(healthy);
 
     await expect(sessionManager.refresh()).resolves.toEqual(rotated);
 
+    expect(broken).toHaveBeenCalledTimes(1);
     expect(healthy).toHaveBeenCalledWith(rotated);
-    offBroken();
-    offHealthy();
   });
 
   it('does not tell rotation listeners about failed or empty refreshes', async () => {
     const listener = jest.fn();
-    const unsubscribe = sessionManager.onTokensRotated(listener);
+    listenForRotation(listener);
 
     await expect(sessionManager.refresh()).resolves.toBeNull();
 
@@ -189,7 +199,6 @@ describe('sessionManager', () => {
     await expect(sessionManager.refresh()).rejects.toBeDefined();
 
     expect(listener).not.toHaveBeenCalled();
-    unsubscribe();
   });
 
   it('coalesces concurrent refresh attempts into one in-flight rotation', async () => {

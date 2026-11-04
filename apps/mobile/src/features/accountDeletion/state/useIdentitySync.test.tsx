@@ -4,6 +4,8 @@ import {Provider} from 'react-redux';
 import {configureStore} from '@reduxjs/toolkit';
 import {sessionManager} from '../../auth/api/sessionManager';
 import type {AccountResolution, AuthTokenResponse, Identity} from '../../auth/domain/types';
+import {appQueryClient} from '../../../app/query/queryClient';
+import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {authActions, authReducer} from '../../auth/state/authSlice';
 import {useIdentitySync} from './useIdentitySync';
 
@@ -37,6 +39,10 @@ const chefFlow: AccountResolution = {
   onboardingStatus: 'APPROVED',
 };
 
+const chefKey = createPrivateQueryKey('chef-profile-kitchen', {
+  userId: '11111111-1111-4111-8111-111111111111',
+  role: 'CHEF',
+});
 const unsubscribe = jest.fn();
 let rotated: ((tokens: AuthTokenResponse) => void) | undefined;
 
@@ -60,6 +66,7 @@ function mount(resolution: AccountResolution) {
   const store = configureStore({reducer: {auth: authReducer}});
   store.dispatch(authActions.authenticated(identity));
   store.dispatch(authActions.accountResolved({identity, resolution}));
+  const realDispatch = store.dispatch;
   const dispatchSpy = jest.spyOn(store, 'dispatch');
   let tree!: ReactTestRenderer.ReactTestRenderer;
   act(() => {
@@ -69,13 +76,14 @@ function mount(resolution: AccountResolution) {
       </Provider>,
     );
   });
-  return {store, dispatchSpy, tree};
+  return {store, dispatchSpy, realDispatch, tree};
 }
 
 describe('useIdentitySync', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     rotated = undefined;
+    appQueryClient.clear();
     jest.mocked(sessionManager.onTokensRotated).mockImplementation(listener => {
       rotated = listener;
       return unsubscribe;
@@ -125,13 +133,33 @@ describe('useIdentitySync', () => {
     expect(dispatchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('moves a chef-mode session to Customer when the identity loses CHEF', () => {
-    const {store, dispatchSpy} = mount(chefFlow);
+  it('purges Chef-private data before moving a chef-mode session to Customer', async () => {
+    appQueryClient.setQueryData(chefKey, {secret: 'chef'});
+    const {store, dispatchSpy, realDispatch} = mount(chefFlow);
+    let chefDataWhenRoleSwitched: unknown = 'not switched';
+    dispatchSpy.mockImplementation((action: any) => {
+      if (authActions.roleSelected.match(action) && action.payload === 'CUSTOMER') {
+        chefDataWhenRoleSwitched = appQueryClient.getQueryData(chefKey);
+      }
+      return realDispatch(action);
+    });
 
-    act(() => rotated?.(tokensFor({...identity, roles: ['CUSTOMER']})));
+    await act(async () => rotated?.(tokensFor({...identity, roles: ['CUSTOMER']})));
 
     expect(dispatchSpy).toHaveBeenCalledWith(authActions.roleSelected('CUSTOMER'));
+    expect(chefDataWhenRoleSwitched).toBeUndefined();
     expect(store.getState().auth.selectedRole).toBe('CUSTOMER');
+    expect(store.getState().auth.accountResolution).toBeNull();
+  });
+
+  it('stays in the Chef root when the Chef-private purge fails', async () => {
+    const {store, dispatchSpy} = mount(chefFlow);
+    jest.spyOn(appQueryClient, 'cancelQueries').mockRejectedValueOnce(new Error('cancel failed'));
+
+    await act(async () => rotated?.(tokensFor({...identity, roles: ['CUSTOMER']})));
+
+    expect(dispatchSpy).not.toHaveBeenCalledWith(authActions.roleSelected('CUSTOMER'));
+    expect(store.getState().auth.accountResolution).toEqual(chefFlow);
   });
 
   it('keeps a chef-mode session when the identity still holds CHEF', () => {

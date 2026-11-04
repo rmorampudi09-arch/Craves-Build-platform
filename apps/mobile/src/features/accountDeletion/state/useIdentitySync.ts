@@ -4,6 +4,7 @@ import {useAppDispatch} from '../../../app/store/hooks';
 import type {RootState} from '../../../app/store/store';
 import {sessionManager} from '../../auth/api/sessionManager';
 import {authActions} from '../../auth/state/authSlice';
+import {switchChefToCustomerRole} from '../../chefProfile/state/chefProfileRoleSwitch';
 
 /** Keeps the signed-in identity current on every token rotation, and moves the person off a role they lost. */
 export function useIdentitySync(): void {
@@ -20,7 +21,8 @@ export function useIdentitySync(): void {
         if (flow === 'CUSTOMER' && !hasCustomer && hasChef) {
           dispatch(authActions.roleSelected('CHEF'));
         } else if (flow === 'CHEF' && !hasChef) {
-          dispatch(authActions.roleSelected('CUSTOMER'));
+          // Purges Chef-private data first; if that fails the person stays in the Chef root.
+          switchChefToCustomerRole(dispatch).catch(() => undefined);
         }
       }),
     [dispatch, store],

@@ -68,6 +68,38 @@ craves:
     stale-lock-minutes: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_STALE_LOCK_MINUTES:5}
     retry-base-seconds: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_RETRY_BASE_SECONDS:30}
     worker-fixed-delay-ms: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_WORKER_FIXED_DELAY_MS:5000}
+  account-deletion:
+    enabled: ${CRAVES_ACCOUNT_DELETION_ENABLED:false}
+    worker-enabled: ${CRAVES_ACCOUNT_DELETION_WORKER_ENABLED:false}
+    worker-delay: ${CRAVES_ACCOUNT_DELETION_WORKER_DELAY:PT1M}
+    wait-days: ${CRAVES_ACCOUNT_DELETION_WAIT_DAYS:30}
+    reminder-days: ${CRAVES_ACCOUNT_DELETION_REMINDER_DAYS:7}
+    call-timeout: ${CRAVES_ACCOUNT_DELETION_CALL_TIMEOUT:PT20S}
+    referral-hmac-key-base64: ${CRAVES_ACCOUNT_DELETION_REFERRAL_HMAC_BASE64:}
+    services:
+      subscription:
+        base-url: ${CRAVES_ACCOUNT_DELETION_SUBSCRIPTION_BASE_URL:}
+        credential: ${CRAVES_ACCOUNT_DELETION_SUBSCRIPTION_CREDENTIAL:}
+      order:
+        base-url: ${CRAVES_ACCOUNT_DELETION_ORDER_BASE_URL:}
+        credential: ${CRAVES_ACCOUNT_DELETION_ORDER_CREDENTIAL:}
+      integration:
+        base-url: ${CRAVES_ACCOUNT_DELETION_INTEGRATION_BASE_URL:}
+        credential: ${CRAVES_ACCOUNT_DELETION_INTEGRATION_CREDENTIAL:}
+      advanced:
+        base-url: ${CRAVES_ACCOUNT_DELETION_ADVANCED_BASE_URL:}
+        credential: ${CRAVES_ACCOUNT_DELETION_ADVANCED_CREDENTIAL:}
+      notification:
+        base-url: ${CRAVES_ACCOUNT_DELETION_NOTIFICATION_BASE_URL:}
+        credential: ${CRAVES_ACCOUNT_DELETION_NOTIFICATION_CREDENTIAL:}
+      catalog:
+        base-url: ${CRAVES_ACCOUNT_DELETION_CATALOG_BASE_URL:}
+        credential: ${CRAVES_ACCOUNT_DELETION_CATALOG_CREDENTIAL:}
+      user-chef:
+        base-url: ${CRAVES_ACCOUNT_DELETION_USER_CHEF_BASE_URL:}
+        credential: ${CRAVES_ACCOUNT_DELETION_USER_CHEF_CREDENTIAL:}
+      referral:
+        base-url: ${CRAVES_ACCOUNT_DELETION_REFERRAL_BASE_URL:}
 
 # Handbook 099: every log line carries the request's X-Correlation-ID (MDC key correlationId, set by CorrelationIdConfiguration).
 logging:

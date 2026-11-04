@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class AccountErasureIT {
     ReferralTestRig r;
     AccountErasureService erasure;
-    @BeforeEach void setup() { r=new ReferralTestRig(); erasure=new AccountErasureService(r.db); }
+    @BeforeEach void setup() { r=new ReferralTestRig(); erasure=new AccountErasureService(r.db,ReferralTestRig.settings(true)); }
 
     /** A member whose wallet holds 2000 paise of available credit, as in ReferralHttpContractIT. */
     ReferralTestRig.Member memberWithCredit() {
@@ -75,6 +75,34 @@ class AccountErasureIT {
         assertEquals(owner.id(),uuid(entry,"user_id"));assertEquals(-2000,number(entry,"available_delta"));assertEquals(2000,number(entry,"counterparty_delta"));
         assertEquals(0,number(entry,"pending_delta")+number(entry,"reserved_delta"));assertTrue(entry.get("event_key").toString().startsWith("forfeit:"));
         assertEquals(1,r.db.count("SELECT count(*) FROM referral_schema.outbox WHERE event_key=?","journal:"+number(entry,"id")),"finance still gets the entry");
+    }
+    @Test void wholeAccountWithABalanceWaitsWhileForfeitIsOff() {
+        var owner=memberWithCredit();
+        long journal=journalRows();String member=memberJson(owner.id());var wallet=r.db.rows("SELECT * FROM referral_schema.wallet WHERE user_id=?",owner.id());
+        var off=new AccountErasureService(r.db,ReferralTestRig.settings(false));
+        var blockers=off.blockers(owner.id(),Scope.ALL);
+        assertEquals(List.of("FORFEIT_AWAITING_FINANCE"),codes(blockers));
+        assertEquals("referral balance can't be forfeited until finance approves the forfeiture account",blockers.getFirst().detail());
+        var result=off.erase(UUID.randomUUID(),owner.id(),Scope.ALL);
+        assertFalse(result.done());assertEquals(blockers,result.blockers());
+        assertEquals(wallet,r.db.rows("SELECT * FROM referral_schema.wallet WHERE user_id=?",owner.id()));
+        assertEquals(journal,journalRows());assertEquals(member,memberJson(owner.id()));assertTrue(active(owner));
+        // One side only never forfeits, so the switch does not matter to it.
+        for(Scope scope:List.of(Scope.CHEF,Scope.CUSTOMER)) { assertTrue(off.blockers(owner.id(),scope).isEmpty(),scope.name());assertAllZero(off.erase(UUID.randomUUID(),owner.id(),scope)); }
+    }
+    @Test void wholeAccountWithZeroBalanceErasesWhileForfeitIsOff() {
+        var owner=r.member(null);long journal=journalRows();
+        var off=new AccountErasureService(r.db,ReferralTestRig.settings(false));
+        assertTrue(off.blockers(owner.id(),Scope.ALL).isEmpty());
+        assertEquals(Map.of("journal",0,"member",1),off.erase(UUID.randomUUID(),owner.id(),Scope.ALL).counts());
+        assertEquals(journal,journalRows());assertFalse(active(owner));
+        assertThrows(ReferralProblem.class,()->r.member(owner),"the code is retired");
+    }
+    @Test void forfeitOnBehavesAsPlanOne() {
+        var owner=memberWithCredit();
+        assertTrue(erasure.blockers(owner.id(),Scope.ALL).isEmpty());
+        assertEquals(Map.of("journal",1,"member",1),erasure.erase(UUID.randomUUID(),owner.id(),Scope.ALL).counts());
+        assertEquals(0,r.balance(owner,"available_paise"));
     }
     @Test void aCashOutThatIsNotFinishedBlocksAllOnlyAndNothingChanges() {
         var owner=memberWithCredit();r.assess(owner);UUID cashout=UUID.randomUUID();

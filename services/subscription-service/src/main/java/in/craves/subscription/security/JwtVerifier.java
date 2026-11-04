@@ -71,7 +71,9 @@ public class JwtVerifier {
             List<String> roles = objectMapper.convertValue(claims.get("roles"), new TypeReference<List<String>>() {
             });
 
-            return new CurrentUser(identityId, firebaseUid, phoneNumber, roles == null ? List.of() : roles);
+            Object deletionPending = claims.get("deletion_pending");
+            return new CurrentUser(identityId, firebaseUid, phoneNumber, roles == null ? List.of() : roles,
+                deletionPending == null ? null : String.valueOf(deletionPending));
         } catch (ApiException ex) {
             throw ex;
         } catch (Exception ex) {

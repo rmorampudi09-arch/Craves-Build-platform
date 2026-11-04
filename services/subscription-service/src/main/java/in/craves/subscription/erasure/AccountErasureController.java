@@ -53,6 +53,16 @@ public class AccountErasureController {
         return service.prepare(request.identityId(), request.scope(), request.requestId());
     }
 
+    /** Undoes prepare's closing of the chef's plans when the person keeps their account. */
+    @PostMapping("/release")
+    public ErasureResponse release(
+        @RequestHeader(value = INTERNAL_HEADER, required = false) String internalAccess,
+        @Valid @RequestBody ErasureRequest request
+    ) {
+        requireInternal(internalAccess);
+        return service.release(request.identityId(), request.scope(), request.requestId());
+    }
+
     @PostMapping
     public ResponseEntity<ErasureResponse> erase(
         @RequestHeader(value = INTERNAL_HEADER, required = false) String internalAccess,

@@ -61,6 +61,12 @@ public class KitchenScheduleService {
         KitchenScheduleUpdateRequest request
     ) {
         UUID kitchenId = requireChefKitchen(principal);
+        // The only way to reopen a kitchen, so only release may do it while a deletion is pending.
+        if (Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM catalog_schema.kitchen_schedule_config WHERE kitchen_id = ? AND pause_reason = ?)",
+            Boolean.class, kitchenId, ACCOUNT_DELETION_REASON))) {
+            throw ApiException.conflict("ACCOUNT_DELETION_PENDING", "Your account is set to be deleted. Tap Keep my account to open your kitchen.");
+        }
         validateScheduleRequest(request);
         if (Boolean.TRUE.equals(request.acceptingOrders())) financeEligibility.requireChef(principal.identityId());
         ensureConfig(kitchenId);
@@ -97,20 +103,43 @@ public class KitchenScheduleService {
         return newState;
     }
 
-    /** Account deletion: stops new orders to every kitchen of this person (no pause date, so nothing reopens it). Returns how many changed. */
+    /**
+     * Account deletion: stops new orders to every kitchen of this person (no pause date, so nothing reopens it) and keeps
+     * how each one was, once, for {@link #releaseAccountDeletion}. Returns how many changed.
+     */
     @Transactional
     public int closeForAccountDeletion(UUID identityId) {
         int changed = 0;
         for (UUID kitchenId : jdbcTemplate.queryForList("SELECT id FROM catalog_schema.kitchen_profile WHERE identity_id = ?", UUID.class, identityId)) {
             ensureConfig(kitchenId);
+            // In an UPDATE the right-hand sides read the old row, so the prior columns get the values being replaced.
             changed += jdbcTemplate.update(
                 "UPDATE catalog_schema.kitchen_schedule_config " +
-                    "SET accepting_orders = false, paused_until = NULL, pause_reason = ?, updated_at = now() " +
+                    "SET deletion_prior_accepting = CASE WHEN deletion_prior_saved THEN deletion_prior_accepting ELSE accepting_orders END, " +
+                    "deletion_prior_paused_until = CASE WHEN deletion_prior_saved THEN deletion_prior_paused_until ELSE paused_until END, " +
+                    "deletion_prior_pause_reason = CASE WHEN deletion_prior_saved THEN deletion_prior_pause_reason ELSE pause_reason END, " +
+                    "deletion_prior_saved = true, " +
+                    "accepting_orders = false, paused_until = NULL, pause_reason = ?, updated_at = now() " +
                     "WHERE kitchen_id = ? AND (accepting_orders OR paused_until IS NOT NULL OR pause_reason IS DISTINCT FROM ?)",
                 ACCOUNT_DELETION_REASON, kitchenId, ACCOUNT_DELETION_REASON
             );
         }
         return changed;
+    }
+
+    /**
+     * Account deletion kept: puts every kitchen closed by {@link #closeForAccountDeletion} back exactly as it was.
+     * A kitchen not closed for deletion is left alone, so a repeat changes nothing. Returns how many were restored.
+     */
+    public int releaseAccountDeletion(UUID identityId) {
+        // shortcut: a kitchen closed before the prior state was kept has none to restore, so it comes back closed (COALESCE) and unlocked; the chef reopens it.
+        return jdbcTemplate.update(
+            "UPDATE catalog_schema.kitchen_schedule_config " +
+                "SET accepting_orders = COALESCE(deletion_prior_accepting, false), paused_until = deletion_prior_paused_until, pause_reason = deletion_prior_pause_reason, " +
+                "deletion_prior_accepting = NULL, deletion_prior_paused_until = NULL, deletion_prior_pause_reason = NULL, deletion_prior_saved = false, updated_at = now() " +
+                "WHERE pause_reason = ? AND kitchen_id IN (SELECT id FROM catalog_schema.kitchen_profile WHERE identity_id = ?)",
+            ACCOUNT_DELETION_REASON, identityId
+        );
     }
 
     @Transactional

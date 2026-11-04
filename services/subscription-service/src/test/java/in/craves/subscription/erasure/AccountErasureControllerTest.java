@@ -62,7 +62,7 @@ class AccountErasureControllerTest {
 
     @Test
     void everyCallNeedsTheInternalSecret() throws Exception {
-        for (String path : List.of("/blockers", "/prepare", "")) {
+        for (String path : List.of("/blockers", "/prepare", "/release", "")) {
             mockMvc.perform(post(BASE + path).contentType(MediaType.APPLICATION_JSON).content(body("CUSTOMER")))
                 .andExpect(status().isUnauthorized());
             mockMvc.perform(post(BASE + path).header("X-Craves-Internal-Secret", "wrong").contentType(MediaType.APPLICATION_JSON)
@@ -75,7 +75,7 @@ class AccountErasureControllerTest {
 
     @Test
     void anUnknownScopeIsABadRequest() throws Exception {
-        for (String path : List.of("/blockers", "/prepare", "")) {
+        for (String path : List.of("/blockers", "/prepare", "/release", "")) {
             mockMvc.perform(call(path, body("OTHER"))).andExpect(status().isBadRequest());
         }
         verifyNoInteractions(service);
@@ -117,6 +117,17 @@ class AccountErasureControllerTest {
             .andExpect(jsonPath("$.service").value("subscription"))
             .andExpect(jsonPath("$.status").value("DONE"))
             .andExpect(jsonPath("$.counts.customer_subscription").value(2));
+    }
+
+    @Test
+    void releaseAnswersDoneWithTheReopenedPlanCount() throws Exception {
+        when(service.release(IDENTITY, Scope.CHEF, REQUEST)).thenReturn(ErasureResponse.done(Map.of("subscription_plan", 2)));
+
+        mockMvc.perform(call("/release", body("CHEF")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.service").value("subscription"))
+            .andExpect(jsonPath("$.status").value("DONE"))
+            .andExpect(jsonPath("$.counts.subscription_plan").value(2));
     }
 
     @Test

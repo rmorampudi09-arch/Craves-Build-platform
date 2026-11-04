@@ -56,6 +56,13 @@ public class AccountErasureService {
         return counts;
     }
 
+    /** The person kept the account: the kitchens prepare closed go back to how they were. CUSTOMER has none. */
+    public Map<String, Integer> release(UUID identityId, Scope scope, UUID requestId) {
+        int released = scope == Scope.CUSTOMER ? 0 : schedule.releaseAccountDeletion(identityId);
+        if (released > 0) discoveryCache.invalidateAllDiscovery();
+        return Map.of("kitchen_schedule_config", released);
+    }
+
     /**
      * Photos are deleted first and outside the transaction: a blob cannot be rolled back, and the rows must keep
      * naming a photo until it is really gone. A storage failure therefore fails the whole call with the database
@@ -135,6 +142,16 @@ public class AccountErasureService {
         counts.put("menu_item_image", jdbc.update("""
             DELETE FROM catalog_schema.menu_item_image
              WHERE menu_item_id IN (SELECT id FROM catalog_schema.menu_item WHERE kitchen_id IN %s)
+            """.formatted(MY_KITCHENS), identityId));
+        // kitchen_profile.identity_id is unique, so a chef who applies again gets this row back: the deletion lock and the
+        // kept prior state (the chef's own pause text) go, and the kitchen stays closed until the chef opens it.
+        counts.put("kitchen_schedule_config", jdbc.update("""
+            UPDATE catalog_schema.kitchen_schedule_config
+               SET accepting_orders = false, pause_reason = NULL, deletion_prior_accepting = NULL, deletion_prior_paused_until = NULL,
+                   deletion_prior_pause_reason = NULL, deletion_prior_saved = false, updated_at = now()
+             WHERE kitchen_id IN %s
+               AND (accepting_orders OR pause_reason IS NOT NULL OR deletion_prior_accepting IS NOT NULL
+                    OR deletion_prior_paused_until IS NOT NULL OR deletion_prior_pause_reason IS NOT NULL OR deletion_prior_saved)
             """.formatted(MY_KITCHENS), identityId));
     }
 }

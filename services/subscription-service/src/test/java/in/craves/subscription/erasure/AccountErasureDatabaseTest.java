@@ -332,4 +332,145 @@ class AccountErasureDatabaseTest {
             assertTrue(chefAgain.counts().values().stream().allMatch(n -> n == 0), chefAgain.counts().toString());
         }
     }
+
+    /** Writes the audit row prepare's close statement writes, at a chosen time, so the order of changes is under the test's control. */
+    void audit(UUID onPlan, String action, String reason, int minutesFromNow) {
+        db.update("INSERT INTO subscription_schema.subscription_plan_audit(id,plan_id,actor_identity_id,action,old_status,new_status,reason,created_at) "
+            + "VALUES (?,?,?,?,'ACTIVE','ACTIVE',?, now() + make_interval(mins => ?))", UUID.randomUUID(), onPlan, chef, action, reason, minutesFromNow);
+    }
+
+    boolean accepting(UUID onPlan) {
+        return db.queryForObject("SELECT accepting_subscribers FROM subscription_schema.subscription_plan WHERE id=?", Boolean.class, onPlan);
+    }
+
+    @Test
+    void releaseReopensOnlyThePlansPrepareClosed() {
+        // A plan the chef had closed before the request, a plan prepare closes, and a plan closed by prepare that the chef then closed again by hand.
+        UUID closedByChef = UUID.randomUUID(), closedAgainByChef = UUID.randomUUID(), neverAudited = UUID.randomUUID();
+        addPlan(closedByChef, chef, "ACTIVE", true);
+        addPlan(closedAgainByChef, chef, "ACTIVE", true);
+        addPlan(neverAudited, chef, "ACTIVE", true);
+        db.update("UPDATE subscription_schema.subscription_plan SET accepting_subscribers=FALSE WHERE id IN (?,?)", closedByChef, neverAudited);
+        audit(closedByChef, "CHEF_ACCEPTING_OFF", "Chef closed the plan to new subscribers", -60);
+        service.prepare(chef, Scope.CHEF, request);
+        audit(closedAgainByChef, "CHEF_ACCEPTING_OFF", "Chef closed the plan to new subscribers", 1);
+        assertEquals(0, count("subscription_schema.subscription_plan WHERE chef_identity_id=? AND accepting_subscribers", chef));
+
+        ErasureResponse released = service.release(chef, Scope.CHEF, request);
+
+        assertEquals("DONE", released.status());
+        assertEquals(Map.of("subscription_plan", 1), released.counts());
+        assertTrue(accepting(plan));
+        assertFalse(accepting(closedByChef));
+        assertFalse(accepting(closedAgainByChef));
+        assertFalse(accepting(neverAudited));
+        assertEquals(1, count("subscription_schema.subscription_plan_audit WHERE plan_id=? AND action='CHEF_ACCEPTING_ON' "
+            + "AND actor_identity_id=? AND old_status='ACTIVE' AND new_status='ACTIVE' AND reason='Account deletion cancelled'", plan, chef));
+        assertEquals(1, count("subscription_schema.subscription_plan_audit WHERE reason='Account deletion cancelled'"));
+        assertEquals(0, service.release(chef, Scope.ALL, request).counts().get("subscription_plan"));
+        assertEquals(1, count("subscription_schema.subscription_plan_audit WHERE reason='Account deletion cancelled'"));
+    }
+
+    @Test
+    void releaseLeavesOtherChefsAndCustomerOnlyRequestsAlone() {
+        UUID otherChefPlan = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        addPlan(otherChefPlan, other, "ACTIVE", true);
+        service.prepare(chef, Scope.CHEF, request);
+        service.prepare(other, Scope.CHEF, request);
+
+        assertEquals(0, service.release(chef, Scope.CUSTOMER, request).counts().get("subscription_plan"));
+        assertFalse(accepting(plan));
+
+        assertEquals(1, service.release(chef, Scope.ALL, request).counts().get("subscription_plan"));
+        assertTrue(accepting(plan));
+        assertFalse(accepting(otherChefPlan));
+    }
+
+    @Test
+    void releaseDoesNotReopenAPlanAnAdminRetiredMeanwhile() {
+        service.prepare(chef, Scope.CHEF, request);
+        db.update("UPDATE subscription_schema.subscription_plan SET status='INACTIVE' WHERE id=?", plan);
+
+        assertEquals(0, service.release(chef, Scope.CHEF, request).counts().get("subscription_plan"));
+        assertFalse(accepting(plan));
+    }
+
+    @Test
+    void releaseReopensADraftPlanPrepareClosedAndAuditsItsOwnStatus() {
+        // A new plan is a DRAFT that already accepts subscribers, so prepare closes it like any other.
+        UUID draft = UUID.randomUUID();
+        addPlan(draft, chef, "DRAFT", true);
+        service.prepare(chef, Scope.CHEF, request);
+        assertFalse(accepting(draft));
+
+        assertEquals(2, service.release(chef, Scope.CHEF, request).counts().get("subscription_plan"));
+
+        assertTrue(accepting(draft));
+        assertTrue(accepting(plan));
+        assertEquals(1, count("subscription_schema.subscription_plan_audit WHERE plan_id=? AND action='CHEF_ACCEPTING_ON' "
+            + "AND old_status='DRAFT' AND new_status='DRAFT' AND reason='Account deletion cancelled'", draft));
+        assertEquals(1, count("subscription_schema.subscription_plan_audit WHERE plan_id=? AND action='CHEF_ACCEPTING_ON' "
+            + "AND old_status='ACTIVE' AND new_status='ACTIVE' AND reason='Account deletion cancelled'", plan));
+    }
+
+    @Test
+    void anAbandonedCheckoutOnAChefsPlanNoLongerBlocksTheChef() {
+        UUID stale = subscribe(customer, plan, "PENDING_PAYMENT", null);
+        ageCheckout(stale, 25);
+
+        assertEquals(List.of(), service.blockers(chef, Scope.CHEF));
+        assertEquals(List.of(), service.blockers(chef, Scope.ALL));
+
+        UUID fresh = subscribe(UUID.randomUUID(), plan, "PENDING_PAYMENT", null);
+        ageCheckout(fresh, 1);
+
+        assertEquals(List.of("PLAN_HAS_ACTIVE_SUBSCRIBERS"), codes(service.blockers(chef, Scope.CHEF)));
+        assertEquals("1 subscription(s) are still running on this chef's meal plans", service.blockers(chef, Scope.CHEF).get(0).detail());
+    }
+
+    void ageCheckout(UUID subscription, int hours) {
+        db.update("UPDATE subscription_schema.customer_subscription SET created_at = now() - make_interval(hours => ?) WHERE id=?", hours, subscription);
+    }
+
+    @Test
+    void anAbandonedCheckoutNoLongerBlocks() {
+        UUID checkout = subscribe(customer, plan, "PENDING_PAYMENT", "Leave at the gate");
+        invoice(checkout, plan, "PAYMENT_REQUESTED");
+        UUID second = subscribe(customer, plan, "PENDING_PAYMENT", null);
+        invoice(second, plan, "PAYMENT_PENDING");
+        ageCheckout(checkout, 25);
+        ageCheckout(second, 25);
+
+        assertEquals(List.of(), service.blockers(customer, Scope.CUSTOMER));
+        ErasureResponse done = service.erase(customer, Scope.ALL, request);
+
+        assertEquals("DONE", done.status());
+        assertEquals(AccountErasureService.ERASED_TEXT, notes(checkout));
+        assertEquals("PENDING_PAYMENT", status(checkout));
+        assertEquals(2, count("subscription_schema.subscription_invoice WHERE customer_identity_id=? AND status IN ('PAYMENT_REQUESTED','PAYMENT_PENDING')", customer));
+    }
+
+    @Test
+    void aFreshCheckoutStillBlocks() {
+        UUID checkout = subscribe(customer, plan, "PENDING_PAYMENT", "Leave at the gate");
+        invoice(checkout, plan, "PAYMENT_REQUESTED");
+        ageCheckout(checkout, 1);
+
+        assertEquals(List.of("SUBSCRIPTION_STILL_ACTIVE", "SUBSCRIPTION_UNPAID_INVOICE"), codes(service.blockers(customer, Scope.CUSTOMER)));
+        assertEquals("BLOCKED", service.erase(customer, Scope.CUSTOMER, request).status());
+        assertEquals("Leave at the gate", notes(checkout));
+    }
+
+    @Test
+    void anOldRunningOrFailedPlanStillBlocks() {
+        UUID running = subscribe(customer, plan, "ACTIVE", null);
+        invoice(running, plan, "PAYMENT_REQUESTED");
+        ageCheckout(running, 48);
+        UUID failed = subscribe(customer, plan, "PAYMENT_FAILED", null);
+        ageCheckout(failed, 48);
+
+        assertEquals(List.of("SUBSCRIPTION_STILL_ACTIVE", "SUBSCRIPTION_UNPAID_INVOICE"), codes(service.blockers(customer, Scope.CUSTOMER)));
+        assertEquals("2 meal plan subscription(s) are still running", service.blockers(customer, Scope.CUSTOMER).get(0).detail());
+    }
 }

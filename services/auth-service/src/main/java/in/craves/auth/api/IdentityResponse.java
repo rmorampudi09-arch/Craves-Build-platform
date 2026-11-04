@@ -13,6 +13,10 @@ public record IdentityResponse(
     String displayName,
     String status,
     List<String> roles,
-    Instant lastLoginAt
+    Instant lastLoginAt,
+    PendingDeletion pendingDeletion
 ) {
+    /** The person's open account deletion request, for the app banner; null when there is none. */
+    public record PendingDeletion(UUID requestId, String scope, String status, Instant dueAt) {
+    }
 }

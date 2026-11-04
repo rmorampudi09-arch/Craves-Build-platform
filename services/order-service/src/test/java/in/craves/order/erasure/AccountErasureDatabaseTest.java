@@ -40,6 +40,9 @@ class AccountErasureDatabaseTest {
     }
 
     private static final String PHONE = "9876543210";
+    private static final String CHEF_PHONE = "9123456780";
+    private static final List<String> CHEF_CONTACT = List.of(CHEF_PHONE, "kitchen.owner@example.com", "5 Kitchen Lane", "Floor 2",
+        "Opposite the park", "Kondapur", "500084", "17.46", "78.36");
     private static final String ORDER_TABLES = "order_schema.customer_order o";
 
     private JdbcTemplate jdbc;
@@ -201,10 +204,12 @@ class AccountErasureDatabaseTest {
 
     @Test
     void everyStatusThatIsNotFinishedIsABlocker() {
-        for (String status : List.of("PAYMENT_PENDING", "PAID", "CHEF_ACCEPTANCE_PENDING", "CHEF_ACCEPTED", "PREPARING",
+        // A checkout still waiting for its payment (CREATED is the legacy name) blocks only while it can still be paid.
+        for (String status : List.of("PAYMENT_PENDING", "CREATED", "PAID", "CHEF_ACCEPTANCE_PENDING", "CHEF_ACCEPTED", "PREPARING",
             "READY_FOR_PICKUP", "OUT_FOR_DELIVERY")) {
             UUID id = order(customer, chef, status);
             assertEquals(List.of("ORDER_IN_PROGRESS"), codes(service.blockers(customer, Scope.CUSTOMER)), status);
+            assertEquals(List.of("KITCHEN_ORDER_IN_PROGRESS"), codes(service.blockers(chef, Scope.CHEF)), status);
             jdbc.update("DELETE FROM order_schema.customer_order WHERE id = ?", id);
         }
         for (String status : List.of("REFUND_PENDING", "REFUND_FAILED")) {
@@ -215,7 +220,121 @@ class AccountErasureDatabaseTest {
         for (String status : List.of("DELIVERED", "CHEF_REJECTED", "CANCELLED", "REFUNDED")) {
             order(customer, chef, status);
         }
+        // Abandoned checkouts: older than the payable window, nobody can pay them any more.
+        for (String status : List.of("PAYMENT_PENDING", "CREATED")) {
+            abandon(order(customer, chef, status));
+        }
         assertEquals(List.of(), service.blockers(customer, Scope.ALL));
+        assertEquals(List.of(), service.blockers(chef, Scope.ALL));
+    }
+
+    @Test
+    void anAbandonedCheckoutBlocksNobodyAndIsAnonymisedLikeAFinishedOrder() {
+        UUID abandoned = order(customer, chef, "PAYMENT_PENDING");
+        bindFinancialSnapshot(abandoned);
+        abandon(abandoned);
+        String moneyBefore = withoutPersonalColumns(abandoned);
+
+        assertEquals(List.of(), service.blockers(customer, Scope.ALL));
+        assertEquals(List.of(), service.blockers(chef, Scope.ALL));
+        ErasureResponse customerSide = service.erase(customer, Scope.CUSTOMER, request);
+
+        assertEquals("DONE", customerSide.status());
+        assertEquals(1, customerSide.counts().get("customer_order"));
+        assertFalse(rowOf(abandoned).contains(PHONE));
+        assertFalse(rowOf(abandoned).contains("the guard"));
+        // Still there, with its status, ids, amounts and timestamps: never deleted.
+        assertEquals(moneyBefore, withoutPersonalColumns(abandoned));
+        assertEquals("PAYMENT_PENDING", jdbc.queryForObject("SELECT status FROM order_schema.customer_order WHERE id = ?", String.class, abandoned));
+
+        // The kitchen's side of the same abandoned checkout is finished too, so the chef's contact goes.
+        ErasureResponse chefSide = service.erase(chef, Scope.CHEF, request);
+        assertEquals("DONE", chefSide.status());
+        assertEquals(1, chefSide.counts().get("customer_order_pickup"));
+        for (String gone : CHEF_CONTACT) {
+            assertFalse(rowOf(abandoned).contains(gone), gone + " is still in " + rowOf(abandoned));
+        }
+
+        // A fresh one can still be paid: it blocks both sides and nothing changes.
+        UUID fresh = order(customer, chef, "PAYMENT_PENDING");
+        String freshBefore = rowOf(fresh);
+        assertEquals("BLOCKED", service.erase(customer, Scope.CUSTOMER, request).status());
+        assertEquals(List.of("KITCHEN_ORDER_IN_PROGRESS"), codes(service.erase(chef, Scope.CHEF, request).blockers()));
+        assertEquals(freshBefore, rowOf(fresh));
+    }
+
+    @Test
+    void eraseChefAnonymisesThePickupContactOnTheKitchensFinishedOrdersOnly() {
+        UUID bound = order(customer, chef, "PAYMENT_PENDING");
+        bindFinancialSnapshot(bound);
+        jdbc.update("UPDATE order_schema.customer_order SET status = 'CANCELLED' WHERE id = ?", bound);
+        UUID delivered = order(other, chef, "DELIVERED");
+        UUID othersKitchen = order(other, UUID.randomUUID(), "DELIVERED");
+        // The chef also ordered as a customer from another kitchen: that kitchen's contact is not theirs to erase.
+        UUID placedByTheChef = order(chef, UUID.randomUUID(), "DELIVERED");
+        Map<UUID, String> restBefore = Map.of(bound, withoutPickupColumns(bound), delivered, withoutPickupColumns(delivered));
+        String othersBefore = rowOf(othersKitchen);
+        String placedBefore = rowOf(placedByTheChef);
+        String snapshotBefore = jdbc.queryForObject("SELECT to_jsonb(s)::text FROM order_schema.order_financial_snapshot s", String.class);
+
+        ErasureResponse response = service.erase(chef, Scope.CHEF, request);
+
+        assertEquals("DONE", response.status());
+        assertEquals(Map.of("customer_order_pickup", 2), response.counts());
+        for (UUID id : List.of(bound, delivered)) {
+            for (String gone : CHEF_CONTACT) {
+                assertFalse(rowOf(id).contains(gone), gone + " is still in " + rowOf(id));
+            }
+            Map<String, Object> pickup = jdbc.queryForMap("SELECT * FROM order_schema.customer_order WHERE id = ?", id);
+            assertEquals(AccountErasureService.ERASED_PHONE, pickup.get("pickup_phone_number"));
+            assertEquals(AccountErasureService.ERASED_TEXT, pickup.get("pickup_address_line1"));
+            assertEquals(AccountErasureService.ERASED_TEXT, pickup.get("pickup_area_name"));
+            assertEquals(AccountErasureService.ERASED_POSTAL_CODE, pickup.get("pickup_postal_code"));
+            assertNull(pickup.get("pickup_email"));
+            assertNull(pickup.get("pickup_address_line2"));
+            assertNull(pickup.get("pickup_landmark"));
+            // The customer's drop-off, the kitchen name, money, ids and timestamps are exactly as they were.
+            assertEquals(restBefore.get(id), withoutPickupColumns(id));
+        }
+        // The pickup check still holds: an address line means every required field is filled in.
+        assertEquals(0, jdbc.queryForObject(
+            "SELECT count(*) FROM order_schema.customer_order WHERE pickup_address_line1 IS NOT NULL AND (pickup_phone_number IS NULL "
+                + "OR pickup_area_name IS NULL OR pickup_city IS NULL OR pickup_state IS NULL OR pickup_postal_code IS NULL "
+                + "OR pickup_latitude IS NULL OR pickup_longitude IS NULL)", Integer.class));
+        // The money guard did not fire and the snapshot is untouched.
+        assertEquals(snapshotBefore, jdbc.queryForObject("SELECT to_jsonb(s)::text FROM order_schema.order_financial_snapshot s", String.class));
+        assertEquals(othersBefore, rowOf(othersKitchen));
+        assertEquals(placedBefore, rowOf(placedByTheChef));
+
+        String kitchenOrdersAfterFirst = rowOf(bound) + rowOf(delivered);
+        for (Scope scope : List.of(Scope.CHEF, Scope.ALL)) {
+            assertEquals(0, service.erase(chef, scope, request).counts().get("customer_order_pickup"), scope.name());
+        }
+        assertEquals(kitchenOrdersAfterFirst, rowOf(bound) + rowOf(delivered));
+        // ALL also ran the customer side: the order the chef placed lost its drop-off, but the other kitchen's contact on it stays.
+        assertFalse(rowOf(placedByTheChef).contains(PHONE));
+        assertTrue(rowOf(placedByTheChef).contains(CHEF_PHONE) && rowOf(placedByTheChef).contains("5 Kitchen Lane"), rowOf(placedByTheChef));
+        assertEquals(othersBefore, rowOf(othersKitchen));
+    }
+
+    @Test
+    void eraseCustomerBlanksTheNoteOnAnOrderWithoutADropoff() {
+        UUID noAddress = order(customer, chef, "DELIVERED");
+        // An order from before the address snapshot: no drop-off at all, only the customer's note.
+        jdbc.update("UPDATE order_schema.customer_order SET delivery_address_id = NULL, dropoff_recipient_name = NULL, dropoff_contact_phone = NULL, "
+            + "dropoff_address_line1 = NULL, dropoff_address_line2 = NULL, dropoff_landmark = NULL, dropoff_area_name = NULL, dropoff_city = NULL, "
+            + "dropoff_state = NULL, dropoff_postal_code = NULL, dropoff_latitude = NULL, dropoff_longitude = NULL WHERE id = ?", noAddress);
+        UUID withAddress = order(customer, chef, "DELIVERED");
+
+        ErasureResponse response = service.erase(customer, Scope.CUSTOMER, request);
+
+        assertEquals(2, response.counts().get("customer_order"));
+        for (UUID id : List.of(noAddress, withAddress)) {
+            assertNull(jdbc.queryForObject("SELECT customer_note FROM order_schema.customer_order WHERE id = ?", String.class, id));
+        }
+        assertNull(jdbc.queryForObject("SELECT dropoff_address_line1 FROM order_schema.customer_order WHERE id = ?", String.class, noAddress),
+            "no address is invented for an order that had none");
+        assertEquals(0, service.erase(customer, Scope.CUSTOMER, request).counts().get("customer_order"));
     }
 
     @Test
@@ -265,16 +384,18 @@ class AccountErasureDatabaseTest {
     }
 
     @Test
-    void eraseChefHasNothingToRemove() {
+    void eraseChefRemovesOnlyTheKitchensContactAndKeepsTheCustomerSide() {
         UUID cooked = order(other, chef, "DELIVERED");
         cart(chef, 1);
-        String before = rowOf(cooked);
+        String before = withoutPickupColumns(cooked);
 
         ErasureResponse response = service.erase(chef, Scope.CHEF, request);
 
         assertEquals("DONE", response.status());
-        assertEquals(Map.of(), response.counts());
-        assertEquals(before, rowOf(cooked));
+        assertEquals(Map.of("customer_order_pickup", 1), response.counts());
+        // The customer's drop-off and note on the kitchen's order, and the chef's own cart, stay.
+        assertEquals(before, withoutPickupColumns(cooked));
+        assertTrue(rowOf(cooked).contains(PHONE));
         assertEquals(1, count("order_schema.cart WHERE customer_identity_id = ?", chef));
     }
 
@@ -413,7 +534,10 @@ class AccountErasureDatabaseTest {
 
     // ---- fixtures ----
 
-    /** A checkout with its one order, both carrying the same delivery address snapshot and a note. */
+    /**
+     * A checkout with its one order, both carrying the same delivery address snapshot and a note; the order also carries the
+     * kitchen's pickup contact the way checkout copies it in.
+     */
     private UUID order(UUID owner, UUID cookedBy, String status) {
         UUID checkout = UUID.randomUUID();
         UUID id = UUID.randomUUID();
@@ -430,15 +554,24 @@ class AccountErasureDatabaseTest {
                 prep_time_minutes, accepted_at, ready_at, chef_acceptance_requested_at, chef_acceptance_expires_at,
                 food_subtotal, platform_fee, tax_amount, delivery_fee, grand_total, delivery_address_id, dropoff_recipient_name,
                 dropoff_contact_phone, dropoff_address_line1, dropoff_address_line2, dropoff_landmark, dropoff_area_name,
-                dropoff_city, dropoff_state, dropoff_postal_code, dropoff_latitude, dropoff_longitude, customer_note)
+                dropoff_city, dropoff_state, dropoff_postal_code, dropoff_latitude, dropoff_longitude, customer_note,
+                pickup_phone_number, pickup_email, pickup_address_line1, pickup_address_line2, pickup_landmark, pickup_area_name,
+                pickup_city, pickup_state, pickup_postal_code, pickup_latitude, pickup_longitude)
             SELECT ?, c.id, c.customer_identity_id, ?, ?, ?, 20, now() - interval '1 hour', now() - interval '40 minutes',
                 now() - interval '2 hours', now() - interval '90 minutes', 100, 0, 0, 0, 100, c.delivery_address_id,
                 c.dropoff_recipient_name, c.dropoff_contact_phone, c.dropoff_address_line1, c.dropoff_address_line2,
                 c.dropoff_landmark, c.dropoff_area_name, c.dropoff_city, c.dropoff_state, c.dropoff_postal_code,
-                c.dropoff_latitude, c.dropoff_longitude, 'Leave it with the guard'
+                c.dropoff_latitude, c.dropoff_longitude, 'Leave it with the guard',
+                ?, 'kitchen.owner@example.com', '5 Kitchen Lane', 'Floor 2', 'Opposite the park', 'Kondapur', 'Hyderabad',
+                'Telangana', '500084', 17.4612345, 78.3654321
             FROM order_schema.checkout c WHERE c.id = ?
-            """, id, UUID.randomUUID(), cookedBy, status, checkout);
+            """, id, UUID.randomUUID(), cookedBy, status, CHEF_PHONE, checkout);
         return id;
+    }
+
+    /** Makes an order older than the payable window: a checkout nobody paid for and nobody will. */
+    private void abandon(UUID orderId) {
+        jdbc.update("UPDATE order_schema.customer_order SET created_at = now() - interval '25 hours' WHERE id = ?", orderId);
     }
 
     /** Binds the order's money the way checkout does, which makes the money guard triggers apply to it. */
@@ -558,6 +691,13 @@ class AccountErasureDatabaseTest {
         return jdbc.queryForObject("SELECT (to_jsonb(o) - ARRAY['dropoff_recipient_name', 'dropoff_contact_phone', 'dropoff_address_line1', "
             + "'dropoff_address_line2', 'dropoff_landmark', 'dropoff_area_name', 'dropoff_city', 'dropoff_state', 'dropoff_postal_code', "
             + "'dropoff_latitude', 'dropoff_longitude', 'customer_note'])::text FROM " + ORDER_TABLES + " WHERE id = ?", String.class, orderId);
+    }
+
+    /** Every column of the order except the kitchen's pickup contact, which a chef erase is allowed to change. */
+    private String withoutPickupColumns(UUID orderId) {
+        return jdbc.queryForObject("SELECT (to_jsonb(o) - ARRAY['pickup_phone_number', 'pickup_email', 'pickup_address_line1', "
+            + "'pickup_address_line2', 'pickup_landmark', 'pickup_area_name', 'pickup_city', 'pickup_state', 'pickup_postal_code', "
+            + "'pickup_latitude', 'pickup_longitude'])::text FROM " + ORDER_TABLES + " WHERE id = ?", String.class, orderId);
     }
 
     /** The listed rows of a table as one string, for comparing before and after. */

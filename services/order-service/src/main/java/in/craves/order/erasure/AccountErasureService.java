@@ -3,11 +3,8 @@ package in.craves.order.erasure;
 import in.craves.order.erasure.AccountErasureDtos.Blocker;
 import in.craves.order.erasure.AccountErasureDtos.ErasureResponse;
 import in.craves.order.erasure.AccountErasureDtos.Scope;
-import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
+import in.craves.order.idempotency.IdempotencyKeyFilter;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,12 +16,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Account deletion. An order that is still being paid for, cooked, delivered or refunded stops it. Otherwise CUSTOMER erase
- * deletes the cart, reviews, delivery codes and replay records, and replaces the delivery address, phone and note of every
- * order and checkout with placeholders. The order rows stay with their ids, amounts and owner: once an order is bound to a
- * financial snapshot the database refuses any change to them. Copies of the address in the message tables go too, but only
- * once the message is finished (sent, published or processed): one still waiting to go out is left for the sender. A chef
- * has nothing to remove here, only orders that may block. Every step is safe to repeat.
+ * Account deletion. An order that is still being paid for, cooked, delivered or refunded stops it; a checkout nobody paid
+ * within {@link #PAYABLE_HOURS} hours is abandoned, not in progress. Otherwise CUSTOMER erase deletes the cart, reviews,
+ * delivery codes and replay records, and replaces the delivery address, phone and note of every order and checkout with
+ * placeholders. The order rows stay with their ids, amounts and owner: once an order is bound to a financial snapshot the
+ * database refuses any change to them. Copies of the address in the message tables go too, but only once the message is
+ * finished (sent, published or processed): one still waiting to go out is left for the sender. CHEF erase replaces the
+ * kitchen's pickup phone, email and address on the kitchen's finished orders; the kitchen name stays. Every step is safe to repeat.
  */
 @Service
 public class AccountErasureService {
@@ -35,9 +33,13 @@ public class AccountErasureService {
     public static final String ERASED_POSTAL_CODE = "000000";
     private static final Logger LOGGER = LoggerFactory.getLogger(AccountErasureService.class);
     private static final String SCHEMA = "order_schema.";
-    private static final String IN_PROGRESS =
-        "'PAYMENT_PENDING', 'PAID', 'CHEF_ACCEPTANCE_PENDING', 'CHEF_ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'";
-    private static final String REFUND_OPEN = "'REFUND_PENDING', 'REFUND_FAILED'";
+    /** No Cashfree order_expiry_time is sent and no config sets one, so a checkout unpaid after a day counts as abandoned. */
+    static final int PAYABLE_HOURS = 24;
+    /** Being cooked or delivered, or (PAYMENT_PENDING, legacy CREATED) still payable. */
+    private static final String IN_PROGRESS = "(status IN ('PAID', 'CHEF_ACCEPTANCE_PENDING', 'CHEF_ACCEPTED', 'PREPARING', "
+        + "'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY') OR (status IN ('PAYMENT_PENDING', 'CREATED') AND created_at > now() - interval '"
+        + PAYABLE_HOURS + " hours'))";
+    private static final String REFUND_OPEN = "status IN ('REFUND_PENDING', 'REFUND_FAILED')";
     // Line 2 and landmark are optional, so they are cleared; coordinates 0, 0 pass the check that they lie on the globe.
     private static final String DROPOFF_SET = "dropoff_recipient_name = ?, dropoff_contact_phone = ?, dropoff_address_line1 = ?, "
         + "dropoff_address_line2 = NULL, dropoff_landmark = NULL, dropoff_area_name = ?, dropoff_city = ?, dropoff_state = ?, "
@@ -47,6 +49,22 @@ public class AccountErasureService {
     private static final String DROPOFF_ERASED = "?, ?, ?, NULL, NULL, ?, ?, ?, ?, 0, 0";
     private static final List<String> DROPOFF_VALUES =
         List.of(ERASED_TEXT, ERASED_PHONE, ERASED_TEXT, ERASED_TEXT, ERASED_TEXT, ERASED_TEXT, ERASED_POSTAL_CODE);
+    /**
+     * The kitchen's contact as checkout copied it onto each order. A value that is there gets its placeholder (the pickup check
+     * wants phone, area, city, state, postcode and coordinates whenever there is an address line); optional ones are cleared,
+     * and a column that was empty stays empty.
+     */
+    private static final String PICKUP_SET = "pickup_phone_number = CASE WHEN pickup_phone_number IS NOT NULL THEN ? END, pickup_email = NULL, "
+        + "pickup_address_line1 = CASE WHEN pickup_address_line1 IS NOT NULL THEN ? END, pickup_address_line2 = NULL, pickup_landmark = NULL, "
+        + "pickup_area_name = CASE WHEN pickup_area_name IS NOT NULL THEN ? END, pickup_city = CASE WHEN pickup_city IS NOT NULL THEN ? END, "
+        + "pickup_state = CASE WHEN pickup_state IS NOT NULL THEN ? END, pickup_postal_code = CASE WHEN pickup_postal_code IS NOT NULL THEN ? END, "
+        + "pickup_latitude = CASE WHEN pickup_latitude IS NOT NULL THEN 0 END, pickup_longitude = CASE WHEN pickup_longitude IS NOT NULL THEN 0 END";
+    // A row already erased holds only placeholders and nulls; <> against a null column is not true, so it never matches again.
+    private static final String PICKUP_NOT_ERASED = "(pickup_phone_number <> ? OR pickup_email IS NOT NULL OR pickup_address_line1 <> ? "
+        + "OR pickup_address_line2 IS NOT NULL OR pickup_landmark IS NOT NULL OR pickup_area_name <> ? OR pickup_city <> ? OR pickup_state <> ? "
+        + "OR pickup_postal_code <> ? OR pickup_latitude <> 0 OR pickup_longitude <> 0)";
+    private static final List<String> PICKUP_VALUES =
+        List.of(ERASED_PHONE, ERASED_TEXT, ERASED_TEXT, ERASED_TEXT, ERASED_TEXT, ERASED_POSTAL_CODE);
     private static final String OWN_REVIEWS = "SELECT id FROM " + SCHEMA + "order_review WHERE customer_identity_id = ?";
     private static final String OWN_ORDERS = "SELECT id FROM " + SCHEMA + "customer_order WHERE customer_identity_id = ?";
     // The customer's stop in a CHEF_ACCEPTED_ORDER event; merged over the stored object, so the kitchen's stop and the rest stay.
@@ -95,13 +113,16 @@ public class AccountErasureService {
             }
             counts.put("order_review", delete("order_review WHERE customer_identity_id = ?", identityId));
             counts.put("order_delivery_code", delete("order_delivery_code WHERE order_id IN (" + OWN_ORDERS + ")", identityId));
-            counts.put("idempotency_record", delete("idempotency_record WHERE actor_hash = ?", idempotencyActorHash(identityId)));
+            counts.put("idempotency_record", delete("idempotency_record WHERE actor_hash = ?", IdempotencyKeyFilter.actorHash(identityId.toString())));
             counts.put("notification_outbox", delete("notification_outbox WHERE user_identity_id = ? AND user_role = 'CUSTOMER' AND status IN ('SENT', 'DEAD')", identityId));
             counts.put("domain_event_outbox", scrubPublishedDropoffs(identityId));
             counts.put("delivery_status_inbox", scrubFinishedTrackingLinks(identityId));
             // updated_at is left alone: the admin dashboard counts deliveries by it, and the order itself did not change.
-            counts.put("customer_order", anonymiseDropoff("customer_order", true, identityId));
+            counts.put("customer_order", anonymiseDropoff("customer_order", true, identityId) + blankNoteWithoutDropoff(identityId));
             counts.put("checkout", anonymiseDropoff("checkout", false, identityId));
+        }
+        if (scope != Scope.CUSTOMER) {
+            counts.put("customer_order_pickup", anonymisePickup(identityId));
         }
         LOGGER.info("account erasure service=order requestId={} scope={} counts={}", requestId, scope, counts);
         return ErasureResponse.done(counts);
@@ -121,6 +142,21 @@ public class AccountErasureService {
                 + DROPOFF_NOW + (withNote ? ", customer_note" : "") + ") IS DISTINCT FROM ("
                 + DROPOFF_ERASED + (withNote ? ", NULL" : "") + ")",
             args.toArray());
+    }
+
+    /** Orders older than the address snapshot have no drop-off, but may still carry the customer's note. */
+    private int blankNoteWithoutDropoff(UUID identityId) {
+        return db.update("UPDATE " + SCHEMA + "customer_order SET customer_note = NULL "
+            + "WHERE customer_identity_id = ? AND dropoff_address_line1 IS NULL AND customer_note IS NOT NULL", identityId);
+    }
+
+    /** The kitchen's orders that are over (abandoned checkouts included); one still in progress blocks the erase anyway. */
+    private int anonymisePickup(UUID identityId) {
+        List<Object> args = new ArrayList<>(PICKUP_VALUES);
+        args.add(identityId);
+        args.addAll(PICKUP_VALUES);
+        return db.update("UPDATE " + SCHEMA + "customer_order SET " + PICKUP_SET + " WHERE chef_identity_id = ? AND NOT " + IN_PROGRESS
+            + " AND " + PICKUP_NOT_ERASED, args.toArray());
     }
 
     /** Events already published (or given up on) only; PENDING, FAILED and PROCESSING ones are still to be sent with the real address. */
@@ -150,21 +186,10 @@ public class AccountErasureService {
         return db.update("DELETE FROM " + SCHEMA + fromAndWhere, args);
     }
 
-    private int countOrders(String personColumn, String statuses, UUID identityId) {
+    private int countOrders(String personColumn, String which, UUID identityId) {
         Integer value = db.queryForObject(
-            "SELECT count(*) FROM " + SCHEMA + "customer_order WHERE " + personColumn + " = ? AND status IN (" + statuses + ")",
-            Integer.class, identityId);
+            "SELECT count(*) FROM " + SCHEMA + "customer_order WHERE " + personColumn + " = ? AND " + which, Integer.class, identityId);
         return value == null ? 0 : value;
-    }
-
-    /** The key the Idempotency-Key filter files a caller's records under: SHA-256 of "caller:" and the identity id. */
-    private static String idempotencyActorHash(UUID identityId) {
-        try {
-            return HexFormat.of().formatHex(
-                MessageDigest.getInstance("SHA-256").digest(("caller:" + identityId).getBytes(StandardCharsets.UTF_8)));
-        } catch (GeneralSecurityException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
     }
 
     private static void addIfAny(List<Blocker> blockers, String code, String what, int found) {

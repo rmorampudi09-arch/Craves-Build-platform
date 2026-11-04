@@ -276,7 +276,12 @@ public final class IdempotencyKeyFilter extends OncePerRequestFilter {
             return null;
         }
         String id = callerId.apply(authentication);
-        return id == null || id.isBlank() ? null : sha256("caller:" + id, new byte[0]);
+        return id == null || id.isBlank() ? null : actorHash(id);
+    }
+
+    /** The key a caller's records are filed under, for code that has to find them (account erasure). */
+    public static String actorHash(String callerId) {
+        return sha256("caller:" + callerId, new byte[0]);
     }
 
     private static void writeError(HttpServletResponse response, int status, String code, String message) throws IOException {

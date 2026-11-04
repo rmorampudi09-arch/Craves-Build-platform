@@ -1,5 +1,6 @@
 import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
+import {useIsFocused} from '@react-navigation/native';
 import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
 import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, StateCard} from '../components/StateCard';
@@ -12,7 +13,7 @@ import {useStrings} from '../strings/StringsProvider';
 export function SlotNowScreen() {
   const {strings} = useStrings();
   const s = strings.slots;
-  const slots = useSlots();
+  const slots = useSlots(useIsFocused());
   const running = slots.data?.running;
   const cluster = slots.data?.clusters.find(c => c.name === running?.clusterName);
   const total = running ? Math.round((Date.parse(running.endsAt) - Date.parse(running.startsAt)) / 60_000) : 0;
@@ -38,7 +39,11 @@ export function SlotNowScreen() {
                 {formatRupees(running.coveredPaise)}
               </Text>
             </View>
-            <View style={styles.track} accessibilityRole="progressbar" accessibilityValue={{min: 0, max: total, now: running.inZoneMinutes}}>
+            <View
+              style={styles.track}
+              accessibilityRole="progressbar"
+              accessibilityLabel={s.inZone}
+              accessibilityValue={{min: 0, max: total, now: running.inZoneMinutes}}>
               <View style={[styles.fill, {width: `${Math.round(share * 100)}%`}]} />
             </View>
             <RateRow label={s.inZone} value={s.ofMinutes(formatHoursMinutes(running.inZoneMinutes), formatHoursMinutes(total))} />

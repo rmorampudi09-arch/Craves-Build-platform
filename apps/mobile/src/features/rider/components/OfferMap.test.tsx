@@ -37,6 +37,12 @@ describe('OfferMap', () => {
     expect(tree.root.findByProps({testID: 'maplibre-Camera'}).props.initialViewState.bounds).toEqual(offerBounds([kitchen, {lat: 17.4, lng: 78.5}]));
   });
 
+  it('shows nothing, not a grey box, once the map fails to load', async () => {
+    const tree = await render(<OfferMap kitchen={kitchen} customerArea={area} label="Map" />);
+    await act(async () => tree.root.findByProps({testID: 'maplibre-Map'}).props.onDidFailLoadingMap());
+    expect(tree.toJSON()).toBeNull();
+  });
+
   it('shows nothing when the server sent no kitchen position', async () => {
     const tree = await render(<OfferMap label="Map" />);
     expect(tree.toJSON()).toBeNull();

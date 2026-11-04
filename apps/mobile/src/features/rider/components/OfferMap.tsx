@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react';
+import React, {useState} from 'react';
 import {StyleSheet, View} from 'react-native';
 import {Camera, GeoJSONSource, Layer, Map as MapLibreMap, Marker, TransformRequestManager} from '@maplibre/maplibre-react-native';
 import {colors, radius} from '../../../design/tokens';
@@ -9,6 +9,13 @@ type Point = {lat: number; lng: number};
 
 const AREA_M = 300;
 const M_PER_DEG_LAT = 111_320;
+
+/** The proxy only serves craves.in; the header is registered before the first map mounts (a stable id updates it in place). */
+function withReferer(): string {
+  const base = mapTilesBaseUrl();
+  TransformRequestManager.addHeader({id: 'craves-map-tiles-referer', match: mapTilesRequestMatch(base), name: 'Referer', value: mapTilesReferer(base)});
+  return base;
+}
 
 /** The customer's area as a 300 m circle, as GeoJSON for the map. */
 export function areaCircle({lat, lng}: Point, radiusM = AREA_M): GeoJSON.Feature<GeoJSON.Polygon> {
@@ -36,14 +43,12 @@ export function offerBounds(points: Point[], padM = AREA_M): [number, number, nu
  * service's last fix, the customer's area as a shaded 300 m circle on its centre, never the door. Nothing to tap.
  */
 export function OfferMap({kitchen, customerArea, label}: {kitchen?: Point; customerArea?: Point; label: string}) {
-  const base = mapTilesBaseUrl();
-  useEffect(() => {
-    // The proxy only serves craves.in; a stable id updates this header in place (same as OlaMapPicker).
-    TransformRequestManager.addHeader({id: 'craves-map-tiles-referer', match: mapTilesRequestMatch(base), name: 'Referer', value: mapTilesReferer(base)});
-  }, [base]);
-  if (!kitchen) {
+  const [failed, setFailed] = useState(false);
+  if (!kitchen || failed) {
+    // A style or tile that will not load leaves no grey box: the rows under the map carry everything the rider needs.
     return null;
   }
+  const base = withReferer();
   const fix = riderOnlineService.lastFix();
   const rider = fix ? {lat: fix.lat, lng: fix.lng} : undefined;
   const bounds = offerBounds([kitchen, ...(customerArea ? [customerArea] : []), ...(rider ? [rider] : [])]);
@@ -60,7 +65,8 @@ export function OfferMap({kitchen, customerArea, label}: {kitchen?: Point; custo
         touchPitch={false}
         compass={false}
         logo={false}
-        attribution={false}>
+        attribution={false}
+        onDidFailLoadingMap={() => setFailed(true)}>
         <Camera initialViewState={{bounds, padding: {top: 24, right: 24, bottom: 24, left: 24}}} maxZoom={17} />
         {customerArea ? (
           <GeoJSONSource id="rider-offer-area" data={areaCircle(customerArea)}>

@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
 import {Alert, StyleSheet, Text, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {useIsFocused, useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
 import type {SlotOffer} from '../api/contract';
@@ -28,12 +28,18 @@ export function SlotsScreen() {
   const s = strings.slots;
   const navigation = useNavigation<RiderNav>();
   const queryClient = useQueryClient();
-  const slots = useSlots();
+  const slots = useSlots(useIsFocused());
   const [day, setDay] = useState<string>();
   const [busy, setBusy] = useState<string | null>(null);
   const data = slots.data;
-  const days = [...new Set((data?.slots ?? []).map(slot => dayOf(slot.startsAt)))];
-  const chosen = day && days.includes(day) ? day : days[0];
+  // Each day once, with its first window's instant for the chip label (never re-parse the day key).
+  const days = new Map<string, string>();
+  (data?.slots ?? []).forEach(slot => {
+    if (!days.has(dayOf(slot.startsAt))) {
+      days.set(dayOf(slot.startsAt), slot.startsAt);
+    }
+  });
+  const chosen = day && days.has(day) ? day : days.keys().next().value;
   const shown = (data?.slots ?? []).filter(slot => dayOf(slot.startsAt) === chosen);
   const lowestRate = data?.slots.length ? Math.min(...data.slots.map(slot => slot.ratePerHourPaise)) : null;
 
@@ -41,7 +47,8 @@ export function SlotsScreen() {
     setBusy(capacityId);
     try {
       await work();
-      void queryClient.invalidateQueries({queryKey: riderKeys.slots});
+      // The button stays busy until the list is read again, so a second tap cannot race the server.
+      await queryClient.invalidateQueries({queryKey: riderKeys.slots});
     } catch (error) {
       Alert.alert(riderMessage(error, strings, language));
     } finally {
@@ -56,9 +63,9 @@ export function SlotsScreen() {
     ]);
   }
 
-  const dayLabel = (value: string) => {
-    const date = new Date(value);
-    return value === dayOf(Date.now()) ? s.today : `${strings.earnings.weekdays[date.getDay()]} ${date.getDate()}`;
+  const dayLabel = (key: string, startsAt: string) => {
+    const date = new Date(startsAt);
+    return key === dayOf(Date.now()) ? s.today : `${strings.earnings.weekdays[date.getDay()]} ${date.getDate()}`;
   };
   const weekdayClock = (value: string) => `${strings.earnings.weekdays[new Date(value).getDay()]} ${formatClock(value)}`;
 
@@ -78,13 +85,13 @@ export function SlotsScreen() {
         ) : (
           <CardsSkeleton cards={2} testID="rider-slots-loading" />
         )
-      ) : days.length === 0 ? (
+      ) : days.size === 0 ? (
         <StateCard icon="calendar-blank-outline" title={s.emptyTitle} body={s.emptyBody} testID="rider-slots-empty" />
       ) : (
         <>
           <Segmented
             value={chosen as string}
-            options={days.map(value => ({value, label: dayLabel(value)}))}
+            options={[...days].map(([value, startsAt]) => ({value, label: dayLabel(value, startsAt)}))}
             onChange={setDay}
             label={s.dayLabel}
             role="tab"
@@ -93,11 +100,12 @@ export function SlotsScreen() {
           {shown.map(slot => {
             const opensLater = Date.parse(slot.opensAt) > Date.now();
             const full = slot.placesLeft <= 0;
+            const window = s.window(slot.clusterName, formatClock(slot.startsAt), formatClock(slot.endsAt));
             return (
               <View key={slot.capacityId} testID={`rider-slot-${slot.capacityId}`}>
                 <Card style={styles.tight}>
                   <View style={styles.row}>
-                    <Text style={[styles.strong, styles.flex]}>{s.window(slot.clusterName, formatClock(slot.startsAt), formatClock(slot.endsAt))}</Text>
+                    <Text style={[styles.strong, styles.flex]}>{window}</Text>
                     {slot.bookingId ? (
                       <View style={[styles.pill, styles.pillBooked]}>
                         <Text style={styles.pillBookedText}>{s.booked}</Text>
@@ -109,6 +117,7 @@ export function SlotsScreen() {
                     ) : (
                       <BottomAction
                         label={s.book}
+                        accessibilityLabel={`${s.book}, ${window}`}
                         size="compact"
                         disabled={opensLater || busy === slot.capacityId}
                         onPress={() => run(slot.capacityId, () => riderApi.bookSlot(slot.capacityId))}
@@ -119,7 +128,14 @@ export function SlotsScreen() {
                   {slot.bookingId ? (
                     <>
                       <Text style={styles.body}>{s.bookedLine(formatClock(Date.parse(slot.startsAt) + 15 * 60_000), formatClock(slot.startsAt))}</Text>
-                      <BottomAction label={s.cancel} variant="ghost" size="compact" onPress={() => cancel(slot)} testID={`rider-slot-cancel-${slot.capacityId}`} />
+                      <BottomAction
+                        label={s.cancel}
+                        accessibilityLabel={`${s.cancel}, ${window}`}
+                        variant="ghost"
+                        size="compact"
+                        onPress={() => cancel(slot)}
+                        testID={`rider-slot-cancel-${slot.capacityId}`}
+                      />
                     </>
                   ) : full ? (
                     <>
@@ -127,6 +143,7 @@ export function SlotsScreen() {
                       {slot.standby ? null : (
                         <BottomAction
                           label={s.joinStandby}
+                          accessibilityLabel={`${s.joinStandby}, ${window}`}
                           variant="ghost"
                           size="compact"
                           disabled={opensLater || busy === slot.capacityId}

@@ -42,9 +42,9 @@ export const useActiveTrip = () =>
 
 export const useTerms = () => useQuery({queryKey: riderKeys.terms, queryFn: riderApi.getTerms, enabled: useRiderRole()});
 
-/** App 1.3.3 (R-08): booked peak slots, read again every minute while a screen shows them (places move). */
-export const useSlots = () =>
-  useQuery({queryKey: riderKeys.slots, queryFn: riderApi.getSlots, refetchInterval: 60_000, enabled: useRiderRole()});
+/** App 1.3.3 (R-08): booked peak slots, read again every minute only while the screen is in front (places move). */
+export const useSlots = (inFront = true) =>
+  useQuery({queryKey: riderKeys.slots, queryFn: riderApi.getSlots, refetchInterval: inFront ? 60_000 : false, enabled: useRiderRole()});
 
 // Any rider ops added may read their profile (documents before activation too); someone not signed up yet may not (403).
 export const useProfile = (enabled = true) => useQuery({queryKey: riderKeys.profile, queryFn: riderApi.getProfile, enabled});

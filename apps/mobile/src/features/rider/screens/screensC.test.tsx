@@ -33,6 +33,7 @@ jest.mock('react-native-safe-area-context', () => require('react-native-safe-are
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => mockNavigation,
+  useIsFocused: () => true,
 }));
 // FlashList needs real layout; FlatList renders the same props in the test renderer.
 jest.mock('@shopify/flash-list', () => ({FlashList: require('react-native').FlatList}));
@@ -654,6 +655,7 @@ describe('Slots (R-08)', () => {
     (riderApi.bookSlot as jest.Mock).mockResolvedValueOnce({bookingId: 'b2', capacityId: 'k2', status: 'BOOKED'});
     (riderApi.standbySlot as jest.Mock).mockResolvedValueOnce({capacityId: 'k3', position: 1});
     (riderApi.cancelSlotBooking as jest.Mock).mockResolvedValueOnce({bookingId: 'b1', capacityId: 'k1', status: 'CANCELLED'});
+    (riderApi.getSlots as jest.Mock).mockResolvedValue(slots);
     const client = await render(<SlotsScreen />, [[riderKeys.slots, slots]]);
     const invalidate = jest.spyOn(client, 'invalidateQueries');
     await press('rider-slot-book-k2');

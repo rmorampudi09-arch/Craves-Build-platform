@@ -162,14 +162,43 @@ describe("Chef Mode guard", () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
   });
 
-  it("leaves customers alone while customers wait when this device never used Chef Mode for them", () => {
+  it("shows any other signed-in customer the launching-soon note while customers wait, without the kitchen button", async () => {
     launch.soon = true;
     sessionStorage.clear();
     localStorage.clear();
     setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
     render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/sign-in"));
     cleanup();
+    mocks.replace.mockReset();
+    // The device remembers someone else's kitchen, not theirs.
     rememberChefAccount("71111111-1111-4111-8111-111111111111");
+    render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/sign-in"));
+  });
+
+  it("keeps the account deletion pages, sign-in and the public pages open to that customer while customers wait", () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    localStorage.clear();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
+    for (const pathname of ["/account/delete", "/account-deletion", "/sign-in", "/privacy", "/contact"]) {
+      vi.mocked(usePathname).mockReturnValue(pathname);
+      render(createElement(ChefModeGuard));
+      cleanup();
+    }
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("lets a customer who is an owner, or on a device that opened the early-access link, keep customer screens while customers wait", () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    localStorage.clear();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER", "ADMIN"] });
+    render(createElement(ChefModeGuard));
+    cleanup();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
+    rememberEarlyAccess();
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
   });

@@ -3,10 +3,11 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { isChefAccountOnDevice, isChefModeTab, isChefModeVerified, rememberChefAccount } from "@/features/chef/lib/chef-mode";
-import { CUSTOMERS_LAUNCHING_SOON, hasEarlyAccess, isCravesOwner } from "@/features/sign-in/lib/customer-launch";
+import { CUSTOMERS_LAUNCHING_SOON, hasEarlyAccess, isCravesOwner, isDeletionPath } from "@/features/sign-in/lib/customer-launch";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
-// Reachable from Chef Mode: the chef app, legal and help pages, sign-in, and the separate admin portal.
+// Reachable from Chef Mode, and during the customer launch lock: the chef app, legal and help pages, sign-in,
+// the separate admin portal, and the account deletion pages (DELETION_PATHS in customer-launch.ts).
 const OPEN_PATHS = [
   "/chef",
   "/privacy",
@@ -15,23 +16,22 @@ const OPEN_PATHS = [
   "/refunds-cancellations",
   "/contact",
   "/products-pricing",
-  "/account-deletion",
-  "/account/delete",
   "/pilot-launch",
   "/sign-in",
   "/admin",
 ];
 
 export function isOpenInChefMode(pathname: string): boolean {
-  return OPEN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  return isDeletionPath(pathname) || OPEN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 /**
  * While this tab is in Chef Mode, customer screens are replaced with the chef home, so browser
  * Back never lands on them. Leaving is explicit: "Switch to customer app" or "Sign out".
  * Other tabs keep the customer app, even on a device that remembers the kitchen. Until the
- * customer launch, chefs (and applicants who used Chef Mode here) see the launching-soon note instead;
- * owners (ADMIN), and any account on a device that opened the early-access link, keep the customer app.
+ * customer launch, every signed-in person sees the launching-soon note instead (chefs, and applicants
+ * who used Chef Mode here, with its "Back to my kitchen" button); owners (ADMIN), and any account on a
+ * device that opened the early-access link, keep the customer app.
  */
 export function ChefModeGuard() {
   const pathname = usePathname();
@@ -45,8 +45,10 @@ export function ChefModeGuard() {
       customerScreen &&
       !leave &&
       !isCravesOwner(customerScreen.roles) &&
-      !hasEarlyAccess() &&
-      (customerScreen.roles.some((role) => role.toUpperCase() === "CHEF") || isChefAccountOnDevice(customerScreen.id)),
+      !hasEarlyAccess(),
+  );
+  const chefAccount = Boolean(
+    confirm && customerScreen && (customerScreen.roles.some((role) => role.toUpperCase() === "CHEF") || isChefAccountOnDevice(customerScreen.id)),
   );
 
   useEffect(() => {
@@ -56,8 +58,8 @@ export function ChefModeGuard() {
   useEffect(() => {
     if (leave) router.replace("/chef");
     // The same launching-soon note as "Switch to customer app" (customer-launch.ts).
-    else if (confirm) router.replace("/sign-in?from=chef");
-  }, [leave, confirm, router]);
+    else if (confirm) router.replace(chefAccount ? "/sign-in?from=chef" : "/sign-in");
+  }, [leave, confirm, chefAccount, router]);
   useEffect(() => {
     // Back can restore a customer page from the browser's page cache; check it again when it shows.
     const restored = (event: PageTransitionEvent) => {

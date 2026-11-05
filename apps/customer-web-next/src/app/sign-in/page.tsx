@@ -8,7 +8,7 @@ import { safeReturnPath } from "@/features/auth/lib/auth-contract";
 import { safeChefReturnTo } from "@/features/chef/lib/chef-mode";
 import { createHash } from "node:crypto";
 import { isAdminDestination } from "@/features/admin/shell/lib/admin-navigation";
-import { CUSTOMER_EARLY_ACCESS_SHA256, CUSTOMERS_LAUNCHING_SOON, CUSTOMERS_LAUNCHING_SOON_COPY } from "@/features/sign-in/lib/customer-launch";
+import { CUSTOMER_EARLY_ACCESS_SHA256, CUSTOMERS_LAUNCHING_SOON, CUSTOMERS_LAUNCHING_SOON_COPY, opensSignInDuringLaunch } from "@/features/sign-in/lib/customer-launch";
 import "@/features/admin/styles/admin-control.css";
 
 export const metadata = {
@@ -30,9 +30,10 @@ export default async function SignInPage({ searchParams }: {
   const pathname = returnTo.split(/[?#]/, 1)[0];
   if (!adminJourney && (pathname === "/chef" || pathname.startsWith("/chef/")))
     redirect(`/chef/sign-in?returnTo=${encodeURIComponent(safeChefReturnTo(returnTo) ?? "/chef")}`);
-  // Customer launch lock: only the private early-access link opens the customer sign-in (see customer-launch.ts).
+  // Customer launch lock: only the private early-access link opens the customer sign-in (see customer-launch.ts),
+  // except the way back to the delete page, where earlyAccess stays false so the device is not remembered.
   const earlyAccess = typeof query.access === "string" && createHash("sha256").update(query.access).digest("hex") === CUSTOMER_EARLY_ACCESS_SHA256;
-  if (!adminJourney && CUSTOMERS_LAUNCHING_SOON && !earlyAccess) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl">
+  if (!adminJourney && CUSTOMERS_LAUNCHING_SOON && !earlyAccess && !opensSignInDuringLaunch(returnTo)) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl">
     <section role="status" className="w-full rounded-3xl border border-[#E5E7EB] bg-white p-6 text-[#1A1A1A] shadow-[0_8px_30px_rgba(0,0,0,0.08)] sm:p-8">
       <Link href="/" aria-label="Craves home"><CravesLogo size="lg" priority/></Link>
       <h1 className="mt-6 text-3xl font-bold tracking-tight">{CUSTOMERS_LAUNCHING_SOON_COPY.title}</h1>

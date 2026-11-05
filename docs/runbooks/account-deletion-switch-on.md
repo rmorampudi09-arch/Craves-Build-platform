@@ -28,7 +28,7 @@ Each step says what it does, the commands, the check that proves it worked, and 
 
    Expected: one line, the switch-on PR's merge commit or a later one. Nothing printed means the clone is older than the merge: delete `~/craves-switch-on` and run the block again.
 
-3. Paste the two helpers. Paste them again in every new Cloud Shell session (after a time-out too), together with the `D=~/craves-switch-on` line. Both remove their temporary rule when they end, even when the command fails or you press Ctrl+C.
+3. Paste the helpers. Paste them again in every new Cloud Shell session (after a time-out too), together with the `D=~/craves-switch-on` line. `copy_secret` and `with_ingress` remove their temporary rule when they end, even when the command fails or you press Ctrl+C. If a removal fails, they print `WARNING:` with the exact command to run.
 
    ```bash
    # copy_secret <source Key Vault secret URL> <target vault> <target secret name>
@@ -40,15 +40,18 @@ Each step says what it does, the commands, the check that proves it worked, and 
      src_vault=$(sed -E 's#https://([^.]+)\..*#\1#' <<<"$src")
      ip=$(curl -fsS https://api.ipify.org); tmp=$(mktemp)
      trap 'rm -f "$tmp"
-       az keyvault network-rule remove -n "$src_vault" --ip-address "$ip/32" -o none || true
-       az keyvault network-rule remove -n "$dst_vault" --ip-address "$ip/32" -o none || true' EXIT
-     az keyvault network-rule add -n "$src_vault" --ip-address "$ip/32" -o none
-     az keyvault network-rule add -n "$dst_vault" --ip-address "$ip/32" -o none
+       for v in "$src_vault" "$dst_vault"; do
+         az keyvault network-rule remove -n "$v" --ip-address "$ip/32" -o none ||
+           echo "WARNING: rule not removed. Run: az keyvault network-rule remove -n $v --ip-address $ip/32" >&2
+       done' EXIT
+     # Explicit '|| exit 1': bash ignores set -e when a function is called inside if, && or ||.
+     az keyvault network-rule add -n "$src_vault" --ip-address "$ip/32" -o none || exit 1
+     az keyvault network-rule add -n "$dst_vault" --ip-address "$ip/32" -o none || exit 1
      sleep 30  # the vault firewalls take a moment to let this shell in
      # -o tsv ends the value with one newline; head -c -1 drops exactly that one. Nothing reaches the screen.
      az keyvault secret show --id "$src" --query value -o tsv | head -c -1 > "$tmp"
      [ -s "$tmp" ] || { echo "Could not read $src"; exit 1; }
-     az keyvault secret set --vault-name "$dst_vault" -n "$dst_name" --file "$tmp" -o none
+     az keyvault secret set --vault-name "$dst_vault" -n "$dst_name" --file "$tmp" -o none || exit 1
      echo "Copied to $dst_vault/$dst_name"
    )
 
@@ -58,19 +61,38 @@ Each step says what it does, the commands, the check that proves it worked, and 
      set -euo pipefail; set +x
      rg=$1 app=$2; shift 2
      allows=$(az containerapp ingress access-restriction list -g "$rg" -n "$app" -o json | jq '[.[]? | select(.action == "Allow")] | length')
+     [ -n "$allows" ] || { echo "Could not read the ingress rules of $app"; exit 1; }
      # No allow-list means the app is open already; adding an Allow rule would shut everyone else out.
      [ "$allows" -gt 0 ] || { "$@"; exit; }
      ip=$(curl -fsS https://api.ipify.org)
-     trap 'az containerapp ingress access-restriction remove -g "$rg" -n "$app" --rule-name cloudshell-check -o none || true' EXIT
-     az containerapp ingress access-restriction set -g "$rg" -n "$app" --rule-name cloudshell-check --ip-address "$ip/32" --action Allow -o none
+     trap 'az containerapp ingress access-restriction remove -g "$rg" -n "$app" --rule-name cloudshell-check -o none ||
+       echo "WARNING: rule not removed. Run: az containerapp ingress access-restriction remove -g $rg -n $app --rule-name cloudshell-check" >&2' EXIT
+     az containerapp ingress access-restriction set -g "$rg" -n "$app" --rule-name cloudshell-check --ip-address "$ip/32" --action Allow -o none || exit 1
      sleep 30
      "$@"
    )
+
+   # vault_rules_left <vault>...: rules each vault still has for this Cloud Shell's address (expect 0)
+   vault_rules_left() {
+     local ip v; ip=$(curl -fsS https://api.ipify.org)
+     for v in "$@"; do
+       [ -n "$v" ] && echo "$v: $(az keyvault network-rule list -n "$v" --query "ipRules[].value" -o tsv | grep -cxF -e "$ip" -e "$ip/32")"
+     done
+   }
    ```
 
-4. **Merge freeze starts now:** no merge that touches `services/auth-service` until step 7 is done (about one day). See "Merge freeze".
+4. **Wait for the releases this PR's merge started.** The PR touches auth-service (its start-up test) and referral-service (its deploy file), so the merge runs `release-auth` and `release-referral`. A release landing in the middle of step 3 or 5 could ship half-set settings. In Azure DevOps (org `ravitejamm6`, project `Craves-New-Original`), both runs for the merge commit must show finished. Then check the images:
 
-5. Have ready:
+   ```bash
+   az containerapp show -g rg-craves-auth-prod -n ca-craves-auth-prod --query "properties.template.containers[0].image" -o tsv
+   az containerapp show -g rg-craves-referral-prod -n ca-craves-referral-prod --query "properties.template.containers[0].image" -o tsv
+   ```
+
+   Expected: each tag (after the `:`) starts with the merge commit's id, or a later `main` commit's. Start step 1 only then.
+
+5. **Merge freeze starts now:** no merge that touches `services/auth-service` until step 7 is done (about one day). See "Merge freeze".
+
+6. Have ready:
    - the test phone: a spare number you control, customer-only, with at least one past order, signed in on an app build that has the Delete account screen (plan 3, #615). Never write the number in this file or in chat;
    - your staff sign-in on `admin.craves.in`.
 
@@ -92,7 +114,7 @@ Owner answers (5 Nov):
 
 ## Move auth's traffic
 
-Steps 3, 5, 7, Fix A and the rollback each end here. auth's traffic stays pinned to a named revision, so a settings change makes a new revision with no traffic until you move it.
+Steps 3, 5, 7, Fix A and the rollback each end here. auth's traffic stays pinned to a named revision, so a settings change makes a new revision with no traffic until you move it. Moving traffic is not enough: the deletion worker runs inside every active revision, with or without traffic. So part 3 deactivates every other revision (as `docs/riders/GO-LIVE.md` §8 does).
 
 1. Find the new revision and wait for it. Run the second line once a minute until it shows `Running` (or `RunningAtMaxScale`) and `Healthy`:
 
@@ -111,6 +133,18 @@ Steps 3, 5, 7, Fix A and the rollback each end here. auth's traffic stays pinned
    ```
 
    Expected: the `$NEW` row has weight 100; any other row has 0.
+
+3. Deactivate every other active revision, then list what is left. The first line does nothing unless `$NEW` really holds all traffic:
+
+   ```bash
+   [ "$(az containerapp ingress traffic show -g rg-craves-auth-prod -n ca-craves-auth-prod --query "[?revisionName=='$NEW'].weight | [0]" -o tsv)" = 100 ] &&
+   for R in $(az containerapp revision list -g rg-craves-auth-prod -n ca-craves-auth-prod --query "[?properties.active && name!='$NEW'].name" -o tsv); do
+     az containerapp revision deactivate -g rg-craves-auth-prod -n ca-craves-auth-prod --revision "$R" -o none && echo "deactivated $R"
+   done
+   az containerapp revision list -g rg-craves-auth-prod -n ca-craves-auth-prod --query "[?properties.active].name" -o tsv
+   ```
+
+   Expected: `deactivated <name>` for each old revision, then one line: `$NEW`. Nothing deactivated and more than one name left means `$NEW` did not hold all traffic: run part 2 again, then part 3.
 
 ## Step 1. Preflight (read only)
 
@@ -172,17 +206,46 @@ Advanced has no internal secret yet, so its erase endpoints answer 503. This cop
      az role assignment create --assignee-object-id "$(az ad signed-in-user show --query id -o tsv)" --assignee-principal-type User --role "Key Vault Secrets Officer" --scope "$(az keyvault show -n <vault> --query id -o tsv)" -o none
      ```
 
-4. Redeploy advanced with the commit it runs now. The image tag is the first 12 characters of that commit:
+   Then check that both vaults are closed to this Cloud Shell again, whether the copy worked or not:
+
+   ```bash
+   vault_rules_left "$(sed -E 's#https://([^.]+)\..*#\1#' <<<"$SRC_URL")" kv-crv-advanced-34eefd
+   ```
+
+   Expected: `kv-crv-auth-34eefd: 0` and `kv-crv-advanced-34eefd: 0`. A `1` means a rule stayed: run the `WARNING:` command the copy printed.
+
+4. Find the commit advanced runs now, and make sure its image is there. The image tag is the first 12 characters of that commit:
 
    ```bash
    IMAGE=$(az containerapp show -g rg-craves-advanced-prod -n ca-craves-advanced-prod --query "properties.template.containers[0].image" -o tsv)
    COMMIT=$(git -C "$D" rev-parse --verify "${IMAGE##*:}^{commit}"); echo "$IMAGE -> $COMMIT"
+   [ "${IMAGE##*:}" = "${COMMIT:0:12}" ] && echo "same tag" || echo "different tag"
+   ```
+
+   Expected: `crcravesprod34eefd.azurecr.io/craves/advanced-features-service:<12 characters> -> <40 characters, the same 12 first>`, then `same tag`. If `rev-parse` fails, the tag is not a `main` commit: stop and ask. Only then:
+
+   ```bash
+   bash "$D/infra/advanced-features/provision.sh" image "$COMMIT"
+   ```
+
+   Expected: `exists`. With `different tag` it builds that commit's 12-character tag first (several minutes); let it finish.
+
+5. Before deploying, check that `provision.sh` keeps every setting advanced has now. It rewrites the whole app, and advanced's traffic follows the new revision at once:
+
+   ```bash
+   grep -oE '^      - \{name: [A-Z][A-Z0-9_]*' "$D/infra/advanced-features/provision.sh" | sed 's/.*name: //' | sort | diff ~/advanced-env-before.txt - | grep '^[<>]'
+   ```
+
+   Expected: `> CRAVES_INTERNAL_SERVICE_SECRET`. Another `>` line is a setting `provision.sh` gained since advanced's last deploy: fine. A `<` line is a setting the live app has and `provision.sh` would drop: stop and ask. Do not deploy.
+
+6. Deploy:
+
+   ```bash
    bash "$D/infra/advanced-features/provision.sh" app "$COMMIT"
    ```
 
-   Expected: `crcravesprod34eefd.azurecr.io/craves/advanced-features-service:<12 characters> -> <40 characters, the same 12 first>`, then, after up to 10 minutes, `Revision ca-craves-advanced-prod--m<8 characters>: Healthy`.
-   - `rev-parse` fails: the tag is not a `main` commit. Stop and ask.
-   - `provision.sh` stops with an error that the revision or its suffix already exists: this commit was deployed by `provision.sh` before, and the suffix must be new. Give it one more letter and apply the file `provision.sh` just wrote, then watch the newest revision become `Healthy`:
+   Expected, after up to 10 minutes: `Revision ca-craves-advanced-prod--m<8 characters>: Healthy`. Any other state: roll back.
+   - If `provision.sh` stops with an error that the revision or its suffix already exists, this commit was deployed by `provision.sh` before, and the suffix must be new. Give it one more letter and apply the file `provision.sh` just wrote:
 
      ```bash
      sed -i -E 's/^( *revisionSuffix: m[0-9a-f]{8})$/\1b/' ~/advanced-features-state/app.yaml
@@ -190,21 +253,23 @@ Advanced has no internal secret yet, so its erase endpoints answer 503. This cop
      az containerapp revision list -g rg-craves-advanced-prod -n ca-craves-advanced-prod -o table
      ```
 
-5. Check that no setting was lost, and that the erase endpoint stops answering 503. A wrong credential must now get 401:
+     Run the last line once a minute until the newest revision (`...--m<8 characters>b`) shows `Healthy`. Do not go on to part 7 before that. Not `Healthy` after 10 minutes: roll back.
+
+7. Check that the erase endpoint stops answering 503. A wrong credential must now get 401:
 
    ```bash
-   az containerapp show -g rg-craves-advanced-prod -n ca-craves-advanced-prod --query "properties.template.containers[0].env[].name" -o tsv | sort | diff ~/advanced-env-before.txt - | grep '^[<>]'
    ADV=$(az containerapp show -g rg-craves-advanced-prod -n ca-craves-advanced-prod --query properties.configuration.ingress.fqdn -o tsv)
    with_ingress rg-craves-advanced-prod ca-craves-advanced-prod curl -s -w ' HTTP %{http_code}\n' -X POST \
      "https://$ADV/internal/v1/account-erasure/blockers" -H 'Content-Type: application/json' -H 'X-Craves-Internal-Secret: wrong' \
      --data '{"identityId":"00000000-0000-4000-8000-000000000000","scope":"ALL"}'
+   az containerapp ingress access-restriction list -g rg-craves-advanced-prod -n ca-craves-advanced-prod --query "[?name=='cloudshell-check'].name" -o tsv
    ```
 
    Expected:
-   - the diff prints `> CRAVES_INTERNAL_SERVICE_SECRET`. A `<` line means `provision.sh` dropped a setting the app had: roll back and ask. Another `>` line is a setting `provision.sh` gained since advanced's last deploy: fine.
-   - the call prints `INTERNAL_SECRET_REQUIRED` and `HTTP 401`. `INTERNAL_SECRET_NOT_CONFIGURED` and `HTTP 503` mean the secret has not reached the app: check the newest revision is the one with traffic. `HTTP 403` with no JSON means the Cloud Shell rule was not active yet: run the call again.
+   - the call prints `INTERNAL_SECRET_REQUIRED` and `HTTP 401`. `INTERNAL_SECRET_NOT_CONFIGURED` and `HTTP 503` mean the secret has not reached the app: check that the newest revision is the one with traffic. `HTTP 403` with no JSON means the Cloud Shell rule was not active yet: run the call again.
+   - the last line prints nothing: the temporary rule is gone.
 
-6. In step 1's preflight output, the sections `subscription`, `order`, `integration`, `user-chef`, `catalog` and `notification` each show their credential line as `secretref:...` (or `plain value (hidden)`), never `missing`.
+8. In step 1's preflight output, the sections `subscription`, `order`, `integration`, `user-chef`, `catalog` and `notification` each show their credential line as `secretref:...` (or `plain value (hidden)`), never `missing`.
 
 Rollback: move advanced's traffic back to the revision you noted. The vault secret can stay: nothing uses it until a revision does.
 
@@ -321,9 +386,9 @@ Proves that auth reaches all 8 services, and that keep and release work. The det
    | Detail | Meaning | Do |
    |---|---|---|
    | `HTTP 401` or `HTTP 403` | The service refuses auth's credential (most likely catalog or subscription holding a different value). | Fix A. A 403 can also be the service's ingress: if the preflight's `ingress:` line for it says `does not allow auth`, Fix B instead. |
-   | `TIMEOUT` or `UNREACHABLE` | The network. | Fix B. If the preflight shows that service with `internal ingress`, stop and ask. |
+   | `TIMEOUT` or `UNREACHABLE` | The network. | Fix B, but only if the preflight's `ingress:` line for that service says `does not allow auth`. Otherwise (`open`, `allows auth`, or `internal ingress`) stop and ask. |
    | `NOT_CONFIGURED` | A step 3 setting is missing. | Step 3 again. |
-   | `HTTP 503` on advanced | Step 2 did not reach the app. | Step 2, check 5. |
+   | `HTTP 503` on advanced | Step 2 did not reach the app. | Step 2, part 7. |
    | anything else | | Stop and ask. |
 
    After a fix, reload the request. The row must be gone.
@@ -333,23 +398,43 @@ Proves that auth reaches all 8 services, and that keep and release work. The det
 
 ### Fix A: a service refuses auth's credential
 
-Gives auth its own copy of that service's value, for that service only.
+Gives auth its own copy of that service's value, for that service only. Paste the three blocks one at a time, and check each one's output before you paste the next.
 
-```bash
-T=catalog                                                   # the service the admin page names
-T_RG=rg-craves-catalog-prod; T_APP=ca-craves-catalog-prod   # the app in the preflight's section for it
-T_VAR=CRAVES_INTERNAL_SERVICE_SECRET                        # the credential line in that section
-AUTH_SETTING=CRAVES_ACCOUNT_DELETION_CATALOG_CREDENTIAL     # for referral: CRAVES_ACCOUNT_DELETION_REFERRAL_HMAC_BASE64
-REF=$(az containerapp show -g "$T_RG" -n "$T_APP" --query "properties.template.containers[0].env[?name=='$T_VAR'].secretRef | [0]" -o tsv)
-SRC_URL=$(az containerapp show -g "$T_RG" -n "$T_APP" --query "properties.configuration.secrets[?name=='$REF'].keyVaultUrl | [0]" -o tsv); echo "$SRC_URL"
-copy_secret "$SRC_URL" kv-crv-auth-34eefd "account-deletion-$T-credential"
-ID=$(az containerapp show -g rg-craves-auth-prod -n ca-craves-auth-prod --query "properties.configuration.secrets[?keyVaultUrl].identity | [0]" -o tsv)
-az containerapp secret set -g rg-craves-auth-prod -n ca-craves-auth-prod -o none \
-  --secrets "account-deletion-$T-credential=keyvaultref:https://kv-crv-auth-34eefd.vault.azure.net/secrets/account-deletion-$T-credential,identityref:$ID"
-az containerapp update -g rg-craves-auth-prod -n ca-craves-auth-prod --set-env-vars "$AUTH_SETTING=secretref:account-deletion-$T-credential" -o none
-```
+1. Name the service (example values for catalog):
 
-The `echo` must print a Key Vault address. If it prints nothing, the service's value is not in a Key Vault: stop and ask. Then move auth's traffic. Check: reload the request; that service's row is gone.
+   ```bash
+   T=catalog                                                   # the service the admin page names
+   T_RG=rg-craves-catalog-prod; T_APP=ca-craves-catalog-prod   # the app in the preflight's section for it
+   T_VAR=CRAVES_INTERNAL_SERVICE_SECRET                        # the credential line in that section
+   AUTH_SETTING=CRAVES_ACCOUNT_DELETION_CATALOG_CREDENTIAL     # for referral: CRAVES_ACCOUNT_DELETION_REFERRAL_HMAC_BASE64
+   ```
+
+2. Find the service's own Key Vault secret, copy it into auth's vault, and check both vaults are closed again:
+
+   ```bash
+   REF=$(az containerapp show -g "$T_RG" -n "$T_APP" --query "properties.template.containers[0].env[?name=='$T_VAR'].secretRef | [0]" -o tsv)
+   SRC_URL=$(az containerapp show -g "$T_RG" -n "$T_APP" --query "properties.configuration.secrets[?name=='$REF'].keyVaultUrl | [0]" -o tsv); echo "$SRC_URL"
+   copy_secret "$SRC_URL" kv-crv-auth-34eefd "account-deletion-$T-credential"
+   vault_rules_left "$(sed -E 's#https://([^.]+)\..*#\1#' <<<"$SRC_URL")" kv-crv-auth-34eefd
+   ```
+
+   Expected: a Key Vault address, then `Copied to kv-crv-auth-34eefd/account-deletion-<service>-credential`, then lines ending `: 0` (a `1`: run the `WARNING:` command). `Not a Key Vault secret URL: ''` means the service's value is not in a Key Vault: stop and ask. Any other error: fix it as in step 2, part 3, and paste this block again. Go on only after `Copied to`.
+
+3. Give auth an app secret for it, and point the one setting at it:
+
+   ```bash
+   (
+     set -euo pipefail
+     ID=$(az containerapp show -g rg-craves-auth-prod -n ca-craves-auth-prod --query "properties.configuration.secrets[?keyVaultUrl].identity | [0]" -o tsv)
+     [ -n "$ID" ] || { echo "auth has no Key Vault identity; stop and ask"; exit 1; }
+     az containerapp secret set -g rg-craves-auth-prod -n ca-craves-auth-prod -o none \
+       --secrets "account-deletion-$T-credential=keyvaultref:https://kv-crv-auth-34eefd.vault.azure.net/secrets/account-deletion-$T-credential,identityref:$ID"
+     az containerapp update -g rg-craves-auth-prod -n ca-craves-auth-prod --set-env-vars "$AUTH_SETTING=secretref:account-deletion-$T-credential" -o none
+     echo "auth: $AUTH_SETTING -> account-deletion-$T-credential"
+   )
+   ```
+
+   Expected: `auth: <setting> -> account-deletion-<service>-credential`. Then move auth's traffic. Check: reload the request; that service's row is gone.
 
 Rollback: point the setting back at auth's shared secret (the name `secretref:` showed in step 3's line), then move auth's traffic: `az containerapp update -g rg-craves-auth-prod -n ca-craves-auth-prod --set-env-vars "$AUTH_SETTING=secretref:<auth's secret from step 3>" -o none`.
 
@@ -361,7 +446,7 @@ Lets auth's outbound address through that service's ingress. Take the address fr
 az containerapp ingress access-restriction list -g <resource group> -n <app> -o table
 ```
 
-Expected: a list of Allow rules. If it shows Deny rules, stop and ask.
+Expected: a list of Allow rules. If the list is empty, stop: the app is open, and one Allow rule would lock everyone else out, the gateway included. If it shows Deny rules, stop and ask.
 
 ```bash
 az containerapp ingress access-restriction set -g <resource group> -n <app> --rule-name craves-auth --ip-address <auth outbound address>/32 --action Allow --description "auth-service account deletion" -o none
@@ -452,11 +537,7 @@ Fill in as you go. Ids, dates, states and counts only: no phone number, name or 
   az containerapp update -g rg-craves-auth-prod -n ca-craves-auth-prod --set-env-vars CRAVES_ACCOUNT_DELETION_ENABLED=false CRAVES_ACCOUNT_DELETION_WORKER_ENABLED=false -o none
   ```
 
-Then move auth's traffic. Then deactivate each revision that never took traffic (a step whose revision never became `Healthy`):
-
-```bash
-az containerapp revision deactivate -g rg-craves-auth-prod -n ca-craves-auth-prod --revision <revision>
-```
+Then move auth's traffic, all three parts. Part 3 matters most here: it deactivates every other active revision, including the worker-on one. An active revision with 0 traffic still runs the worker. It also removes a revision that never became `Healthy`.
 
 Other rollbacks: the gateway route (step 4), advanced (step 2), Fix A and Fix B each have their own.
 
@@ -473,7 +554,7 @@ After the freeze, once auth's next release is live, run the preflight again: bot
 
   ```kusto
   ContainerAppConsoleLogs_CL
-  | where ContainerAppName_s == "ca-craves-auth-prod" and Log_s has "alert=ACCOUNT_DELETION_"
+  | where ContainerAppName_s == "ca-craves-auth-prod" and Log_s contains "CRAVES_ALERT alert=ACCOUNT_DELETION_"
   | project TimeGenerated, Log_s
   | order by TimeGenerated desc
   ```

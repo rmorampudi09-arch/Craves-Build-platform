@@ -175,7 +175,7 @@ The owner follows the runbook, `docs/runbooks/account-deletion-switch-on.md`, wi
 **Rollback at any step:**
 - set the switch back to `false` and move traffic. Open requests stay in the database and nothing is erased while the worker is off.
 - Never roll back by moving traffic alone: a later release could copy settings from the revision you moved away from.
-- Deactivate any revision that never took traffic.
+- Deactivate every active auth revision except the one just moved to (a 0-traffic active revision still runs the worker).
 - For the gateway route, delete the API `craves-admin-account-deletions-v1`.
 
 **Merge freeze:** no merge that touches `services/auth-service` from step 3 until step 7 is done (about one day). It's unknown which revision `release-auth` copies, so a release mid-way could ship half-set settings.

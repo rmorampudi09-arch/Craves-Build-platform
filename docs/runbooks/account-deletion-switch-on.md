@@ -18,7 +18,7 @@ Each step says what it does, the commands, the check that proves it worked, and 
 
    Expected: `34eefd95-1a19-416f-b9df-92b326500615`.
 
-2. Get `main` once. It must include the PR that added this runbook. The clone stays in your Cloud Shell home, so later days reuse it:
+2. Get `main` once. It must include the PR that added this runbook. The clone usually stays in your Cloud Shell home, so later days reuse it. An ephemeral Cloud Shell ("Your Cloud Shell session will be ephemeral") forgets files and variables when it restarts or times out: run items 1-3 again, then set again the variables the step you are in uses (`NEW`, `SRC_URL`, `COMMIT`).
 
    ```bash
    D=~/craves-switch-on
@@ -90,10 +90,20 @@ Each step says what it does, the commands, the check that proves it worked, and 
 
    Expected: each tag (after the `:`) starts with the merge commit's id, or a later `main` commit's. Start step 1 only then.
 
-5. **Merge freeze starts now:** no merge that touches `services/auth-service` until step 7 is done (about one day). See "Merge freeze".
+5. **Check that advanced runs code with the erase endpoint.** Advanced has no automatic release: a merge to `main` does not redeploy it, so it can run code older than account deletion 1/5 (#611, `eff853255`). That code has no `/internal/v1/account-erasure` route and answers auth with `HTTP 401` (on 5 Nov 2026 it ran `0fb5ca9b`, from 3 Nov). Read only:
 
-6. Have ready:
-   - the test phone: a spare number you control, customer-only, with at least one past order, signed in on an app build that has the Delete account screen (plan 3, #615). Never write the number in this file or in chat;
+   ```bash
+   ADV_TAG=$(az containerapp show -g rg-craves-advanced-prod -n ca-craves-advanced-prod --query "properties.template.containers[0].image" -o tsv); ADV_TAG=${ADV_TAG##*:}
+   git -C "$D" merge-base --is-ancestor eff853255 "$(git -C "$D" rev-parse --verify "$ADV_TAG^{commit}")" && echo "has the erase endpoint" || echo "older than #611"
+   git -C "$D" log --oneline "$ADV_TAG..origin/main" -- services/advanced-features-service
+   ```
+
+   Expected: `has the erase endpoint`. With `older than #611`, step 2 deploys a newer commit instead of the one advanced runs now (step 2, part 4): the last line lists every change that deploy would ship. Each one must be meant to go live; otherwise stop and ask.
+
+6. **Merge freeze starts now:** no merge that touches `services/auth-service` until step 7 is done (about one day). See "Merge freeze".
+
+7. Have ready:
+   - the test phone: a spare number you control, customer-only (no chef, rider or staff role: never your own admin login), with at least one past order, signed in on an app build that has the Delete account screen (plan 3, #615, app 1.36.17 or later). Never write the number in this file or in chat;
    - your staff sign-in on `admin.craves.in`.
 
    Steps 5 and 6 run in the same hour. Pick a quiet one.
@@ -223,7 +233,15 @@ Advanced has no internal secret yet, so its erase endpoints answer 503. This cop
    [ "${IMAGE##*:}" = "${COMMIT:0:12}" ] && echo "same tag" || echo "different tag"
    ```
 
-   Expected: `crcravesprod34eefd.azurecr.io/craves/advanced-features-service:<12 characters> -> <40 characters, the same 12 first>`, then `same tag`. If `rev-parse` fails, the tag is not a `main` commit: stop and ask. Only then:
+   Expected: `crcravesprod34eefd.azurecr.io/craves/advanced-features-service:<12 characters> -> <40 characters, the same 12 first>`, then `same tag`. If `rev-parse` fails, the tag is not a `main` commit: stop and ask.
+
+   If "Before you start" item 5 said `older than #611`, deploy the newest `main` commit that changes advanced instead (the image builds first, several minutes):
+
+   ```bash
+   COMMIT=$(git -C "$D" log -1 --format=%H origin/main -- services/advanced-features-service); echo "$COMMIT"
+   ```
+
+   Only then:
 
    ```bash
    bash "$D/infra/advanced-features/provision.sh" image "$COMMIT"
@@ -367,7 +385,7 @@ Proves that auth reaches all 8 services, and that keep and release work. The det
 2. On `admin.craves.in` → Deletion requests, open the new request (Scope: Whole account, Via: App). It can take 30 seconds: auth asks all 8 services.
 
    Expected:
-   - Summary: Status Scheduled, Due 30 days from now;
+   - Summary: Scope Whole account, Roles `CUSTOMER` only, Status Scheduled, Due 30 days from now. Any other role (CHEF, an `*_ADMIN`) means a chef or staff login, and the scope shows Customer: tap **Keep my account** at once and use another number. Keep also signs that account out everywhere, `admin.craves.in` included;
    - Open items: "Nothing is open";
    - Steps: 8 PREPARE rows, status PENDING (the worker is off).
 
@@ -377,6 +395,7 @@ Proves that auth reaches all 8 services, and that keep and release work. The det
 
    | Detail | Meaning | Do |
    |---|---|---|
+   | `HTTP 401` on advanced | Most likely advanced runs code older than the erase endpoint (a missing route also answers 401). | "Before you start" item 5, then step 2 parts 4-6 with the newer commit. Fix A only if advanced already has the endpoint. |
    | `HTTP 401` or `HTTP 403` | The service refuses auth's credential (most likely catalog or subscription holding a different value). | Fix A. A 403 can also be the service's ingress: if the preflight's `ingress:` line for it says `does not allow auth`, Fix B instead. |
    | `TIMEOUT` or `UNREACHABLE` | The network. | Fix B, but only if the preflight's `ingress:` line for that service says `does not allow auth`. Otherwise (`open`, `allows auth`, or `internal ingress`) stop and ask. |
    | `NOT_CONFIGURED` | A step 3 setting is missing. | Step 3 again. |
@@ -507,14 +526,15 @@ Fill in as you go. Ids, dates, states and counts only: no phone number, name or 
 
 | Step | Date | Request id | Outcome | Erase counts |
 |---|---|---|---|---|
-| 1 Preflight | | | | |
-| 2 Advanced | | | | |
-| 3 auth settings | | | | |
-| 4 Gateway | | | | |
-| 5 Requests on | | | | |
-| 6 Test request (first, kept) | | | | |
-| 6 Test request (second, open) | | | | |
-| 7 Worker on | | | | |
+| 1 Preflight | 5 Nov 2026 | | NOT READY as expected: 16 auth settings + advanced secret missing; no STOP; all 8 services external and allow auth | |
+| 2 Advanced | 5 Nov 2026 | | Secret added, rev `m0fb5ca9b-11051644`. Step 6 then showed advanced `HTTP 401`: its code (`0fb5ca9b`) predated #611. Redeployed at `eff853255`, rev `meff85325` Healthy | |
+| 3 auth settings | 5 Nov 2026 | | auth rev `81ixzfh`, preflight READY, `/auth/me` 401 | |
+| 4 Gateway | 5 Nov 2026 | | `craves-admin-account-deletions-v1` written, both probes 401, SUCCESS | |
+| 5 Requests on | 5 Nov 2026 | | auth rev `0000001` started Healthy with the switch on (start-up check passed) | |
+| 6 Wrong account (kept) | 5 Nov 2026 | `0a863f3b` | Mistake: a staff login (CHEF + admin roles), scope Customer, via web. Kept at once; its steps never ran | |
+| 6 Test request (first, kept) | 6 Nov 2026 | `5ce8aafc` | Customer-only test account, app 1.36.17, Whole account, all 8 services answered, nothing open. Kept; RELEASE catalog + subscription DONE after step 7 | |
+| 6 Test request (second, open) | 6 Nov 2026 | `673330d5` | Scheduled, due 6 Dec 2026 | |
+| 7 Worker on | 6 Nov 2026 | `673330d5` | auth rev `0000002`; PREPARE 8/8 DONE 00:31 IST, no error; logs arrive (118 lines/h), no `ACCOUNT_DELETION_` alert | |
 | 8 Reminder | | | | |
 | 9 Erase | | | | |
 | 9 Sweep (day 31) | | | | |

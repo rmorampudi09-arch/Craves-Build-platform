@@ -117,6 +117,13 @@ public class CatalogService {
                 socialLinks
             );
         } else {
+            // Handbook 008: while staff hold the kitchen suspended, a save keeps SUSPENDED and its status becomes what reinstating restores.
+            // Lock the kitchen row in a statement of its own, then touch the hold: a statement that waited for the lock
+            // still sees other tables as they were before the wait, so it could miss a hold added or lifted meanwhile.
+            jdbcTemplate.queryForList("SELECT 1 FROM catalog_schema.kitchen_profile WHERE id = ? FOR UPDATE", existingId.get());
+            if (jdbcTemplate.update("UPDATE catalog_schema.kitchen_suspension_hold SET prior_status = ? WHERE kitchen_id = ?", status.name(), existingId.get()) > 0) {
+                status = KitchenStatus.SUSPENDED;
+            }
             jdbcTemplate.update(
                 "UPDATE catalog_schema.kitchen_profile SET kitchen_name = ?, display_name = ?, description = ?, phone_number = ?, email = ?, address_line1 = ?, address_line2 = ?, landmark = ?, area_name = ?, city = ?, state = ?, postal_code = ?, latitude = ?, longitude = ?, status = ?, cuisines = COALESCE(CAST(? AS jsonb), cuisines), service_areas = COALESCE(CAST(? AS jsonb), service_areas), social_links = COALESCE(CAST(? AS jsonb), social_links), updated_at = now() WHERE identity_id = ?",
                 request.kitchenName(),

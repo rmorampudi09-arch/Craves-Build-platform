@@ -49,8 +49,11 @@ export async function requestIdOf(context: RequestContext): Promise<string | Nex
   return isUuid(requestId) ? requestId : failure(404, "NO_DELETION_REQUEST");
 }
 
+/** The default of `authenticatedApiFetch`, stated so each route's wait is visible and tested. */
+export const DEFAULT_TIMEOUT_MS = 10_000;
+
 /** Approve or reject: same-origin JSON {reason} of 10 to 500 characters once trimmed, forwarded as {reason}. */
-export async function decide(request: NextRequest, context: RequestContext, action: "approve" | "reject"): Promise<NextResponse> {
+export async function decide(request: NextRequest, context: RequestContext, action: "approve" | "reject", timeoutMs: number): Promise<NextResponse> {
   const requestId = await requestIdOf(context);
   if (requestId instanceof NextResponse) return requestId;
   // 4 KiB covers 500 characters even when every one is escaped.
@@ -65,5 +68,5 @@ export async function decide(request: NextRequest, context: RequestContext, acti
   if (reason.length < 10 || reason.length > 500) return failure(400, "ADMIN_REASON_INVALID");
   return forward(bounded, `/admin/account-deletions/${requestId}/${action}`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }),
-  }, 15_000, body => replyParsed(parseAdminSummary(body)));
+  }, timeoutMs, body => replyParsed(parseAdminSummary(body)));
 }

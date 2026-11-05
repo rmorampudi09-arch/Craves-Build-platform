@@ -45,6 +45,7 @@ describe("admin deletion list", () => {
     const response = await list(new NextRequest(`${base}?status=PENDING_REVIEW&cursor=abc_-1`));
     expect(response.status).toBe(200);
     expect(backend.fetch.mock.calls[0][1]).toBe("/admin/account-deletions?status=PENDING_REVIEW&cursor=abc_-1&limit=25");
+    expect(backend.fetch.mock.calls[0][3]).toBe(10_000);
     expect(await response.json()).toEqual({ items: [summary], nextCursor: "abc_-1" });
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
@@ -166,7 +167,14 @@ describe("admin deletion detail", () => {
   });
 });
 
-describe.each([["approve", approve], ["reject", reject]] as const)("admin deletion %s", (action, handler) => {
+// Approve waits for the eight-service open-items check (up to about 21 s); reject calls no service.
+describe.each([["approve", approve, 25_000], ["reject", reject, 10_000]] as const)("admin deletion %s", (action, handler, timeoutMs) => {
+  it(`gives the backend call ${timeoutMs} ms`, async () => {
+    backend.fetch.mockImplementation(async () => json(summary));
+    expect((await post(handler, { reason })).status).toBe(200);
+    expect(backend.fetch.mock.calls[0][3]).toBe(timeoutMs);
+  });
+
   it("forwards the trimmed reason to the backend", async () => {
     backend.fetch.mockResolvedValue(json({ ...summary, status: "SCHEDULED", reviewedBy: "staff-1", reviewNote: reason }));
     const response = await post(handler, { reason: `   ${reason}  `, status: "COMPLETED", extra: 1 });

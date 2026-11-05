@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { ADMIN_STATUS_FILTERS, parseAdminPage } from "@/features/account-deletion/domain/deletion-contract";
-import { failure, forward, replyParsed } from "@/features/admin/account-deletions/lib/admin-deletion-bff";
+import { DEFAULT_TIMEOUT_MS, failure, forward, replyParsed } from "@/features/admin/account-deletions/lib/admin-deletion-bff";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,5 +18,5 @@ export async function GET(request: NextRequest) {
   if (status) query.set("status", status);
   if (cursor) query.set("cursor", cursor);
   query.set("limit", "25");
-  return forward(request, `/admin/account-deletions?${query}`, {}, 15_000, body => replyParsed(parseAdminPage(body)));
+  return forward(request, `/admin/account-deletions?${query}`, {}, DEFAULT_TIMEOUT_MS, body => replyParsed(parseAdminPage(body)));
 }

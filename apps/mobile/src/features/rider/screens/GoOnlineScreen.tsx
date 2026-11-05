@@ -183,14 +183,19 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
             <Text style={styles.why}>{g.goingOnline}</Text>
           </View>
         ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={g.shutter}
-            onPress={takeSelfie}
-            style={({pressed}) => [styles.shutter, pressed && styles.pressed]}
-            testID="rider-selfie-shutter">
-            <View style={styles.shutterDisc} />
-          </Pressable>
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={g.shutter}
+              onPress={takeSelfie}
+              style={({pressed}) => [styles.shutter, pressed && styles.pressed]}
+              testID="rider-selfie-shutter">
+              <View style={styles.shutterDisc} />
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.notNow} testID="rider-go-online-not-now">
+              <Text style={styles.why}>{g.notNow}</Text>
+            </Pressable>
+          </>
         )}
       </View>
     </SafeAreaView>
@@ -209,7 +214,8 @@ const styles = StyleSheet.create({
   heading: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.white, textAlign: 'center'},
   why: {fontSize: typography.body, color: colors.border, textAlign: 'center'},
   problem: {gap: spacing.xs, marginTop: spacing.xs},
-  bottom: {minHeight: 112, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md},
+  bottom: {minHeight: 112, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md, gap: spacing.xs},
+  notNow: {minHeight: touchTarget.minimum, justifyContent: 'center', paddingHorizontal: spacing.md},
   busy: {alignItems: 'center', gap: spacing.xs},
   shutter: {
     width: 80,

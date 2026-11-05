@@ -1,19 +1,19 @@
 // Steps 3 and 4 of the trip: ride to the customer, then hand over (docs/riders/SCREENS.md 11 and 12).
 import React, {type PropsWithChildren, useState} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, Text, View} from 'react-native';
 import {Icon} from '../../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, radius, spacing, touchTarget, typography} from '../../../../design/tokens';
+import {borderWidth, colors, fontWeight, iconSize, radius, spacing, typography} from '../../../../design/tokens';
 import {DEMO_OTP} from '../../api/riderApi.mock';
-import {Banner} from '../../components/Banner';
 import {BottomAction} from '../../components/BottomAction';
 import {CodeBoxes} from '../../components/CodeBoxes';
 import {RefusalNotices} from '../../components/RefusalNotices';
-import {RiderScreen} from '../../components/ui';
-import {distanceMeters, formatKm} from '../../domain/format';
+import {Card, RiderScreen} from '../../components/ui';
+import {distanceMeters, formatClock, formatKm, formatRupees} from '../../domain/format';
 import {riderOnlineService} from '../../native/riderOnlineService';
 import {isDemo} from '../../riderConfig';
+import {useRiderMe} from '../../state/riderQueries';
 import {useStrings} from '../../strings/StringsProvider';
-import {call, navigateTo, OrderCard, PlaceCard, SyncNote, text, TripHeader, TwoUp, type StepProps} from './parts';
+import {call, distanceLine, navigateTo, PlaceCard, SyncNote, text, TripHeader, TripRows, TwoUp, type StepProps} from './parts';
 
 const NEAR_DROP_M = 200;
 
@@ -25,39 +25,56 @@ export interface OtpError {
 
 export function ToCustomer({trip, run, syncing}: StepProps) {
   const t = useStrings().strings.trip;
+  const maskedCalls = useRiderMe().data?.features.maskedCalls === true;
+  const distance = distanceLine(trip.dropDistanceM, trip.customer, t);
+  const rows: [string, string][] = [
+    ...(distance ? [[t.distance, distance] as [string, string]] : []),
+    [t.handOver, t.codeFromCustomer],
+    [t.payForTrip, t.payPlusWait(formatRupees(trip.payPaise))],
+  ];
   return (
     <RiderScreen
-      header={<TripHeader title={t.titles.PICKED_UP} trip={trip} step={3} />}
+      header={<TripHeader title={t.orderTitle(trip.orderCode)} trip={trip} step={3} />}
       testID="rider-to-customer"
       footer={
-        <BottomAction label={t.reachedCustomer} onPress={() => run('arrived-drop')} testID="rider-reached-customer" />
+        <View style={styles.tight}>
+          <BottomAction label={t.atDoor} onPress={() => run('arrived-drop')} testID="rider-reached-customer" />
+          <Text style={[text.small, text.center]} testID="rider-no-deadline">
+            {t.noDeadline}
+          </Text>
+        </View>
       }>
+      <Text style={text.small}>
+        {trip.pickedUpAt ? t.lockedWith(formatRupees(trip.payPaise), t.pickedUpAt(formatClock(trip.pickedUpAt))) : t.lockedPay(formatRupees(trip.payPaise))}
+      </Text>
       <SyncNote show={syncing} />
       <RefusalNotices tripId={trip.tripId} />
       <PlaceCard label={t.deliverTo} name={trip.customer.firstName} place={trip.customer} />
-      <TwoUp
-        left={
-          <BottomAction
-            label={t.callName(trip.customer.firstName)}
-            variant="outline"
-            leftIcon="phone-outline"
-            onPress={() => call(trip.customer.phone)}
-            testID="rider-call-customer"
-          />
-        }
-        right={
-          <BottomAction
-            label={t.navigate}
-            variant="outline"
-            leftIcon="navigation-variant-outline"
-            accessibilityHint={t.navigateNote}
-            onPress={() => navigateTo(trip.customer)}
-            testID="rider-navigate"
-          />
-        }
-      />
-      <OrderCard trip={trip} />
-      <Banner tone="info" text={t.noDeadline} testID="rider-no-deadline" />
+      <TripRows rows={rows} />
+      <View style={styles.tight}>
+        <TwoUp
+          left={
+            <BottomAction
+              label={t.navigate}
+              variant="outline"
+              leftIcon="navigation-variant-outline"
+              accessibilityHint={t.navigateNote}
+              onPress={() => navigateTo(trip.customer)}
+              testID="rider-navigate"
+            />
+          }
+          right={
+            <BottomAction
+              label={t.callName(trip.customer.firstName)}
+              variant="outline"
+              leftIcon="phone-outline"
+              onPress={() => call(trip.customer.phone)}
+              testID="rider-call-customer"
+            />
+          }
+        />
+        {maskedCalls ? <Text style={text.small} testID="rider-masked-calls">{t.maskedCalls}</Text> : null}
+      </View>
     </RiderScreen>
   );
 }
@@ -92,17 +109,21 @@ export function Deliver({
 
   return (
     <RiderScreen
-      header={<TripHeader title={t.titles.AT_DROP} trip={trip} step={4} />}
+      header={<TripHeader title={name} trip={trip} step={4} />}
       testID="rider-deliver"
       footer={
         locked ? (
           <BottomAction label={t.photoRoute} leftIcon="camera-outline" onPress={onNotAnswering} testID="rider-photo-route" />
         ) : (
-          <BottomAction label={t.delivered} disabled={otp.length !== 4} onPress={deliver} testID="rider-delivered" />
+          <View style={styles.tight}>
+            <BottomAction label={t.delivered} disabled={otp.length !== 4} onPress={deliver} testID="rider-delivered" />
+            <Text style={[text.small, text.center]}>{t.deliveredWhen}</Text>
+          </View>
         )
       }>
       <SyncNote show={syncing} />
       <RefusalNotices tripId={trip.tripId} />
+      <Text style={text.small}>{t.lockedWith(formatRupees(trip.payPaise), t.orderTitle(trip.orderCode))}</Text>
       <View style={styles.who}>
         <View style={styles.whoText}>
           <Text accessibilityRole="header" style={text.heading}>
@@ -114,6 +135,7 @@ export function Deliver({
           <DropChip near={distance <= NEAR_DROP_M} label={distance <= NEAR_DROP_M ? t.nearDrop : t.farDrop(formatKm(distance))} />
         ) : null}
       </View>
+      <Text style={[text.body, text.secondary]}>{t.handoverNote}</Text>
       <Fieldset legend={t.otpTitle(name)}>
         <CodeBoxes
           value={otp}
@@ -127,9 +149,11 @@ export function Deliver({
       </Fieldset>
       <BottomAction label={t.callName(name)} variant="outline" leftIcon="phone-outline" onPress={onCall} testID="rider-call-customer" />
       {locked ? null : (
-        <Pressable accessibilityRole="button" onPress={onNotAnswering} style={styles.link} testID="rider-unreachable">
-          <Text style={styles.linkText}>{t.notAnswering}</Text>
-        </Pressable>
+        <Card style={styles.tight}>
+          <Text style={[text.body, text.bold]}>{t.ifNotAnswering(name)}</Text>
+          <Text style={[text.body, text.secondary]}>{t.notAnsweringHelp(Math.round(trip.unreachableWaitSeconds / 60))}</Text>
+          <BottomAction label={t.notAnswering} variant="outline" size="compact" onPress={onNotAnswering} testID="rider-unreachable" />
+        </Card>
       )}
     </RiderScreen>
   );
@@ -190,11 +214,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.white,
   },
-  link: {minHeight: touchTarget.minimum, alignSelf: 'center', justifyContent: 'center', paddingHorizontal: spacing.xs},
-  linkText: {
-    fontSize: typography.button,
-    fontWeight: fontWeight.bold,
-    color: colors.flameRed,
-    textDecorationLine: 'underline',
-  },
+  tight: {gap: spacing.xs},
 });

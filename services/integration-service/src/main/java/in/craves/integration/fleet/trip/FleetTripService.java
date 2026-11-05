@@ -58,8 +58,8 @@ public class FleetTripService {
     private static final TypeReference<List<PayLine>> LINES = new TypeReference<>() { };
     static final String ACTIVE_STATES = "('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')";
     private static final String VIEW = """
-        SELECT t.*, o.pay_lines::text AS offer_lines, t.final_pay_lines::text AS final_lines, rc.wait_free_minutes,
-               rc.unreachable_wait_minutes, rc.wait_per_minute_paise
+        SELECT t.*, o.pay_lines::text AS offer_lines, o.pay_paise AS offer_pay_paise, t.final_pay_lines::text AS final_lines,
+               rc.wait_free_minutes, rc.unreachable_wait_minutes, rc.wait_per_minute_paise
         FROM fleet_schema.trip t
         LEFT JOIN fleet_schema.trip_offer o ON o.trip_id = t.id AND o.state = 'ACCEPTED'
         LEFT JOIN fleet_schema.rate_card rc ON rc.version = t.rate_card_version
@@ -601,7 +601,9 @@ public class FleetTripService {
                 row.getDouble("drop_lng"), row.getString("customer_first_name"), row.getString("customer_phone")),
             instant(row.getTimestamp("arrived_kitchen_at")), freeMinutes == null ? 0 : freeMinutes * 60L,
             unreachableMinutes == null ? 0 : unreachableMinutes * 60L, (Long) row.getObject("wait_per_minute_paise"),
-            row.getString("cancel_reason"), lines, row.getBoolean("sealed"), instant(row.getTimestamp("chef_ready_at")));
+            row.getString("cancel_reason"), lines, row.getBoolean("sealed"), instant(row.getTimestamp("chef_ready_at")),
+            row.getString("rate_card_version"), (Long) row.getObject("offer_pay_paise"), (Integer) row.getObject("pickup_distance_m"),
+            (Integer) row.getObject("drop_distance_m"), instant(row.getTimestamp("picked_up_at")), instant(row.getTimestamp("finished_at")));
     }
 
     /**

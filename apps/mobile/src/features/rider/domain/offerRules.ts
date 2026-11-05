@@ -53,6 +53,9 @@ export function offerRulesLines(rules: OfferRules, t: RiderStrings['terms']): st
         ? t.rulesFair(formatKm(rules.fairBandM))
         : t.rulesNearest,
     ...(rules.offerRounds > 1 ? [t.rulesRounds(rules.offerRounds)] : []),
+    // Policy 2026-11-v2 (app 1.3.3): two rule lines the server sends only when true.
+    ...(rules.jointMatching ? [t.rulesJoint] : []),
+    ...(rules.nextOrderOffers ? [t.rulesNextOrder] : []),
     t.rulesRadius(formatKm(rules.radiusM)),
     t.rulesFree,
     t.rulesWhy,

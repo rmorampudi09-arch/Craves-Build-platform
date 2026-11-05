@@ -207,7 +207,8 @@ public class FleetLocationService {
                 jdbc.update("INSERT INTO fleet_schema.trip_track (trip_id, rider_id, recorded_at, lat, lng, accuracy_m, mock) VALUES "
                     + String.join(", ", Collections.nCopies(fresh.size(), "(?, ?, ?, ?, ?, ?, ?)")), args.toArray());
             }
-            seconds = inZoneSeconds(after, sameShift && Boolean.TRUE.equals(shift.lastMock()), fresh, shift.slotStart(), shift.slotEnd());
+            seconds = inZoneSeconds(after, sameShift && Boolean.TRUE.equals(shift.lastMock()), fresh, shift.slotStart(), shift.slotEnd(),
+                shift.slotLat(), shift.slotLng(), shift.slotRadiusM());
         }
         String health = health(batch.health());
         long slotSeconds = shift.paused() ? 0 : seconds;
@@ -399,13 +400,23 @@ public class FleetLocationService {
     /**
      * In-zone seconds for the slot guarantee. Zone model: P1 stores a slot's zone as a name and a time window, with no
      * geometry, so a gap between two consecutive non-mock fixes counts while one of the rider's BOOKED slots runs, clipped
-     * to that slot and at most MAX_GAP per gap. shortcut: the position is not checked against the zone; add zone geometry (centre and radius)
-     * when ops draws the pilot area and test each fix against it.
+     * to that slot and at most MAX_GAP per gap. A booked slot (app 1.3.3) carries its cluster's centre and radius, and only
+     * fixes inside count; ops slots have no geometry yet, so for them the whole window still counts.
      *
      * @param previousAt the stored fix of this shift that the first fresh fix follows, or null
      * @param fixes      fresh fixes, oldest first
      */
     static long inZoneSeconds(Instant previousAt, boolean previousMock, List<RiderFix> fixes, Instant slotStart, Instant slotEnd) {
+        return inZoneSeconds(previousAt, previousMock, fixes, slotStart, slotEnd, null, null, null);
+    }
+
+    /**
+     * App 1.3.3 (R-07): a booked slot carries its cluster's centre and radius, and a gap counts only when the fix that ends
+     * it is inside that circle. Ops slots without geometry keep the old rule. The lateral slot read keeps the geometry
+     * in step with the slot.
+     */
+    static long inZoneSeconds(Instant previousAt, boolean previousMock, List<RiderFix> fixes, Instant slotStart, Instant slotEnd,
+                              Double zoneLat, Double zoneLng, Integer zoneRadiusM) {
         if (slotStart == null) {
             return 0;
         }
@@ -413,16 +424,32 @@ public class FleetLocationService {
         Instant previous = previousAt;
         boolean previousCounts = previousAt != null && !previousMock;
         for (RiderFix fix : fixes) {
-            boolean counts = !Boolean.TRUE.equals(fix.mock());
-            if (previousCounts && counts) {
+            boolean real = !Boolean.TRUE.equals(fix.mock());
+            // A gap counts when both its fixes are real and the one ending it is inside the zone.
+            if (previousCounts && real && inZone(fix, zoneLat, zoneLng, zoneRadiusM)) {
                 Instant from = Collections.max(List.of(previous, fix.at().minus(MAX_GAP), slotStart));
                 Instant to = fix.at().isBefore(slotEnd) ? fix.at() : slotEnd;
                 millis += Math.max(0, Duration.between(from, to).toMillis());
             }
             previous = fix.at();
-            previousCounts = counts;
+            previousCounts = real;
         }
         return Math.round(millis / 1000.0);
+    }
+
+    /** Inside the slot's zone, or no zone to check (ops slots): the whole window counts, as before app 1.3.3. */
+    static boolean inZone(RiderFix fix, Double zoneLat, Double zoneLng, Integer zoneRadiusM) {
+        if (zoneLat == null || zoneLng == null || zoneRadiusM == null) {
+            return true;
+        }
+        if (fix.lat() == null || fix.lng() == null) {
+            return false;
+        }
+        double dLat = Math.toRadians(fix.lat() - zoneLat);
+        double dLng = Math.toRadians(fix.lng() - zoneLng);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+            + Math.cos(Math.toRadians(zoneLat)) * Math.cos(Math.toRadians(fix.lat())) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return 2 * 6_371_000 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) <= zoneRadiusM;
     }
 
     /**
@@ -465,7 +492,8 @@ public class FleetLocationService {
                    r.id AS rider_id, r.status, p.shift_id AS last_shift_id, p.recorded_at AS last_at, p.mock AS last_mock,
                    p.trip_id AS last_trip_id, a.id AS trip_id, a.state AS trip_state, a.version AS trip_version,
                    e.rider_id AS last_trip_rider_id, e.state AS last_trip_state, e.version AS last_trip_version,
-                   z.id AS slot_id, z.starts_at AS slot_starts_at, z.ends_at AS slot_ends_at, now() AS db_now,
+                   z.id AS slot_id, z.starts_at AS slot_starts_at, z.ends_at AS slot_ends_at, z.zone_lat AS slot_lat, z.zone_lng AS slot_lng,
+                   z.zone_radius_m AS slot_radius_m, now() AS db_now,
                    """ + FleetShiftService.BREAK_ENDS.formatted("s.id") + " IS NOT NULL AS paused" + columns + """
 
             FROM fleet_schema.rider_shift s
@@ -473,7 +501,7 @@ public class FleetLocationService {
             LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = s.rider_id
             LEFT JOIN fleet_schema.trip a ON a.rider_id = s.rider_id AND a.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP')
             LEFT JOIN fleet_schema.trip e ON e.id = p.trip_id
-            LEFT JOIN LATERAL (SELECT id, starts_at, ends_at FROM fleet_schema.rider_slot
+            LEFT JOIN LATERAL (SELECT id, starts_at, ends_at, zone_lat, zone_lng, zone_radius_m FROM fleet_schema.rider_slot
               WHERE rider_id = s.rider_id AND status = 'BOOKED' AND starts_at <= now() AND ends_at > now() ORDER BY starts_at DESC LIMIT 1) z ON true""" + join + """
 
             WHERE %s
@@ -495,7 +523,9 @@ public class FleetLocationService {
             row.getObject("last_trip_id", UUID.class), row.getObject("trip_id", UUID.class), row.getString("trip_state"),
             (Integer) row.getObject("trip_version"), row.getObject("last_trip_rider_id", UUID.class), row.getString("last_trip_state"),
             (Integer) row.getObject("last_trip_version"), row.getObject("slot_id", UUID.class), instant(row, "slot_starts_at"),
-            instant(row, "slot_ends_at"), instant(row, "db_now"), row.getBoolean("paused"), dispatch);
+            instant(row, "slot_ends_at"), instant(row, "db_now"), row.getBoolean("paused"), dispatch,
+            row.getObject("slot_lat") == null ? null : row.getDouble("slot_lat"), row.getObject("slot_lng") == null ? null : row.getDouble("slot_lng"),
+            (Integer) row.getObject("slot_radius_m"));
     }
 
     private static Instant instant(ResultSet row, String column) throws SQLException {
@@ -507,13 +537,13 @@ public class FleetLocationService {
     record Context(UUID shiftId, Instant startedAt, Instant endedAt, Instant revokedAt, boolean expired, UUID riderId, String status,
                    UUID lastShiftId, Instant lastAt, Boolean lastMock, UUID lastTripId, UUID tripId, String tripState, Integer tripVersion,
                    UUID lastTripRiderId, String lastTripState, Integer lastTripVersion, UUID slotId, Instant slotStart, Instant slotEnd,
-                   Instant now, boolean paused, Dispatch dispatch) {
+                   Instant now, boolean paused, Dispatch dispatch, Double slotLat, Double slotLng, Integer slotRadiusM) {
         Context(UUID shiftId, Instant startedAt, Instant endedAt, Instant revokedAt, boolean expired, UUID riderId, String status,
                 UUID lastShiftId, Instant lastAt, Boolean lastMock, UUID lastTripId, UUID tripId, String tripState, Integer tripVersion,
                 UUID lastTripRiderId, String lastTripState, Integer lastTripVersion, UUID slotId, Instant slotStart, Instant slotEnd,
                 Instant now, boolean paused) {
             this(shiftId, startedAt, endedAt, revokedAt, expired, riderId, status, lastShiftId, lastAt, lastMock, lastTripId, tripId, tripState,
-                tripVersion, lastTripRiderId, lastTripState, lastTripVersion, slotId, slotStart, slotEnd, now, paused, null);
+                tripVersion, lastTripRiderId, lastTripState, lastTripVersion, slotId, slotStart, slotEnd, now, paused, null, null, null, null);
         }
     }
 

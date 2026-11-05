@@ -143,6 +143,60 @@ class RiderOnlineModule(private val reactContext: ReactApplicationContext) :
     promise.resolve(RiderOnlineService.lastFix?.toMap())
   }
 
+  /**
+   * "Reached <kitchen>?" (R-03) for a JS that starts after it was asked: the heads-up that opened the app (yes: the rider
+   * already answered on it), else the question the service still has open. The intent's answer is read once.
+   */
+  @ReactMethod
+  fun getPendingReached(promise: Promise) {
+    val intent = reactContext.currentActivity?.intent
+    val tapped = intent?.getStringExtra(RiderOffers.EXTRA_REACHED)
+    val yes = intent?.getBooleanExtra(RiderOffers.EXTRA_REACHED_YES, false) ?: false
+    intent?.removeExtra(RiderOffers.EXTRA_REACHED)
+    intent?.removeExtra(RiderOffers.EXTRA_REACHED_YES)
+    val open = RiderOnlineService.reachedPrompt
+    val prompt = when {
+      tapped != null -> RiderReached.Prompt(tapped, open?.kitchenName.orEmpty(), open?.distanceM ?: 0)
+      else -> open
+    }
+    promise.resolve(prompt?.let {
+      Arguments.createMap().apply {
+        putString("tripId", it.tripId)
+        putString("kitchenName", it.kitchenName)
+        putInt("distanceM", it.distanceM)
+        putBoolean("yes", tapped != null && yes)
+      }
+    })
+  }
+
+  /** What the rider tapped on the trip notification (R-04): `{step?, sos}`, read once; null when the app opened otherwise. */
+  @ReactMethod
+  fun getPendingTap(promise: Promise) {
+    val intent = reactContext.currentActivity?.intent
+    val step = intent?.getStringExtra(RiderOffers.EXTRA_TAP_STEP)
+    val sos = intent?.getBooleanExtra(RiderOffers.EXTRA_TAP_SOS, false) ?: false
+    intent?.removeExtra(RiderOffers.EXTRA_TAP_STEP)
+    intent?.removeExtra(RiderOffers.EXTRA_TAP_SOS)
+    if (step == null && !sos) {
+      promise.resolve(null)
+      return
+    }
+    promise.resolve(Arguments.createMap().apply {
+      step?.let { putString("step", it) }
+      putBoolean("sos", sos)
+    })
+  }
+
+  @ReactMethod
+  fun reachedNotYet() {
+    RiderOnlineService.reachedNotYet(reactContext)
+  }
+
+  @ReactMethod
+  fun reachedDone() {
+    RiderOnlineService.reachedDone(reactContext)
+  }
+
   @ReactMethod
   fun getFcmToken(promise: Promise) {
     try {

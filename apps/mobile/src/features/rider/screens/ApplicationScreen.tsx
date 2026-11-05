@@ -450,6 +450,7 @@ function Sent({
 }) {
   const {strings, language} = useStrings();
   const ap = strings.account.apply;
+  const navigation = useNavigation<RiderNav>();
   // A press that finds no decision yet still says it looked, or why it couldn't (a decision moves the screen on by itself).
   const [checked, setChecked] = useState<{at: number; error: unknown}>();
   const check = async () => {
@@ -486,11 +487,21 @@ function Sent({
       </Card>
       <Card style={styles.list}>
         <Text accessibilityRole="header" style={[styles.strong, styles.listTitle]}>
-          {ap.whatYouSent}
+          {ap.approvedCount(application.documents.filter(doc => doc.status === 'VERIFIED').length, application.documents.length)}
         </Text>
         {application.documents.map(doc => (
           <DocumentRow key={doc.type ?? doc.label} doc={doc} mode="review" divider />
         ))}
+      </Card>
+      <Card>
+        <Text style={styles.secondary}>{ap.whileYouWait}</Text>
+        <BottomAction
+          label={ap.readRateCard}
+          variant="outline"
+          size="compact"
+          onPress={() => navigation.navigate('Terms', {mode: 'view'})}
+          testID="rider-application-rate-card"
+        />
       </Card>
       <DetailsCard me={me} profile={profile} />
       <PayoutAccountCard key={me.name} profile={profile} kycName={me.name} />

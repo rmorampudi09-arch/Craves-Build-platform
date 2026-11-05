@@ -29,4 +29,24 @@
     <string name="rider_trip_ended_released">Craves ऑप्स टीम ने यह ऑर्डर Borzo या Pidge को दे दिया। अब तक की ट्रिप के पैसे आपको मिलेंगे।</string>
     <string name="rider_trip_ended_handed">Craves ऑप्स टीम ने यह ऑर्डर दूसरे राइडर को दे दिया। अब तक की ट्रिप के पैसे आपको मिलेंगे।</string>
     <string name="rider_trip_ended_order_cancelled">कस्टमर का ऑर्डर रद्द हो गया। अब तक की ट्रिप के पैसे आपको मिलेंगे।</string>
+    <!-- "Reached the kitchen?" (app 1.3.3, R-03): the heads-up while Google Maps is in front. -->
+    <string name="rider_channel_reached">किचन पहुँच गए?</string>
+    <string name="rider_reached_title">%1$s पहुँच गए?</string>
+    <string name="rider_reached_body">आपका फ़ोन किचन से करीब %1$d मी. दूर दिख रहा है। हाँ कहने पर किचन का इंतज़ार शुरू होता है।</string>
+    <string name="rider_reached_yes">हाँ, आ गया</string>
+    <string name="rider_reached_not_yet">अभी नहीं</string>
+    <!-- The trip notification (app 1.3.3, R-04): the step, the order code and three actions. -->
+    <string name="rider_notice_to_kitchen">%1$s की ओर · ऑर्डर %2$s</string>
+    <string name="rider_notice_at_kitchen">%1$s पर · ऑर्डर %2$s</string>
+    <string name="rider_notice_to_customer">%1$s की ओर · ऑर्डर %2$s</string>
+    <string name="rider_notice_ride">पहुँचने पर पहुँच गया दबाएँ.</string>
+    <string name="rider_notice_food_ready">खाना तैयार है. पहुँचने पर पहुँच गया दबाएँ.</string>
+    <string name="rider_notice_pickup">शेफ़ को ऑर्डर नंबर बताएँ, फिर उठा लिया दबाएँ.</string>
+    <string name="rider_notice_drop">दरवाज़े पर 4 अंकों का कोड पूछें.</string>
+    <string name="rider_notice_handover">पूरा करने के लिए ग्राहक का 4 अंकों का कोड Craves में टाइप करें.</string>
+    <string name="rider_notice_back">Craves पर जाएँ</string>
+    <string name="rider_notice_reached">किचन पहुँच गया</string>
+    <string name="rider_notice_picked_up">उठा लिया</string>
+    <string name="rider_notice_at_door">दरवाज़े पर हूँ</string>
+    <string name="rider_notice_sos">SOS</string>
 </resources>

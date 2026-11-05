@@ -29,4 +29,24 @@
     <string name="rider_trip_ended_released">Craves ಆಪ್ಸ್ ಟೀಮ್ ಈ ಆರ್ಡರ್ ಅನ್ನು Borzo ಅಥವಾ Pidgeಗೆ ಕೊಟ್ಟಿದೆ. ಇಲ್ಲಿಯವರೆಗಿನ ಟ್ರಿಪ್‌ಗೆ ನಿಮಗೆ ಹಣ ಸಿಗುತ್ತದೆ.</string>
     <string name="rider_trip_ended_handed">Craves ಆಪ್ಸ್ ಟೀಮ್ ಈ ಆರ್ಡರ್ ಅನ್ನು ಬೇರೆ ರೈಡರ್‌ಗೆ ಕೊಟ್ಟಿದೆ. ಇಲ್ಲಿಯವರೆಗಿನ ಟ್ರಿಪ್‌ಗೆ ನಿಮಗೆ ಹಣ ಸಿಗುತ್ತದೆ.</string>
     <string name="rider_trip_ended_order_cancelled">ಕಸ್ಟಮರ್ ಆರ್ಡರ್ ರದ್ದಾಗಿದೆ. ಇಲ್ಲಿಯವರೆಗಿನ ಟ್ರಿಪ್‌ಗೆ ನಿಮಗೆ ಹಣ ಸಿಗುತ್ತದೆ.</string>
+    <!-- "Reached the kitchen?" (app 1.3.3, R-03): the heads-up while Google Maps is in front. -->
+    <string name="rider_channel_reached">ಕಿಚನ್ ತಲುಪಿದಿರಾ?</string>
+    <string name="rider_reached_title">%1$s ತಲುಪಿದಿರಾ?</string>
+    <string name="rider_reached_body">ನಿಮ್ಮ ಫೋನ್ ಕಿಚನ್‌ನಿಂದ ಸುಮಾರು %1$d ಮೀ. ದೂರದಲ್ಲಿದೆ ಎಂದು ತೋರುತ್ತದೆ. ಹೌದು ಎಂದರೆ ಕಿಚನ್ ಕಾಯುವಿಕೆ ಶುರುವಾಗುತ್ತದೆ.</string>
+    <string name="rider_reached_yes">ಹೌದು, ಬಂದಿದ್ದೇನೆ</string>
+    <string name="rider_reached_not_yet">ಇನ್ನೂ ಇಲ್ಲ</string>
+    <!-- The trip notification (app 1.3.3, R-04): the step, the order code and three actions. -->
+    <string name="rider_notice_to_kitchen">%1$s ಕಡೆಗೆ · ಆರ್ಡರ್ %2$s</string>
+    <string name="rider_notice_at_kitchen">%1$s ನಲ್ಲಿ · ಆರ್ಡರ್ %2$s</string>
+    <string name="rider_notice_to_customer">%1$s ಕಡೆಗೆ · ಆರ್ಡರ್ %2$s</string>
+    <string name="rider_notice_ride">ತಲುಪಿದ ಮೇಲೆ ತಲುಪಿದೆ ಒತ್ತಿ.</string>
+    <string name="rider_notice_food_ready">ಆಹಾರ ಸಿದ್ಧವಿದೆ. ತಲುಪಿದ ಮೇಲೆ ತಲುಪಿದೆ ಒತ್ತಿ.</string>
+    <string name="rider_notice_pickup">ಶೆಫ್‌ಗೆ ಆರ್ಡರ್ ಸಂಖ್ಯೆ ಹೇಳಿ, ನಂತರ ತೆಗೆದುಕೊಂಡೆ ಒತ್ತಿ.</string>
+    <string name="rider_notice_drop">ಬಾಗಿಲಲ್ಲಿ 4 ಅಂಕಿಯ ಕೋಡ್ ಕೇಳಿ.</string>
+    <string name="rider_notice_handover">ಮುಗಿಸಲು ಗ್ರಾಹಕರ 4 ಅಂಕಿಯ ಕೋಡ್ ಅನ್ನು Craves ನಲ್ಲಿ ಟೈಪ್ ಮಾಡಿ.</string>
+    <string name="rider_notice_back">Craves ಗೆ ಹಿಂತಿರುಗಿ</string>
+    <string name="rider_notice_reached">ಕಿಚನ್ ತಲುಪಿದೆ</string>
+    <string name="rider_notice_picked_up">ತೆಗೆದುಕೊಂಡೆ</string>
+    <string name="rider_notice_at_door">ಬಾಗಿಲಲ್ಲಿ ಇದ್ದೇನೆ</string>
+    <string name="rider_notice_sos">SOS</string>
 </resources>

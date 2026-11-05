@@ -5,7 +5,7 @@ import {AppApiError} from '../../../core/http/apiError';
 import {riderApi} from '../api/riderApi';
 import {pickOffer, type ReceivedOffer} from '../domain/offerTiming';
 import {riderDevice} from '../native/riderDevice';
-import {riderOnlineService} from '../native/riderOnlineService';
+import {riderOnlineService, type NotificationTap} from '../native/riderOnlineService';
 import {RIDER_APP_VERSION} from '../riderConfig';
 import {connection} from '../state/connection';
 import {riderKeys, TRIP_ENDED_EVENT} from '../state/riderQueries';
@@ -42,10 +42,13 @@ export function RiderRuntime({
   riderId,
   nativeOutbox = false,
   openOffer,
+  openTap,
 }: {
   riderId: string;
   nativeOutbox?: boolean;
   openOffer: (offer: ReceivedOffer) => void;
+  /** The trip notification's actions (R-04): a step tapped, or SOS; the navigator opens the right screen. */
+  openTap?: (tap: NotificationTap) => void;
 }) {
   const queryClient = useQueryClient();
   const shown = useRef<ReceivedOffer | null>(null);
@@ -54,6 +57,19 @@ export function RiderRuntime({
   useEffect(() => {
     tripQueue.setNativeOutbox(nativeOutbox).catch(() => undefined);
   }, [nativeOutbox]);
+
+  // A notification action opens the app with the tap in its intent; read it now and each time the app comes to the front.
+  useEffect(() => {
+    if (!openTap) {
+      return;
+    }
+    const read = () => {
+      riderOnlineService.pendingTap().then(tap => tap && openTap(tap));
+    };
+    read();
+    const appState = AppState.addEventListener('change', state => state === 'active' && read());
+    return () => appState.remove();
+  }, [openTap]);
 
   useEffect(() => {
     const register = (fcmToken: string | null) =>

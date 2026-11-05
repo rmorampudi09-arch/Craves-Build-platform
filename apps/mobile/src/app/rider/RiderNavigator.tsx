@@ -9,6 +9,7 @@ import {Icon} from '../../shared/components';
 import {borderWidth, colors, fontWeight, iconSize, typography} from '../../design/tokens';
 import {BottomAction} from '../../features/rider/components/BottomAction';
 import {RiderRuntime} from '../../features/rider/components/RiderRuntime';
+import {riderOnlineService, type NotificationTap} from '../../features/rider/native/riderOnlineService';
 import {RiderSplash} from '../../features/rider/components/RiderSplash';
 import {ProblemCard, StateCard} from '../../features/rider/components/StateCard';
 import {RiderScreen, Title} from '../../features/rider/components/ui';
@@ -27,6 +28,9 @@ import {GoOnlineScreen} from '../../features/rider/screens/GoOnlineScreen';
 import {HelpScreen} from '../../features/rider/screens/HelpScreen';
 import {HomeScreen} from '../../features/rider/screens/HomeScreen';
 import {NoticeScreen} from '../../features/rider/screens/NoticeScreen';
+import {RulesScreen} from '../../features/rider/screens/RulesScreen';
+import {SlotNowScreen} from '../../features/rider/screens/SlotNowScreen';
+import {SlotsScreen} from '../../features/rider/screens/SlotsScreen';
 import {OfferScreen} from '../../features/rider/screens/OfferScreen';
 import {PayoutsScreen} from '../../features/rider/screens/PayoutsScreen';
 import {PhoneSetupScreen} from '../../features/rider/screens/PhoneSetupScreen';
@@ -50,6 +54,7 @@ const DEMO_PANEL = isDemo || __DEV__;
 type TabIconProps = {color: string};
 const homeIcon = ({color}: TabIconProps) => <Icon name="home-outline" color={color} size={iconSize.lg} surface={false} />;
 const walletIcon = ({color}: TabIconProps) => <Icon name="wallet" color={color} size={iconSize.lg} surface={false} />;
+const slotsIcon = ({color}: TabIconProps) => <Icon name="calendar-blank-outline" color={color} size={iconSize.lg} surface={false} />;
 const accountIcon = ({color}: TabIconProps) => <Icon name="account-outline" color={color} size={iconSize.lg} surface={false} />;
 
 /** 64 dp above the system bar, a 1 dp top line, no shadow; the active tab is red (docs/riders/SCREENS.md 0.6). */
@@ -77,6 +82,7 @@ function RiderTabs() {
         component={HomeScreen}
         options={{title: strings.tabs.home, tabBarIcon: homeIcon}}
       />
+      <Tabs.Screen name="Slots" component={SlotsScreen} options={{title: strings.tabs.slots, tabBarIcon: slotsIcon}} />
       <Tabs.Screen
         name="Earnings"
         component={EarningsScreen}
@@ -133,6 +139,18 @@ function SignedIn() {
       navigationRef.navigate('Offer', offer);
     }
   }, []);
+  // The trip notification's actions (R-04): SOS opens the SOS screen; a step action opens the trip, which posts the step.
+  const openTap = useCallback((tap: NotificationTap) => {
+    if (!navigationRef.isReady()) {
+      return;
+    }
+    if (tap.sos) {
+      navigationRef.navigate('Sos', {});
+    } else if (tap.step) {
+      riderOnlineService.keepStepTap(tap.step);
+      navigationRef.navigate('Trip');
+    }
+  }, []);
 
   if (!me.data) {
     return me.isError ? (
@@ -171,6 +189,7 @@ function SignedIn() {
             <Stack.Screen name="GoOnline" component={GoOnlineScreen} options={{presentation: 'fullScreenModal'}} />
             <Stack.Screen name="Help" component={HelpScreen} />
             <Stack.Screen name="Notice" component={NoticeScreen} />
+            <Stack.Screen name="SlotNow" component={SlotNowScreen} />
             <Stack.Screen name="AccountStatus" component={AccountStatusScreen} navigationKey={gate.kind} />
             <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} navigationKey={gate.kind} />
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
@@ -178,15 +197,17 @@ function SignedIn() {
           </>
         )}
         {gate.kind !== 'ready' ? (
-          // The account, terms and privacy screens show SOS and the demo chip too.
+          // The account, terms and privacy screens show SOS and the demo chip too, and can read the rate card and the rules.
           <>
             <Stack.Screen name="Sos" component={SosScreen} options={{presentation: 'modal'}} />
+            {gate.kind === 'terms' ? null : <Stack.Screen name="Terms" component={TermsScreen} initialParams={{mode: 'view'}} navigationKey={gate.kind} />}
+            <Stack.Screen name="Rules" component={RulesScreen} navigationKey={gate.kind} />
             {DEMO_PANEL ? <Stack.Screen name="DevPanel" component={DevPanelScreen} options={{presentation: 'modal'}} /> : null}
           </>
         ) : null}
       </Stack.Navigator>
       {gate.kind === 'ready' ? (
-        <RiderRuntime riderId={riderId} nativeOutbox={me.data.features?.nativeTripOutbox === true} openOffer={openOffer} />
+        <RiderRuntime riderId={riderId} nativeOutbox={me.data.features?.nativeTripOutbox === true} openOffer={openOffer} openTap={openTap} />
       ) : null}
     </RiderShellContext.Provider>
   );

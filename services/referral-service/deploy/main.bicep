@@ -110,6 +110,10 @@ var dormantEnvironment = [
     value: 'false'
   }
   {
+    name: 'CRAVES_REFERRAL_ERASURE_FORFEIT_ENABLED'
+    value: 'false'
+  }
+  {
     name: 'REFERRAL_DB_POOL_SIZE'
     value: '4'
   }

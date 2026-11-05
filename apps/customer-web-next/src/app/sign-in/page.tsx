@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PhoneAuthForm } from "@/features/sign-in/components/phone-auth-form";
@@ -8,7 +7,8 @@ import { safeReturnPath } from "@/features/auth/lib/auth-contract";
 import { safeChefReturnTo } from "@/features/chef/lib/chef-mode";
 import { createHash } from "node:crypto";
 import { isAdminDestination } from "@/features/admin/shell/lib/admin-navigation";
-import { CUSTOMER_EARLY_ACCESS_SHA256, CUSTOMERS_LAUNCHING_SOON, CUSTOMERS_LAUNCHING_SOON_COPY } from "@/features/sign-in/lib/customer-launch";
+import { CUSTOMER_EARLY_ACCESS_SHA256, CUSTOMERS_LAUNCHING_SOON, opensSignInDuringLaunch } from "@/features/sign-in/lib/customer-launch";
+import { LaunchingSoonNote } from "./launching-soon-note";
 import "@/features/admin/styles/admin-control.css";
 
 export const metadata = {
@@ -30,29 +30,11 @@ export default async function SignInPage({ searchParams }: {
   const pathname = returnTo.split(/[?#]/, 1)[0];
   if (!adminJourney && (pathname === "/chef" || pathname.startsWith("/chef/")))
     redirect(`/chef/sign-in?returnTo=${encodeURIComponent(safeChefReturnTo(returnTo) ?? "/chef")}`);
-  // Customer launch lock: only the private early-access link opens the customer sign-in (see customer-launch.ts).
+  // Customer launch lock: only the private early-access link opens the customer sign-in (see customer-launch.ts),
+  // except the way back to the delete page, where earlyAccess stays false so the device is not remembered.
   const earlyAccess = typeof query.access === "string" && createHash("sha256").update(query.access).digest("hex") === CUSTOMER_EARLY_ACCESS_SHA256;
-  if (!adminJourney && CUSTOMERS_LAUNCHING_SOON && !earlyAccess) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl">
-    <section role="status" className="w-full rounded-3xl border border-[#E5E7EB] bg-white p-6 text-[#1A1A1A] shadow-[0_8px_30px_rgba(0,0,0,0.08)] sm:p-8">
-      <Link href="/" aria-label="Craves home"><CravesLogo size="lg" priority/></Link>
-      <h1 className="mt-6 text-3xl font-bold tracking-tight">{CUSTOMERS_LAUNCHING_SOON_COPY.title}</h1>
-      <p className="mt-3 text-sm leading-6 text-[#6B6B6B]">{CUSTOMERS_LAUNCHING_SOON_COPY.body}</p>
-      <Image
-        src="/landing-v20/images/rider-delivery.png"
-        alt="Crayon drawing of a smiling Craves rider on a red motorbike, carrying a red Craves delivery box through the city"
-        width={1448}
-        height={1086}
-        sizes="320px"
-        preload
-        className="mx-auto mt-6 h-auto w-full max-w-[320px]"
-      />
-      <div className="mt-6 flex flex-wrap gap-3">{query.from === "chef"
-        ? <Link href="/chef" className="inline-flex min-h-12 items-center rounded-full bg-[#F62E18] px-6 text-sm font-semibold text-white">{CUSTOMERS_LAUNCHING_SOON_COPY.backToKitchen}</Link>
-        : <>
-        <Link href="/chef/sign-in" className="inline-flex min-h-12 items-center rounded-full bg-[#F62E18] px-6 text-sm font-semibold text-white">{CUSTOMERS_LAUNCHING_SOON_COPY.chef}</Link>
-        <Link href="/" className="inline-flex min-h-12 items-center rounded-full border border-[#E5E7EB] px-6 text-sm font-semibold">Back to Craves</Link>
-      </>}</div>
-    </section>
+  if (!adminJourney && CUSTOMERS_LAUNCHING_SOON && !earlyAccess && !opensSignInDuringLaunch(returnTo)) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl">
+    <LaunchingSoonNote fromChef={query.from === "chef"}/>
   </div></main>;
   // confirm=customer: a chef switching to the customer app confirms with an OTP first.
   if (!adminJourney) return <main className="flex min-h-screen items-center bg-[#F1F3F5] px-5 py-12"><div className="mx-auto w-full max-w-xl"><CustomerSignIn returnTo={returnTo} centralOtp={centralOtp} confirm={query.confirm === "customer"} earlyAccess={earlyAccess} email={query.method === "email"}/></div></main>;

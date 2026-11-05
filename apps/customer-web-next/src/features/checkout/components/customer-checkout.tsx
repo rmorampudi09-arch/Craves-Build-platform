@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { deletionCopy } from "@/features/account-deletion/domain/deletion-copy";
+import { isDeletionPaused } from "@/features/account-deletion/domain/deletion-model";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import type { CustomerCart } from "@/features/cart/lib/cart-contract";
 import type { CustomerCheckout } from "@/features/checkout/lib/checkout-contract";
@@ -20,6 +22,7 @@ export function CustomerCheckoutForm() {
   const [checkout, setCheckout] = useState<CustomerCheckout | null>(null);
   const [message, setMessage] = useState("Loading cart and addresses…");
   const [busy, setBusy] = useState(false);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -37,13 +40,14 @@ export function CustomerCheckoutForm() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!cart?.items.length || !deliveryAddressId) return;
-    setBusy(true); setCheckout(null); setMessage("Validating cart and creating checkout…");
+    setBusy(true); setCheckout(null); setPaused(false); setMessage("Validating cart and creating checkout…");
     try {
       const validation = await fetch("/api/cart/validate", { method: "POST" });
       const validated = await validation.json();
       if (!validation.ok) throw new Error(validated?.message || "Cart validation failed.");
       const response = await fetch("/api/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deliveryAddressId, note: note.trim() || null }) });
       const body = await response.json();
+      if (response.status === 409 && isDeletionPaused(body?.code)) { setPaused(true); return; }
       if (!response.ok) throw new Error(body?.message || "We couldn’t start checkout. Check your cart for items that are no longer available, then try again.");
       setCheckout(body);
       setMessage("Checkout created. Review the backend-calculated totals before payment.");
@@ -60,7 +64,7 @@ export function CustomerCheckoutForm() {
         <Link href="/addresses" className="mt-2 inline-flex text-sm font-semibold text-[#6930CA]">Manage saved addresses</Link>
         <label className="mt-5 block text-sm font-semibold">Order note<textarea maxLength={500} rows={4} value={note} onChange={event => setNote(event.target.value)} className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3" placeholder="Optional instructions for the chef" /></label>
         <button disabled={busy || !cart?.items.length || !deliveryAddressId} className="mt-6 w-full rounded-full bg-[#6930CA] px-6 py-3 text-sm font-bold text-white disabled:opacity-50">{busy ? "Creating checkout…" : "Create checkout"}</button>
-        <p role="status" className="mt-4 text-sm text-slate-600">{message}</p>
+        <p role="status" className="mt-4 text-sm text-slate-600">{paused ? <>{deletionCopy.paused.orders(null)} <Link href="/account/delete" className="font-semibold text-[#6930CA]">{deletionCopy.paused.link}</Link></> : message}</p>
       </form>
       <section className="h-fit rounded-[30px] bg-white p-7 text-slate-950 shadow-2xl shadow-black/15">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6930CA]">{checkout ? "Checkout totals" : "Cart preview"}</p>

@@ -47,6 +47,7 @@ export function FooterSection({ landingHrefPrefix = "" }: FooterSectionProps) {
             <FooterHeading>LEGAL</FooterHeading>
             <div className="mt-5 grid gap-2.5" aria-label="Craves legal and security pages">
               <Link href="/privacy" className={`${styles.footerLink} text-sm leading-6`}>Privacy policy</Link>
+              <Link href="/account-deletion" className={`${styles.footerLink} text-sm leading-6`}>Delete your account</Link>
               <Link href="/terms" className={`${styles.footerLink} text-sm leading-6`}>Terms of service</Link>
               <Link href="/refunds-cancellations" className={`${styles.footerLink} text-sm leading-6`}>Refunds &amp; cancellations</Link>
               <Link href="/security" className={`${styles.footerLink} text-sm leading-6`}>Security</Link>

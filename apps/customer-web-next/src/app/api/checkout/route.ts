@@ -1,5 +1,6 @@
 import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { NextRequest, NextResponse } from "next/server";
+import { isDeletionPaused } from "@/features/account-deletion/domain/deletion-model";
 import { parseCheckout, parseCheckoutInput } from "@/features/checkout/lib/checkout-contract";
 import { isSameOrigin } from "@/shared/lib/request-security";
 import {
@@ -106,6 +107,14 @@ export async function POST(request: NextRequest) {
     const body = await upstream.json().catch(() => null);
 
     if (!upstream.ok) {
+      // The screen swaps its error for the paused notice on this code alone.
+      const raw = record(body);
+      if (upstream.status === 409 && isDeletionPaused(safeText(raw?.code, 80) ?? safeText(raw?.error, 80))) {
+        return NextResponse.json({ code: "ACCOUNT_DELETION_PENDING" }, {
+          status: 409,
+          headers: { "Cache-Control": "no-store" },
+        });
+      }
       return NextResponse.json(checkoutFailure(upstream.status, body), {
         status: upstream.status,
         headers: { "Cache-Control": "no-store" },

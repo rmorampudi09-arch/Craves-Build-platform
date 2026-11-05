@@ -55,6 +55,8 @@ const HIDDEN_PATH_PREFIXES = [
   "/security",
   "/refunds-cancellations",
   "/products-pricing",
+  "/account-deletion",
+  "/account/delete",
   "/support",
   "/assistant",
 ];

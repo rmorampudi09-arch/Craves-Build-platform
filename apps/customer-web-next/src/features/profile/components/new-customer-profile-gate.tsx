@@ -16,7 +16,7 @@ import { EmailVerificationPanel } from "@/features/sign-in/components/EmailVerif
 import { secondaryActionClass, Sheet } from "@/shared/ui/overlays/overlay";
 
 // Customer pages only: sign-in, Chef Mode, the admin portal and the legal pages never ask.
-const SKIP = ["/sign-in", "/chef", "/admin", "/privacy", "/terms", "/security", "/refunds-cancellations", "/contact", "/products-pricing", "/pilot-launch"];
+const SKIP = ["/sign-in", "/chef", "/admin", "/privacy", "/terms", "/security", "/refunds-cancellations", "/contact", "/products-pricing", "/pilot-launch", "/account-deletion", "/account/delete"];
 const FIELD =
   "mt-2 block min-h-12 w-full rounded-xl border border-[#D3D7DD] bg-white px-4 text-base text-[#1A1A1A] placeholder:text-[#8A8F98] focus:!border-[#1A1A1A] focus:outline-none focus:ring-1 focus:ring-[#1A1A1A] aria-[invalid=true]:!border-[#C4200F] disabled:bg-[#F1F3F5]";
 

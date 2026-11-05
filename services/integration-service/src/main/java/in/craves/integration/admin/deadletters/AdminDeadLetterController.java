@@ -1,5 +1,6 @@
 package in.craves.integration.admin.deadletters;
 
+import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.security.CravesPrincipal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -11,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -21,13 +24,17 @@ import org.springframework.web.server.ResponseStatusException;
  * Handbook 105, read-only first: the failed and dead-lettered delivery webhooks, Cashfree webhooks and delivery commands,
  * so operations can see what is stuck and why without database access. Raw payloads are never returned (they hold
  * addresses, phone numbers and payment details), only their size. Every read needs X-Admin-Reason and writes an audit
- * row. Replaying is a later, separate step. Off unless CRAVES_DEAD_LETTER_CONSOLE_ENABLED=true (then 404).
+ * row. Off unless CRAVES_DEAD_LETTER_CONSOLE_ENABLED=true (then 404). With CRAVES_DEAD_LETTER_RETRY_ENABLED=true as well,
+ * operations can give a dead-lettered delivery webhook one more attempt; Cashfree webhooks and delivery commands are never
+ * retried here.
  */
 @RestController
 @RequestMapping("/api/v1/admin/operations/dead-letters")
 public class AdminDeadLetterController {
     static final String[] DELIVERY_ROLES = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN"};
     static final String[] PAYMENT_ROLES = {"PLATFORM_ADMIN", "PAYMENTS_ADMIN", "SUPPORT_ADMIN", "AUDIT_ADMIN"};
+    /** Support and audit admins only read (as in M12 and M25). */
+    static final String[] RETRY_ROLES = {"PLATFORM_ADMIN", "OPERATIONS_ADMIN"};
     private static final Pattern PROVIDER = Pattern.compile("[a-z0-9_-]{1,80}");
 
     public enum Source { DELIVERY_WEBHOOK, CASHFREE_WEBHOOK, DELIVERY_COMMAND }
@@ -42,12 +49,17 @@ public class AdminDeadLetterController {
     public record DeadLetterPage(Source source, Status status, long total, int limit, int offset, List<DeadLetter> items) {}
 
     private final DeadLetterRepository repository;
+    private final DeliveryCommandProperties delivery;
     private final boolean enabled;
+    private final boolean retryEnabled;
 
-    public AdminDeadLetterController(DeadLetterRepository repository,
-        @Value("${CRAVES_DEAD_LETTER_CONSOLE_ENABLED:false}") boolean enabled) {
+    public AdminDeadLetterController(DeadLetterRepository repository, DeliveryCommandProperties delivery,
+        @Value("${CRAVES_DEAD_LETTER_CONSOLE_ENABLED:false}") boolean enabled,
+        @Value("${CRAVES_DEAD_LETTER_RETRY_ENABLED:false}") boolean retryEnabled) {
         this.repository = repository;
+        this.delivery = delivery;
         this.enabled = enabled;
+        this.retryEnabled = retryEnabled;
     }
 
     @GetMapping
@@ -69,6 +81,37 @@ public class AdminDeadLetterController {
         repository.audit(actor.identityId(), source, why, correlationId);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).header("X-Correlation-ID", correlationId.toString())
             .body(repository.page(source, status, provider, limit, offset));
+    }
+
+    /**
+     * One more attempt for a dead-lettered delivery webhook: the worker picks it up within seconds and dead-letters it
+     * again if it fails. Processing ignores duplicate, stale and post-terminal updates, so a retry can only apply what the
+     * provider sent. Cashfree webhooks (a payment notification must be checked against the payment first) and delivery
+     * commands (the provider may already have booked a courier) answer 409.
+     */
+    @PostMapping("/{deadLetterId}/retry")
+    public ResponseEntity<DeadLetter> retryDeadLetter(Authentication authentication, @PathVariable UUID deadLetterId,
+        @RequestParam Source source,
+        @RequestHeader(value = "X-Admin-Reason", required = false) String reason,
+        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader) {
+        if (!enabled || !retryEnabled) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Retrying dead letters is switched off");
+        CravesPrincipal actor = require(authentication, RETRY_ROLES);
+        if (source == Source.CASHFREE_WEBHOOK) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cashfree webhooks are not retried here: check the payment first");
+        }
+        if (source == Source.DELIVERY_COMMAND) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Delivery commands are not retried here: the provider may already have booked a courier");
+        }
+        if (!delivery.isWebhookProcessingEnabled()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Delivery webhook processing is switched off, so a retry would not run");
+        }
+        String why = reason(reason);
+        UUID correlationId = correlationId(correlationHeader);
+        DeadLetter retried = repository.retryDeliveryWebhook(deadLetterId, delivery.getMaxWebhookAttempts(), actor.identityId(),
+            why, correlationId);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).header("X-Correlation-ID", correlationId.toString())
+            .body(retried);
     }
 
     private static CravesPrincipal require(Authentication authentication, String[] roles) {

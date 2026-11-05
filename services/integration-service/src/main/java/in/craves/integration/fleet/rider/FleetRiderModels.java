@@ -144,10 +144,16 @@ public final class FleetRiderModels {
      * means soonest at the kitchen by Craves's travel-time estimate, the band counted in minutes at 20 km/h.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record OfferRules(int offersAtOnce, int offerRounds, int offerSeconds, int radiusM, int fairBandM, Boolean byTravelTime) {
+    public record OfferRules(int offersAtOnce, int offerRounds, int offerSeconds, int radiusM, int fairBandM, Boolean byTravelTime,
+                             Boolean jointMatching, Boolean nextOrderOffers) {
         /** Phase 4's rules: by distance. */
         public OfferRules(int offersAtOnce, int offerRounds, int offerSeconds, int radiusM, int fairBandM) {
             this(offersAtOnce, offerRounds, offerSeconds, radiusM, fairBandM, null);
+        }
+
+        /** Up to Phase 5: neither 2026-11-v2 line (jointMatching and nextOrderOffers, present only when true). */
+        public OfferRules(int offersAtOnce, int offerRounds, int offerSeconds, int radiusM, int fairBandM, Boolean byTravelTime) {
+            this(offersAtOnce, offerRounds, offerSeconds, radiusM, fairBandM, byTravelTime, null, null);
         }
     }
 

@@ -130,7 +130,8 @@ class FleetConfigurationTest {
                     .toList();
                 assertThat(jobs).containsExactlyInAnyOrder("RiderJoinsExitsExport#writeYesterday", "FleetSlotService#settleDue",
                     "FleetDispatchJobs#tick", "FleetLocationService#createTrackDays", "FleetEarnings#tick", "FleetPhotoRetention#daily",
-                    "FleetCourierCancel#tick");
+                    "FleetCourierCancel#tick", "FleetSlotBookingService#rebuildClustersDaily", "FleetSlotBookingService#planComingWeek",
+                    "FleetSlotBookingService#markNoShowsNow");
                 assertThat(context.getBean(FleetConfiguration.FLEET_SCHEDULER, ThreadPoolTaskScheduler.class).getPoolSize())
                     .isEqualTo(jobs.size());
             });

@@ -1,30 +1,20 @@
 import React, {useState} from 'react';
-import {Linking, StyleSheet, Text, View} from 'react-native';
+import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {useNavigation} from '@react-navigation/native';
 import {InputField} from '../../../shared/components';
-import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
+import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, StateCard} from '../components/StateCard';
-import {Body, Card, RiderScreen, Title} from '../components/ui';
-import {formatClock, formatDay} from '../domain/format';
+import {Card, RiderScreen, Title} from '../components/ui';
+import {formatClock, formatDay, formatRupees} from '../domain/format';
+import type {RiderNav} from '../navigation';
 import {riderMessage} from '../domain/problem';
 import {useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {LoadFailed} from './TripDetailScreen';
-
-/** A numbered step: a 24 dp espresso circle, then the text 12 dp after it. */
-function Step({n, label, children}: {n: number; label: string; children: React.ReactNode}) {
-  return (
-    <View accessible accessibilityLabel={`${n}. ${label}`} style={styles.step}>
-      <View style={styles.circle}>
-        <Text style={styles.circleText}>{n}</Text>
-      </View>
-      <Text style={styles.stepText}>{children}</Text>
-    </View>
-  );
-}
 
 /**
  * A notice from ops (Telangana Act 21, s.14): what happened, what is being checked, what happens next and how to appeal.
@@ -33,6 +23,7 @@ function Step({n, label, children}: {n: number; label: string; children: React.R
 export function NoticeScreen() {
   const {strings, language} = useStrings();
   const n = strings.notice;
+  const navigation = useNavigation<RiderNav>();
   const me = useRiderMe();
   const notice = me.data?.notice;
   const [writing, setWriting] = useState(false);
@@ -59,11 +50,11 @@ export function NoticeScreen() {
         writing ? (
           <BottomAction label={n.sendSide} disabled={!side.trim()} onPress={send} testID="rider-notice-send" />
         ) : (
-          <BottomAction label={n.giveSide} onPress={() => setWriting(true)} testID="rider-notice-give" />
+          <BottomAction label={n.addSide} onPress={() => setWriting(true)} testID="rider-notice-give" />
         )
       ) : null}
       <BottomAction
-        label={n.callSupport}
+        label={n.callPerson}
         variant="outline"
         leftIcon="phone-outline"
         onPress={() => Linking.openURL(`tel:${phone}`).catch(() => undefined)}
@@ -72,8 +63,20 @@ export function NoticeScreen() {
     </>
   ) : undefined;
 
+  const openTerms = () => navigation.navigate('Terms', {mode: 'view'});
+  // The review as drawn: each line says plainly when the server hasn't sent it, rather than leaving a gap.
+  const rows: [string, string][] = notice
+    ? [
+        [n.about, notice.reason],
+        [n.have, notice.checking ?? n.notSent],
+        [n.decides, notice.decidedBy ?? n.aPerson],
+        [n.decisionBy, notice.deadline ? withWeekday(notice.deadline) : n.notSet],
+        [n.onHold, notice.heldPaise !== undefined ? n.heldTrip(formatRupees(notice.heldPaise)) : notice.tripId ? n.heldTripOnly : n.nothingHeld],
+      ]
+    : [];
+
   return (
-    <RiderScreen header={<RiderHeader title={n.title} back />} footer={footer} testID="rider-notice">
+    <RiderScreen header={<RiderHeader title={n.yourAccount} back />} footer={footer} testID="rider-notice">
       {!me.data ? (
         me.isError ? (
           <LoadFailed error={me.error} onRetry={me.refetch} />
@@ -88,47 +91,38 @@ export function NoticeScreen() {
             <Title>{notice.title}</Title>
             {notice.sentAt ? <Text style={styles.meta}>{n.sent(`${withWeekday(notice.sentAt)}, ${formatClock(notice.sentAt)}`)}</Text> : null}
           </View>
-          {/* Only a 7-day notice about one trip leaves the rider working with just that pay held. */}
-          {me.data.status === 'ACTIVE' && notice.deadline && notice.tripId ? (
-            <Banner tone="success" icon="shield-check-outline" text={n.keepWorking} testID="rider-notice-keep-working" />
-          ) : null}
-          <Card>
-            <Text accessibilityRole="header" style={styles.heading}>
-              {n.whatHappened}
+          <View style={styles.amber}>
+            <Text accessibilityRole="header" style={styles.amberTitle}>
+              {n.reviewOpen}
             </Text>
-            <Body>{notice.reason}</Body>
-            {notice.checking ? (
-              <>
-                <Text accessibilityRole="header" style={[styles.heading, styles.next]}>
-                  {n.checking}
-                </Text>
-                <Body>{notice.checking}</Body>
-              </>
+            {/* Only a 7-day notice about one trip leaves the rider working with just that pay held. */}
+            {me.data.status === 'ACTIVE' && notice.deadline && notice.tripId ? (
+              <Text style={styles.amberBody} testID="rider-notice-keep-working">
+                {n.keepWorking}
+              </Text>
             ) : null}
-          </Card>
+          </View>
+          <View style={styles.rows}>
+            {rows.map(([label, value]) => (
+              <View key={label} style={styles.row}>
+                <Text style={[styles.meta, styles.rowLabel]}>{label}</Text>
+                <Text style={[styles.rowValue]}>{value}</Text>
+              </View>
+            ))}
+          </View>
           <Card style={styles.steps}>
             <Text accessibilityRole="header" style={styles.heading}>
-              {n.next}
+              {n.ifPaused}
             </Text>
-            {sideBy ? (
-              <Step n={1} label={sideBy.join('')}>
-                {sideBy[0]}
-                <Text style={styles.bold}>{sideBy[1]}</Text>
-                {sideBy[2]}
-              </Step>
-            ) : (
-              <Step n={1} label={n.sideNow}>
-                {n.sideNow}
-              </Step>
-            )}
-            <Step n={2} label={n.person}>
-              {n.person}
-            </Step>
-            <Step n={3} label={n.writing}>
-              {n.writing}
-            </Step>
+            <Text style={styles.body}>{n.ifPausedBody}</Text>
+            <Text style={styles.body}>{n.person}</Text>
           </Card>
-          <Text style={styles.meta}>{n.appeal}</Text>
+          <Text style={styles.meta} testID="rider-notice-side-by">
+            {sideBy ? sideBy.join('') : n.sideNow}
+          </Text>
+          <Pressable accessibilityRole="link" onPress={openTerms} style={styles.link} testID="rider-notice-grievance">
+            <Text style={styles.linkText}>{n.grievanceLink}</Text>
+          </Pressable>
           {result === 'sent' ? <Banner tone="success" text={n.sideSent} testID="rider-notice-sent" /> : null}
           {writing ? (
             <Card>
@@ -154,21 +148,20 @@ export function NoticeScreen() {
 
 const styles = StyleSheet.create({
   intro: {gap: spacing.xxs},
+  // The review card as drawn: warm amber, dark amber words.
+  amber: {backgroundColor: colors.warningSoft, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xxs},
+  amberTitle: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.warningText},
+  amberBody: {fontSize: typography.body, lineHeight: 22, color: colors.warningText},
+  rows: {gap: spacing.sm},
+  row: {flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm},
+  rowLabel: {fontSize: typography.body, flexShrink: 0},
+  rowValue: {flex: 1, textAlign: 'right', fontSize: typography.body, fontWeight: fontWeight.medium, color: colors.textPrimary},
+  body: {fontSize: typography.body, lineHeight: 20, color: colors.textSecondary},
+  link: {minHeight: 44, justifyContent: 'center', alignItems: 'center'},
+  linkText: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.flameRedAccessible},
   meta: {fontSize: typography.small, color: colors.textSecondary},
   heading: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
   next: {marginTop: spacing.xs},
   steps: {gap: spacing.sm},
-  step: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm},
-  circle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.textPrimary,
-  },
-  circleText: {fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.white},
-  stepText: {flex: 1, fontSize: typography.body, color: colors.textPrimary},
-  bold: {fontWeight: fontWeight.bold},
   input: {minHeight: 96, paddingVertical: spacing.sm, textAlignVertical: 'top'},
 });

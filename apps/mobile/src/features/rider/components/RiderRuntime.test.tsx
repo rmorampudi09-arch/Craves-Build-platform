@@ -1,5 +1,5 @@
 import React from 'react';
-import {Alert, DeviceEventEmitter} from 'react-native';
+import {Alert, AppState, DeviceEventEmitter} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {AppApiError} from '../../../core/http/apiError';
@@ -35,6 +35,7 @@ jest.mock('../native/riderOnlineService', () => ({
       return () => undefined;
     },
     pendingOffer: jest.fn(async () => null),
+    pendingTap: jest.fn(async () => null),
     onOffer: () => () => undefined,
     onTripChanged: () => () => undefined,
     onStatus: (cb: (status: {state: string; connected?: boolean}) => void) => {
@@ -139,6 +140,43 @@ describe('RiderRuntime pending offer', () => {
     const tree = await mount(openOffer);
     expect(openOffer).not.toHaveBeenCalled();
     act(() => tree.unmount());
+  });
+});
+
+describe('RiderRuntime trip notification tap (R-04)', () => {
+  const pendingTap = riderOnlineService.pendingTap as jest.Mock;
+
+  it('hands a tapped step or SOS to the navigator, on start and again when the app comes to the front', async () => {
+    const openTap = jest.fn();
+    pendingTap.mockResolvedValueOnce({step: 'picked-up', sos: false});
+    const listeners: ((state: string) => void)[] = [];
+    // The preset's AppState.addEventListener is already a jest.fn: swap it for the test, then put it back as it was.
+    const addListener = AppState.addEventListener;
+    (AppState as {addEventListener: unknown}).addEventListener = jest.fn((_type: string, cb: (state: string) => void) => {
+      listeners.push(cb);
+      return {remove: jest.fn()};
+    });
+    let tree!: renderer.ReactTestRenderer;
+    try {
+      await act(async () => {
+        tree = renderer.create(
+          <QueryClientProvider client={new QueryClient()}>
+            <RiderRuntime riderId="r1" openOffer={jest.fn()} openTap={openTap} />
+          </QueryClientProvider>,
+        );
+      });
+      expect(openTap).toHaveBeenCalledWith({step: 'picked-up', sos: false});
+      pendingTap.mockResolvedValueOnce({sos: true});
+      await act(async () => listeners.forEach(cb => cb('active')));
+      expect(openTap).toHaveBeenCalledWith({sos: true});
+      // Nothing tapped: the navigator hears nothing.
+      await act(async () => listeners.forEach(cb => cb('active')));
+      expect(openTap).toHaveBeenCalledTimes(2);
+    } finally {
+      // Unmounted, the runtime clears its flush interval; a mounted tree keeps Jest alive after the run.
+      await act(async () => tree.unmount());
+      (AppState as {addEventListener: unknown}).addEventListener = addListener;
+    }
   });
 });
 

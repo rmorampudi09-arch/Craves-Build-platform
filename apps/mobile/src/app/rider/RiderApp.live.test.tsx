@@ -193,7 +193,7 @@ describe('rider app in live mode', () => {
     const accept = calls.find(c => c.url === '/api/v1/rider/terms/accept');
     expect(JSON.parse(accept?.data)).toEqual({version: 'v2'});
     const device = calls.find(c => c.url === '/api/v1/rider/devices');
-    expect(JSON.parse(device?.data)).toMatchObject({installationId: 'android-id-1', appVersion: '1.3.2'});
+    expect(JSON.parse(device?.data)).toMatchObject({installationId: 'android-id-1', appVersion: '1.3.3'});
     expect(calls.every(c => c.baseURL === 'https://api.example.invalid')).toBe(true);
   });
 
@@ -206,7 +206,7 @@ describe('rider app in live mode', () => {
     it('is asked to update between shifts', async () => {
       await start({me: old, home});
       expect(urls()[0]).toBe('post /api/v1/auth/refresh');
-      expect(texts()).toContain('Update the app to continue');
+      expect(texts()).toContain('Please update the app before your next shift');
       expect(has('rider-home')).toBe(false);
     });
 
@@ -232,7 +232,7 @@ describe('rider app in live mode', () => {
     it('keeps working while online', async () => {
       await start({me: old, home: {...home, online: true, shiftStartedAt: '2026-10-20T10:00:00Z'}});
       expect(has('rider-home')).toBe(true);
-      expect(texts()).not.toContain('Update the app to continue');
+      expect(texts()).not.toContain('Please update the app before your next shift');
     });
   });
 

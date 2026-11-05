@@ -7,7 +7,8 @@ import type {DeliverBody, FailBody, Place, Trip, TripAction} from '../../api/con
 import {RiderHeader} from '../../components/RiderHeader';
 import {StepBar} from '../../components/StepBar';
 import {Card, RateRow} from '../../components/ui';
-import {formatRupees} from '../../domain/format';
+import {distanceMeters, formatKm, formatRupees, minutesFor} from '../../domain/format';
+import {riderOnlineService} from '../../native/riderOnlineService';
 import {useStrings} from '../../strings/StringsProvider';
 
 /** Sends a step through the offline queue; resolves false when the server refused it. The screen shows its step at once. */
@@ -79,6 +80,24 @@ export function PlaceCard({label, name, place}: {label: string; name: string; pl
       {place.landmark ? <Text style={[text.body, text.secondary]}>{t.landmark(place.landmark)}</Text> : null}
     </Card>
   );
+}
+
+/** Key–value rows in a warm grey card, as the trip screens draw them (app 1.3.3). */
+export function TripRows({rows}: {rows: [string, string][]}) {
+  return (
+    <Card style={styles.rows}>
+      {rows.map(([label, value]) => (
+        <RateRow key={label} label={label} value={value} />
+      ))}
+    </Card>
+  );
+}
+
+/** "0.6 km, about 3 min": the offer's distance when the server sent it, else from the phone's last fix; null without either. */
+export function distanceLine(offerM: number | undefined, to: Place, t: {kmAbout: (km: string, minutes: number) => string}): string | null {
+  const fix = riderOnlineService.lastFix();
+  const metres = offerM ?? (fix ? distanceMeters(fix, to) : null);
+  return metres === null ? null : t.kmAbout(formatKm(metres), minutesFor(metres));
 }
 
 /** Order code, items and (on the way to the kitchen) the locked pay, as key–value rows. */

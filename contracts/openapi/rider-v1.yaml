@@ -215,6 +215,26 @@ paths:
           multipart/form-data:
             schema: {type: object, required: [method, callsMade], properties: {method: {type: string, enum: [PHOTO]}, callsMade: {type: integer, minimum: 2}, photo: {type: string, format: binary}, ageMs: {type: integer, minimum: 0, description: 'When the photo was taken, ms before this request'}, fix: {type: string, description: RiderFix as JSON}}}
       responses: {'200': {description: The updated trip, content: {application/json: {schema: {$ref: '#/components/schemas/Trip'}}}}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}, '422': {$ref: '#/components/responses/Error'}, '423': {$ref: '#/components/responses/Error'}, '503': {$ref: '#/components/responses/Error'}}
+  /slots:
+    get:
+      summary: Booked peak slots (app 1.3.3)
+      description: The approved windows of the next 8 days with the places left, this rider's wave (opensAt), bookings and standbys, and the slot running now.
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/SlotsPage'}}}}}
+  /slots/{capacityId}/book:
+    post:
+      description: 404 CAPACITY_NOT_FOUND (also before ops approves it), 409 SLOT_WAVE_NOT_OPEN, SLOT_FULL (join the standby), SLOT_ALREADY_BOOKED, SLOT_OVERLAP, SLOT_HOURS_LIMIT (6 booked hours a day), SLOT_STARTED.
+      parameters: [{name: capacityId, in: path, required: true, schema: {type: string, format: uuid}}]
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/SlotBooking'}}}}, '404': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
+  /slots/{capacityId}/standby:
+    post:
+      description: Waits for a place in a full window, in order; 409 SLOT_HAS_PLACES when it can be booked instead.
+      parameters: [{name: capacityId, in: path, required: true, schema: {type: string, format: uuid}}]
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/SlotStandby'}}}}, '404': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
+  /slots/bookings/{bookingId}:
+    delete:
+      description: Cancels before the slot starts; the place goes to the first rider on standby who still fits. 409 SLOT_STARTED afterwards, BOOKING_NOT_BOOKED when already cancelled or over.
+      parameters: [{name: bookingId, in: path, required: true, schema: {type: string, format: uuid}}]
+      responses: {'200': {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/SlotBooking'}}}}, '404': {$ref: '#/components/responses/Error'}, '409': {$ref: '#/components/responses/Error'}}
   /earnings:
     get:
       summary: Per-trip pay for today or this week (Monday to Sunday), paged
@@ -395,6 +415,8 @@ components:
         radiusM: {type: integer, description: 'Only riders this close to the kitchen (straight line) hear of an order'}
         fairBandM: {type: integer, minimum: 0, maximum: 5000, description: '0: the nearest free rider hears first. Above 0: among the free riders within this many metres of the nearest, the one who has earned the least per online hour today hears first (ties: free the longest)'}
         byTravelTime: {type: boolean, description: 'Phase 5, present only when true: the free rider who can reach the kitchen soonest by Craves''s travel-time estimate hears first (the nearest when there is no estimate), and a fair band counts minutes, max(1, round(fairBandM x 3 / 1000)), its metres at 20 km/h. Left out: by straight-line distance.'}
+        jointMatching: {type: boolean, description: 'Policy 2026-11-v2 (app 1.3.3), present only when true: orders near each other are shared out among the free riders nearby together, not one by one. A rule riders are shown; the dispatcher acts on it in a later release.'}
+        nextOrderOffers: {type: boolean, description: 'Policy 2026-11-v2 (app 1.3.3), present only when true: a rider may hear of the next order before the current one ends. A rule riders are shown; the dispatcher acts on it in a later release.'}
     OfferReason:
       type: object
       description: 'Why this rider heard of this order (Phase 4): stored with the offer, so the rider and ops see the same reason. Each round ranks the riders not yet asked.'
@@ -449,6 +471,70 @@ components:
         itemsCount: {type: integer, minimum: 1, description: 'Items in the sealed bag ("About 28 min in total, 2 items")'}
         payLines: {type: array, description: 'How payPaise is made up, with short labels the app joins into one sentence ("₹40 base + ₹18 drop distance")', items: {$ref: '#/components/schemas/PayLine'}}
         reason: {$ref: '#/components/schemas/OfferReason'}
+        kitchenName: {type: string, description: 'App 1.3.3: the offer title ("New order · Lakshmi''s Kitchen")'}
+        pickupMinutes: {type: integer, description: 'App 1.3.3: minutes from the rider to the kitchen, when the travel-time model ran'}
+        foodReadyInMinutes: {type: integer, description: 'App 1.3.3: minutes until the chef says the food is ready; left out until the kitchen says'}
+        afterTrip: {type: object, description: 'App 1.3.3: a next-order offer, starting after the current drop', required: [dropLocality, dropMinutes], properties: {dropLocality: {type: string}, dropMinutes: {type: integer}, foodReadyAt: {type: string, format: date-time}}}
+        kitchenAt: {$ref: '#/components/schemas/Point', description: 'App 1.3.3: the kitchen, for the map preview'}
+        customerAreaAt: {$ref: '#/components/schemas/Point', description: 'App 1.3.3: the centre of the customer''s area (a 0.005° cell), never the door; the preview shades 300 m around it'}
+    Point:
+      type: object
+      required: [lat, lng]
+      properties: {lat: {type: number}, lng: {type: number}}
+    SlotsPage:
+      type: object
+      required: [clusters, slots, maxHoursPerDay, earlyWave]
+      properties:
+        clusters: {type: array, items: {$ref: '#/components/schemas/SlotCluster'}}
+        slots: {type: array, items: {$ref: '#/components/schemas/SlotOffer'}}
+        running: {$ref: '#/components/schemas/RunningSlot', description: 'The booked slot running now, if any'}
+        maxHoursPerDay: {type: integer, description: 'Booked hours a rider may hold on one day (6)'}
+        earlyWave: {type: boolean, description: 'This rider books from Thursday 10:00 IST (a slot completed in the last 14 days, no two no-shows)'}
+    SlotCluster:
+      type: object
+      required: [clusterId, name, lat, lng, radiusM]
+      properties: {clusterId: {type: string, format: uuid}, name: {type: string}, lat: {type: number}, lng: {type: number}, radiusM: {type: integer}}
+    SlotOffer:
+      type: object
+      required: [capacityId, clusterId, clusterName, startsAt, endsAt, ratePerHourPaise, places, placesLeft, opensAt, standby]
+      properties:
+        capacityId: {type: string, format: uuid}
+        clusterId: {type: string, format: uuid}
+        clusterName: {type: string}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        ratePerHourPaise: {$ref: '#/components/schemas/Paise', description: 'The guarantee an hour while online inside the cluster'}
+        places: {type: integer}
+        placesLeft: {type: integer}
+        opensAt: {type: string, format: date-time, description: 'When this rider may book it (their wave)'}
+        bookingId: {type: string, format: uuid, description: 'Present when this rider holds a place'}
+        standby: {type: boolean}
+    RunningSlot:
+      type: object
+      required: [bookingId, clusterName, startsAt, endsAt, ratePerHourPaise, inZoneMinutes, coveredPaise]
+      properties:
+        bookingId: {type: string, format: uuid}
+        clusterName: {type: string}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        ratePerHourPaise: {$ref: '#/components/schemas/Paise'}
+        inZoneMinutes: {type: integer}
+        coveredPaise: {$ref: '#/components/schemas/Paise', description: 'The guarantee the minutes so far cover'}
+    SlotBooking:
+      type: object
+      required: [bookingId, capacityId, status, clusterName, startsAt, endsAt, ratePerHourPaise]
+      properties:
+        bookingId: {type: string, format: uuid}
+        capacityId: {type: string, format: uuid}
+        status: {type: string, enum: [BOOKED, CANCELLED, NO_SHOW, COMPLETED]}
+        clusterName: {type: string}
+        startsAt: {type: string, format: date-time}
+        endsAt: {type: string, format: date-time}
+        ratePerHourPaise: {$ref: '#/components/schemas/Paise'}
+    SlotStandby:
+      type: object
+      required: [capacityId, position]
+      properties: {capacityId: {type: string, format: uuid}, position: {type: integer, minimum: 1}}
     Place:
       type: object
       required: [area, address, lat, lng]
@@ -468,6 +554,12 @@ components:
         arrivedKitchenAt: {type: string, format: date-time}
         waitFreeSeconds: {type: integer}
         unreachableWaitSeconds: {type: integer}
+        rateCardVersion: {type: string, description: 'App 1.3.3: the rate card the pay was locked on ("Rate card 2026-11-v1")'}
+        offerPayPaise: {$ref: '#/components/schemas/Paise', description: 'App 1.3.3: the locked pay the offer showed ("Offer said at least ₹61")'}
+        pickupDistanceM: {type: integer, description: 'App 1.3.3: the offer distance to the kitchen, the one pay counts'}
+        dropDistanceM: {type: integer, description: 'App 1.3.3: the offer distance kitchen to customer'}
+        pickedUpAt: {type: string, format: date-time}
+        finishedAt: {type: string, format: date-time, description: 'When the trip ended (delivered, failed or cancelled)'}
         waitPayPerMinutePaise: {$ref: '#/components/schemas/Paise'}
         cancelReason: {type: string}
         payLines: {type: array, items: {$ref: '#/components/schemas/PayLine'}}

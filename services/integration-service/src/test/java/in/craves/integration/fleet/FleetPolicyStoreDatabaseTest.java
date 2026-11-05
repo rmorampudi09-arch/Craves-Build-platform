@@ -30,6 +30,11 @@ class FleetPolicyStoreDatabaseTest {
         assertThat(card.ranges()).containsKey("base_paise");
         assertThat(card.summaryOfChanges().get("en")).isNotEmpty();
         assertThat(store.currentDispatchPolicy()).as("a draft policy never drives dispatch").isEmpty();
+        // Policy 2026-11-v2 (V184): before any policy is published, its two lines join the draft and no version is spent.
+        FleetPolicyStore.DispatchRules shown = store.dispatchRules(null);
+        assertThat(shown.jointMatching()).isTrue();
+        assertThat(shown.nextOrderOffers()).isTrue();
+        assertThat(fleet.db.queryForList("SELECT version FROM fleet_schema.dispatch_policy", String.class)).containsExactly("2026-10-v1");
     }
 
     @Test
@@ -163,7 +168,7 @@ class FleetPolicyStoreDatabaseTest {
 
     private void insertPolicy(String version, String effectiveFrom, int detour) {
         fleet.db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
-            + "fleet_stage_seconds, radius_m, pickup_detour_percent, ranges) VALUES (?, 'PUBLISHED', " + effectiveFrom + ", now(), 'off', 40, "
-            + "60, 5000, ?, '{}')", version, detour);
+            + "fleet_stage_seconds, radius_m, pickup_detour_percent, ranges, joint_matching, next_order_offers) VALUES (?, 'PUBLISHED', "
+            + effectiveFrom + ", now(), 'off', 40, 60, 5000, ?, '{}', true, true)", version, detour);
     }
 }

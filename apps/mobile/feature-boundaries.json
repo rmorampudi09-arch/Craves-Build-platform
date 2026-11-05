@@ -185,6 +185,7 @@
     "payment -> src/features/cart/state/cartSelectors.ts",
     "payment -> src/features/checkout/api/checkoutApi.ts",
     "payment -> src/features/checkout/domain/checkoutTypes.ts",
+    "rider -> src/features/maps/olaMapTiles.ts",
     "src/core -> src/features/auth/api/sessionManager.ts",
     "src/core -> src/features/chefDiscovery/query/nearbyChefDiscoveryQueries.ts",
     "src/core -> src/features/home/query/homeFeedQueries.ts",

@@ -184,3 +184,32 @@ it("Back keeps the customer on checkout, with the message, while a payment is be
   expect(window.sessionStorage.getItem("craves.checkout.id")).toBe(CHECKOUT_ID);
   expect(screen.getByText("We’re confirming your payment.")).toBeTruthy();
 });
+
+function refuseCheckout(body: unknown) {
+  return serve([KITCHEN], (url, init) =>
+    url.startsWith("/api/checkout/operations/") && init?.method === "POST" ? Response.json(body, { status: 409 }) : undefined);
+}
+async function tapReviewTotal() {
+  const review = await screen.findByRole("button", { name: "Review total" });
+  await waitFor(() => expect((review as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(review);
+}
+
+it("says new orders are paused, with a link to keep the account, when an account deletion is open", async () => {
+  refuseCheckout({ error: "ACCOUNT_DELETION_PENDING", message: "Your account is set to be deleted. Tap Keep my account to order again." });
+  render(createElement(CheckoutPage));
+  await tapReviewTotal();
+
+  expect(await screen.findByText(/Your account is set to be deleted, so new orders are paused\./)).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Keep my account" }).getAttribute("href")).toBe("/account/delete");
+  expect(screen.queryByText(/Tap Keep my account/)).toBeNull();
+});
+
+it("shows any other checkout conflict as before, without the keep-account link", async () => {
+  refuseCheckout({ error: "CART_CHANGED", message: "The cart has changed since it was validated." });
+  render(createElement(CheckoutPage));
+  await tapReviewTotal();
+
+  expect(await screen.findByText("Your cart changed while you were checking out. Review it, then try again.")).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "Keep my account" })).toBeNull();
+});

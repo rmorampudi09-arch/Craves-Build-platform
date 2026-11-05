@@ -11,7 +11,7 @@ import ChefNotificationsPage from "../../../app/chef/notifications/page";
 import LegacyChefProfilePage from "../../../app/chef/[id]/page";
 import { chefDeviceAccount, isChefModeTab, isChefModeVerified, markChefModeVerified, markCustomerModeVerified, rememberChefAccount } from "./chef-mode";
 import { captureSessionContext, getSession, invalidateSession, setSessionIdentity } from "../../auth/api/cravesAuth";
-import { rememberEarlyAccess } from "@/features/sign-in/lib/customer-launch";
+import { rememberDeletionOnlySignIn, rememberEarlyAccess } from "@/features/sign-in/lib/customer-launch";
 import type { CravesIdentity } from "../../auth/lib/auth-contract";
 
 const mocks = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), assign: vi.fn(), locationReplace: vi.fn() }));
@@ -76,15 +76,19 @@ describe("Chef Mode guard", () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/chef"));
   });
 
-  it.each(["/chef/orders", "/chef/sign-in", "/contact", "/privacy", "/terms", "/security", "/refunds-cancellations", "/products-pricing", "/pilot-launch", "/sign-in", "/admin/accounts"])("keeps %s open", (pathname) => {
+  it.each(["/chef/orders", "/chef/sign-in", "/contact", "/privacy", "/terms", "/security", "/refunds-cancellations", "/products-pricing", "/pilot-launch", "/sign-in", "/admin/accounts", "/account-deletion", "/account/delete"])("keeps %s open", (pathname) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it("treats only the chef app and the listed public pages as open", () => {
-    for (const pathname of ["/home", "/chefs", "/kitchen/abc", "/cart", "/profile", "/notifications", "/chefsomething"])
+    for (const pathname of ["/home", "/chefs", "/kitchen/abc", "/cart", "/profile", "/notifications", "/chefsomething", "/account", "/account/other"])
       expect(isOpenInChefMode(pathname), pathname).toBe(false);
+  });
+
+  it("opens the account deletion explainer and the delete page, and no other account page", () => {
+    for (const pathname of ["/account-deletion", "/account/delete"]) expect(isOpenInChefMode(pathname), pathname).toBe(true);
   });
 
   it("checks a customer page again when Back restores it from the page cache", async () => {
@@ -158,7 +162,7 @@ describe("Chef Mode guard", () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/sign-in?from=chef"));
   });
 
-  it("leaves customers alone while customers wait when this device never used Chef Mode for them", () => {
+  it("leaves customers alone while customers wait when they did not sign in through the delete page", () => {
     launch.soon = true;
     sessionStorage.clear();
     localStorage.clear();
@@ -166,6 +170,52 @@ describe("Chef Mode guard", () => {
     render(createElement(ChefModeGuard));
     cleanup();
     rememberChefAccount("71111111-1111-4111-8111-111111111111");
+    render(createElement(ChefModeGuard));
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("shows a customer who signed in through the delete page the launching-soon note while customers wait, without the kitchen button", async () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    localStorage.clear();
+    rememberDeletionOnlySignIn();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
+    render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/sign-in"));
+    cleanup();
+    mocks.replace.mockReset();
+    // The device remembers someone else's kitchen, not theirs.
+    rememberChefAccount("71111111-1111-4111-8111-111111111111");
+    render(createElement(ChefModeGuard));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledExactlyOnceWith("/sign-in"));
+  });
+
+  it("keeps the account deletion pages, sign-in and the public pages open to that customer while customers wait", () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    localStorage.clear();
+    rememberDeletionOnlySignIn();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
+    for (const pathname of ["/account/delete", "/account-deletion", "/sign-in", "/privacy", "/contact"]) {
+      vi.mocked(usePathname).mockReturnValue(pathname);
+      render(createElement(ChefModeGuard));
+      cleanup();
+    }
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("lets a customer who is an owner, or on a device that opened the early-access link, keep customer screens while customers wait", () => {
+    launch.soon = true;
+    sessionStorage.clear();
+    localStorage.clear();
+    rememberDeletionOnlySignIn();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER", "ADMIN"] });
+    render(createElement(ChefModeGuard));
+    cleanup();
+    setSessionIdentity({ ...chef, roles: ["CUSTOMER"] });
+    rememberEarlyAccess();
+    // Early access also forgets the delete-page sign-in; the guard checks early access on its own too.
+    rememberDeletionOnlySignIn();
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
   });

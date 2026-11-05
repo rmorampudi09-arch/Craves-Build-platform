@@ -44,6 +44,8 @@ describe("Settings", () => {
     expect(href(/^Privacy & security/)).toBe("/security");
     expect(href(/^Saved addresses/)).toBe("/addresses");
     expect(href(/^Notifications/)).toBe("/notifications");
+    expect(href(/^Delete account/)).toBe("/account/delete?side=customer");
+    expect(screen.getByText("Your details are removed 30 days after you ask")).toBeTruthy();
     expect(href(/^Help & support/)).toBe("/help");
     expect(href(/^Terms & conditions/)).toBe("/terms");
     expect(href(/^Privacy policy/)).toBe("/privacy");

@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { PhoneAuthForm } from "../components/phone-auth-form";
 import { LanguageProvider } from "@/shared/i18n/language-context";
 import type { Language } from "@/shared/i18n/language";
+import { isDeletionOnlySignIn, rememberEarlyAccess } from "./customer-launch";
 
 // createElement passes children as its third argument; the cast only makes that prop optional.
 const Provider = LanguageProvider as (props: { initial: Language; chosen: boolean; children?: ReactNode }) => ReactNode;
@@ -119,4 +120,33 @@ it("opens the next step as soon as the session exists, while the accepted wave p
   await waitFor(() => expect(onSignedIn).toHaveBeenCalledOnce(), { timeout: 300 });
   expect(document.querySelector(".code-slots")?.classList.contains("is-success")).toBe(true);
   expect(screen.getByRole("button", { name: "Opening…" }).getAttribute("aria-busy")).toBe("true");
+});
+
+it("remembers a completed sign-in that the delete page opened without early access, and no other", async () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ identity: { id: "31111111-1111-4111-8111-111111111111" } })));
+  mocks.msg91.mockResolvedValue({ confirm: vi.fn().mockResolvedValue({ user: { getIdToken: vi.fn().mockResolvedValue("token") } }) });
+  const signIn = async (returnTo: string) => {
+    const onSignedIn = vi.fn();
+    render(createElement(PhoneAuthForm, { returnTo, onSignedIn }));
+    type(phoneField(), "9876543210");
+    fireEvent.click(screen.getByRole("button", { name: "Send OTP" }));
+    fireEvent.change(await screen.findByLabelText("Six-digit OTP"), { target: { value: "123456" } });
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalledOnce());
+    cleanup();
+  };
+  localStorage.clear();
+  render(createElement(PhoneAuthForm, { returnTo: "/account/delete" }));
+  // Opening the page is not a sign-in.
+  expect(isDeletionOnlySignIn()).toBe(false);
+  cleanup();
+  await signIn("/home");
+  expect(isDeletionOnlySignIn()).toBe(false);
+  rememberEarlyAccess();
+  await signIn("/account/delete");
+  expect(isDeletionOnlySignIn()).toBe(false);
+  localStorage.clear();
+  await signIn("/account/delete?side=chef");
+  expect(isDeletionOnlySignIn()).toBe(true);
+  localStorage.clear();
 });

@@ -11,6 +11,8 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
+import { deletionCopy } from "@/features/account-deletion/domain/deletion-copy";
+import { isDeletionPaused } from "@/features/account-deletion/domain/deletion-model";
 import {
   displayAddressLabel,
   isDeliveryReadyAddress,
@@ -65,7 +67,10 @@ function money(amount: number, currency = "INR") {
   }
 }
 
-type CheckoutProblem = { message: string; section?: "address" | "cart" };
+type CheckoutProblem = { message: string; section?: "address" | "cart"; paused?: true };
+
+/** The server refused a new order because the account has an open deletion request. */
+class DeletionPausedError extends Error {}
 
 function checkoutMessage(error: unknown): string {
   return checkoutProblem(error).message;
@@ -73,6 +78,7 @@ function checkoutMessage(error: unknown): string {
 
 /** Customer copy for a checkout error, plus the section whose controls fix it. */
 export function checkoutProblem(error: unknown): CheckoutProblem {
+  if (error instanceof DeletionPausedError) return { message: deletionCopy.paused.orders(null), paused: true };
   if (!(error instanceof Error)) {
     return { message: "We couldn’t prepare checkout right now. Your cart is safe — please try again." };
   }
@@ -241,6 +247,8 @@ async function createAuthoritativeCheckout(
     },
   );
   const raw = await response.json().catch(() => null);
+  // The attempt route spells the server's code "error".
+  if (response.status === 409 && isDeletionPaused((raw as { error?: string } | null)?.error)) throw new DeletionPausedError();
   if (!response.ok) {
     throw new Error(responseMessage(raw, "We couldn’t start checkout. Check your cart for items that are no longer available, then try again."));
   }

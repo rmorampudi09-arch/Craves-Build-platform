@@ -27,7 +27,7 @@ export function isLaunchMutationOrigin(request: NextRequest): boolean {
 }
 
 export function launchExemptPath(path: string): boolean {
-  if (["/pilot-launch", "/api/web-launch/control", "/api/web-launch/status", "/api/version", "/api/readiness/razorpay", "/robots.txt", "/sitemap.xml", "/favicon.ico", "/privacy", "/terms", "/contact", "/products-pricing", "/refunds-cancellations", "/security"].includes(path)) return true;
+  if (["/pilot-launch", "/api/web-launch/control", "/api/web-launch/status", "/api/version", "/api/readiness/razorpay", "/robots.txt", "/sitemap.xml", "/favicon.ico", "/privacy", "/terms", "/contact", "/products-pricing", "/refunds-cancellations", "/security", "/account-deletion"].includes(path)) return true;
   if (path.startsWith("/_next/static/") || path === "/_next/image" || path.startsWith("/.well-known/acme-challenge/")) return true;
   // Assets only: a dot or a forged file extension on an API is never a bypass.
   return !path.startsWith("/api/") && /\.(?:css|js|mjs|map|png|jpe?g|webp|avif|gif|svg|ico|woff2?|ttf|otf|mp4|webm)$/i.test(path);

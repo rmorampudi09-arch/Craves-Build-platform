@@ -8,11 +8,30 @@
 // Owners (ADMIN) are the exception: signed in through the early-access link, or switching from Chef Mode, they get the
 // customer app, so they can check it before the launch. So is a device that opened the early-access link (testers are
 // usually chefs): it remembers the link, and its chef accounts keep the customer app there.
+// Account deletion (5 Nov 2026, Google Play): /sign-in?returnTo=/account/delete opens the phone sign-in without the
+// link and without remembering early access; a person who signs in there (not an owner, no early access) sees the note
+// on every page but the deletion pages and the open pages in ChefModeGuard. The device remembers that sign-in until
+// sign-out or early access, so customers who signed in before the lock keep their screens.
 export const CUSTOMERS_LAUNCHING_SOON = true;
 
 /** Only the Craves owners have ADMIN; the launch lock lets them into the customer app. */
 export function isCravesOwner(roles: readonly string[] | undefined): boolean {
   return Boolean(roles?.some((role) => role.toUpperCase() === "ADMIN"));
+}
+
+/** Open to everyone during the launch lock: the public explainer and the delete page. */
+export const DELETION_PATHS = ["/account/delete", "/account-deletion"] as const;
+
+const pathPart = (value: string) => value.split(/[?#]/, 1)[0];
+
+export function isDeletionPath(pathname: string): boolean {
+  const path = pathPart(pathname);
+  return DELETION_PATHS.some((deletion) => path === deletion || path.startsWith(`${deletion}/`));
+}
+
+/** The one customer sign-in the launch lock opens: back to the delete page (returnTo already passed safeReturnPath). */
+export function opensSignInDuringLaunch(returnTo: string): boolean {
+  return pathPart(returnTo) === "/account/delete";
 }
 
 // SHA-256 of the private key in craves.in/sign-in?access=<key>. The key itself is never stored in the repo.
@@ -28,6 +47,7 @@ export function rememberEarlyAccess(): void {
   } catch {
     // Blocked storage: chef accounts get the launching-soon note here, as before.
   }
+  forgetDeletionOnlySignIn();
 }
 
 export function hasEarlyAccess(): boolean {
@@ -35,6 +55,34 @@ export function hasEarlyAccess(): boolean {
     return window.localStorage.getItem(EARLY_ACCESS_KEY) === CUSTOMER_EARLY_ACCESS_SHA256;
   } catch {
     return false;
+  }
+}
+
+const DELETION_ONLY_KEY = "craves.deletion-only-sign-in";
+
+/** A sign-in that opensSignInDuringLaunch opened, without early access, completed on this device. */
+export function rememberDeletionOnlySignIn(): void {
+  try {
+    window.localStorage.setItem(DELETION_ONLY_KEY, "1");
+  } catch {
+    // Blocked storage: the guard cannot tell, so this person keeps the customer screens.
+  }
+}
+
+export function isDeletionOnlySignIn(): boolean {
+  try {
+    return window.localStorage.getItem(DELETION_ONLY_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** On sign-out, and once the device remembers early access. */
+export function forgetDeletionOnlySignIn(): void {
+  try {
+    window.localStorage.removeItem(DELETION_ONLY_KEY);
+  } catch {
+    // Blocked storage: nothing was remembered.
   }
 }
 

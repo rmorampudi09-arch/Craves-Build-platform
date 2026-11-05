@@ -8,6 +8,7 @@ import type {
 } from "@/features/addresses/lib/address-contract";
 import { selectDefaultDeliveryAddress } from "@/features/addresses/lib/address-selection";
 import { clearChefMode, forgetChefDevice } from "@/features/chef/lib/chef-mode";
+import { forgetDeletionOnlySignIn } from "@/features/sign-in/lib/customer-launch";
 import {
   parseCustomerProfile,
   type CustomerProfile,
@@ -475,6 +476,7 @@ export async function clearSession(): Promise<void> {
   }
   // Signing out also drops chef application details kept across "Sign in again" (use-chef-onboarding).
   try { window.sessionStorage.removeItem("craves.chef-application-unsaved"); } catch { /* storage blocked */ }
+  forgetDeletionOnlySignIn();
   forgetSession(true);
   // Like the app's logout, end the Firebase sign-in too, so this browser cannot mint a new Craves session from it.
   // Loaded on demand to keep Firebase out of every page's bundle; best effort (hosts without Firebase config throw).

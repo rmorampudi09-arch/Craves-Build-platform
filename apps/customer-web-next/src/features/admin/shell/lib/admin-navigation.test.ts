@@ -3,10 +3,10 @@ import test from "node:test";
 import { ADMIN_MODULES, adminMetricCsv, currentAdminHref, formatAdminTimestamp, isAdminDestination, matchesAdminRoute, searchAdminModules } from "./admin-navigation.ts";
 
 test("every workspace has a unique stable destination", () => {
-  assert.equal(ADMIN_MODULES.length, 31);
+  assert.equal(ADMIN_MODULES.length, 32);
   assert.equal(new Set(ADMIN_MODULES.map(module => module.id)).size, ADMIN_MODULES.length);
   assert.equal(new Set(ADMIN_MODULES.map(module => module.href)).size, ADMIN_MODULES.length);
-  for (const id of ["chefs", "chef-onboarding", "accounts", "finance", "plans", "subscriptions", "capacity", "notifications", "academy", "delivery", "delivery-exceptions", "dead-letters", "operations", "search", "support", "home-banners", "customer-reviews", "riders", "fleet-selfies", "fleet-trips", "fleet-slots", "fleet-setup", "fleet-health", "fleet-support", "fleet-payouts"]) assert.ok(ADMIN_MODULES.find(module => module.id === id));
+  for (const id of ["chefs", "chef-onboarding", "accounts", "finance", "plans", "subscriptions", "capacity", "notifications", "academy", "delivery", "delivery-exceptions", "dead-letters", "operations", "search", "support", "home-banners", "customer-reviews", "account-deletions", "riders", "fleet-selfies", "fleet-trips", "fleet-slots", "fleet-setup", "fleet-health", "fleet-support", "fleet-payouts"]) assert.ok(ADMIN_MODULES.find(module => module.id === id));
 });
 
 test("active routes use path boundaries, not shared prefixes", () => {
@@ -35,6 +35,7 @@ test("module search covers work language without pretending to search customer d
   assert.ok(searchAdminModules("failed webhook").some(module => module.id === "dead-letters"));
   assert.ok(searchAdminModules("rate card").some(module => module.id === "fleet-setup"));
   assert.ok(searchAdminModules("sos").some(module => module.id === "fleet-support"));
+  assert.ok(searchAdminModules("erase account").some(module => module.id === "account-deletions"));
   assert.equal(searchAdminModules("no-such-control-12947").length, 0);
   assert.equal(searchAdminModules("").length, ADMIN_MODULES.length);
 });

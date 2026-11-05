@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, LoaderCircle, LockKeyhole } from "lucide-react";
 import {
@@ -9,6 +10,7 @@ import {
   parsePaymentVerification,
 } from "@/features/checkout/lib/payment-contract";
 import type { CustomerCheckout } from "@/features/checkout/lib/checkout-contract";
+import { deletionCopy } from "@/features/account-deletion/domain/deletion-copy";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/shared/lib/session-fetch";
 import { loadCart } from "@/features/cart/api/cravesCart";
@@ -62,6 +64,8 @@ export type CheckoutPaymentFailure = {
   retryAllowed: boolean;
   /** Where the fix lives. Payment and connection problems show next to Pay. */
   section?: "address" | "cart";
+  /** An open account deletion refused the order: the message is followed by a link to keep the account. */
+  paused?: boolean;
 } | null;
 
 // A submitted but unconfirmed payment survives a reload, so Pay isn't offered twice.
@@ -562,7 +566,17 @@ export function CheckoutPaymentButton({
             <p className="text-sm font-bold text-[#1A1A1A]">
               {checkout ? (timedOut ? "Time to pay ran out" : "Payment didn’t go through") : "We couldn’t prepare your order"}
             </p>
-            <p className="mt-0.5 text-xs leading-5 text-[#6B6B6B]">{paymentProblem.message}</p>
+            <p className="mt-0.5 text-xs leading-5 text-[#6B6B6B]">
+              {paymentProblem.message}
+              {paymentProblem.paused ? (
+                <>
+                  {" "}
+                  <Link href="/account/delete" className="font-bold text-[#1A1A1A] underline underline-offset-2">
+                    {deletionCopy.paused.link}
+                  </Link>
+                </>
+              ) : null}
+            </p>
           </div>
         </div>
       ) : closedPaymentId ? (

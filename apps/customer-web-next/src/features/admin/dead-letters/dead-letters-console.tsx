@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { adminFetch } from "@/features/admin/shell/lib/admin-renewal";
 import { formatAdminTimestamp, readableAdminStatus } from "@/features/admin/shell/lib/admin-navigation";
-import { fieldClass, labelClass } from "@/features/admin/fleet/components/fleet-action";
+import { ActionMessage, fieldClass, labelClass, type ActionState } from "@/features/admin/fleet/components/fleet-action";
 import {
   ADMIN_REASON, deadLetterError, deadLetterRetryError, deadLetterSchema, pageSchema, PROVIDER, SOURCE_LABELS, SOURCES, STATUS_LABELS, STATUSES,
   type DeadLetter, type DeadLetterPage, type DeadLetterSource, type DeadLetterStatus,
@@ -14,8 +14,15 @@ const MAX_OFFSET = 10_000;
 const when = (value: string | null) => value ? formatAdminTimestamp(value) : "—";
 type Search = { source: DeadLetterSource; status: DeadLetterStatus; provider: string; reason: string };
 type State = { busy: boolean; error: string; reference: string };
+// Answers with a code and no message, read first as in admin-deletion-client: adminFetch's own (it never re-sends a POST after
+// renewing the session) and the BFF's origin check.
+const RETRY_CODES: Record<string, string> = {
+  SESSION_RENEWED_RETRY_REQUIRED: "Your session was renewed. Try again.",
+  SESSION_RECONNECTING: "Reconnecting securely. Try again in a moment.",
+  ORIGIN_REJECTED: "This page isn't allowed to send that. Reload the page and try again.",
+};
 
-/** Handbook 105, read-only: what failed or was given up on, most recent change first. Each page is one audited read. */
+/** Handbook 105: what failed or was given up on, most recent change first. Each page is one audited read, each retry one audited write. */
 export function DeadLettersConsole() {
   const [source, setSource] = useState<DeadLetterSource>("DELIVERY_WEBHOOK");
   const [status, setStatus] = useState<DeadLetterStatus>("DEAD_LETTER");
@@ -24,7 +31,8 @@ export function DeadLettersConsole() {
   const [page, setPage] = useState<DeadLetterPage | null>(null);
   const [shown, setShown] = useState<Search | null>(null);
   const [state, setState] = useState<State>({ busy: false, error: "", reference: "" });
-  const [retried, setRetried] = useState<Record<string, string>>({});
+  const [retries, setRetries] = useState<Record<string, ActionState>>({});
+  const busy = state.busy || Object.values(retries).some(retry => retry.phase === "submitting");
 
   async function load(search: Search, offset: number) {
     setState({ busy: true, error: "", reference: "" });
@@ -42,34 +50,37 @@ export function DeadLettersConsole() {
       if (!parsed.success) return setState({ busy: false, error: "The integration service sent an unexpected answer. Refresh and try again.", reference });
       setPage(parsed.data);
       setShown(search);
-      setRetried({});
+      setRetries({});
       setState({ busy: false, error: "", reference });
     } catch {
       setState({ busy: false, error: "The integration service is unavailable. Try again shortly.", reference: "" });
     }
   }
 
-  // One more attempt for one dead-lettered delivery webhook, with the reason the list was opened with.
+  // One more attempt for one dead-lettered delivery webhook, recorded with the reason the list was shown with; the outcome shows in its row.
   async function retry(item: DeadLetter) {
-    if (!shown || state.busy) return;
-    if (!window.confirm("Give this delivery webhook one more attempt? If it fails again it goes back to the dead letters.")) return;
-    setState({ busy: true, error: "", reference: "" });
+    if (!shown || busy) return;
+    if (!window.confirm(`Give this delivery webhook one more attempt? It is recorded with your reason "${shown.reason}". If it fails again it goes back to the dead letters.`)) return;
+    const mark = (outcome: ActionState) => setRetries(current => ({ ...current, [item.id]: outcome }));
+    mark({ phase: "submitting", message: "" });
     const query = new URLSearchParams({ id: item.id, source: "DELIVERY_WEBHOOK" });
     try {
       const response = await adminFetch(`/api/admin/dead-letters?${query}`, { method: "POST", cache: "no-store", headers: { "X-Admin-Reason": shown.reason } });
       const reference = response.headers.get("X-Correlation-ID") ?? "";
+      const quoted = reference ? ` Reference ${reference}.` : "";
       const data: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        const message = data && typeof data === "object" ? (data as Record<string, unknown>).message : undefined;
-        return setState({ busy: false, error: typeof message === "string" ? message.slice(0, 500) : deadLetterRetryError(response.status).message, reference });
+        const body = data && typeof data === "object" ? data as Record<string, unknown> : {};
+        const message = typeof body.code === "string" && Object.hasOwn(RETRY_CODES, body.code) ? RETRY_CODES[body.code]
+          : typeof body.message === "string" ? body.message.slice(0, 500) : deadLetterRetryError(response.status).message;
+        return mark({ phase: "error", message: message + quoted });
       }
       const row = deadLetterSchema.safeParse(data);
-      if (!row.success) return setState({ busy: false, error: "The integration service sent an unexpected answer. Refresh the list.", reference });
+      if (!row.success) return mark({ phase: "error", message: `The integration service sent an unexpected answer. Refresh the list.${quoted}` });
       setPage(current => current && { ...current, items: current.items.map(entry => entry.id === row.data.id ? row.data : entry) });
-      setRetried(current => ({ ...current, [item.id]: reference }));
-      setState({ busy: false, error: "", reference });
+      mark({ phase: "success", message: `Queued for one more attempt${reference ? `, reference ${reference}` : ""}. Show the list again in a minute to see how it went.` });
     } catch {
-      setState({ busy: false, error: "The integration service is unavailable. Try again shortly.", reference: "" });
+      mark({ phase: "error", message: "The integration service is unavailable. Try again shortly." });
     }
   }
 
@@ -103,10 +114,10 @@ export function DeadLettersConsole() {
         {source !== "CASHFREE_WEBHOOK" && <label className={labelClass}>Provider (optional)
           <input className={fieldClass} value={provider} maxLength={80} spellCheck={false} placeholder="borzo" onChange={event => setProvider(event.target.value)} />
         </label>}
-        <label className={`${labelClass} md:col-span-2`}>Why you are looking (recorded with every page you open)
+        <label className={`${labelClass} md:col-span-2`}>Why you are looking (recorded with every page you open and every retry)
           <input className={fieldClass} value={reason} maxLength={500} onChange={event => setReason(event.target.value)} />
         </label>
-        <span className="cr-actions md:col-span-2"><button type="submit" className="cr-button cr-primary" disabled={state.busy}>Show</button></span>
+        <span className="cr-actions md:col-span-2"><button type="submit" className="cr-button cr-primary" disabled={busy}>Show</button></span>
       </form>
       {state.busy && <p className="cr-feedback" role="status">Loading…</p>}
       {state.error && <p className="cr-error-text" role="alert">{state.error}{state.reference ? ` Reference ${state.reference}.` : ""}</p>}
@@ -119,16 +130,21 @@ export function DeadLettersConsole() {
         {page.total === 0 ? "Nothing here." : `${page.offset + 1}–${end} of ${page.total}, most recent change first.`}
         {state.reference ? ` Audit reference ${state.reference}.` : ""}
       </p>
-      {page.items.map(item => <Row key={item.id} item={item} busy={state.busy} retriedReference={retried[item.id]} onRetry={() => void retry(item)} />)}
+      {page.items.map(item => <Row key={item.id} item={item} busy={busy} retry={retries[item.id]} onRetry={() => void retry(item)} />)}
       {(page.offset > 0 || end < page.total) && <span className="cr-actions">
-        <button type="button" className="cr-button" disabled={state.busy || page.offset === 0} onClick={() => void load(shown, Math.max(0, page.offset - PAGE))}>Newer</button>
-        <button type="button" className="cr-button" disabled={state.busy || end >= page.total || page.offset + PAGE > MAX_OFFSET} onClick={() => void load(shown, page.offset + PAGE)}>Older</button>
+        <button type="button" className="cr-button" disabled={busy || page.offset === 0} onClick={() => void load(shown, Math.max(0, page.offset - PAGE))}>Newer</button>
+        <button type="button" className="cr-button" disabled={busy || end >= page.total || page.offset + PAGE > MAX_OFFSET} onClick={() => void load(shown, page.offset + PAGE)}>Older</button>
       </span>}
     </section>}
   </div>;
 }
 
-function Row({ item, busy, retriedReference, onRetry }: { item: DeadLetter; busy: boolean; retriedReference?: string; onRetry: () => void }) {
+function Row({ item, busy, retry, onRetry }: { item: DeadLetter; busy: boolean; retry?: ActionState; onRetry: () => void }) {
+  const record = useId();
+  const outcome = useRef<HTMLDivElement>(null);
+  const retried = retry?.phase === "success";
+  // The focused button goes away after a retry, so focus moves to what happened instead of dropping to the page.
+  useEffect(() => { if (retried) outcome.current?.focus(); }, [retried]);
   const ids: Array<[string, string | null]> = [
     ["Order", item.orderId], ["Kitchen order", item.chefSubOrderId], ["Delivery job", item.deliveryJobId], ["Provider event", item.providerEventId],
   ];
@@ -147,12 +163,10 @@ function Row({ item, busy, retriedReference, onRetry }: { item: DeadLetter; busy
     <p>{ids.filter(([, value]) => value).map(([label, value], index) => <span key={label}>
       {index > 0 ? " · " : ""}{label} <span className="select-all font-mono text-xs">{value}</span>
     </span>)}</p>
-    <p className="cr-muted">Record <span className="select-all font-mono text-xs">{item.id}</span></p>
-    {retriedReference !== undefined && <p className="cr-feedback" role="status">
-      Queued for one more attempt{retriedReference ? `, reference ${retriedReference}` : ""}. Show the list again in a minute to see how it went.
-    </p>}
-    {item.source === "DELIVERY_WEBHOOK" && item.status === "DEAD_LETTER" && retriedReference === undefined && <span className="cr-actions">
-      <button type="button" className="cr-button" disabled={busy} onClick={onRetry}>Retry once</button>
+    <p id={record} className="cr-muted">Record <span className="select-all font-mono text-xs">{item.id}</span></p>
+    {item.source === "DELIVERY_WEBHOOK" && item.status === "DEAD_LETTER" && !retried && <span className="cr-actions">
+      <button type="button" className="cr-button" disabled={busy} aria-describedby={record} onClick={onRetry}>Retry once</button>
     </span>}
+    {retry && <div ref={outcome} tabIndex={-1}><ActionMessage state={retry} /></div>}
   </article>;
 }

@@ -248,6 +248,8 @@ def build(args) -> tuple:
         entry.update({"baseUrl": "https://" + host if host else None, "ingress": verdict, "credential": cred})
         if not host:
             problems.append(f"{name}: no Azure ingress hostname")
+        if not ingress(app).get("external"):
+            problems.append(f"{name}: internal ingress; auth runs in another environment and can reach it only over network peering")
         if verdict == "does not allow auth":
             problems.append(f"{name}: ingress does not allow auth's address {args.auth_outbound_ip}")
         if cred == "missing":
@@ -272,7 +274,7 @@ def build(args) -> tuple:
 
     lines.append("## commands")
     if sets:
-        lines.append(f"az containerapp update -g {AUTH_APP.replace('ca-', 'rg-', 1)} -n {AUTH_APP} --set-env-vars " + " ".join(sets))
+        lines.append(f"az containerapp update -g {AUTH_GROUP} -n {AUTH_APP} -o none --set-env-vars " + " ".join(sets))
     else:
         lines.append("nothing to add to auth")
     lines += notes

@@ -60,7 +60,8 @@ LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
 READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
 RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
 [[ -n "$FQDN" && "$LATEST" == "$READY" && "$RUNNING" == "Running" ]] || fail "Auth Service is not ready"
-curl --silent --show-error --fail --max-time 30 "https://$FQDN/actuator/health" >/dev/null
+HEALTH=$(azq "read auth's revision health" az containerapp revision show -g "$AUTH_RG" -n "$AUTH_APP" --revision "$READY" --query properties.healthState -o tsv)
+[[ "$HEALTH" == Healthy ]] || fail "Auth Service revision $READY is not Healthy"
 BASE="https://${FQDN}"
 
 API_LIST=$(azq "list APIM APIs" az apim api list -g "$APIM_RG" --service-name "$APIM" --query '[].[name,path]' -o tsv)
@@ -83,7 +84,7 @@ POLICY_URLS=("${APIM_MGMT}/policies/policy")
 for URL in "${POLICY_URLS[@]}"; do
   # Fail closed: only a genuine not-found on the API's own policy (no policy set yet) counts as "no policy".
   if XML=$(az rest --method get --url "${URL}?api-version=${API_VERSION}" --query properties.value -o tsv 2>"$ERR_FILE"); then :
-  elif [[ "$URL" == "$API_MGMT"* ]] && grep -qiE 'ResourceNotFound|NotFound|\(404\)|404' "$ERR_FILE"; then XML=''
+  elif [[ "$URL" == "$API_MGMT"* ]] && grep -qiE 'ResourceNotFound|NotFound|\(404\)' "$ERR_FILE"; then XML=''
   else fail "Azure command failed: read the gateway policy (${URL#"$APIM_MGMT"/}); cannot confirm the 30 s timeout"; fi
   # Flatten newlines so a forward-request tag split over lines is still matched.
   FLAT=$(tr '\n\r' '  ' <<<"$XML")

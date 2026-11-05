@@ -13,12 +13,12 @@ import preflight
 
 SECRET = "SENTINEL-SECRET-VALUE"
 AUTH = "ca-craves-auth-prod"
-FQDN = "%s.internal.env.centralindia.azurecontainerapps.io"
+FQDN = "%s.env.centralindia.azurecontainerapps.io"
 NAMES = ["subscription", "order", "integration", "referral", "advanced", "catalog", "user-chef", "notification"]
 
 
 def app(name, env, secrets=None, fqdn=None, restrictions=None, traffic=None):
-    ingress = {"external": False, "fqdn": fqdn or f"{name}.internal.env.centralindia.azurecontainerapps.io"}
+    ingress = {"external": True, "fqdn": fqdn or f"{name}.env.centralindia.azurecontainerapps.io"}
     if restrictions:
         ingress["ipSecurityRestrictions"] = restrictions
     configuration = {"ingress": ingress, "secrets": secrets or []}
@@ -206,6 +206,13 @@ class PreflightTest(unittest.TestCase):
         self.assertNotIn(SECRET, out)
         self.assertIn("Azure command failed", out)
 
+    def test_internal_ingress_is_a_problem(self):
+        world = ready_world()
+        world["ca-craves-catalog-prod"]["properties"]["configuration"]["ingress"]["external"] = False
+        code, out = run(world)
+        self.assertEqual(1, code)
+        self.assertIn("catalog: internal ingress; auth runs in another environment", out)
+
     def test_commands_never_set_switches_or_values(self):
         world = ready_world()
         drop_all_deletion_settings(world)
@@ -213,6 +220,7 @@ class PreflightTest(unittest.TestCase):
         commands = section(out, "commands")
         self.assertEqual(1, code)
         self.assertIn("az containerapp update -g rg-craves-auth-prod -n ca-craves-auth-prod", commands)
+        self.assertIn("-o none", commands)
         self.assertIn("secretref:internal-secret", commands)
         self.assertIn("secretref:referral-source-hmac", commands)
         self.assertIn("CRAVES_ACCOUNT_DELETION_ORDER_BASE_URL=https://ca-craves-order-prod.", commands)

@@ -215,8 +215,13 @@ image() {
 app() {
   local commit=${1:?main commit}
   local tag=${commit:0:12}
+  local suffix="m${tag:0:8}"
   log "Container app $APP ($IMAGE_REPO:$tag)"
   local env_id uai_id kv_uri fqdn ip i=0 restrictions
+  # Same commit deployed before: a revision suffix must be new.
+  if az containerapp revision show -g "$RG" -n "$APP" --revision "$APP--$suffix" -o none 2>/dev/null; then
+    suffix="$suffix-$(date -u +%m%d%H%M)"
+  fi
   env_id=$(az containerapp env show -g "$RG" -n "$CAE" --query id -o tsv)
   uai_id=$(az identity show -g "$RG" -n "$UAI" --query id -o tsv)
   kv_uri=$(az keyvault show -n "$KV" --query properties.vaultUri -o tsv)
@@ -253,7 +258,7 @@ $restrictions
     # Key Vault secret must exist before app, or the revision cannot start (runbook step 2).
     - {name: internal-service-secret, keyVaultUrl: ${kv_uri}secrets/craves-internal-service-secret, identity: $uai_id}
   template:
-    revisionSuffix: m${tag:0:8}
+    revisionSuffix: $suffix
     containers:
     - name: advanced-features
       image: $ACR.azurecr.io/$IMAGE_REPO:$tag

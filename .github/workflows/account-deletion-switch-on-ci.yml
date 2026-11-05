@@ -7,6 +7,7 @@ on:
       - scripts/apim/tests/test_admin_account_deletions_apim.py
       - infra/apim/admin-account-deletions/**
       - scripts/account-deletion/**
+      - services/auth-service/src/main/java/in/craves/auth/deletion/AdminAccountDeletionController.java
       - .github/workflows/account-deletion-switch-on-ci.yml
 
 permissions:

@@ -164,6 +164,7 @@ Anything else first:
 |---|---|
 | `STOP` and `exit 2` | Plan 5 halts. A service enforces signed calls on the erase paths, so auth would need to sign them (a code change). Change nothing. |
 | `rolling out` | A release is splitting traffic. Wait until it ends, then run step 1 again. |
+| `<service>: internal ingress; ...` | The service is not reachable from auth's environment except over network peering. Stop and ask. |
 | `<service>: ingress does not allow auth's address ...` | Fix B (under step 6) for that service, then run step 1 again. |
 | any other `PROBLEM` line | Stop and ask. |
 
@@ -244,16 +245,7 @@ Advanced has no internal secret yet, so its erase endpoints answer 503. This cop
    bash "$D/infra/advanced-features/provision.sh" app "$COMMIT"
    ```
 
-   Expected, after up to 10 minutes: `Revision ca-craves-advanced-prod--m<8 characters>: Healthy`. Any other state: roll back.
-   - If `provision.sh` stops with an error that the revision or its suffix already exists, this commit was deployed by `provision.sh` before, and the suffix must be new. Give it one more letter and apply the file `provision.sh` just wrote:
-
-     ```bash
-     sed -i -E 's/^( *revisionSuffix: m[0-9a-f]{8})$/\1b/' ~/advanced-features-state/app.yaml
-     az containerapp update -g rg-craves-advanced-prod -n ca-craves-advanced-prod --yaml ~/advanced-features-state/app.yaml -o none
-     az containerapp revision list -g rg-craves-advanced-prod -n ca-craves-advanced-prod -o table
-     ```
-
-     Run the last line once a minute until the newest revision (`...--m<8 characters>b`) shows `Healthy`. Do not go on to part 7 before that. Not `Healthy` after 10 minutes: roll back.
+   Expected, after up to 10 minutes: `Revision ca-craves-advanced-prod--m<8 characters>[-<time>]: Healthy`. Any other state: roll back.
 
 7. Check that the erase endpoint stops answering 503. A wrong credential must now get 401:
 
@@ -292,7 +284,7 @@ Gives auth the 8 service addresses, the 7 credentials and the referral HMAC, all
 2. Copy the one line under `## commands`. It looks like this, with real values:
 
    ```text
-   az containerapp update -g rg-craves-auth-prod -n ca-craves-auth-prod --set-env-vars CRAVES_ACCOUNT_DELETION_SUBSCRIPTION_BASE_URL=https://ca-craves-subscription-prod.<...>.azurecontainerapps.io ... CRAVES_ACCOUNT_DELETION_SUBSCRIPTION_CREDENTIAL=secretref:<auth's internal secret> ... CRAVES_ACCOUNT_DELETION_REFERRAL_HMAC_BASE64=secretref:<auth's referral secret>
+   az containerapp update -g rg-craves-auth-prod -n ca-craves-auth-prod -o none --set-env-vars CRAVES_ACCOUNT_DELETION_SUBSCRIPTION_BASE_URL=https://ca-craves-subscription-prod.<...>.azurecontainerapps.io ... CRAVES_ACCOUNT_DELETION_SUBSCRIPTION_CREDENTIAL=secretref:<auth's internal secret> ... CRAVES_ACCOUNT_DELETION_REFERRAL_HMAC_BASE64=secretref:<auth's referral secret>
    ```
 
    Before you run it, check that it has:
@@ -301,7 +293,7 @@ Gives auth the 8 service addresses, the 7 credentials and the referral HMAC, all
    - `..._REFERRAL_HMAC_BASE64=secretref:...`;
    - no `<create-a-key-vault-backed-secret>`. If it is there, stop and ask.
 
-3. Paste the line, add ` -o none` at its end (so Azure does not print the app's settings back), and press Enter.
+3. Paste the line and press Enter. It already has `-o none`, so Azure does not print the app's settings back.
 
 4. Move auth's traffic (section above).
 
@@ -324,13 +316,13 @@ Publishes `/api/v1/admin/account-deletions` on `api.craves.in`, so `admin.craves
 DRY_RUN=true bash "$D/scripts/apim/configure-admin-account-deletions-apim.sh"
 ```
 
-Expected: four `WOULD WRITE ...` lines, then `DRY RUN: all read-only checks passed, nothing written.` An `ERROR:` line means nothing was written: stop and ask. If it stops at auth's health check with `curl: (22) ... 403` or a time-out, Cloud Shell cannot reach auth's own address. Then run this line, and the write below, through the helper, for example `with_ingress rg-craves-auth-prod ca-craves-auth-prod env DRY_RUN=true bash "$D/scripts/apim/configure-admin-account-deletions-apim.sh"`.
+Expected: four `WOULD WRITE ...` lines, then `DRY RUN: all read-only checks passed, nothing written.` An `ERROR:` line means nothing was written: stop and ask.
 
 ```bash
 CONFIRM_APIM_WRITE=true bash "$D/scripts/apim/configure-admin-account-deletions-apim.sh"
 ```
 
-Expected: four `WRITTEN ...` lines, two `OK ... -> 401 without a login` lines (each may take up to 2 minutes), then `SUCCESS: admin account deletion routes configured and verified. auth-service still checks the admin role.` `Azure command failed: <step>` names the step that failed.
+Expected: four `WRITTEN ...` lines, two `OK ... -> 401 without a login` lines (each may take up to 2 minutes), then `SUCCESS: admin account deletion routes configured and verified. auth-service still checks the admin role.` `Azure command failed: <step>` names the step that failed. Re-run it (every write is a PUT and safe to repeat), or run this step's rollback.
 
 Check:
 
@@ -379,7 +371,7 @@ Proves that auth reaches all 8 services, and that keep and release work. The det
    - Open items: "Nothing is open";
    - Steps: 8 PREPARE rows, status PENDING (the worker is off).
 
-   Also check the list: the test request should be the only Scheduled one. If a real person asked in this hour, note their due date in Results: their erase runs before the test account's.
+   Also check the list: the test request should be the only Scheduled one. If a real person asked between step 5 and the test request, treat their request as the first erase. Note their due date in Results, watch it with step 9's admin checks, and run Rollback, "Stop erasing", on the first `ACCOUNT_DELETION_ERASE_BLOCKED` or `ACCOUNT_DELETION_STEP_FAILING` alert.
 
 3. Any row with code `SERVICE_UNREACHABLE` must be fixed before you go on. Its Detail column says why:
 
@@ -473,7 +465,7 @@ Then move auth's traffic.
 Check, within 5 minutes:
 - the open test request's 8 PREPARE rows show DONE, with no Last error;
 - the cancelled first request's RELEASE rows (subscription, catalog) show DONE;
-- auth's log has no `ACCOUNT_DELETION_` alert since step 5 (query in "Where things are").
+- auth's log has no `ACCOUNT_DELETION_` alert since step 5 (query in "Where things are"). Run the positive control there first: a count of 0 means the logs go elsewhere, so an empty alert list proves nothing.
 
 The merge freeze ends here.
 
@@ -491,6 +483,12 @@ Check:
 1. Admin detail: Status Completed, Phone "Erased", and ERASE rows for the 8 services and auth, all DONE. A day later a SWEEP row for notification shows DONE too.
 2. The test number signs up fresh in the app: a new, empty customer account with no past orders.
 3. The erase counts. auth keeps them in its step records (`account_deletion_step.erased_count`, in the IP-locked database). Each service also logs its counts, so read them in Log Analytics (portal: `law-craves-prod` in `rg-craves-shared-prod` → Logs):
+
+   First check that the service's logs reach Log Analytics (use `ca-craves-order-prod`); the count must be above 0, else logs go elsewhere: stop and ask.
+
+   ```kusto
+   ContainerAppConsoleLogs_CL | where ContainerAppName_s == "ca-craves-order-prod" and TimeGenerated > ago(1h) | count
+   ```
 
    ```kusto
    ContainerAppConsoleLogs_CL
@@ -550,7 +548,11 @@ After the freeze, once auth's next release is live, run the preflight again: bot
 ## Where things are
 
 - **Requests:** `admin.craves.in` → Deletion requests. The detail page shows open items (with why a service could not be asked) and every step.
-- **Alerts:** auth logs `CRAVES_ALERT alert=ACCOUNT_DELETION_*`: `REQUEST_FAILING`, `STEP_FAILING`, `ERASE_BLOCKED` and `WAITING`. In Log Analytics:
+- **Alerts:** auth logs `CRAVES_ALERT alert=ACCOUNT_DELETION_*`: `REQUEST_FAILING`, `STEP_FAILING`, `ERASE_BLOCKED` and `WAITING`. In Log Analytics, first the positive control (it must count more than 0; if 0, logs go elsewhere: stop and ask), then the alerts:
+
+  ```kusto
+  ContainerAppConsoleLogs_CL | where ContainerAppName_s == "ca-craves-auth-prod" and TimeGenerated > ago(1h) | count
+  ```
 
   ```kusto
   ContainerAppConsoleLogs_CL

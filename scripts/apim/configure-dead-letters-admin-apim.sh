@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Publishes the handbook 105 dead-letter console (integration-service AdminDeadLetterController, read-only) as one operation
+# Publishes the handbook 105 dead-letter console (integration-service AdminDeadLetterController: the list, and one more attempt
+# for a dead-lettered delivery webhook) as two operations
 # on the existing admin operations API (craves-admin-operational-investigations-v1, api/v1/admin/operations) of the mobile
 # gateway (apim-craves-prod-34eefd, api.craves.in). Copied from configure-delivery-exceptions-admin-apim.sh.
-# Writes only this operation; it gets the live policy of the delivery-command investigation on the same API
+# Writes only these operations; each gets the live policy of the delivery-command investigation on the same API
 # (Bearer required, no-store, routed to ca-craves-integration-prod), which the script checks first. It does not use
 # infra/apim/admin-operational-investigations/authenticated-policy.xml: this APIM refuses that template ("Block statements
 # must be enclosed in { and }", 3 Nov 2026). Every other operation stays as it is. The backend answers 404 until
-# CRAVES_DEAD_LETTER_CONSOLE_ENABLED=true and checks roles, X-Admin-Reason and the audit row itself.
+# CRAVES_DEAD_LETTER_CONSOLE_ENABLED=true (retry also needs CRAVES_DEAD_LETTER_RETRY_ENABLED=true) and checks roles,
+# X-Admin-Reason and the audit row itself.
 #
 #   DRY_RUN=true bash scripts/apim/configure-dead-letters-admin-apim.sh             lists the operations, calls nothing
 #   CONFIRM_APIM_WRITE=true bash scripts/apim/configure-dead-letters-admin-apim.sh  scoped, idempotent write (az login first)
@@ -29,6 +31,7 @@ SOURCE_OPERATION=get-admin-delivery-command-investigation
 # operation id|method|template|display name
 OPERATIONS=(
   "list-admin-dead-letters|GET|/dead-letters|List failed and dead-lettered work (read-only)"
+  "retry-admin-dead-letter|POST|/dead-letters/{deadLetterId}/retry|Give a dead-lettered delivery webhook one more attempt"
 )
 fail() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -64,10 +67,10 @@ for ROW in "${OPERATIONS[@]}"; do
   BODY=$(mktemp); POLICY_BODY=$(mktemp)
   jq -n --arg display "$DISPLAY" --arg method "$METHOD" --arg template "$TEMPLATE" \
     '{properties:{displayName:$display,method:$method,urlTemplate:$template,
-      templateParameters:(if ($template|test("\\{caseId\\}")) then [{name:"caseId",type:"string",required:true}] else [] end),
+      templateParameters:[$template|scan("\\{([A-Za-z]+)\\}")|{name:.[0],type:"string",required:true}],
       responses:[{statusCode:200,description:"Failed and dead-lettered work"},{statusCode:400,description:"Invalid request"},
         {statusCode:401,description:"Authentication required"},{statusCode:403,description:"Admin role required"},
-        {statusCode:404,description:"Not found or switched off"},{statusCode:409,description:"Case changed"}]}}' >"$BODY"
+        {statusCode:404,description:"Not found or switched off"},{statusCode:409,description:"Not retryable or already retrying"}]}}' >"$BODY"
   az rest --method put --url "$API_MGMT/operations/$ID?api-version=$API_VERSION" --body @"$BODY" -o none --only-show-errors
   jq -Rs '{properties:{format:"rawxml",value:.}}' <<<"$SOURCE_POLICY" >"$POLICY_BODY"
   az rest --method put --url "$API_MGMT/operations/$ID/policies/policy?api-version=$API_VERSION" --body @"$POLICY_BODY" -o none --only-show-errors
@@ -81,4 +84,7 @@ done
 
 STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 "$PUBLIC_HOST/$API_PATH/dead-letters?source=DELIVERY_WEBHOOK")
 [[ "$STATUS" == 401 ]] || fail "Unauthenticated list returned HTTP $STATUS through $PUBLIC_HOST, expected 401"
-echo "SUCCESS: the dead-letter operation is published; an unauthenticated call gets 401."
+STATUS=$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 30 -X POST --data '' \
+  "$PUBLIC_HOST/$API_PATH/dead-letters/00000000-0000-0000-0000-000000000000/retry?source=DELIVERY_WEBHOOK")
+[[ "$STATUS" == 401 ]] || fail "Unauthenticated retry returned HTTP $STATUS through $PUBLIC_HOST, expected 401"
+echo "SUCCESS: the dead-letter operations are published; unauthenticated calls get 401."

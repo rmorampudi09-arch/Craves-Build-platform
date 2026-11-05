@@ -86,8 +86,8 @@ export function KitchenMenuRow({ dish, orderable, priorityImage = false }: { dis
             <ProgressiveImage src={dish.img} alt="" fill sizes="116px" loading={priorityImage ? "eager" : "lazy"} fetchPriority={priorityImage ? "high" : "auto"} fallbackLabel="No photo" className="object-cover" />
           )}
         </Link>
-        {/* A 40 px heart with an invisible 2 px edge, so the press area is 44 px. */}
-        <WishlistHeartButton item={dish} size="md" className="absolute right-1.5 top-1.5 before:absolute before:-inset-0.5 before:content-['']" />
+        {/* The site's 40 px save heart with an invisible 2 px edge, so the press area is 44 px. */}
+        <WishlistHeartButton item={dish} size="sm" className="absolute right-1.5 top-1.5 before:absolute before:-inset-0.5 before:content-['']" />
         {orderable ? (
           <CartStepper
             name={dish.name}

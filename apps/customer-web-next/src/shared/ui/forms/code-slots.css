@@ -132,6 +132,27 @@
 }
 .code-slots.is-error .code-slots-row { animation: cs-shake 360ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
 
+/* The tick on the last slot: white on green with a white ring, popping in after the wave. */
+.code-slot-check {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--cs-success);
+  color: #fff;
+  box-shadow: 0 0 0 2px #fff, 0 4px 10px rgba(23, 128, 61, 0.28);
+  animation: cs-check 320ms cubic-bezier(0.34, 1.56, 0.64, 1) calc((var(--cs-length) - 1) * var(--cs-cascade) + 220ms) both;
+}
+.code-slot-check svg { width: 13px; height: 13px; }
+
+@keyframes cs-check {
+  0% { opacity: 0; transform: scale(0.4); }
+  100% { opacity: 1; transform: scale(1); }
+}
 @keyframes cs-rise {
   0% { opacity: 0; transform: translateY(var(--cs-rise)) scale(0.9); }
   60% { opacity: 1; transform: translateY(calc(var(--cs-rise) * var(--cs-bounce) * -1)) scale(1.03); }
@@ -166,7 +187,8 @@
   .code-slots .code-slot,
   .code-slots .code-slot-digit,
   .code-slots .code-slots-row,
-  .code-slots .code-slot-caret {
+  .code-slots .code-slot-caret,
+  .code-slots .code-slot-check {
     animation: none !important;
     transition: none !important;
   }

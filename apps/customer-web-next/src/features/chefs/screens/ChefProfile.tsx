@@ -20,6 +20,7 @@ import { KitchenHeader } from "@/features/chefs/components/KitchenHeader";
 import { KitchenMenu } from "@/features/chefs/components/KitchenMenu";
 import { kitchenFoodMixLabel, kitchenJoinedLabel, kitchenLocation } from "@/features/chefs/lib/kitchen-menu";
 import { useFavoriteKitchen } from "@/shared/hooks/use-favorite-kitchen";
+import { isVegDish, setVegMode, useVegMode } from "@/shared/hooks/use-veg-mode";
 import { getKitchenProfile } from "@/shared/lib/kitchen-profile-client";
 import type { KitchenProfile } from "@/shared/lib/kitchen-profile-contract";
 import { formatPreparationTime } from "@/shared/lib/kitchen-dish-summary";
@@ -60,7 +61,7 @@ function placeName(address: CravesAddress | null): string {
   return address?.mandal?.trim() || address?.city?.trim() || address?.label?.trim() || "your address";
 }
 
-/** The menu's empty state, as in the app (1.35): see other home chefs, or save this kitchen to find it again. */
+/** The menu's empty state, as in the app (1.35): see other kitchens, or save this kitchen to find it again. */
 function NoDishes({ kitchenId, name }: { kitchenId: string; name: string }) {
   const { saved, busy, toggle } = useFavoriteKitchen(kitchenId);
   return (
@@ -68,10 +69,10 @@ function NoDishes({ kitchenId, name }: { kitchenId: string; name: string }) {
       compact
       illustration="kitchenNoDishes"
       title="No dishes right now"
-      message={`${name} hasn't put up today's dishes yet. Save this kitchen to find it again, or see other home chefs.`}
+      message={`${name} hasn't put up today's dishes yet. Save this kitchen to find it again, or see other kitchens.`}
     >
       <Link to="/chefs" className="craves-primary-action">
-        See other home chefs
+        See other kitchens
       </Link>
       {saved ? null : (
         // The shared class needs "!" on a button, where the site's base button colours otherwise win.
@@ -94,6 +95,8 @@ function ChefProfilePage() {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [pastTitle, setPastTitle] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
+  // Veg mode (either kind) shows a kitchen's veg dishes only, and says how many are hidden.
+  const vegMode = useVegMode();
 
   // The kitchen bar (h-16) turns white and shows the kitchen once its name has scrolled under the bar.
   useEffect(() => {
@@ -187,10 +190,10 @@ function ChefProfilePage() {
               heading="h1"
               illustration="search"
               title="This kitchen isn't on Craves right now"
-              message="It may have closed or stopped taking orders. Other home chefs are cooking near you."
+              message="It may have closed or stopped taking orders. Other kitchens are cooking near you."
             >
               <Link to="/chefs" className="craves-primary-action">
-                See other home chefs
+                See other kitchens
               </Link>
             </EmptyState>
           ) : (
@@ -230,6 +233,17 @@ function ChefProfilePage() {
   ].filter((fact): fact is string => Boolean(fact));
   const bio = profile.description;
   const reviews = dishes.flatMap((dish) => dish.reviews ?? []);
+  const menuDishes = vegMode === "off" ? dishes : dishes.filter(isVegDish);
+  const hiddenByVeg = dishes.length - menuDishes.length;
+  const showAllDishes = (
+    <button
+      type="button"
+      onClick={() => setVegMode("off")}
+      className="!min-h-10 !min-w-0 !border-0 !bg-transparent !p-0 text-sm font-bold !text-[#C92716] underline-offset-4 !shadow-none hover:underline"
+    >
+      Show all dishes
+    </button>
+  );
 
   return (
     <div
@@ -307,8 +321,23 @@ function ChefProfilePage() {
           ) : null}
         </section>
 
-        {dishes.length ? (
-          <KitchenMenu dishes={dishes} orderable={delivery !== "no" && delivery !== "no-address"} />
+        {hiddenByVeg > 0 ? (
+          <div role="status" className="mt-5 flex max-w-3xl flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-[#F2F8F2] px-4 py-2 text-sm">
+            <span className="inline-flex items-center gap-2 font-semibold text-[#1F5E23]">
+              <span aria-hidden="true" className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border-[1.5px] border-[#2E7D32] bg-white">
+                <span className="h-2 w-2 rounded-full bg-[#2E7D32]" />
+              </span>
+              Veg mode: {hiddenByVeg} non-veg {hiddenByVeg === 1 ? "dish" : "dishes"} hidden
+            </span>
+            {menuDishes.length ? showAllDishes : null}
+          </div>
+        ) : null}
+        {menuDishes.length ? (
+          <KitchenMenu dishes={menuDishes} orderable={delivery !== "no" && delivery !== "no-address"} />
+        ) : dishes.length ? (
+          <EmptyState compact heading="h2" illustration="search" title="No veg dishes here" message={`${name} isn't cooking veg dishes right now.`}>
+            {showAllDishes}
+          </EmptyState>
         ) : (
           <NoDishes kitchenId={profile.id} name={name} />
         )}

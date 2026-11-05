@@ -1,0 +1,19 @@
+name: Account deletion switch-on CI
+
+on:
+  pull_request:
+    paths:
+      - scripts/apim/configure-admin-account-deletions-apim.sh
+      - scripts/apim/tests/test_admin_account_deletions_apim.py
+      - infra/apim/admin-account-deletions/**
+      - .github/workflows/account-deletion-switch-on-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  apim-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s scripts/apim/tests -p 'test_admin_account_deletions_apim.py' -v

@@ -7,6 +7,10 @@ import in.craves.integration.admin.deadletters.AdminDeadLetterController.DeadLet
 import in.craves.integration.admin.deadletters.AdminDeadLetterController.DeadLetterPage;
 import in.craves.integration.admin.deadletters.AdminDeadLetterController.Source;
 import in.craves.integration.admin.deadletters.AdminDeadLetterController.Status;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.status.DeliveryStatusRepository;
+import java.time.Instant;
 import in.craves.integration.fleet.FleetDatabase;
 import in.craves.integration.security.CravesPrincipal;
 import java.util.List;
@@ -26,12 +30,15 @@ class AdminDeadLetterDatabaseTest {
     private static final String REASON = "Checking stuck delivery updates for ticket 4411";
 
     private FleetDatabase database;
+    private DeliveryCommandProperties delivery;
     private AdminDeadLetterController console;
 
     @BeforeEach
     void setUp() {
         database = new FleetDatabase();
-        console = new AdminDeadLetterController(new DeadLetterRepository(database.db), true);
+        delivery = new DeliveryCommandProperties();
+        delivery.setWebhookProcessingEnabled(true);
+        console = new AdminDeadLetterController(new DeadLetterRepository(database.db), delivery, true, true);
     }
 
     @Test
@@ -111,7 +118,7 @@ class AdminDeadLetterDatabaseTest {
 
     @Test
     void refusesWhenSwitchedOffOrAskedBadly() {
-        AdminDeadLetterController off = new AdminDeadLetterController(new DeadLetterRepository(database.db), false);
+        AdminDeadLetterController off = new AdminDeadLetterController(new DeadLetterRepository(database.db), delivery, false, true);
         assertStatus(() -> off.listDeadLetters(as("PLATFORM_ADMIN"), Source.DELIVERY_WEBHOOK, Status.DEAD_LETTER, null, 50, 0, REASON, null), 404);
         assertStatus(() -> console.listDeadLetters(null, Source.DELIVERY_WEBHOOK, Status.DEAD_LETTER, null, 50, 0, REASON, null), 401);
         assertStatus(() -> console.listDeadLetters(as("CHEF"), Source.DELIVERY_WEBHOOK, Status.DEAD_LETTER, null, 50, 0, REASON, null), 403);
@@ -121,6 +128,69 @@ class AdminDeadLetterDatabaseTest {
         assertStatus(() -> console.listDeadLetters(as("PLATFORM_ADMIN"), Source.DELIVERY_WEBHOOK, Status.DEAD_LETTER, "Borzo'--", 50, 0, REASON, null), 400);
         assertStatus(() -> console.listDeadLetters(as("PAYMENTS_ADMIN"), Source.CASHFREE_WEBHOOK, Status.DEAD_LETTER, "borzo", 50, 0, REASON, null), 400);
         assertThat(database.db.queryForObject("SELECT count(*) FROM payment_schema.admin_investigation_audit", Integer.class)).isZero();
+    }
+
+    @Test
+    void operationsGiveADeadWebhookExactlyOneMoreAttempt() {
+        UUID dead = webhook("borzo", "evt-9", "DEAD_LETTER", "No delivery job matches order 9");
+        UUID correlation = UUID.randomUUID();
+
+        ResponseEntity<DeadLetter> answer = console.retryDeadLetter(as("OPERATIONS_ADMIN"), dead, Source.DELIVERY_WEBHOOK, REASON,
+            correlation.toString());
+
+        assertThat(answer.getBody().status()).isEqualTo("FAILED");
+        assertThat(answer.getBody().attemptCount()).isEqualTo(9);
+        assertThat(answer.getBody().lastError()).isEqualTo("No delivery job matches order 9");
+        assertThat(answer.getHeaders().getFirst("X-Correlation-ID")).isEqualTo(correlation.toString());
+        assertThat(answer.getHeaders().getCacheControl()).isEqualTo("no-store");
+        assertThat(database.db.queryForObject("SELECT next_attempt_at <= now() AND processed_at IS NULL FROM delivery_schema.delivery_webhook_inbox "
+            + "WHERE id = ?", Boolean.class, dead)).isTrue();
+        assertThat(database.db.queryForObject("SELECT count(*) FROM payment_schema.admin_investigation_audit WHERE resource_id = ? "
+            + "AND resource_type = 'DEAD_LETTERS_DELIVERY_WEBHOOK' AND action = 'RETRY_DEAD_LETTER' AND reason = ? AND correlation_id = ?",
+            Integer.class, dead, REASON, correlation)).isEqualTo(1);
+
+        // The worker's own claim takes it once; a failure dead-letters it again, and nothing claims it after that.
+        DeliveryStatusRepository worker = new DeliveryStatusRepository(database.db, new ObjectMapper());
+        var claimed = worker.claimWebhookBatch(10, 5, 10);
+        assertThat(claimed).extracting(DeliveryStatusRepository.WebhookWorkItem::id).containsExactly(dead);
+        worker.markWebhookFailed(dead, claimed.get(0).attemptCount(), 10, Instant.now(), "still no job");
+        assertThat(database.db.queryForObject("SELECT processing_status FROM delivery_schema.delivery_webhook_inbox WHERE id = ?",
+            String.class, dead)).isEqualTo("DEAD_LETTER");
+        assertThat(worker.claimWebhookBatch(10, 5, 10)).isEmpty();
+    }
+
+    @Test
+    void retriesOnlyDeadDeliveryWebhooksAndOnlyForOperations() {
+        UUID dead = webhook("pidge", "evt-10", "DEAD_LETTER", "timeout");
+        UUID failed = webhook("pidge", "evt-11", "FAILED", "HTTP 503");
+        UUID processed = webhook("pidge", "evt-12", "PROCESSED", null);
+        AdminDeadLetterController off = new AdminDeadLetterController(new DeadLetterRepository(database.db), delivery, false, true);
+        AdminDeadLetterController readOnly = new AdminDeadLetterController(new DeadLetterRepository(database.db), delivery, true, false);
+        DeliveryCommandProperties notProcessing = new DeliveryCommandProperties();
+        AdminDeadLetterController idle = new AdminDeadLetterController(new DeadLetterRepository(database.db), notProcessing, true, true);
+
+        assertStatus(() -> off.retryDeadLetter(as("PLATFORM_ADMIN"), dead, Source.DELIVERY_WEBHOOK, REASON, null), 404);
+        assertStatus(() -> readOnly.retryDeadLetter(as("PLATFORM_ADMIN"), dead, Source.DELIVERY_WEBHOOK, REASON, null), 404);
+        assertThat(readOnly.listDeadLetters(as("PLATFORM_ADMIN"), Source.DELIVERY_WEBHOOK, Status.DEAD_LETTER, null, 50, 0, REASON, null)
+            .getBody().total()).isEqualTo(1);
+        database.db.update("DELETE FROM payment_schema.admin_investigation_audit");
+        // Nothing would claim it while webhook processing is off.
+        assertStatus(() -> idle.retryDeadLetter(as("PLATFORM_ADMIN"), dead, Source.DELIVERY_WEBHOOK, REASON, null), 409);
+        assertStatus(() -> console.retryDeadLetter(null, dead, Source.DELIVERY_WEBHOOK, REASON, null), 401);
+        assertStatus(() -> console.retryDeadLetter(as("SUPPORT_ADMIN"), dead, Source.DELIVERY_WEBHOOK, REASON, null), 403);
+        assertStatus(() -> console.retryDeadLetter(as("AUDIT_ADMIN"), dead, Source.DELIVERY_WEBHOOK, REASON, null), 403);
+        assertStatus(() -> console.retryDeadLetter(as("PLATFORM_ADMIN"), dead, Source.CASHFREE_WEBHOOK, REASON, null), 409);
+        assertStatus(() -> console.retryDeadLetter(as("PLATFORM_ADMIN"), dead, Source.DELIVERY_COMMAND, REASON, null), 409);
+        assertStatus(() -> console.retryDeadLetter(as("PLATFORM_ADMIN"), dead, Source.DELIVERY_WEBHOOK, "short", null), 400);
+        assertStatus(() -> console.retryDeadLetter(as("PLATFORM_ADMIN"), failed, Source.DELIVERY_WEBHOOK, REASON, null), 409);
+        assertStatus(() -> console.retryDeadLetter(as("PLATFORM_ADMIN"), processed, Source.DELIVERY_WEBHOOK, REASON, null), 409);
+        assertStatus(() -> console.retryDeadLetter(as("PLATFORM_ADMIN"), UUID.randomUUID(), Source.DELIVERY_WEBHOOK, REASON, null), 404);
+        assertThat(database.db.queryForObject("SELECT count(*) FROM payment_schema.admin_investigation_audit", Integer.class)).isZero();
+
+        console.retryDeadLetter(as("PLATFORM_ADMIN"), dead, Source.DELIVERY_WEBHOOK, REASON, null);
+        // A second admin a moment later finds it already retrying.
+        assertStatus(() -> console.retryDeadLetter(as("OPERATIONS_ADMIN"), dead, Source.DELIVERY_WEBHOOK, REASON, null), 409);
+        assertThat(database.db.queryForObject("SELECT count(*) FROM payment_schema.admin_investigation_audit", Integer.class)).isEqualTo(1);
     }
 
     private UUID webhook(String provider, String eventId, String status, String error) {

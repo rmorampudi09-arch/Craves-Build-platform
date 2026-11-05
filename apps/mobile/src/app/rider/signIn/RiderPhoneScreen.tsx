@@ -36,9 +36,14 @@ export function RiderPhoneScreen({navigation}: RiderScreenProps<'Phone'>) {
   return (
     <SignInFrame
       testID="rider-sign-in-phone"
-      footer={<BottomAction label={s.sendCode} onPress={sendCode} testID="rider-send-code" />}>
+      footer={
+        <>
+          <BottomAction label={s.sendCode} onPress={sendCode} testID="rider-send-code" />
+          <Label>{s.agree}</Label>
+        </>
+      }>
       <Title>{s.title}</Title>
-      <Text style={signInStyles.line}>{s.phoneHint}</Text>
+      <Text style={signInStyles.line}>{s.pitch}</Text>
       <SignInField
         label={s.phoneLabel}
         prefix="+91"
@@ -54,6 +59,7 @@ export function RiderPhoneScreen({navigation}: RiderScreenProps<'Phone'>) {
         error={error}
         testID="rider-phone-input"
       />
+      <Label>{s.phoneHint}</Label>
       {isDemo ? <Label>{s.demoHint}</Label> : null}
     </SignInFrame>
   );

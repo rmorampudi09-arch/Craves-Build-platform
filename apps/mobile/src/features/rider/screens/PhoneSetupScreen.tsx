@@ -148,6 +148,7 @@ export function PhoneSetupScreen({navigation}: RiderScreenProps<'PhoneSetup'>) {
   };
   const ring = () => riderOnlineService.testRing();
 
+  // Six settings count (REDESIGN.md, PhoneSetup); the test ring is its own card, not a setting.
   const checks = {
     location: phone.location,
     notifications: phone.notifications,
@@ -155,8 +156,8 @@ export function PhoneSetupScreen({navigation}: RiderScreenProps<'PhoneSetup'>) {
     battery: Boolean(phone.device?.ignoringBatteryOptimizations),
     autostart: Boolean(phone.answers.autostart),
     recents: Boolean(phone.answers.recents),
-    ring: Boolean(phone.answers.ring),
   };
+  const rang = Boolean(phone.answers.ring);
   const total = Object.keys(checks).length;
   const doneCount = Object.values(checks).filter(Boolean).length;
 
@@ -165,7 +166,15 @@ export function PhoneSetupScreen({navigation}: RiderScreenProps<'PhoneSetup'>) {
       // Back to where the rider came from (Home, Profile, or Home under a closed selfie screen).
       header={<RiderHeader title={s.title} back />}
       testID="rider-phone-setup"
-      footer={phone.ready ? <BottomAction label={s.done} onPress={() => navigation.goBack()} testID="rider-setup-done" /> : undefined}>
+      footer={
+        <View style={styles.footer}>
+          {phone.ready ? <BottomAction label={s.done} onPress={() => navigation.goBack()} testID="rider-setup-done" /> : null}
+          <Text style={[styles.sub, styles.center]}>{s.canGoOnlineWith(2, total)}</Text>
+        </View>
+      }>
+      <Text accessibilityRole="header" style={styles.heading}>
+        {s.heading}
+      </Text>
       <Text style={styles.steps}>{s.intro}</Text>
       <View style={styles.progress}>
         <View style={styles.track}>
@@ -227,20 +236,16 @@ export function PhoneSetupScreen({navigation}: RiderScreenProps<'PhoneSetup'>) {
           steps={s.recentsSteps[brand]}
           action={<Fix label={s.locked} onPress={() => phone.answer('recents', true)} />}
         />
-        <SetupCheck
-          testID="setup-ring"
-          title={s.testRing}
-          sub={checks.ring ? s.rang : s.recommended}
-          done={checks.ring}
-          steps={s.ringSteps}
-          action={<Fix label={s.ring} onPress={() => ring().then(() => ask(s.askRing, 'ring'))} />}
-          aside={
-            checks.ring ? (
-              <BottomAction label={s.ringAgain} variant="ghost" size="compact" onPress={ring} testID="rider-ring-again" />
-            ) : null
-          }
-        />
       </View>
+      <SetupCheck
+        testID="setup-ring"
+        title={s.testRing}
+        sub={rang ? s.rang : s.ringSteps}
+        done={rang}
+        steps={rang ? undefined : s.ringSteps}
+        action={<Fix label={s.ring} onPress={() => ring().then(() => ask(s.askRing, 'ring'))} />}
+        aside={rang ? <BottomAction label={s.ringAgain} variant="ghost" size="compact" onPress={ring} testID="rider-ring-again" /> : null}
+      />
     </RiderScreen>
   );
 }
@@ -251,6 +256,9 @@ function Fix({label, onPress}: {label: string; onPress: () => Promise<unknown> |
 
 const styles = StyleSheet.create({
   flex: {flex: 1},
+  footer: {gap: spacing.xs},
+  center: {textAlign: 'center'},
+  heading: {fontSize: typography.title, fontWeight: fontWeight.bold, color: colors.textPrimary},
   progress: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   track: {flex: 1, height: 8, borderRadius: radius.pill, backgroundColor: colors.muted, overflow: 'hidden'},
   fill: {height: '100%', width: '100%', backgroundColor: colors.success, transformOrigin: 'left'},

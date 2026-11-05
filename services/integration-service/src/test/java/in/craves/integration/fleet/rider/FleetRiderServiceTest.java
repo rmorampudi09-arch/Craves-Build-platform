@@ -100,6 +100,12 @@ class FleetRiderServiceTest {
         assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 1, 333, true))).startsWith("Among the free riders who can reach "
             + "the kitchen within 1 minute of the soonest");
 
+        // Policy 2026-11-v2 (app 1.3.3): two more lines riders are shown, before the dispatcher acts on them.
+        assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 3, 1500, false, true, true))).isEqualTo("Among the free riders "
+            + "within 1.5 km of the nearest, the one who has earned the least per online hour today hears first, one rider at a time, in up "
+            + "to 3 rounds. Orders near each other are shared out among the free riders nearby together, not one by one. You may hear of "
+            + "your next order before this one ends; it waits for you. Declining is free.");
+
         OfferRules now = new OfferRules(3, 1, 40, 5000, 0);
         OfferRules then = new OfferRules(1, 3, 30, 5000, 1500);
         Instant at = Instant.parse("2026-11-20T00:00:00Z");

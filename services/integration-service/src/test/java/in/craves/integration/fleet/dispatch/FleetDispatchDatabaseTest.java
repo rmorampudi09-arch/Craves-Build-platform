@@ -162,7 +162,8 @@ class FleetDispatchDatabaseTest {
         // The push carries the rider-v1 Offer from the same mapping as /locations.
         JsonNode rung = json.readTree(pushed.getValue());
         assertThat(rung.fieldNames()).toIterable().containsExactlyInAnyOrder("offerId", "tripId", "expiresAt", "expiresInSec", "payPaise",
-            "pickupDistanceM", "dropDistanceM", "kitchenArea", "customerLocality", "estMinutes", "itemsCount", "payLines", "reason");
+            "pickupDistanceM", "dropDistanceM", "kitchenArea", "customerLocality", "estMinutes", "itemsCount", "payLines", "reason",
+            "kitchenName", "kitchenAt", "customerAreaAt");
         // Why this rider (Phase 4): today's rules, nearest first, three at once, in one round; four free riders were considered.
         assertThat(json.treeToValue(rung.get("reason"), Map.class))
             .isEqualTo(Map.of("rule", "NEAREST", "place", 1, "riders", 4, "atOnce", 3, "round", 1));

@@ -144,7 +144,8 @@ public class FleetPolicyStore {
 
     static DispatchRules rules(Map<String, Object> policy) {
         return new DispatchRules(((Number) policy.get("offers_at_once")).intValue(), ((Number) policy.get("offer_rounds")).intValue(),
-            ((Number) policy.get("fair_band_m")).intValue(), Boolean.TRUE.equals(policy.get("rank_by_travel_time")));
+            ((Number) policy.get("fair_band_m")).intValue(), Boolean.TRUE.equals(policy.get("rank_by_travel_time")),
+            Boolean.TRUE.equals(policy.get("joint_matching")), Boolean.TRUE.equals(policy.get("next_order_offers")));
     }
 
     /**
@@ -169,8 +170,9 @@ public class FleetPolicyStore {
         DispatchRules rules = dispatchRules(now);
         starts.addAll(jdbc.queryForList("SELECT effective_from FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED' "
             + "AND withdrawn_at IS NULL AND effective_from > ? AND (offers_at_once <> ? OR offer_rounds <> ? OR fair_band_m <> ? "
-            + "OR rank_by_travel_time <> ?) ORDER BY effective_from LIMIT 1", Timestamp.class, Timestamp.from(now), rules.offersAtOnce(),
-            rules.offerRounds(), rules.fairBandM(), rules.byTravelTime()));
+            + "OR rank_by_travel_time <> ? OR joint_matching <> ? OR next_order_offers <> ?) ORDER BY effective_from LIMIT 1",
+            Timestamp.class, Timestamp.from(now), rules.offersAtOnce(), rules.offerRounds(), rules.fairBandM(), rules.byTravelTime(),
+            rules.jointMatching(), rules.nextOrderOffers()));
         return starts.stream().map(Timestamp::toInstant).min(Comparator.naturalOrder()).map(at -> {
             RateCard card = rateCardInForce(at).orElseThrow();
             return new TermsChange(at, card, card.effectiveFrom().equals(at), detour, pickupDetour(at), rules, dispatchRules(at));
@@ -449,8 +451,16 @@ public class FleetPolicyStore {
      * fair band in metres (0: nearest first; above 0: among the free riders within it of the nearest, the one who has earned
      * least per online hour today goes first). byTravelTime (Phase 5): "nearest" is the soonest at the kitchen by the
      * travel-time model, when it is live and was judged to rank riders well (FleetEta.ranking); else the nearest by distance.
+     * jointMatching and nextOrderOffers (policy 2026-11-v2, app 1.3.3): two rule lines riders are shown; the dispatcher does
+     * not act on them yet (REDESIGN.md R-09), so they only decide the terms text and the 14-day notice.
      */
-    public record DispatchRules(int offersAtOnce, int offerRounds, int fairBandM, boolean byTravelTime) {
+    public record DispatchRules(int offersAtOnce, int offerRounds, int fairBandM, boolean byTravelTime, boolean jointMatching,
+                                boolean nextOrderOffers) {
+        /** Up to Phase 5's rules: neither 2026-11-v2 line. */
+        public DispatchRules(int offersAtOnce, int offerRounds, int fairBandM, boolean byTravelTime) {
+            this(offersAtOnce, offerRounds, fairBandM, byTravelTime, false, false);
+        }
+
         /** Before Phase 4: 3 riders at once, one round, nearest first. Versions saved with these keep them. */
         public static final DispatchRules TODAY = new DispatchRules(3, 1, 0, false);
         /**

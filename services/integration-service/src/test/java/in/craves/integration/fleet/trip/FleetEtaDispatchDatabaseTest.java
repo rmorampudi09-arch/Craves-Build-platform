@@ -140,7 +140,13 @@ class FleetEtaDispatchDatabaseTest {
         assertThat(offer.get("rule")).as("the offer says soonest, not nearest").isEqualTo("SOONEST");
         assertThat(((Number) offer.get("pickup_minutes")).doubleValue()).isEqualTo(2.0);
         assertThat(((Number) offer.get("drop_minutes")).doubleValue()).isEqualTo(12.0);
-        assertThat(shown().estMinutes()).as("2 + 12 minutes riding, and 5 at the kitchen and the door").isEqualTo(19);
+        Offer shown = shown();
+        assertThat(shown.estMinutes()).as("2 + 12 minutes riding, and 5 at the kitchen and the door").isEqualTo(19);
+        assertThat(shown.pickupMinutes()).as("app 1.3.3 shows the minutes to the kitchen").isEqualTo(2);
+        assertThat(shown.kitchenName()).isNotBlank();
+        assertThat(shown.kitchenAt()).isNotNull();
+        assertThat(shown.customerAreaAt()).as("the area's centre, on a 0.005° cell, never the door")
+            .isEqualTo(FleetTripModels.areaCentre(shown.customerAreaAt().lat(), shown.customerAreaAt().lng()));
 
         UUID identity = fleet.db.queryForObject("SELECT identity_id FROM fleet_schema.rider WHERE id = ?", UUID.class, south);
         UUID tripId = UUID.fromString(new TransactionTemplate(fleet.transactions)

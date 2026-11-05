@@ -84,6 +84,11 @@ class AdminAccountDeletionsApimTest(unittest.TestCase):
         self.assertIn("Azure command failed", r.stderr)
         self.assertNotIn("SECRET-MARKER", r.stdout + r.stderr)
 
+    def test_writes_never_print_az_output(self):
+        # azq prints what az returned, so it is only for captured reads; a bare azq call echoed the policy XML on 5 Nov 2026
+        bare = [line.strip() for line in script_text().splitlines() if re.match(r"\s*azq ", line)]
+        self.assertEqual(bare, [])
+
 
 if __name__ == "__main__":
     unittest.main()

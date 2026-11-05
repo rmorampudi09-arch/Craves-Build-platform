@@ -18,7 +18,8 @@ public final class FleetTripModels {
     public static final String OFFER_COLUMNS = """
         o.id, o.trip_id, o.rider_id, o.expires_at, GREATEST(0, ceil(EXTRACT(EPOCH FROM o.expires_at - now())))::bigint AS expires_in_sec,
         o.pay_paise, o.pay_lines::text AS pay_lines, o.pickup_distance_m, o.drop_distance_m, t.kitchen_area, t.drop_area, t.items_count,
-        o.reason::text AS reason, o.pickup_minutes, o.drop_minutes""";
+        o.reason::text AS reason, o.pickup_minutes, o.drop_minutes, t.kitchen_name, t.kitchen_lat, t.kitchen_lng,
+        t.drop_lat, t.drop_lng""";
     private static final TypeReference<List<PayLine>> LINES = new TypeReference<>() { };
 
     private FleetTripModels() {
@@ -26,12 +27,26 @@ public final class FleetTripModels {
 
     /**
      * expiresInSec is what the app counts down from, never the phone clock; pay and both distances are locked. reason: why
-     * this rider got it (Phase 4), absent on offers from before it and on ops-assigned trips.
+     * this rider got it (Phase 4), absent on offers from before it and on ops-assigned trips. App 1.3.3 (REDESIGN.md):
+     * kitchenName and pickupMinutes (the model's, when it ran) for the offer as drawn, kitchenAt and customerAreaAt for
+     * its map preview. customerAreaAt is the centre of the customer's area, never the door.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Offer(String offerId, String tripId, Instant expiresAt, long expiresInSec, long payPaise, int pickupDistanceM,
                         int dropDistanceM, String kitchenArea, String customerLocality, int estMinutes, Integer itemsCount,
-                        List<PayLine> payLines, OfferReason reason) {
+                        List<PayLine> payLines, OfferReason reason, String kitchenName, Integer pickupMinutes, Point kitchenAt,
+                        Point customerAreaAt) {
+    }
+
+    public record Point(double lat, double lng) {
+    }
+
+    /**
+     * shortcut: the area's centre is the drop rounded to a 0.005° cell (about 500 m), since localities have no polygon yet;
+     * upgrade to the locality's centroid when the slot clusters (R-07) or a locality table carry one.
+     */
+    static Point areaCentre(double lat, double lng) {
+        return new Point(Math.round(lat / 0.005) * 0.005, Math.round(lng / 0.005) * 0.005);
     }
 
     /**
@@ -68,9 +83,15 @@ public final class FleetTripModels {
 
     /** Never carries the customer's promised time. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    /**
+     * App 1.3.3 (REDESIGN.md, R-05): rateCardVersion, offerPayPaise (the locked pay the offer showed), both offer distances
+     * and the picked-up and finished times, for the trip and trip-complete screens as drawn. Each is left out when unknown.
+     */
     public record Trip(String tripId, int version, String step, String orderCode, int itemsCount, long payPaise, Kitchen kitchen,
                        Customer customer, Instant arrivedKitchenAt, long waitFreeSeconds, long unreachableWaitSeconds,
-                       Long waitPayPerMinutePaise, String cancelReason, List<PayLine> payLines, boolean sealed, Instant chefReadyAt) {
+                       Long waitPayPerMinutePaise, String cancelReason, List<PayLine> payLines, boolean sealed, Instant chefReadyAt,
+                       String rateCardVersion, Long offerPayPaise, Integer pickupDistanceM, Integer dropDistanceM, Instant pickedUpAt,
+                       Instant finishedAt) {
     }
 
     /**
@@ -88,12 +109,16 @@ public final class FleetTripModels {
             throw new IllegalStateException("trip_offer.pay_lines must be [{component, label, amountPaise}]", exception);
         }
         String reason = row.getString("reason");
+        Double pickupMinutes = minutes(row, "pickup_minutes");
         try {
             return new Offer(row.getString("id"), row.getString("trip_id"), row.getTimestamp("expires_at").toInstant(),
                 row.getLong("expires_in_sec"), row.getLong("pay_paise"), pickup, drop, row.getString("kitchen_area"),
-                row.getString("drop_area"), estMinutes(pickup, drop, minutes(row, "pickup_minutes"), minutes(row, "drop_minutes")),
+                row.getString("drop_area"), estMinutes(pickup, drop, pickupMinutes, minutes(row, "drop_minutes")),
                 items > 0 ? items : null, lines,
-                reason == null ? null : json.readValue(reason, OfferReason.class));
+                reason == null ? null : json.readValue(reason, OfferReason.class),
+                row.getString("kitchen_name"), pickupMinutes == null ? null : (int) Math.ceil(pickupMinutes),
+                new Point(row.getDouble("kitchen_lat"), row.getDouble("kitchen_lng")),
+                areaCentre(row.getDouble("drop_lat"), row.getDouble("drop_lng")));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("trip_offer.reason must be an OfferReason", exception);
         }

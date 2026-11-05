@@ -37,6 +37,10 @@ route|rider|rider-get-payouts|GET|/payouts|json
 route|rider|rider-post-withdrawals|POST|/withdrawals|json
 route|rider|rider-post-support-issues|POST|/support/issues|json
 route|rider|rider-post-sos|POST|/sos|json
+route|rider|rider-get-slots|GET|/slots|json
+route|rider|rider-post-slots-capacityId-book|POST|/slots/{capacityId}/book|json
+route|rider|rider-post-slots-capacityId-standby|POST|/slots/{capacityId}/standby|json
+route|rider|rider-delete-slots-bookings-bookingId|DELETE|/slots/bookings/{bookingId}|json
 route|admin|fleet-get-riders|GET|/riders|admin
 route|admin|fleet-post-riders|POST|/riders|admin
 route|admin|fleet-get-riders-riderId|GET|/riders/{riderId}|admin
@@ -85,6 +89,9 @@ route|admin|fleet-get-sos-events|GET|/sos-events|admin
 route|admin|fleet-get-slots|GET|/slots|admin
 route|admin|fleet-post-slots|POST|/slots|admin
 route|admin|fleet-post-slots-slotId-cancel|POST|/slots/{slotId}/cancel|admin
+route|admin|fleet-get-slot-capacity|GET|/slot-capacity|admin
+route|admin|fleet-post-slot-capacity-capacityId-approve|POST|/slot-capacity/{capacityId}/approve|admin
+route|admin|fleet-put-slot-capacity-capacityId|PUT|/slot-capacity/{capacityId}|admin
 route|admin|fleet-get-banner|GET|/banner|admin
 route|admin|fleet-put-banner|PUT|/banner|admin
 route|admin|fleet-delete-banner|DELETE|/banner|admin

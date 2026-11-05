@@ -89,6 +89,7 @@ export function HelpScreen() {
             testID="rider-help-whatsapp"
           />
         ) : null}
+        <Text style={[styles.note, styles.center]}>{h.hours}</Text>
       </HeroCard>
       <Text accessibilityRole="header" style={[styles.heading, styles.section]}>
         {h.faqTitle}
@@ -136,6 +137,17 @@ export function HelpScreen() {
       ) : (
         <StateCard icon="inbox-outline" title={h.noTrips} body={h.noTripsHint} testID="rider-help-no-trips" />
       )}
+      <Card>
+        <Text style={styles.strong}>{h.grievanceTitle}</Text>
+        <Text style={styles.note}>{h.grievanceBody}</Text>
+        <BottomAction
+          label={h.grievanceLink}
+          variant="outline"
+          size="compact"
+          onPress={() => navigation.navigate('Terms', {mode: 'view'})}
+          testID="rider-help-grievance"
+        />
+      </Card>
     </RiderScreen>
   );
 }
@@ -145,6 +157,8 @@ const styles = StyleSheet.create({
   heading: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
   section: {marginTop: spacing.xs},
   note: {fontSize: typography.body, color: colors.textSecondary},
+  center: {textAlign: 'center'},
+  strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
   call: {marginTop: spacing.xxs},
   list: {padding: 0, gap: 0, overflow: 'hidden'},
   divider: {borderTopWidth: borderWidth.standard, borderTopColor: colors.border},

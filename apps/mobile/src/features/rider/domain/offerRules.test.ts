@@ -73,6 +73,16 @@ describe('offerRulesLines', () => {
     expect(offerRulesLines({offersAtOnce: 1, offerRounds: 3, offerSeconds: 30, radiusM: 4000, fairBandM: 1500}, te.terms)[1]).toContain('1.5 km');
   });
 
+  it('adds the two 2026-11-v2 lines only when the server sends them', () => {
+    const rules = {offersAtOnce: 1, offerRounds: 3, offerSeconds: 30, radiusM: 4000, fairBandM: 1500};
+    expect(offerRulesLines({...rules, jointMatching: true, nextOrderOffers: true}, en.terms).slice(3, 5)).toEqual([
+      'Orders near each other are shared out among the free riders nearby together, not one by one.',
+      'You may hear of your next order before this one ends. It waits for you.',
+    ]);
+    expect(offerRulesLines(rules, en.terms)).toHaveLength(6);
+    expect(offerRulesLines({...rules, jointMatching: true}, hi.terms)).toHaveLength(7);
+  });
+
   it('words ranking by travel time, with a fair band in minutes as the server counts it', () => {
     const rules = {offersAtOnce: 1, offerRounds: 1, offerSeconds: 40, radiusM: 5000, fairBandM: 0, byTravelTime: true};
     expect(offerRulesLines(rules, en.terms)[1]).toBe(

@@ -76,15 +76,19 @@ describe("Chef Mode guard", () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/chef"));
   });
 
-  it.each(["/chef/orders", "/chef/sign-in", "/contact", "/privacy", "/terms", "/security", "/refunds-cancellations", "/products-pricing", "/pilot-launch", "/sign-in", "/admin/accounts"])("keeps %s open", (pathname) => {
+  it.each(["/chef/orders", "/chef/sign-in", "/contact", "/privacy", "/terms", "/security", "/refunds-cancellations", "/products-pricing", "/pilot-launch", "/sign-in", "/admin/accounts", "/account-deletion", "/account/delete"])("keeps %s open", (pathname) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     render(createElement(ChefModeGuard));
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it("treats only the chef app and the listed public pages as open", () => {
-    for (const pathname of ["/home", "/chefs", "/kitchen/abc", "/cart", "/profile", "/notifications", "/chefsomething"])
+    for (const pathname of ["/home", "/chefs", "/kitchen/abc", "/cart", "/profile", "/notifications", "/chefsomething", "/account", "/account/other"])
       expect(isOpenInChefMode(pathname), pathname).toBe(false);
+  });
+
+  it("opens the account deletion explainer and the delete page, and no other account page", () => {
+    for (const pathname of ["/account-deletion", "/account/delete"]) expect(isOpenInChefMode(pathname), pathname).toBe(true);
   });
 
   it("checks a customer page again when Back restores it from the page cache", async () => {

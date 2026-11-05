@@ -15,6 +15,8 @@ const OPEN_PATHS = [
   "/refunds-cancellations",
   "/contact",
   "/products-pricing",
+  "/account-deletion",
+  "/account/delete",
   "/pilot-launch",
   "/sign-in",
   "/admin",

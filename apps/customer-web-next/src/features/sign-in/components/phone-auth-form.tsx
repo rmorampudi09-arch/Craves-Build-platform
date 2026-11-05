@@ -7,6 +7,7 @@ import {
 } from "firebase/auth";
 import { beginMsg91PhoneSignIn, parkMsg91Captcha, type PhoneConfirmation } from "@/features/sign-in/lib/msg91-browser";
 import { phoneCodeRequestError, phoneCodeVerifyError } from "@/features/sign-in/lib/phone-auth-errors";
+import { hasEarlyAccess, opensSignInDuringLaunch, rememberDeletionOnlySignIn } from "@/features/sign-in/lib/customer-launch";
 import { getFirebaseBrowserClient } from "@/shared/lib/firebase-client";
 import { safeReturnPath, type CravesIdentity } from "@/features/auth/lib/auth-contract";
 import { CodeSlots, type CodeSlotsStatus } from "@/shared/ui/forms/code-slots";
@@ -432,6 +433,8 @@ export function PhoneAuthForm({
   async function openSignedIn(identity: CravesIdentity | undefined) {
     // A customer sign-in opens the customer app on this device; Chef Mode keeps its own check.
     if (!chefJourney && identity?.id) markCustomerModeVerified(identity.id);
+    // The launch lock opened this sign-in only for the delete page: keep this person to the deletion pages (customer-launch.ts).
+    if (opensSignInDuringLaunch(destination) && !hasEarlyAccess()) rememberDeletionOnlySignIn();
     if (onSignedIn) {
       if (!identity?.id) throw new Error("Sign-in failed. Please try again.");
       await onSignedIn(identity);

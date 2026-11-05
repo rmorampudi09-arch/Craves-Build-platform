@@ -54,6 +54,14 @@ describe("deletion model", () => {
     expect(options(scopePlanFor(["CHEF", "RIDER"], null))).toEqual(["CHEF"]);
   });
 
+  it("scopePlanFor falls back to every side the account has when the page's side has none to offer", () => {
+    // a chef and rider without a customer side, sent from the customer side: never a choice with nothing to pick
+    expect(scopePlanFor(["CHEF", "RIDER"], "customer")).toEqual(scopePlanFor(["CHEF", "RIDER"], null));
+    expect(options(scopePlanFor(["CHEF", "RIDER"], "customer"))).toEqual(["CHEF"]);
+    // a chef without a customer side still has the whole account to offer there
+    expect(options(scopePlanFor(["CHEF"], "customer"))).toEqual(["ALL"]);
+  });
+
   it("summaryKindFor", () => {
     expect(summaryKindFor("ALL", ["CUSTOMER"])).toBe("customerAll");
     expect(summaryKindFor("ALL", ["CUSTOMER", "CHEF"])).toBe("chefAll");
@@ -79,7 +87,7 @@ describe("deletion model", () => {
 
   it("copy: the website changes and the no-date paused texts", () => {
     expect(deletionCopy.customerSummary.dateBody).toBe("30 days from today. Until then you can keep your account on this page or in the app.");
-    expect(deletionCopy.web.unavailable).toBe("Deleting an account from the website isn't available yet. You can ask in the Craves app, or email support@craves.in.");
+    expect(deletionCopy.web.unavailable).toBe("Deleting an account isn't available on the website yet. Email support@craves.in and Craves will help.");
     expect(deletionCopy.web.signInFirst).toBe("Sign in with the phone number on your account to continue.");
     expect(deletionCopy.paused.link).toBe("Keep my account");
     expect(deletionCopy.paused.orders(null)).toBe("Your account is set to be deleted, so new orders are paused.");

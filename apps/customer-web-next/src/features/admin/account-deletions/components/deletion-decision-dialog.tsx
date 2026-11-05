@@ -48,6 +48,8 @@ export function DeletionDecisionDialog({ requestId, action, onCancel, onDecided,
     };
   }, []);
 
+  // After an unconfirmed decision the old Approve and Reject may be stale, so closing reloads the request too.
+  const cancel = failure?.refresh ? onRefresh : onCancel;
   const fail = (code: string | undefined) => setFailure({ message: deletionError(code, "decide"), blockers: [], refresh: needsRefresh(code) });
 
   async function send() {
@@ -73,7 +75,7 @@ export function DeletionDecisionDialog({ requestId, action, onCancel, onDecided,
   }
 
   return <dialog ref={dialog} className="cr-dialog w-[calc(100vw-2rem)] max-w-lg" aria-labelledby={`${id}-title`} aria-describedby={`${id}-intro`}
-    onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }}>
+    onCancel={event => { event.preventDefault(); if (!busy) cancel(); }}>
     <div className="space-y-4 p-6">
       <h2 id={`${id}-title`}>{copy.title}</h2>
       <p id={`${id}-intro`} className="cr-muted">{copy.intro}</p>
@@ -87,10 +89,10 @@ export function DeletionDecisionDialog({ requestId, action, onCancel, onDecided,
       </div>
       {failure ? <div role="alert" className="cr-error-text space-y-2">
         <p>{failure.message}</p>
-        {failure.blockers.length ? <ul className="list-disc space-y-1 pl-5">{failure.blockers.map(item => <li key={`${item.service}-${item.code}`}>{blockerLine(item)}</li>)}</ul> : null}
+        {failure.blockers.length ? <ul className="list-disc space-y-1 pl-5">{failure.blockers.map((item, index) => <li key={`${item.service}-${item.code}-${index}`}>{blockerLine(item)}</li>)}</ul> : null}
       </div> : null}
       <div className="cr-actions justify-end">
-        <button type="button" className="cr-button" disabled={busy} onClick={onCancel}>Cancel</button>
+        <button type="button" className="cr-button" disabled={busy} onClick={cancel}>Cancel</button>
         {failure?.refresh
           ? <button type="button" className="cr-button cr-primary" onClick={onRefresh}>Refresh</button>
           : <button type="button" className="cr-button cr-primary" disabled={busy || !ready} onClick={() => { void send(); }}>{busy ? "Saving..." : copy.button}</button>}

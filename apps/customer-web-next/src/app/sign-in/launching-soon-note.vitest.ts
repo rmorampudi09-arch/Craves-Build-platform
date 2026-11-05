@@ -40,9 +40,10 @@ afterEach(() => {
 
 it("keeps Back to Craves and the home logo for a visitor who is not signed in", async () => {
   await note();
-  // The note checks for a sign-in (/me, then a refresh); it still says Back to Craves once the check is answered.
-  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => url === "/api/auth/refresh")).toBe(true));
+  // The note asks /me once; a visitor with no sign-in on this browser is never sent to a refresh.
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => url === "/api/auth/me")).toBe(true));
   await act(() => new Promise((settled) => setTimeout(settled, 0)));
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => url === "/api/auth/refresh")).toBe(false);
   expect(screen.getByRole("link", { name: "Back to Craves" }).getAttribute("href")).toBe("/");
   expect(screen.getByRole("link", { name: "Craves home" }).getAttribute("href")).toBe("/");
   expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
@@ -58,6 +59,13 @@ it("offers a signed-in person Sign out instead of Back to Craves, whose landing 
   // The logo leads to the account deletion explainer, which stays open, not to "/".
   expect(screen.queryByRole("link", { name: "Craves home" })).toBeNull();
   expect(screen.getByRole("link", { name: "Delete your Craves account" }).getAttribute("href")).toBe("/account-deletion");
+});
+
+it("finds a sign-in this tab does not hold yet, and offers Sign out", async () => {
+  me = customer;
+  await note();
+  expect(await screen.findByRole("button", { name: "Sign out" })).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "Back to Craves" })).toBeNull();
 });
 
 it("signs out with the website's customer sign-out and lands on the landing page", async () => {

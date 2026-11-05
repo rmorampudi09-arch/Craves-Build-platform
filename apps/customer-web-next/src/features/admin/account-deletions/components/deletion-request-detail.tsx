@@ -112,7 +112,7 @@ export function DeletionRequestDetail({ requestId }: { requestId: string }) {
         <button type="button" className="cr-button" onClick={() => setDeciding("reject")}>Reject</button>
       </> : null}
     </div>
-    {roleBlocked ? <p className="cr-muted">Your administrator role can&apos;t make this decision.</p> : null}
+    {roleBlocked ? <p className="cr-muted">Approve and Reject aren&apos;t available. Refresh to try again.</p> : null}
     {notice ? <p role="status" className="text-sm font-semibold">{notice}</p> : null}
     {loading ? <p role="status" className="cr-muted">Loading this request. Craves is asking each service what is still open, so this can take up to 30 seconds.</p> : null}
     {error ? <p role="alert" className="cr-error-text">{error}</p> : null}

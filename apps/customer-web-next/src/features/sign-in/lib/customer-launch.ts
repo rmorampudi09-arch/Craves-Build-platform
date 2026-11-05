@@ -9,8 +9,9 @@
 // customer app, so they can check it before the launch. So is a device that opened the early-access link (testers are
 // usually chefs): it remembers the link, and its chef accounts keep the customer app there.
 // Account deletion (5 Nov 2026, Google Play): /sign-in?returnTo=/account/delete opens the phone sign-in without the
-// link and without remembering early access; any other signed-in person without early access who is not an owner
-// sees the note on every page but the deletion pages and the open pages in ChefModeGuard.
+// link and without remembering early access; a person who signs in there (not an owner, no early access) sees the note
+// on every page but the deletion pages and the open pages in ChefModeGuard. The device remembers that sign-in until
+// sign-out or early access, so customers who signed in before the lock keep their screens.
 export const CUSTOMERS_LAUNCHING_SOON = true;
 
 /** Only the Craves owners have ADMIN; the launch lock lets them into the customer app. */
@@ -46,6 +47,7 @@ export function rememberEarlyAccess(): void {
   } catch {
     // Blocked storage: chef accounts get the launching-soon note here, as before.
   }
+  forgetDeletionOnlySignIn();
 }
 
 export function hasEarlyAccess(): boolean {
@@ -53,6 +55,34 @@ export function hasEarlyAccess(): boolean {
     return window.localStorage.getItem(EARLY_ACCESS_KEY) === CUSTOMER_EARLY_ACCESS_SHA256;
   } catch {
     return false;
+  }
+}
+
+const DELETION_ONLY_KEY = "craves.deletion-only-sign-in";
+
+/** A sign-in that opensSignInDuringLaunch opened, without early access, completed on this device. */
+export function rememberDeletionOnlySignIn(): void {
+  try {
+    window.localStorage.setItem(DELETION_ONLY_KEY, "1");
+  } catch {
+    // Blocked storage: the guard cannot tell, so this person keeps the customer screens.
+  }
+}
+
+export function isDeletionOnlySignIn(): boolean {
+  try {
+    return window.localStorage.getItem(DELETION_ONLY_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** On sign-out, and once the device remembers early access. */
+export function forgetDeletionOnlySignIn(): void {
+  try {
+    window.localStorage.removeItem(DELETION_ONLY_KEY);
+  } catch {
+    // Blocked storage: nothing was remembered.
   }
 }
 

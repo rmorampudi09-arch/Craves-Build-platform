@@ -18,7 +18,8 @@ const secondaryAction = "inline-flex min-h-12 items-center rounded-full border b
 export function LaunchingSoonNote({ fromChef }: { fromChef: boolean }) {
   const user = useSyncExternalStore(subscribeSession, getSession, () => null);
   useEffect(() => {
-    if (!getSession()) void loadSession().catch(() => null);
+    // Fail fast: a visitor with no sign-in on this browser is not sent on to a refresh.
+    if (!getSession()) void loadSession({ failFastUnauthenticated: true }).catch(() => null);
   }, []);
   return (
     <section role="status" className="w-full rounded-3xl border border-[#E5E7EB] bg-white p-6 text-[#1A1A1A] shadow-[0_8px_30px_rgba(0,0,0,0.08)] sm:p-8">

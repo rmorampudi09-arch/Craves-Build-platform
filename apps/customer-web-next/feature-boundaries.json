@@ -93,6 +93,7 @@
     "auth -> src/features/profile/screens/Profile.tsx",
     "auth -> src/features/sign-in/components/AuthModal.tsx",
     "auth -> src/features/sign-in/components/phone-auth-form.tsx",
+    "auth -> src/features/sign-in/lib/customer-launch.ts",
     "auth -> src/features/sign-in/lib/email-verification-contract.ts",
     "cart -> src/features/auth/api/cravesAuth.ts",
     "cart -> src/features/checkout/components/CheckoutPaymentButton.tsx",

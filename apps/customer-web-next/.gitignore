@@ -11,6 +11,7 @@ node_modules
 .next
 coverage
 dist
+tsconfig.tsbuildinfo
 *.local
 
 # Editor directories and files

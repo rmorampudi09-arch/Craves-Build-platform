@@ -155,6 +155,19 @@ describe("admin deletion detail", () => {
     expect(await missing.json()).toEqual({ code: "ADMIN_SESSION_EXPIRED" });
   });
 
+  it("says not switched on yet when the gateway answers 404 or 405 without a Craves code, and keeps NO_DELETION_REQUEST", async () => {
+    for (const gateway of [new Response("Resource not found", { status: 404 }), json({ statusCode: 404, message: "Resource not found" }, 404), new Response(null, { status: 405 })]) {
+      backend.fetch.mockResolvedValue(gateway);
+      const response = await getDetail();
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ code: "ACCOUNT_DELETION_NOT_ENABLED" });
+    }
+    backend.fetch.mockResolvedValue(json({ code: "NO_DELETION_REQUEST", message: "none", timestamp: "t" }, 404));
+    const missing = await getDetail();
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ code: "NO_DELETION_REQUEST" });
+  });
+
   it("hides an unknown backend code and message behind 503, also when the backend cannot be reached", async () => {
     backend.fetch.mockResolvedValue(json({ code: "SOMETHING_ELSE", message: "private upstream text" }, 500));
     const refused = await getDetail();

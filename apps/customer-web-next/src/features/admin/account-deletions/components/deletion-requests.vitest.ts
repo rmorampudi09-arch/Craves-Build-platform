@@ -191,7 +191,7 @@ describe("Deletion request detail", () => {
     await screen.findByRole("heading", { name: "Open items" });
     expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reject" })).toBeNull();
-    expect(screen.getByText("Your administrator role can't make this decision.")).toBeTruthy();
+    expect(screen.getByText("Approve and Reject aren't available. Refresh to try again.")).toBeTruthy();
     second.unmount();
 
     for (const status of ["SCHEDULED", "WAITING_ON_OPEN_ITEMS", "ERASING", "COMPLETED", "REJECTED", "CANCELLED"]) {
@@ -200,7 +200,7 @@ describe("Deletion request detail", () => {
       await screen.findByRole("heading", { name: "Open items" });
       expect(screen.queryByRole("button", { name: "Approve" }), status).toBeNull();
       expect(screen.queryByRole("button", { name: "Reject" }), status).toBeNull();
-      expect(screen.queryByText("Your administrator role can't make this decision."), status).toBeNull();
+      expect(screen.queryByText("Approve and Reject aren't available. Refresh to try again."), status).toBeNull();
       view.unmount();
     }
   });
@@ -329,6 +329,42 @@ describe("Deletion request detail", () => {
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(decisions()).toHaveLength(0);
+    expect(gets(url)).toHaveLength(1);
+  });
+
+  it.each([
+    ["a 503, closed with Cancel", () => failure(503, "ACCOUNT_DELETION_UNAVAILABLE"), false],
+    ["a dropped connection, closed with Escape", () => { throw new TypeError("Failed to fetch"); }, true],
+    ["a changed request, closed with Cancel", () => failure(409, "ACCOUNT_DELETION_NOT_REVIEWABLE"), false],
+  ])("after %s, reloads the request, so Approve and Reject from before the decision are gone", async (_name, reply, escape) => {
+    answer = ({ method }) => method === "POST" ? reply() : Response.json(detail());
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: REASON } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Approve request" }));
+    await within(dialog).findByRole("alert");
+    if (escape) fireEvent(dialog, new Event("cancel", { cancelable: true }));
+    else fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(gets(url)).toHaveLength(2));
+    expect(decisions()).toHaveLength(1);
+  });
+
+  it("lists two open items with the same service and code, each once, without a key clash", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    answer = ({ method }) => method === "POST"
+      ? failure(409, "ACCOUNT_DELETION_HAS_OPEN_ITEMS", { blockers: [{ service: "order", code: "ACTIVE_ORDERS", detail: "Order A" }, { service: "order", code: "ACTIVE_ORDERS", detail: "Order B" }] })
+      : Response.json(detail({ blockers: [] }));
+    open();
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: REASON } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Approve request" }));
+    const alert = await within(dialog).findByRole("alert");
+    expect(within(alert).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["order: ACTIVE_ORDERS. Order A", "order: ACTIVE_ORDERS. Order B"]);
+    expect(errors.mock.calls.flat().join(" ")).not.toMatch(/same key/);
+    errors.mockRestore();
   });
 
   it.each([

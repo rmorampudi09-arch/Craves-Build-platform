@@ -148,7 +148,7 @@ export const deletionCopy = {
     back: "Back",
   },
   web: {
-    unavailable: "Deleting an account from the website isn't available yet. You can ask in the Craves app, or email support@craves.in.",
+    unavailable: "Deleting an account isn't available on the website yet. Email support@craves.in and Craves will help.",
     signInFirst: "Sign in with the phone number on your account to continue.",
   },
 } as const;

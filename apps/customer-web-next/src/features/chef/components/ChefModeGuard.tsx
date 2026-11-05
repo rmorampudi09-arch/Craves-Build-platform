@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { isChefAccountOnDevice, isChefModeTab, isChefModeVerified, rememberChefAccount } from "@/features/chef/lib/chef-mode";
-import { CUSTOMERS_LAUNCHING_SOON, hasEarlyAccess, isCravesOwner, isDeletionPath } from "@/features/sign-in/lib/customer-launch";
+import { CUSTOMERS_LAUNCHING_SOON, hasEarlyAccess, isCravesOwner, isDeletionOnlySignIn, isDeletionPath } from "@/features/sign-in/lib/customer-launch";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 
 // Reachable from Chef Mode, and during the customer launch lock: the chef app, legal and help pages, sign-in,
@@ -29,9 +29,9 @@ export function isOpenInChefMode(pathname: string): boolean {
  * While this tab is in Chef Mode, customer screens are replaced with the chef home, so browser
  * Back never lands on them. Leaving is explicit: "Switch to customer app" or "Sign out".
  * Other tabs keep the customer app, even on a device that remembers the kitchen. Until the
- * customer launch, every signed-in person sees the launching-soon note instead (chefs, and applicants
- * who used Chef Mode here, with its "Back to my kitchen" button); owners (ADMIN), and any account on a
- * device that opened the early-access link, keep the customer app.
+ * customer launch, chefs (and applicants who used Chef Mode here, with its "Back to my kitchen" button) and
+ * anyone who signed in through the delete page see the launching-soon note instead; owners (ADMIN), and any
+ * account on a device that opened the early-access link, keep the customer app.
  */
 export function ChefModeGuard() {
   const pathname = usePathname();
@@ -40,15 +40,16 @@ export function ChefModeGuard() {
   const [, setRestored] = useState(0);
   const customerScreen = user && !isOpenInChefMode(pathname) ? user : null;
   const leave = Boolean(customerScreen && isChefModeTab(customerScreen.id));
+  const chefAccount = Boolean(
+    customerScreen && (customerScreen.roles.some((role) => role.toUpperCase() === "CHEF") || isChefAccountOnDevice(customerScreen.id)),
+  );
   const confirm = Boolean(
     CUSTOMERS_LAUNCHING_SOON &&
       customerScreen &&
       !leave &&
       !isCravesOwner(customerScreen.roles) &&
-      !hasEarlyAccess(),
-  );
-  const chefAccount = Boolean(
-    confirm && customerScreen && (customerScreen.roles.some((role) => role.toUpperCase() === "CHEF") || isChefAccountOnDevice(customerScreen.id)),
+      !hasEarlyAccess() &&
+      (chefAccount || isDeletionOnlySignIn()),
   );
 
   useEffect(() => {

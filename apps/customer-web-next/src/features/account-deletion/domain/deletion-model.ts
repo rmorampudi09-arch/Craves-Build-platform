@@ -39,7 +39,10 @@ export function scopePlanFor(roles: readonly string[], side: DeletionSide): Scop
     ...(side !== "customer" ? [{ scope: "CHEF" as const, ...chefSide }] : []),
   ];
   // A rider account is not deleted on the website, so the whole account is never offered.
-  return { kind: "choose", options: isRider ? sides : [...sides, { scope: "ALL", ...whole }], riderNote: isRider };
+  const options = isRider ? sides : [...sides, { scope: "ALL" as const, ...whole }];
+  // Nothing left on the page's side (a chef and rider with no customer side): ask as if the side were unknown.
+  if (options.length === 0 && side) return scopePlanFor(roles, null);
+  return { kind: "choose", options, riderNote: isRider };
 }
 
 export type SummaryKind = "customerAll" | "customerSide" | "chefSide" | "chefAll";

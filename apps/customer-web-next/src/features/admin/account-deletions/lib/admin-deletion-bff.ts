@@ -20,6 +20,8 @@ const KNOWN_CODES = new Map([
 function upstreamFailure(status: number, body: unknown): NextResponse {
   if (status === 401) return failure(401, "ADMIN_SESSION_EXPIRED");
   const code = body && typeof body === "object" ? (body as { code?: unknown }).code : undefined;
+  // Before the gateway publishes the routes it answers 404 or 405 with no Craves code: not switched on yet, not an outage.
+  if ((status === 404 || status === 405) && !code) return failure(503, "ACCOUNT_DELETION_NOT_ENABLED");
   const known = typeof code === "string" ? KNOWN_CODES.get(code) : undefined;
   if (!known || typeof code !== "string") return failure(503, "ACCOUNT_DELETION_UNAVAILABLE");
   if (code !== OPEN_ITEMS) return failure(known, code);

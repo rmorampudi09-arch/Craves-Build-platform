@@ -134,6 +134,8 @@ Plan 5 turns it on in production safely, and proves on a test account that a rea
    - add env `CRAVES_INTERNAL_SERVICE_SECRET` with secretRef `internal-service-secret`;
    - so the documented deploy keeps the secret instead of wiping it.
 
+The owner follows the runbook, `docs/runbooks/account-deletion-switch-on.md`, with exact commands; "Production steps" below is its outline.
+
 ### Production steps (the owner runs them, in order)
 
 1. **Preflight:** run it read-only and fix anything it reports missing.

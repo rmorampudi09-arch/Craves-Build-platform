@@ -71,6 +71,19 @@ class AdminAccountDeletionsApimTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertTrue("CONFIRM_APIM_WRITE" in r.stderr and "DRY_RUN" in r.stderr, r.stderr)
 
+    def test_az_output_is_never_echoed(self):
+        # fake az/jq/curl on PATH: az fails and prints a marker; the script must name the step but not repeat the marker
+        with tempfile.TemporaryDirectory() as fake:
+            for name, body in (("az", "echo SECRET-MARKER >&2; echo SECRET-MARKER; exit 1"), ("jq", "exit 0"), ("curl", "exit 0")):
+                f = Path(fake) / name
+                f.write_text("#!/bin/sh\n" + body + "\n", newline="\n")
+                f.chmod(0o755)
+            env = {**os.environ, "DRY_RUN": "true", "PATH": fake + os.pathsep + os.environ["PATH"]}
+            r = subprocess.run([shutil.which("bash"), REL], cwd=ROOT, env=env, capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("Azure command failed", r.stderr)
+        self.assertNotIn("SECRET-MARKER", r.stdout + r.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

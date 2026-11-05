@@ -17,6 +17,8 @@ set +x
 DRY_RUN="${DRY_RUN:-false}"
 CONFIRM_APIM_WRITE="${CONFIRM_APIM_WRITE:-false}"
 fail() { echo "ERROR: $*" >&2; exit 1; }
+# Azure CLI output is captured and never echoed: on failure only this script's own message is printed.
+azq() { local what="$1" out; shift; out=$("$@" 2>/dev/null) || fail "Azure command failed: $what"; printf '%s' "$out"; }
 # The gate comes first, so a missing tool never hides it.
 [[ "${DRY_RUN,,}" == "true" || "${CONFIRM_APIM_WRITE,,}" == "true" ]] || fail "Set DRY_RUN=true to check only, or CONFIRM_APIM_WRITE=true for the controlled APIM write"
 
@@ -41,14 +43,18 @@ OPERATIONS=(
 for tool in az jq curl sed awk; do command -v "$tool" >/dev/null || fail "$tool is required"; done
 [[ -f "$POLICY_TEMPLATE" ]] || fail "APIM policy template is missing"
 
+TEMP_DIR=$(mktemp -d)
+trap 'rm -rf -- "$TEMP_DIR"' EXIT
+ERR_FILE="$TEMP_DIR/az.err"
+
 # Read-only checks first: nothing is written until all of them pass.
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+SUBSCRIPTION_ID=$(azq "read the subscription" az account show --query id -o tsv)
 if [[ -z "${APIM_RG:-}" ]]; then
-  APIM_RGS=$(az apim list --query "[?name=='$APIM'].resourceGroup" -o tsv)
+  APIM_RGS=$(azq "find the APIM resource group" az apim list --query "[?name=='$APIM'].resourceGroup" -o tsv)
   [[ -n "$APIM_RGS" && "$APIM_RGS" != *$'\n'* ]] || fail "Expected exactly one resource group for $APIM; set APIM_RG"
   APIM_RG="$APIM_RGS"
 fi
-APP_JSON=$(az containerapp show -g "$AUTH_RG" -n "$AUTH_APP" -o json)
+APP_JSON=$(azq "read the auth container app" az containerapp show -g "$AUTH_RG" -n "$AUTH_APP" -o json)
 FQDN=$(jq -r '.properties.configuration.ingress.fqdn // ""' <<<"$APP_JSON")
 LATEST=$(jq -r '.properties.latestRevisionName // ""' <<<"$APP_JSON")
 READY=$(jq -r '.properties.latestReadyRevisionName // ""' <<<"$APP_JSON")
@@ -57,14 +63,14 @@ RUNNING=$(jq -r '.properties.runningStatus // ""' <<<"$APP_JSON")
 curl --silent --show-error --fail --max-time 30 "https://$FQDN/actuator/health" >/dev/null
 BASE="https://${FQDN}"
 
-API_LIST=$(az apim api list -g "$APIM_RG" --service-name "$APIM" --query '[].[name,path]' -o tsv)
+API_LIST=$(azq "list APIM APIs" az apim api list -g "$APIM_RG" --service-name "$APIM" --query '[].[name,path]' -o tsv)
 OWNER=$(awk -F'\t' -v p="$API_PATH" '$2==p {print $1}' <<<"$API_LIST")
 [[ -z "$OWNER" || "$OWNER" == "$API_ID" ]] || fail "A different API ($OWNER) owns /${API_PATH}; no update applied"
 while IFS=$'\t' read -r P_ID P_PATH; do
   [[ -n "$P_ID" && "$P_PATH" != "$API_PATH" ]] || continue
   [[ -z "$P_PATH" || "$API_PATH" == "$P_PATH"/* ]] || continue
   REL="/${API_PATH#"$P_PATH"}"; REL="${REL//\/\//\/}"
-  HIT=$(az apim api operation list -g "$APIM_RG" --service-name "$APIM" --api-id "$P_ID" --query '[].urlTemplate' -o tsv |
+  HIT=$(azq "list operations of $P_ID" az apim api operation list -g "$APIM_RG" --service-name "$APIM" --api-id "$P_ID" --query '[].urlTemplate' -o tsv |
     awk -v r="$REL" 'index($0, r) == 1 { print; exit }')
   [[ -z "$HIT" ]] || fail "Parent API $P_ID (/${P_PATH}) already serves $HIT; creating /${API_PATH} would take it over. No update applied"
 done <<<"$API_LIST"
@@ -75,11 +81,15 @@ API_MGMT="${APIM_MGMT}/apis/${API_ID}"
 POLICY_URLS=("${APIM_MGMT}/policies/policy")
 [[ -z "$OWNER" ]] || POLICY_URLS+=("${API_MGMT}/policies/policy")
 for URL in "${POLICY_URLS[@]}"; do
-  # A scope with no policy answers 404; that is fine.
-  XML=$(az rest --method get --url "${URL}?api-version=${API_VERSION}" --query properties.value -o tsv 2>/dev/null || true)
+  # Fail closed: only a genuine not-found on the API's own policy (no policy set yet) counts as "no policy".
+  if XML=$(az rest --method get --url "${URL}?api-version=${API_VERSION}" --query properties.value -o tsv 2>"$ERR_FILE"); then :
+  elif [[ "$URL" == "$API_MGMT"* ]] && grep -qiE 'ResourceNotFound|NotFound|\(404\)|404' "$ERR_FILE"; then XML=''
+  else fail "Azure command failed: read the gateway policy (${URL#"$APIM_MGMT"/}); cannot confirm the 30 s timeout"; fi
+  # Flatten newlines so a forward-request tag split over lines is still matched.
+  FLAT=$(tr '\n\r' '  ' <<<"$XML")
   while read -r LIMIT; do
-    [[ -z "$LIMIT" || "$LIMIT" -ge 30 ]] || fail "gateway timeout under 30 s would cut approve/detail (forward-request timeout=$LIMIT in ${URL#"$APIM_MGMT"/})"
-  done < <(grep -oE '<forward-request[^>]*timeout="[0-9]+"' <<<"$XML" | grep -oE 'timeout="[0-9]+"' | grep -oE '[0-9]+' || true)
+    [[ -z "$LIMIT" || $((10#$LIMIT)) -ge 30 ]] || fail "gateway timeout under 30 s would cut approve/detail (forward-request timeout=$LIMIT in ${URL#"$APIM_MGMT"/})"
+  done < <(grep -oE '<forward-request[^>]*timeout="[0-9]+"' <<<"$FLAT" | grep -oE 'timeout="[0-9]+"' | grep -oE '[0-9]+' || true)
 done
 
 if [[ "${DRY_RUN,,}" == "true" ]]; then
@@ -93,23 +103,21 @@ fi
 
 # Writes.
 if [[ -z "$OWNER" ]]; then
-  az apim api create -g "$APIM_RG" --service-name "$APIM" --api-id "$API_ID" \
+  azq "create the API" az apim api create -g "$APIM_RG" --service-name "$APIM" --api-id "$API_ID" \
     --display-name "Craves Admin Account Deletions" --path "$API_PATH" --service-url "$BASE/api/v1/admin/account-deletions" \
     --protocols https --subscription-required false -o none
 fi
-TEMP_DIR=$(mktemp -d)
-trap 'rm -rf -- "$TEMP_DIR"' EXIT
 for ROW in "${OPERATIONS[@]}"; do
   IFS='|' read -r OP METHOD TEMPLATE NAME <<<"$ROW"
   TARGET="/api/v1/admin/account-deletions${TEMPLATE%/}"
   PARAMS=$(grep -oE '\{[A-Za-z]+\}' <<<"$TEMPLATE" | tr -d '{}' | jq -R '{name: ., type: "string", required: true}' | jq -s . || true)
   jq -n --arg name "$NAME" --arg method "$METHOD" --arg template "$TEMPLATE" --argjson params "${PARAMS:-[]}" \
     '{properties: {displayName: $name, method: $method, urlTemplate: $template, templateParameters: $params, responses: []}}' >"$TEMP_DIR/operation.json"
-  az rest --method put --url "${API_MGMT}/operations/${OP}?api-version=${API_VERSION}" --body @"$TEMP_DIR/operation.json" -o none
+  azq "write operation $OP" az rest --method put --url "${API_MGMT}/operations/${OP}?api-version=${API_VERSION}" --body @"$TEMP_DIR/operation.json" -o none
   sed -e "s|__BACKEND_BASE_URL__|${BASE}|" -e "s|__REWRITE_TEMPLATE__|${TARGET}|" "$POLICY_TEMPLATE" >"$TEMP_DIR/policy.xml"
   jq -Rs '{properties: {format: "rawxml", value: .}}' "$TEMP_DIR/policy.xml" >"$TEMP_DIR/policy.json"
-  az rest --method put --url "${API_MGMT}/operations/${OP}/policies/policy?api-version=${API_VERSION}" --body @"$TEMP_DIR/policy.json" -o none
-  POLICY=$(az rest --method get --url "${API_MGMT}/operations/${OP}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
+  azq "write policy of $OP" az rest --method put --url "${API_MGMT}/operations/${OP}/policies/policy?api-version=${API_VERSION}" --body @"$TEMP_DIR/policy.json" -o none
+  POLICY=$(azq "read back policy of $OP" az rest --method get --url "${API_MGMT}/operations/${OP}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
   [[ "$POLICY" == *"$BASE"* && "$POLICY" == *"$TARGET"* && "$POLICY" == *Bearer* ]] || fail "Policy read-back failed for $METHOD $TARGET"
   echo "WRITTEN $METHOD $TARGET ($API_ID/$OP)"
 done

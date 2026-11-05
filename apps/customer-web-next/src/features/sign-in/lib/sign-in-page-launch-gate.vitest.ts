@@ -9,7 +9,7 @@ vi.mock("./customer-launch", async (original) => ({
 }));
 vi.mock("next/link", () => ({ default: (props: { href: string; children?: unknown }) => createElement("a", { href: props.href }, props.children as never) }));
 vi.mock("next/navigation", () => ({ redirect: (to: string) => { throw new Error(`redirect:${to}`); } }));
-vi.mock("@/features/sign-in/components/phone-auth-form", () => ({ PhoneAuthForm: ({ email }: { email?: boolean }) => createElement("form", { id: "phone-auth-form", "data-email": String(email) }) }));
+vi.mock("@/features/sign-in/components/phone-auth-form", () => ({ PhoneAuthForm: ({ email, returnTo }: { email?: boolean; returnTo?: string }) => createElement("form", { id: "phone-auth-form", "data-email": String(email), "data-return-to": returnTo }) }));
 vi.mock("@/shared/components/brand/CravesLogo", () => ({ CravesLogo: () => createElement("span", null, "Craves") }));
 
 const { default: SignInPage } = await import("@/app/sign-in/page");
@@ -24,6 +24,19 @@ it("shows customers the launching-soon note unless the private link is used", as
   expect(await page({})).not.toContain("phone-auth-form");
   expect(await page({ access: "wrong-key", returnTo: "/home" })).not.toContain("phone-auth-form");
   expect(await page({ access: "test-key", returnTo: "/home" })).toContain("phone-auth-form");
+});
+
+it("opens the sign-in for the account delete page without the private link, and keeps the note everywhere else", async () => {
+  for (const returnTo of ["/account/delete", "/account/delete?side=chef"]) {
+    const form = await page({ returnTo });
+    expect(form, returnTo).toContain(`data-return-to="${returnTo}"`);
+    expect(form, returnTo).not.toContain("Craves is launching soon for customers");
+  }
+  for (const returnTo of ["/home", "/account-deletion", "/account/delete/more", "/account/deleted", "/cart?next=/account/delete"]) {
+    const note = await page({ returnTo });
+    expect(note, returnTo).toContain("Craves is launching soon for customers");
+    expect(note, returnTo).not.toContain("phone-auth-form");
+  }
 });
 
 it("opens on email & password from the landing popup's link, and on phone OTP otherwise", async () => {

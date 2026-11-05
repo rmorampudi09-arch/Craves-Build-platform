@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { deletionCopy } from "@/features/account-deletion/domain/deletion-copy";
+import { isDeletionPaused } from "@/features/account-deletion/domain/deletion-model";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import {
   indiaBusinessDate,
@@ -32,6 +34,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState(LOADING_PLAN);
   const [busy, setBusy] = useState(false);
+  const [paused, setPaused] = useState(false);
   const idempotencyKey = useRef("");
   const today = useMemo(() => indiaBusinessDate(), []);
 
@@ -75,6 +78,7 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
     if (!plan || !addressId || !startDate || busy) return;
     if (!idempotencyKey.current) idempotencyKey.current = newIdempotencyKey();
     setBusy(true);
+    setPaused(false);
     setMessage("");
     try {
       const response = await sessionFetch("/api/subscriptions", {
@@ -94,6 +98,11 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
       if (response.status === 401) throw new Error("Your session expired. Sign in again.");
       if ((body as { code?: unknown } | null)?.code === "DELIVERY_ADDRESS_OUT_OF_RANGE") {
         throw new Error("This chef delivers meal plans within 10 km of their kitchen. Choose a saved address closer to the chef.");
+      }
+      if (response.status === 409 && isDeletionPaused((body as { code?: string } | null)?.code)) {
+        setPaused(true);
+        setBusy(false);
+        return;
       }
       if (response.status === 409) {
         throw new Error("We already received this request. Refresh the page before trying again.");
@@ -175,9 +184,16 @@ export function SubscriptionEnrollmentForm({ planId }: { planId: string }) {
           className="mt-2 min-h-24 w-full rounded-xl border border-[#E5E7EB] bg-white p-4 text-base text-[#1A1A1A]"
         />
       </label>
-      {message ? (
+      {message || paused ? (
         <p className="mt-4 rounded-xl bg-[#F1F3F5] p-3 text-sm font-medium text-[#C4200F]" role="alert">
-          {message}
+          {paused ? (
+            <>
+              {deletionCopy.paused.mealPlans(null)}{" "}
+              <Link href="/account/delete" className="font-bold text-[#1A1A1A] underline underline-offset-2">
+                {deletionCopy.paused.link}
+              </Link>
+            </>
+          ) : message}
         </p>
       ) : null}
       <button

@@ -17,19 +17,21 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 AUTH_APP = "ca-craves-auth-prod"
+AUTH_GROUP = "rg-craves-auth-prod"
 # Auth's outbound address (docs/runbooks/production-environment.md, auth row); a target's ingress must let it in.
 AUTH_OUTBOUND_DEFAULT = "20.198.108.229"
 REFERRAL_HMAC = "CRAVES_REFERRALS_AUTH_HMAC_BASE64"
-# (name, app names, credential variable on the target); AccountErasureClient.ERASE_ORDER. Referral signs with an HMAC.
+# (name, resource group, app names, credential variable on the target); AccountErasureClient.ERASE_ORDER.
+# Referral signs with an HMAC; both its apps live in rg-craves-referral-prod.
 TARGETS = [
-    ("subscription", ["ca-craves-subscription-prod"], "CRAVES_INTERNAL_SERVICE_SECRET"),
-    ("order", ["ca-craves-order-prod"], "CRAVES_INTERNAL_SERVICE_KEY"),
-    ("integration", ["ca-craves-integration-prod"], "CRAVES_INTERNAL_SERVICE_KEY"),
-    ("referral", ["ca-craves-referral-prod", "ca-craves-referral-members-prod"], REFERRAL_HMAC),
-    ("advanced", ["ca-craves-advanced-prod"], "CRAVES_INTERNAL_SERVICE_SECRET"),
-    ("catalog", ["ca-craves-catalog-prod"], "CRAVES_INTERNAL_SERVICE_SECRET"),
-    ("user-chef", ["ca-craves-user-chef-prod"], "CRAVES_INTERNAL_SERVICE_SECRET"),
-    ("notification", ["ca-craves-notification-prod"], "CRAVES_INTERNAL_SERVICE_KEY"),
+    ("subscription", "rg-craves-subscription-prod", ["ca-craves-subscription-prod"], "CRAVES_INTERNAL_SERVICE_SECRET"),
+    ("order", "rg-craves-order-prod", ["ca-craves-order-prod"], "CRAVES_INTERNAL_SERVICE_KEY"),
+    ("integration", "rg-craves-integration-prod", ["ca-craves-integration-prod"], "CRAVES_INTERNAL_SERVICE_KEY"),
+    ("referral", "rg-craves-referral-prod", ["ca-craves-referral-prod", "ca-craves-referral-members-prod"], REFERRAL_HMAC),
+    ("advanced", "rg-craves-advanced-prod", ["ca-craves-advanced-prod"], "CRAVES_INTERNAL_SERVICE_SECRET"),
+    ("catalog", "rg-craves-catalog-prod", ["ca-craves-catalog-prod"], "CRAVES_INTERNAL_SERVICE_SECRET"),
+    ("user-chef", "rg-craves-user-chef-prod", ["ca-craves-user-chef-prod"], "CRAVES_INTERNAL_SERVICE_SECRET"),
+    ("notification", "rg-craves-notification-prod", ["ca-craves-notification-prod"], "CRAVES_INTERNAL_SERVICE_KEY"),
 ]
 ERASE_PATHS = ["/internal/v1/account-erasure", "/internal/v1/account-erasure/blockers",
                "/internal/v1/account-erasure/prepare", "/internal/v1/account-erasure/release"]
@@ -72,8 +74,11 @@ def az(*args: str):
         raise GuardError("Azure response was not valid JSON") from exc
 
 
-def show(name: str) -> dict:
-    return az("containerapp", "show", "-g", name.replace("ca-", "rg-", 1), "-n", name)
+def show(group: str, name: str) -> dict:
+    try:
+        return az("containerapp", "show", "-g", group, "-n", name)
+    except GuardError:
+        raise GuardError(f"Azure command failed: az containerapp show -g {group} -n {name}") from None
 
 
 def environment(app: dict) -> dict:
@@ -151,9 +156,11 @@ def ingress_verdict(app: dict, ip: str) -> str:
     address = ipaddress.ip_address(ip)
 
     def inside(action):
-        return any(r.get("action") == action and address in ipaddress.ip_network(r["ipAddressRange"], strict=False)
+        return any(str(r.get("action")).lower() == action.lower() and address in ipaddress.ip_network(r["ipAddressRange"], strict=False)
                    for r in rules)
-    has_allow = any(r.get("action") == "Allow" for r in rules)
+    if any(str(r.get("action")).lower() not in ("allow", "deny") for r in rules):
+        return "does not allow auth"
+    has_allow = any(str(r.get("action")).lower() == "allow" for r in rules)
     if inside("Deny") or (has_allow and not inside("Allow")):
         return "does not allow auth"
     return "allows auth"
@@ -173,7 +180,7 @@ def build(args) -> tuple:
     """(exit code, text, facts)."""
     lines, problems, stops = [], [], []
     facts = {"problems": problems}
-    auth = show(AUTH_APP)
+    auth = show(AUTH_GROUP, AUTH_APP)
     auth_env = environment(auth)
 
     def traffic(app):
@@ -191,18 +198,19 @@ def build(args) -> tuple:
 
     props = auth["properties"]
     lines.append("## auth")
+    auth_traffic = traffic(auth)
     lines.append(f"{AUTH_APP}: {run_state(auth)}; latest {props.get('latestRevisionName')}, "
-                 f"ready {props.get('latestReadyRevisionName')}; traffic {traffic(auth)}")
-    required = [base_url_setting(n) for n, _, _ in TARGETS] + \
-               [credential_setting(n) for n, _, _ in TARGETS if credential_setting(n)] + [HMAC_SETTING]
+                 f"ready {props.get('latestReadyRevisionName')}; traffic {auth_traffic}")
+    required = [base_url_setting(n) for n, _, _, _ in TARGETS] + \
+               [credential_setting(n) for n, _, _, _ in TARGETS if credential_setting(n)] + [HMAC_SETTING]
     missing = []
     for var in [*required, *SWITCHES, *TUNABLES]:
         value = setting(auth, var, show_value=var in SWITCHES or var in TUNABLES or var.endswith("_BASE_URL"))
         lines.append(f"  {var} = {value}")
-        if value == "missing" and var in required:
+        if value in ("missing", "<empty>") and var in required:
             missing.append(var)
             problems.append(f"auth: {var} missing")
-    facts["auth"] = {"missing": missing, "switches": {v: setting(auth, v, True) for v in SWITCHES}}
+    facts["auth"] = {"running": is_running(auth), "traffic": auth_traffic, "missing": missing, "switches": {v: setting(auth, v, True) for v in SWITCHES}}
 
     secrets = {}
     for var in (INTERNAL_SECRET, SOURCE_HMAC):
@@ -214,8 +222,8 @@ def build(args) -> tuple:
              for v, s in secrets.items() if s == PLACEHOLDER and v in auth_env]
 
     sets = []
-    for name, apps, cred_var in TARGETS:
-        fetched = {a: show(a) for a in apps}
+    for name, group, apps, cred_var in TARGETS:
+        fetched = {a: show(group, a) for a in apps}
         chosen = apps[0]
         if name == "referral":
             holders = [a for a, app in fetched.items() if cred_var in environment(app)]
@@ -231,7 +239,8 @@ def build(args) -> tuple:
         app = fetched[chosen]
         host, cred, verdict = host_of(app), setting(app, cred_var), ingress_verdict(app, args.auth_outbound_ip)
         enforced_item = environment(app).get(ENFORCED) or {}
-        lines += [f"  {run_state(app)}; traffic {traffic(app)}",
+        traffic_of = traffic(app)
+        lines += [f"  {run_state(app)}; traffic {traffic_of}",
                   f"  base URL: {'https://' + host if host else 'no Azure ingress hostname'}"
                   f" ({'external' if ingress(app).get('external') else 'internal'} ingress)",
                   f"  ingress: {verdict}", f"  {cred_var}: {cred}",
@@ -243,10 +252,19 @@ def build(args) -> tuple:
             problems.append(f"{name}: ingress does not allow auth's address {args.auth_outbound_ip}")
         if cred == "missing":
             problems.append(f"{name}: {cred_var} missing")
-        if not enforced_item.get("secretRef") and enforced_stop(enforced_item.get("value")):
+        stop = False
+        if enforced_item.get("secretRef"):
+            problems.append(f"{name}: enforced paths unreadable (secretref)")
+        elif enforced_stop(enforced_item.get("value")):
+            stop = True
             stops.append(name)
+        entry.update({"running": is_running(app), "traffic": traffic_of, "allowedCallers": setting(app, ALLOWED, True),
+                      "enforcedPaths": setting(app, ENFORCED, True), "stop": stop})
         if host and base_url_setting(name) in missing:
             sets.append(f"{base_url_setting(name)}=https://{host}")
+        auth_url = setting(auth, base_url_setting(name), True)
+        if host and base_url_setting(name) not in missing and auth_url != "https://" + host:
+            problems.append(f"auth: {base_url_setting(name)} is {auth_url}, target serves https://{host}")
         if credential_setting(name) in missing:
             sets.append(f"{credential_setting(name)}={secrets[INTERNAL_SECRET]}")
     if HMAC_SETTING in missing:
@@ -258,6 +276,7 @@ def build(args) -> tuple:
     else:
         lines.append("nothing to add to auth")
     lines += notes
+    facts["stops"] = stops
     facts["commands"] = lines[lines.index("## commands") + 1:]
     lines += [f"STOP: {n} enforces internal paths that cover the erase paths; auth would be refused there" for n in stops]
     lines += [f"PROBLEM: {p}" for p in problems]

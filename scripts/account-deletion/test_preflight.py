@@ -13,6 +13,7 @@ import preflight
 
 SECRET = "SENTINEL-SECRET-VALUE"
 AUTH = "ca-craves-auth-prod"
+FQDN = "%s.internal.env.centralindia.azurecontainerapps.io"
 NAMES = ["subscription", "order", "integration", "referral", "advanced", "catalog", "user-chef", "notification"]
 
 
@@ -21,6 +22,7 @@ def app(name, env, secrets=None, fqdn=None, restrictions=None, traffic=None):
     if restrictions:
         ingress["ipSecurityRestrictions"] = restrictions
     configuration = {"ingress": ingress, "secrets": secrets or []}
+    traffic = traffic or [{"revisionName": name + "--r1", "weight": 100}]
     if traffic:
         configuration["activeRevisionsMode"] = "Multiple"
         ingress["traffic"] = traffic
@@ -54,7 +56,7 @@ def ready_world():
     world = {}
     for name in NAMES:
         key = name.upper().replace("-", "_")
-        auth_env.append(val(f"CRAVES_ACCOUNT_DELETION_{key}_BASE_URL", f"https://{name}.example.azurecontainerapps.io"))
+        auth_env.append(val(f"CRAVES_ACCOUNT_DELETION_{key}_BASE_URL", f"https://{FQDN % ('ca-craves-' + name + '-prod')}"))
         if name != "referral":
             auth_env.append(ref(f"CRAVES_ACCOUNT_DELETION_{key}_CREDENTIAL", "internal-secret"))
             world[f"ca-craves-{name}-prod"] = app(f"ca-craves-{name}-prod", [ref(credential[name], "cred")])
@@ -91,6 +93,14 @@ def split_traffic(world, name, a, b):
                                            {"revisionName": name + "--r0", "weight": b}]
 
 
+# Both referral apps live in one resource group: the fake looks (group, app) up, it does not derive one from the name.
+GROUPS = {"ca-craves-referral-members-prod": "rg-craves-referral-prod", "ca-craves-referral-prod": "rg-craves-referral-prod"}
+
+
+def group_of(name):
+    return GROUPS.get(name) or name.replace("ca-", "rg-", 1)
+
+
 def fake_az(world):
     calls = []
 
@@ -98,7 +108,7 @@ def fake_az(world):
         calls.append(cmd)
         assert cmd[:3] == ["az", "containerapp", "show"], cmd
         name = cmd[cmd.index("-n") + 1]
-        assert cmd[cmd.index("-g") + 1] == name.replace("ca-", "rg-", 1)
+        assert cmd[cmd.index("-g") + 1] == group_of(name), (cmd[cmd.index("-g") + 1], name)
         return subprocess.CompletedProcess(cmd, 0, json.dumps(copy.deepcopy(world[name])), "")
     run.calls = calls
     return run
@@ -210,6 +220,52 @@ class PreflightTest(unittest.TestCase):
         self.assertNotIn("WORKER_ENABLED", commands)
         self.assertNotIn(SECRET, commands)
 
+    def test_members_app_is_read_from_the_referral_group(self):
+        fake = fake_az(ready_world())
+        self.assertEqual(0, run(fake)[0])
+        self.assertIn(["az", "containerapp", "show", "-g", "rg-craves-referral-prod", "-n", "ca-craves-referral-members-prod"],
+                      [c[:7] for c in fake.calls])
+
+    def test_pinned_traffic_is_shown(self):
+        code, out = run(ready_world())
+        self.assertIn("traffic pinned ca-craves-order-prod--r1", out)
+
+    def test_auth_base_url_must_be_set_and_match_the_target(self):
+        world = ready_world()
+        set_val(world, AUTH, "CRAVES_ACCOUNT_DELETION_ORDER_BASE_URL", "https://old.example.azurecontainerapps.io")
+        code, out = run(world)
+        self.assertEqual(1, code)
+        self.assertIn("CRAVES_ACCOUNT_DELETION_ORDER_BASE_URL is https://old.example.azurecontainerapps.io, target serves https://", out)
+        world = ready_world()
+        set_val(world, AUTH, "CRAVES_ACCOUNT_DELETION_ORDER_BASE_URL", "")
+        code, out = run(world)
+        self.assertEqual(1, code)
+        self.assertIn("auth: CRAVES_ACCOUNT_DELETION_ORDER_BASE_URL missing", out)
+        self.assertIn("CRAVES_ACCOUNT_DELETION_ORDER_BASE_URL=https://ca-craves-order-prod.", section(out, "commands"))
+
+    def test_ingress_action_is_case_insensitive_and_unknown_fails_closed(self):
+        def verdict(action):
+            world = ready_world()
+            world["ca-craves-catalog-prod"]["properties"]["configuration"]["ingress"]["ipSecurityRestrictions"] = [
+                {"name": "a", "ipAddressRange": "20.198.108.0/24", "action": action}]
+            return run(world)
+        self.assertEqual(0, verdict("allow")[0])
+        self.assertEqual(1, verdict("Permit")[0])
+        self.assertEqual(1, verdict("deny")[0])
+
+    def test_enforced_paths_secretref_is_a_problem(self):
+        world = ready_world()
+        drop_env(world, "ca-craves-order-prod", "CRAVES_INTERNAL_AUTH_ENFORCED_PATHS")
+        add_env(world, "ca-craves-order-prod", ref("CRAVES_INTERNAL_AUTH_ENFORCED_PATHS", "paths"))
+        code, out = run(world)
+        self.assertEqual(1, code)
+        self.assertIn("enforced paths unreadable (secretref)", out)
+
+    def test_azure_failure_names_the_app_without_output(self):
+        code, out = run(failing_az(stderr=SECRET))
+        self.assertIn("ca-craves-auth-prod", out)
+        self.assertNotIn(SECRET, out)
+
     def test_only_container_app_show_is_called_and_output_file_holds_no_value(self):
         world = ready_world()
         set_val(world, AUTH, "CRAVES_ACCOUNT_DELETION_ORDER_CREDENTIAL", SECRET)
@@ -221,6 +277,20 @@ class PreflightTest(unittest.TestCase):
                 text = stream.read()
         self.assertEqual(0, code)
         self.assertNotIn(SECRET, text)
+        facts = json.loads(text)
+        self.assertEqual([], facts["stops"])
+        self.assertEqual("pinned ca-craves-order-prod--r1", facts["order"]["traffic"])
+        self.assertTrue(facts["order"]["running"])
+        self.assertEqual("missing", facts["order"]["enforcedPaths"])
+        world = ready_world()
+        set_val(world, "ca-craves-order-prod", "CRAVES_INTERNAL_AUTH_ENFORCED_PATHS", "/internal/**")
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "p.json")
+            run(world, "--output", path)
+            with open(path) as stream:
+                stopped = json.load(stream)
+        self.assertEqual(["order"], stopped["stops"])
+        self.assertEqual(2, stopped["exitCode"])
         self.assertTrue(all(c[:3] == ["az", "containerapp", "show"] for c in fake.calls))
 
 

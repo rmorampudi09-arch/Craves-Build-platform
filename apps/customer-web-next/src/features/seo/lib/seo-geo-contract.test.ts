@@ -82,6 +82,7 @@ test("sitemap skips sign-in-only pages and IndexNow key file matches the submit 
   const { readdirSync } = await import("node:fs");
   const sitemap = source("../../../app/sitemap.ts");
   assert.doesNotMatch(sitemap, /"\/home"|"\/discover"/);
+  assert.match(sitemap, /"\/account-deletion"/);
   const script = source("../../../../scripts/indexnow-submit.mjs");
   const key = script.match(/const key = "([0-9a-f]{32})"/)?.[1];
   assert.ok(key, "IndexNow key missing");

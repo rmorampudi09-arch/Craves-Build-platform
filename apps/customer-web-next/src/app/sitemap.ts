@@ -21,6 +21,7 @@ const publicRoutes = [
   "/terms",
   "/refunds-cancellations",
   "/security",
+  "/account-deletion",
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

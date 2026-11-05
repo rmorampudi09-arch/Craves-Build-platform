@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Bell, ChevronRight, FileText, Headset, Info, LockKeyhole, MapPin, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Bell, ChevronRight, FileText, Headset, Info, LockKeyhole, MapPin, ShieldCheck, Trash2 } from "lucide-react";
 import { useCustomerSignOut } from "@/features/profile/components/SignOutFlow";
 import { getSession, loadSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
@@ -13,6 +13,7 @@ const ACCOUNT: Row[] = [
   { to: "/security", icon: ShieldCheck, title: "Privacy & security", subtitle: "How Craves keeps your account and payments safe" },
   { to: "/addresses", icon: MapPin, title: "Saved addresses", subtitle: "Home, Work and others" },
   { to: "/notifications", icon: Bell, title: "Notifications", subtitle: "Order and meal plan updates" },
+  { to: "/account/delete?side=customer", icon: Trash2, title: "Delete account", subtitle: "Your details are removed 30 days after you ask" },
 ];
 const SUPPORT: Row[] = [
   { to: "/help", icon: Headset, title: "Help & support" },

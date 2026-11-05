@@ -33,10 +33,11 @@ export function RiderScreen({
   keyboardHidesFooter = false,
   children,
   testID,
-}: PropsWithChildren<{header?: ReactNode; footer?: ReactNode; keyboardHidesFooter?: boolean; testID?: string}>) {
+  style,
+}: PropsWithChildren<{header?: ReactNode; footer?: ReactNode; keyboardHidesFooter?: boolean; testID?: string; style?: StyleProp<ViewStyle>}>) {
   const keyboardShown = useKeyboardShown(keyboardHidesFooter);
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={styles.screen} testID={testID}>
+    <SafeAreaView edges={['top', 'bottom']} style={[styles.screen, style]} testID={testID}>
       {header}
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {children}

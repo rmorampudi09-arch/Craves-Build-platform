@@ -20,6 +20,9 @@ import {EarningsScreen} from './EarningsScreen';
 import {HelpScreen} from './HelpScreen';
 import {PayoutsScreen} from './PayoutsScreen';
 import {NoticeScreen} from './NoticeScreen';
+import {RulesScreen} from './RulesScreen';
+import {SlotNowScreen} from './SlotNowScreen';
+import {SlotsScreen} from './SlotsScreen';
 import {ProfileScreen} from './ProfileScreen';
 import {SosScreen} from './SosScreen';
 import {payLabel, TripDetailScreen} from './TripDetailScreen';
@@ -30,6 +33,7 @@ jest.mock('react-native-safe-area-context', () => require('react-native-safe-are
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => mockNavigation,
+  useIsFocused: () => true,
 }));
 // FlashList needs real layout; FlatList renders the same props in the test renderer.
 jest.mock('@shopify/flash-list', () => ({FlashList: require('react-native').FlatList}));
@@ -121,6 +125,11 @@ const offline = () => new AppApiError('NETWORK_ERROR', 'No internet connection.'
 let tree: renderer.ReactTestRenderer;
 
 async function render(node: React.ReactElement, seed: Array<[readonly unknown[], unknown]> = []) {
+  // A test that renders twice unmounts the first tree: a mounted screen keeps its query observers (and the slots
+  // screens' refetch interval) alive after the run, and Jest never exits.
+  if (tree) {
+    await act(async () => tree.unmount());
+  }
   const client = new QueryClient({defaultOptions: {queries: {retry: false, staleTime: Infinity}}});
   // The app shows these screens only once /me has answered for a rider (RiderNavigator); the rider role gates their queries.
   client.setQueryData(riderKeys.me, me);
@@ -160,14 +169,22 @@ describe('Earnings (15)', () => {
     const text = allText();
     expect(text).toMatch(/Today, (Sun|Mon|Tue|Wed|Thu|Fri|Sat) \d+ \w{3}/);
     expect(text).toContain('₹414');
-    expect(text).toContain('2 trips');
-    expect(text).toContain('Payouts and withdrawals');
-    expect(text).toContain('Madhapur to Kondapur | 7:52 pm | ₹67 | Credited');
-    expect(text).toContain('Ameerpet to Kukatpally | 1:24 pm, tap to see why | ₹58 | On hold');
+    expect(text).toContain('Today | This week | Payouts');
+    expect(text).toContain('₹414 | 2 trips');
+    // The trip on hold, as drawn: what the server says, by when a person decides, and the way to add the rider's side.
+    expect(text).toContain(
+      "On hold: Ameerpet to Kukatpally | ₹58 | You left this order with a photo after the customer didn't answer. A person reviews it by Mon 26 Oct. Nothing else is affected. | Add your side",
+    );
+    expect(text).toContain('7:52 pm · Madhapur to Kondapur | 4.0 km | ₹67');
+    expect(text).not.toContain('Credited'); // a credited trip needs no badge
+    expect(text).toContain('1:24 pm · Ameerpet to Kukatpally | 4.0 km · tap to see why | ₹58 | On hold');
+    expect(text).toContain('Free withdrawal any day from the Payouts tab.');
     await press('earning-t4');
     expect(mockNavigation.navigate).toHaveBeenCalledWith('TripDetail', {tripId: 't4'});
-    await press('rider-open-payouts');
+    await press('rider-range-payouts');
     expect(mockNavigation.navigate).toHaveBeenCalledWith('Payouts');
+    await press('rider-earnings-add-side');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Notice');
   });
 
   it('shows the day on each row for this week', async () => {
@@ -178,7 +195,7 @@ describe('Earnings (15)', () => {
     await press('rider-range-week');
     expect(tree.root.findByProps({testID: 'rider-range-week'}).props.accessibilityState).toEqual({selected: true});
     expect(allText()).toContain('This week (Mon–Sun)');
-    expect(allText()).toContain('Wed 21 Oct, 1:24 pm, tap to see why');
+    expect(allText()).toContain('Wed 21 Oct, 1:24 pm · Ameerpet to Kukatpally | 4.0 km · tap to see why');
   });
 
   it('pages through 200 trips without counting a partial list', async () => {
@@ -333,12 +350,12 @@ describe('Payouts (17)', () => {
   it('shows the withdraw card, the next weekly payout and the paid list', async () => {
     await render(<PayoutsScreen />, seed());
     const text = allText();
-    expect(text).toContain('You can withdraw now | ₹822');
+    expect(text).toContain('Ready to pay out | ₹822');
     expect(text).toContain("Pay from trips more than 24 hours ago. Today's ₹414 can be withdrawn from tomorrow.");
     expect(text).toContain('Withdraw ₹822 | Free, once a day. Reaches you by 1 pm tomorrow.');
     expect(text).toContain('Next weekly payout: Mon 26 Oct, by 3 pm');
     expect(text).toContain('Your whole balance goes to UPI ••••@okhdfc. No minimum amount.');
-    expect(text).toContain('Paid | Week of 12 to 18 Oct | ₹3,240 | Paid | Mon 19 Oct, 11:20 am | Bank ref (UTR) 629318472051');
+    expect(text).toContain('Past payouts | Week of 12 to 18 Oct | ₹3,240 | Paid | Mon 19 Oct, 11:20 am | Bank ref (UTR) 629318472051');
     expect(text).toContain('Craves never takes fees, deposits or penalties from your pay.');
   });
 
@@ -388,7 +405,7 @@ describe('Payouts (17)', () => {
     const processing = {payoutId: 'w1', periodLabel: 'Withdrawal', amountPaise: 82200, status: 'PROCESSING' as const};
     await render(<PayoutsScreen />, seed({}, {withdrawablePaise: 0, payouts: [processing]}));
     expect(allText()).toContain('On the way | Withdrawal | ₹822 | Processing');
-    expect(allText()).toContain('Paid | No payouts yet |');
+    expect(allText()).toContain('Past payouts | No payouts yet |');
     expect(has('rider-withdraw')).toBe(false);
   });
 
@@ -417,7 +434,8 @@ describe('SOS (18)', () => {
     await settle();
     expect(riderApi.sendSos).toHaveBeenCalledWith({tripId: 't1', fix: expect.objectContaining({lat: 17.4615})});
     const text = allText();
-    expect(text).toContain('Emergency | Stop somewhere safe first if you can. | Craves ops has your location');
+    expect(text).toContain('SOS | Pick what you need. Stop somewhere safe first if you can. | Craves ops has your location');
+    expect(text).toContain('Ops phone +910000000000, whenever riders are online. A false alarm costs nothing.');
     expect(text).toContain('Call 112 | Police, fire, ambulance');
     expect(text).toContain("If you've had an accident | Ops calls you back within 15 minutes.");
     await press('rider-sos-ops');
@@ -484,14 +502,20 @@ describe('Notice (19)', () => {
   it('explains the notice, keeps the rider working and sets out what happens next', async () => {
     await render(<NoticeScreen />, [[riderKeys.me, {...me, notice}]]);
     const text = allText();
-    expect(text).toContain('Notice | SOS | Review of a delivery | Sent Wed 21 Oct, 6:05 pm');
-    expect(text).toContain('You can keep working. Your account is not paused. Only the pay for this one order is on hold.');
-    expect(text).toContain("What happened | The customer for order CR-4093 says it didn't arrive.");
-    expect(text).toContain("What we're checking | Your photo at the door (1:24 pm)");
-    expect(tree.root.findAll(node => node.props.accessibilityLabel === '1. Tell us your side by Wed 28 Oct.').length).toBeGreaterThan(0);
-    expect(text).toContain('Wed 28 Oct');
+    expect(text).toContain('Your account | SOS | Review of a delivery | Sent Wed 21 Oct, 6:05 pm');
+    expect(text).toContain(
+      'A review is open on your account | You can keep working. Nothing changes unless a person at Craves decides so, and you will hear from them first.',
+    );
+    expect(text).toContain("What it is about | The customer for order CR-4093 says it didn't arrive.");
+    expect(text).toContain('What we have | Your photo at the door (1:24 pm)');
+    // Who decides and the held pay were not sent: the screen says so rather than leaving a gap.
+    expect(text).toContain("Who decides | A person at Craves, not the system | Decision by | Wed 28 Oct | On hold meanwhile | That trip's pay only");
+    expect(text).toContain('If a pause or an end to your account were ever decided');
+    expect(text).toContain('Tell us your side by Wed 28 Oct.');
     expect(text).toContain('A person at Craves looks at everything. The app never decides on its own.');
-    expect(text).toContain('Telangana Grievance Redressal Officer');
+    expect(text).toContain('Grievance officer and the Telangana portal | Add your side | Call a person at Craves');
+    await press('rider-notice-grievance');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Terms', {mode: 'view'});
     await press('rider-notice-call');
     expect(Linking.openURL).toHaveBeenCalledWith('tel:+911111111111');
   });
@@ -530,6 +554,153 @@ describe('Notice (19)', () => {
     expect(allText()).toContain('No notices');
     expect(has('rider-notice-give')).toBe(false);
     expect(has('rider-notice-call')).toBe(true);
+  });
+});
+
+describe('How you get orders (R-06)', () => {
+  const terms = {
+    version: '2026-10-v1',
+    effectiveFrom: '2026-10-20T00:00:00Z',
+    summaryOfChanges: [],
+    rateCardLines: [],
+    grievanceLines: [],
+    offerRules: {offersAtOnce: 1, offerRounds: 3, offerSeconds: 30, radiusM: 3000, fairBandM: 0},
+  };
+
+  it("lists the rules in force from the server, with the rate card and the grievance officer on Terms", async () => {
+    await render(<RulesScreen />, [[riderKeys.terms, terms]]);
+    const text = allText();
+    expect(text).toContain('How you get orders');
+    expect(text).toContain('Each order goes to one rider at a time. You get 30 seconds to decide.');
+    expect(text).toContain('Nearest first: the free riders closest to the kitchen hear first.');
+    expect(text).toContain('If a rider passes or the time runs out, the next rider hears, in up to 3 rounds.');
+    expect(text).toContain('Declining or missing an offer is free. Your acceptance rate and ratings never decide who gets an order.');
+    expect(text).toContain('Each offer says why it came to you. | Rate card 2026-10-v1 | Grievance officer');
+    expect(has('rider-rules-changes')).toBe(false);
+    await press('rider-rules-grievance');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Terms', {mode: 'view'});
+  });
+
+  it('says what changes and from when only while newer terms wait', async () => {
+    await render(<RulesScreen />, [
+      [
+        riderKeys.terms,
+        {
+          ...terms,
+          upcoming: {version: '2026-11-v2', effectiveFrom: '2026-11-17T00:00:00Z', summaryOfChanges: ['Two rules are new: orders near you are shared out together.'], rateCardLines: []},
+        },
+      ],
+    ]);
+    expect(has('rider-rules-changes')).toBe(true);
+    expect(allText()).toContain(
+      'Changes from 17 Nov | Two rules are new: orders near you are shared out together. | You were told 14 days ahead, as the Telangana Gig Workers Act requires. Everything else is unchanged.',
+    );
+  });
+
+  it('says so when the server has published no rules yet', async () => {
+    await render(<RulesScreen />, [[riderKeys.terms, {...terms, offerRules: undefined}]]);
+    expect(allText()).toContain('The order rules have not been published yet.');
+  });
+});
+
+describe('Slots (R-08)', () => {
+  // In the phone's time zone, like formatClock: tomorrow's windows on the first chip, the day after on the second.
+  const dayAt = (daysAhead: number, hour: number, minute: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysAhead);
+    d.setHours(hour, minute, 0, 0);
+    return d.toISOString();
+  };
+  const chip = (iso: string) => `rider-slot-day-${new Date(iso).toDateString()}`;
+  const open = new Date(Date.now() - 3_600_000).toISOString();
+  const slot = (capacityId: string, clusterName: string, daysAhead: number, h1: number, m1: number, h2: number, m2: number, placesLeft: number) => ({
+    capacityId,
+    clusterId: 'c1',
+    clusterName,
+    startsAt: dayAt(daysAhead, h1, m1),
+    endsAt: dayAt(daysAhead, h2, m2),
+    ratePerHourPaise: 9000,
+    places: 3,
+    placesLeft,
+    opensAt: open,
+    standby: false,
+  });
+  const slots = {
+    clusters: [{clusterId: 'c1', name: 'Madhapur', lat: 17.4483, lng: 78.3915, radiusM: 1500}],
+    slots: [
+      {...slot('k1', 'Madhapur', 1, 19, 0, 21, 30, 1), bookingId: 'b1'},
+      slot('k2', 'Gachibowli', 1, 11, 30, 14, 30, 3),
+      slot('k3', 'Kukatpally', 1, 19, 0, 21, 30, 0),
+      {...slot('k4', 'Madhapur', 2, 19, 0, 21, 30, 2), opensAt: new Date(Date.now() + 86_400_000).toISOString()},
+    ],
+    maxHoursPerDay: 6,
+    earlyWave: true,
+  };
+  const running = {bookingId: 'b1', clusterName: 'Madhapur', startsAt: dayAt(0, 19, 0), endsAt: dayAt(0, 21, 30), ratePerHourPaise: 9000, inZoneMinutes: 102, coveredPaise: 15300};
+
+  it('shows the days as chips and each window as Booked, Book or Full with the standby list', async () => {
+    await render(<SlotsScreen />, [[riderKeys.slots, slots]]);
+    const text = allText();
+    expect(text).toContain('Peak slots');
+    expect(text).toContain('Booked slots pay at least ₹90 an hour while you stay in the zone');
+    expect(a11y(chip(slots.slots[0].startsAt))).toEqual({selected: true});
+    expect(text).toContain('Madhapur · 7:00 pm to 9:30 pm | Booked | Be online by 7:15 pm to keep the guarantee. Cancelling is free until 7:00 pm. | Cancel this slot');
+    expect(text).toContain('Gachibowli · 11:30 am to 2:30 pm | Book | 3 places left · ₹90 an hour guaranteed');
+    expect(text).toContain('Kukatpally · 7:00 pm to 9:30 pm | Full | Join the standby list: if a place frees up before 7:00 pm, it is yours. | Join standby');
+    expect(text).toContain('New slots open every Thursday');
+    expect(has('rider-slot-k4')).toBe(false);
+    // The day after: a window whose wave has not opened for this rider cannot be booked yet.
+    await press(chip(slots.slots[3].startsAt));
+    expect(has('rider-slot-k4')).toBe(true);
+    expect(a11y('rider-slot-book-k4')).toMatchObject({disabled: true});
+    expect(allText()).toContain('Opens ');
+  });
+
+  it('books, joins the standby and cancels through the server, then reads the slots again', async () => {
+    (riderApi.bookSlot as jest.Mock).mockResolvedValueOnce({bookingId: 'b2', capacityId: 'k2', status: 'BOOKED'});
+    (riderApi.standbySlot as jest.Mock).mockResolvedValueOnce({capacityId: 'k3', position: 1});
+    (riderApi.cancelSlotBooking as jest.Mock).mockResolvedValueOnce({bookingId: 'b1', capacityId: 'k1', status: 'CANCELLED'});
+    (riderApi.getSlots as jest.Mock).mockResolvedValue(slots);
+    const client = await render(<SlotsScreen />, [[riderKeys.slots, slots]]);
+    const invalidate = jest.spyOn(client, 'invalidateQueries');
+    await press('rider-slot-book-k2');
+    expect(riderApi.bookSlot).toHaveBeenCalledWith('k2');
+    await press('rider-slot-standby-k3');
+    expect(riderApi.standbySlot).toHaveBeenCalledWith('k3');
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _body, buttons) => buttons?.[1]?.onPress?.());
+    await press('rider-slot-cancel-k1');
+    await settle();
+    expect(riderApi.cancelSlotBooking).toHaveBeenCalledWith('b1');
+    expect(invalidate).toHaveBeenCalledTimes(3);
+    alert.mockRestore();
+  });
+
+  it("shows the server's refusal in the rider's words", async () => {
+    (riderApi.bookSlot as jest.Mock).mockRejectedValueOnce(new AppApiError('SLOT_FULL', 'This slot is full. Join the standby list and you get the next free place.', 409));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await render(<SlotsScreen />, [[riderKeys.slots, slots]]);
+    await press('rider-slot-book-k2');
+    expect(alert).toHaveBeenCalledWith('This slot is full. Join the standby list and you get the next free place.');
+    alert.mockRestore();
+  });
+
+  it('shows the slot running now on top, and its guarantee so far on its own screen', async () => {
+    await render(<SlotsScreen />, [[riderKeys.slots, {...slots, running}]]);
+    expect(allText()).toContain('Your slot now · Madhapur | ₹153 guaranteed so far · 102 min in the zone | View');
+    await press('rider-slot-now');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('SlotNow');
+    await render(<SlotNowScreen />, [[riderKeys.slots, {...slots, running}]]);
+    const text = allText();
+    expect(text).toContain('Madhapur, 7:00 pm to 9:30 pm | Stay within 1.5 km of Madhapur.');
+    expect(text).toContain('Guaranteed so far | ₹153 | In the zone | 1 h 42 min of 2 h 30 min | Rate for this slot | ₹90 an hour');
+    expect(text).toContain('Settled when the slot ends.');
+    await render(<SlotNowScreen />, [[riderKeys.slots, slots]]);
+    expect(allText()).toContain('No slot running now');
+  });
+
+  it('says when there is nothing to book yet', async () => {
+    await render(<SlotsScreen />, [[riderKeys.slots, {...slots, slots: []}]]);
+    expect(allText()).toContain('No slots to book yet');
   });
 });
 
@@ -688,7 +859,11 @@ describe('Help (21)', () => {
   it('offers a person to talk to, the questions and the last three trips', async () => {
     await render(<HelpScreen />, [[riderKeys.me, me], [riderKeys.earnings('week'), week(recent)]]);
     const text = allText();
-    expect(text).toContain('Talk to a person | Rider support answers in every slot, in Telugu, Hindi or English. | Call rider support');
+    expect(text).toContain('A person answers | No bot, no ticket number you have to chase. | Call Craves ops');
+    expect(text).toContain('Open while riders are online. Telugu, Hindi and English.');
+    expect(text).toContain('Not happy with an answer? | Write to the grievance officer. They must reply within 30 days');
+    await press('rider-help-grievance');
+    expect(mockNavigation.navigate).toHaveBeenCalledWith('Terms', {mode: 'view'});
     expect(text).toContain("Open the riders' WhatsApp group");
     expect(text).toContain('Do I lose anything if I decline an offer? | No. Declining, or letting an offer run out, is free');
     expect(text).not.toContain('Every Monday by 3 pm');

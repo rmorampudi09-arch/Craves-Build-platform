@@ -260,6 +260,7 @@ export function ProfileScreen() {
   }
 
   const links: [string, string, () => void][] = [
+    [p.rules, 'rules', () => navigation.navigate('Rules')],
     [p.terms, 'terms', () => navigation.navigate('Terms', {mode: 'view'})],
     [p.setup, 'setup', () => navigation.navigate('PhoneSetup')],
     [p.help, 'help', () => navigation.navigate('Help')],

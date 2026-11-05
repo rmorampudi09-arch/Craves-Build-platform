@@ -68,7 +68,19 @@ export function AccountStatusScreen() {
       {block ? (
         <View style={styles.intro}>
           <Title>{a.titles[block]}</Title>
-          <Text style={styles.secondary}>{a.bodies[block]}</Text>
+          <Text style={styles.secondary}>{block === 'UPDATE_REQUIRED' ? a.updateBody(RIDER_APP_VERSION, me.data.minAppVersion) : a.bodies[block]}</Text>
+        </View>
+      ) : null}
+      {block === 'UPDATE_REQUIRED' ? (
+        <View testID="rider-whats-new">
+          <Card>
+            <Text style={styles.strong}>{a.whatsNewTitle}</Text>
+            {a.whatsNew.map(line => (
+              <Text key={line} style={styles.secondary}>
+                {line}
+              </Text>
+            ))}
+          </Card>
         </View>
       ) : null}
       {block === 'RATES_PENDING' ? (

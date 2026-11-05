@@ -415,7 +415,9 @@ public class FleetRiderService {
         return policies.shownDispatchPolicy(at, "").map(policy -> new OfferRules(((Number) policy.get("offers_at_once")).intValue(),
             ((Number) policy.get("offer_rounds")).intValue(), ((Number) policy.get("offer_seconds")).intValue(),
             ((Number) policy.get("radius_m")).intValue(), ((Number) policy.get("fair_band_m")).intValue(),
-            Boolean.TRUE.equals(policy.get("rank_by_travel_time")) ? Boolean.TRUE : null)).orElse(null);
+            Boolean.TRUE.equals(policy.get("rank_by_travel_time")) ? Boolean.TRUE : null,
+            Boolean.TRUE.equals(policy.get("joint_matching")) ? Boolean.TRUE : null,
+            Boolean.TRUE.equals(policy.get("next_order_offers")) ? Boolean.TRUE : null)).orElse(null);
     }
 
     /** Phase 4: a copy of everything Craves keeps about this rider (RiderDataExport; DPDP Act s.11). */
@@ -506,6 +508,8 @@ public class FleetRiderService {
         return who + (n == 1 ? " hears first, one rider at a time" : " hear at once, and the first to accept gets it")
             + (rules.offerRounds() > 1 ? ", in up to " + rules.offerRounds() + " rounds" : "") + "."
             + (rules.byTravelTime() ? " Soonest is by Craves's travel-time estimate; without one, the nearest hear first." : "")
+            + (rules.jointMatching() ? " Orders near each other are shared out among the free riders nearby together, not one by one." : "")
+            + (rules.nextOrderOffers() ? " You may hear of your next order before this one ends; it waits for you." : "")
             + " Declining is free.";
     }
 

@@ -71,6 +71,12 @@ const KITCHENS = [
   },
 ];
 
+/** App 1.3.3 (R-07): the demo's two clusters, around the first two kitchens; places already taken at lunch and dinner. */
+const SLOT_CLUSTERS = [
+  { clusterId: 'cluster-1', name: 'Madhapur', lat: 17.4483, lng: 78.3915, taken: [0, 1] },
+  { clusterId: 'cluster-2', name: 'Gachibowli', lat: 17.4401, lng: 78.3489, taken: [1, 0] },
+];
+
 const CUSTOMERS = [
   {
     firstName: 'Anil',
@@ -273,6 +279,9 @@ export function createMockRiderApi(options: MockOptions = {}) {
     /** Phase 5: when the home spot was saved (0: none), and heading home until then (0: off). */
     homeSavedAt: 0,
     headingHomeUntil: 0,
+    /** App 1.3.3 (R-07): booked peak slots. The demo's windows start tomorrow, one place each, so Full and standby show. */
+    slotBookings: [] as { bookingId: string; capacityId: string; status: 'BOOKED' | 'CANCELLED' }[],
+    slotStandby: [] as string[],
   };
 
   async function respond<T>(work: () => T): Promise<T> {
@@ -321,6 +330,10 @@ export function createMockRiderApi(options: MockOptions = {}) {
       pickupDistanceM,
       dropDistanceM,
       kitchenArea: kitchen.area,
+      kitchenName: kitchen.kitchenName,
+      kitchenAt: { lat: kitchen.lat, lng: kitchen.lng },
+      // The area's rough centre, as the server sends it: the drop rounded to a 0.005° cell, never the door.
+      customerAreaAt: { lat: Math.round(customer.lat / 0.005) * 0.005, lng: Math.round(customer.lng / 0.005) * 0.005 },
       customerLocality: customer.area,
       estMinutes: Math.round(12 + (pickupDistanceM + dropDistanceM) / 300),
       itemsCount: 1 + (n % 3),
@@ -367,12 +380,45 @@ export function createMockRiderApi(options: MockOptions = {}) {
       waitPayPerMinutePaise: 150,
       sealed: true,
       chefReadyAt: iso(now()),
+      rateCardVersion: state.me.termsVersion,
+      offerPayPaise: offer.payPaise,
+      pickupDistanceM: offer.pickupDistanceM,
+      dropDistanceM: offer.dropDistanceM,
     };
+  }
+
+  /** Lunch and dinner tomorrow and the day after, per cluster, one place each, in the phone's time zone. */
+  function slotWindows() {
+    const at = (dayOffset: number, hour: number, minute: number) => {
+      const d = new Date(now());
+      d.setDate(d.getDate() + dayOffset);
+      d.setHours(hour, minute, 0, 0);
+      return d.toISOString();
+    };
+    const windows = [
+      ['lunch', 11, 30, 14, 30],
+      ['dinner', 19, 0, 21, 30],
+    ] as const;
+    return SLOT_CLUSTERS.flatMap(c =>
+      [1, 2].flatMap(day =>
+        windows.map(([name, h1, m1, h2, m2], i) => ({
+          capacityId: `${c.clusterId}-day${day}-${name}`,
+          clusterId: c.clusterId,
+          clusterName: c.name,
+          startsAt: at(day, h1, m1),
+          endsAt: at(day, h2, m2),
+          ratePerHourPaise: 9000,
+          places: 1,
+          opensAt: iso(now() - DAY),
+          taken: c.taken[i],
+        })),
+      ),
+    );
   }
 
   function endTrip(step: TripStep, extra: Partial<Trip> = {}): Trip {
     const trip = state.activeTrip as Trip;
-    const ended: Trip = { ...trip, ...extra, step, version: trip.version + 1 };
+    const ended: Trip = { ...trip, ...extra, step, version: trip.version + 1, finishedAt: iso(now()) };
     state.activeTrip = null;
     state.endedTrip = ended;
     state.otpTries = 0;
@@ -435,6 +481,7 @@ export function createMockRiderApi(options: MockOptions = {}) {
         step: move[1],
         version: trip.version + 1,
         ...(move[1] === 'AT_KITCHEN' ? { arrivedKitchenAt: iso(now()) } : {}),
+        ...(move[1] === 'PICKED_UP' ? { pickedUpAt: iso(now()) } : {}),
       };
       return state.activeTrip;
     }
@@ -988,6 +1035,66 @@ export function createMockRiderApi(options: MockOptions = {}) {
       }),
     reportIssue: () => respond(() => undefined),
     sendSos: () => respond(() => undefined),
+    getSlots: () =>
+      respond(() => {
+        const booked = state.slotBookings.filter(b => b.status === 'BOOKED');
+        return {
+          clusters: SLOT_CLUSTERS.map(c => ({ clusterId: c.clusterId, name: c.name, lat: c.lat, lng: c.lng, radiusM: 1500 })),
+          slots: slotWindows().map(w => {
+            const mine = booked.find(b => b.capacityId === w.capacityId);
+            return {
+              ...w,
+              placesLeft: Math.max(0, w.places - w.taken - (mine ? 1 : 0)),
+              bookingId: mine?.bookingId,
+              standby: !mine && state.slotStandby.includes(w.capacityId),
+            };
+          }),
+          running: undefined,
+          maxHoursPerDay: 6,
+          earlyWave: state.earnings.length > 5,
+        };
+      }),
+    bookSlot: capacityId =>
+      respond(() => {
+        const w = slotWindows().find(x => x.capacityId === capacityId);
+        if (!w) {
+          throw apiError('CAPACITY_NOT_FOUND', 'No such slot.', 404);
+        }
+        if (state.slotBookings.some(b => b.capacityId === capacityId && b.status === 'BOOKED')) {
+          throw apiError('SLOT_ALREADY_BOOKED', 'You already have this slot.', 409);
+        }
+        if (w.taken >= w.places) {
+          throw apiError('SLOT_FULL', 'This slot is full. Join the standby list and you get the next free place.', 409);
+        }
+        const booking = { bookingId: `booking-${capacityId}`, capacityId, status: 'BOOKED' as const };
+        state.slotBookings.push(booking);
+        state.slotStandby = state.slotStandby.filter(id => id !== capacityId);
+        return { ...booking, clusterName: w.clusterName, startsAt: w.startsAt, endsAt: w.endsAt, ratePerHourPaise: w.ratePerHourPaise };
+      }),
+    standbySlot: capacityId =>
+      respond(() => {
+        const w = slotWindows().find(x => x.capacityId === capacityId);
+        if (!w) {
+          throw apiError('CAPACITY_NOT_FOUND', 'No such slot.', 404);
+        }
+        if (w.taken < w.places) {
+          throw apiError('SLOT_HAS_PLACES', 'This slot still has places: book it instead.', 409);
+        }
+        if (!state.slotStandby.includes(capacityId)) {
+          state.slotStandby.push(capacityId);
+        }
+        return { capacityId, position: 1 };
+      }),
+    cancelSlotBooking: bookingId =>
+      respond(() => {
+        const booking = state.slotBookings.find(b => b.bookingId === bookingId);
+        const w = booking && slotWindows().find(x => x.capacityId === booking.capacityId);
+        if (!booking || !w) {
+          throw apiError('BOOKING_NOT_FOUND', 'No such booking.', 404);
+        }
+        booking.status = 'CANCELLED';
+        return { ...booking, clusterName: w.clusterName, startsAt: w.startsAt, endsAt: w.endsAt, ratePerHourPaise: w.ratePerHourPaise };
+      }),
   };
 
   /** Dev panel buttons. Only reachable in mock builds. */
@@ -1073,6 +1180,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
               checking:
                 "The customer's report, the drop location and the call log for that order.",
               tripId: 'past-3',
+              decidedBy: 'Priya, rider ops',
+              heldPaise: 5400,
             },
       };
     },

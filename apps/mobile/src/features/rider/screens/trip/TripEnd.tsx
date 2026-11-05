@@ -1,13 +1,12 @@
 // How the trip ended (docs/riders/SCREENS.md 14): delivered, or failed / cancelled in the same layout.
 import React, {useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
-import {Icon} from '../../../../shared/components';
-import {colors, iconSize, radius, spacing} from '../../../../design/tokens';
+import {colors, fontWeight, radius, spacing} from '../../../../design/tokens';
 import type {Trip, TripStep} from '../../api/contract';
 import {BottomAction} from '../../components/BottomAction';
 import {RefusalNotices} from '../../components/RefusalNotices';
-import {Card, Label, Money, RateRow, RiderScreen} from '../../components/ui';
-import {formatClock, formatRupees} from '../../domain/format';
+import {Card, Label, RateRow, RiderScreen} from '../../components/ui';
+import {formatClock, formatHoursMinutes, formatRupees} from '../../domain/format';
 import {useRiderHome} from '../../state/riderQueries';
 import {useStrings} from '../../strings/StringsProvider';
 import {payLabel} from '../TripDetailScreen';
@@ -39,64 +38,77 @@ export function TripEnd({
   const delivered = step === 'DELIVERED';
   const reason = trip.cancelReason ? (t.failReasons as Record<string, string>)[trip.cancelReason] ?? trip.cancelReason : undefined;
   const lines = trip.payLines ?? [];
-  // Pay is credited only once the server has the delivery; a photo or a failed delivery waits for ops.
-  const note = !delivered ? t.failedNote : photoDelivery ? t.photoHeld : syncing ? null : t.creditedNote;
 
+  const endClock = formatClock(trip.finishedAt ?? endedAt);
   return (
     <RiderScreen
       header={<TripHeader trip={trip} />}
       testID="rider-trip-end"
-      footer={<BottomAction label={t.backToWaiting} onPress={onBack} testID="rider-back-to-waiting" />}>
-      <View style={styles.top}>
-        <View style={[styles.circle, delivered ? styles.done : styles.notDone]}>
-          <Icon name={delivered ? 'check' : 'close'} size={iconSize.xl} color={delivered ? colors.white : colors.textPrimary} surface={false} />
+      footer={
+        <View style={styles.footer}>
+          <BottomAction label={delivered ? t.readyNext : t.backToWaiting} onPress={onBack} testID="rider-back-to-waiting" />
+          <BottomAction label={t.report} variant="outline" onPress={onReport} testID="rider-report" />
         </View>
-        <Text accessibilityRole="header" style={[text.name, text.center]}>
-          {delivered ? (otpWaiting ? t.deliverySavedTitle : t.completeTitle) : step === 'FAILED' ? t.failedTitle : t.cancelledTitle}
+      }>
+      <View style={[styles.top, delivered ? styles.done : styles.notDone]}>
+        <Text accessibilityRole="header" style={[text.body, delivered ? styles.onGreen : text.secondary]}>
+          {delivered ? (otpWaiting ? t.deliverySavedTitle : t.deliveredToAt(trip.customer.firstName, endClock)) : step === 'FAILED' ? t.failedTitle : t.cancelledTitle}
         </Text>
-        <Text style={[text.body, text.secondary, text.center]}>
-          {!delivered ? reason : otpWaiting ? t.deliverySavedBody : t.deliveredTo(trip.orderCode, trip.customer.firstName, formatClock(endedAt))}
+        {step === 'CANCELLED' ? null : (
+          <Text style={[styles.pay, delivered && styles.onGreenStrong]} testID="rider-earned" {...{paise: trip.payPaise}}>
+            {formatRupees(trip.payPaise)}
+          </Text>
+        )}
+        <Text style={[text.body, delivered ? styles.onGreen : text.secondary]}>
+          {!delivered ? reason : otpWaiting ? t.deliverySavedBody : syncing ? t.linesPending : photoDelivery ? t.photoHeld : t.addedToday}
         </Text>
         <SyncNote show={syncing} />
       </View>
       <RefusalNotices tripId={trip.tripId} />
       {step !== 'CANCELLED' || lines.length > 0 ? (
-        <Card>
-          <Label>{t.youEarned}</Label>
-          {/* A cancelled trip shows only the lines the server paid; the app never adds them up. */}
-          {step === 'CANCELLED' ? null : <Money paise={trip.payPaise} testID="rider-earned" />}
+        <View style={styles.lines}>
           {lines.map((line, i) => (
-            <RateRow
-              key={`${i}-${line.label}`}
-              label={payLabel(line, strings.pay.final, language)}
-              value={formatRupees(line.amountPaise)}
-              divider={i === 0}
-            />
+            <RateRow key={`${i}-${line.label}`} label={payLabel(line, strings.pay.final, language)} value={formatRupees(line.amountPaise)} />
           ))}
+          {/* A cancelled trip shows only the lines the server paid; the app never adds them up. */}
+          {step === 'CANCELLED' ? null : <RateRow label={t.yourPay} value={formatRupees(trip.payPaise)} total />}
           {trip.payLines === undefined ? <Text style={text.small}>{t.linesPending}</Text> : null}
-          {note ? <Text style={text.small}>{note}</Text> : null}
-        </Card>
+          {trip.rateCardVersion || trip.offerPayPaise !== undefined ? (
+            <Text style={text.small}>
+              {[trip.rateCardVersion ? t.rateCardNote(trip.rateCardVersion) : null, trip.offerPayPaise !== undefined ? t.offerSaid(formatRupees(trip.offerPayPaise)) : null]
+                .filter(Boolean)
+                .join(' ')}
+            </Text>
+          ) : null}
+          {!delivered ? <Text style={text.small}>{t.failedNote}</Text> : null}
+        </View>
       ) : null}
       {home && !syncing ? (
         <Card style={styles.today}>
           <View style={styles.todayLeft}>
             <Label>{t.today}</Label>
-            <Text style={[text.name, styles.tabular]}>{formatRupees(home.todayEarningsPaise)}</Text>
+            <Text style={[text.body, text.secondary]}>
+              {home.todayOnlineMinutes === undefined ? t.todayTrips(home.todayTrips) : t.todayLine(home.todayTrips, formatHoursMinutes(home.todayOnlineMinutes))}
+            </Text>
           </View>
-          <Text style={[text.body, text.secondary]}>{t.todayTrips(home.todayTrips)}</Text>
+          <Text style={[text.heading, styles.tabular]}>{formatRupees(home.todayEarningsPaise)}</Text>
         </Card>
       ) : null}
-      <BottomAction label={t.report} variant="ghost" onPress={onReport} testID="rider-report" />
     </RiderScreen>
   );
 }
 
 const styles = StyleSheet.create({
   todayLeft: {flex: 1, gap: spacing.xxs},
-  top: {alignItems: 'center', gap: spacing.xs, paddingTop: spacing.xs},
-  circle: {width: 64, height: 64, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center'},
+  // The header block as drawn: green for a delivery, warm grey for a trip that didn't end with one.
+  top: {gap: spacing.xxs, padding: spacing.md, borderRadius: radius.lg},
   done: {backgroundColor: colors.success},
-  notDone: {backgroundColor: colors.muted},
+  notDone: {backgroundColor: colors.surfaceMuted},
+  onGreen: {color: colors.successSoft},
+  onGreenStrong: {color: colors.white},
+  pay: {fontSize: 44, lineHeight: 48, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
+  lines: {gap: spacing.xs},
   today: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   tabular: {fontVariant: ['tabular-nums']},
+  footer: {gap: spacing.xs},
 });

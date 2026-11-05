@@ -43,6 +43,14 @@ object RiderOffers {
   const val EXTRA_OFFER = "craves.rider.offer"
   const val EXTRA_RECEIVED_AT = "craves.rider.offerReceivedAtMs"
   const val EXTRA_CHANNEL = "craves.rider.offerChannel"
+  /** "Reached <kitchen>?" (R-03): the trip id the question is about, and whether the rider already said Yes on the heads-up. */
+  const val EXTRA_REACHED = "craves.rider.reachedTripId"
+  const val EXTRA_REACHED_YES = "craves.rider.reachedYes"
+  const val REACHED_CHANNEL = "rider_reached"
+  /** The trip notification's actions (R-04): the step the rider tapped (a TripAction), or SOS. */
+  const val EXTRA_TAP_STEP = "craves.rider.tapStep"
+  const val EXTRA_TAP_SOS = "craves.rider.tapSos"
+  private const val REACHED_NOTIFICATION_ID = 4
   private const val TAG = "CravesRiderOffer"
   private const val OFFER_NOTIFICATION_ID = 2
   private const val NOTICE_NOTIFICATION_ID = 3
@@ -131,7 +139,13 @@ object RiderOffers {
     val trip = NotificationChannelCompat.Builder(TRIP_CHANNEL, NotificationManagerCompat.IMPORTANCE_DEFAULT)
       .setName(RiderText.get(context, R.string.rider_channel_trip))
       .build()
-    manager.createNotificationChannelsCompat(listOf(offers, online, trip))
+    // High so it shows as a heads-up over Google Maps; no sound, the rider is on the road.
+    val reached = NotificationChannelCompat.Builder(REACHED_CHANNEL, NotificationManagerCompat.IMPORTANCE_HIGH)
+      .setName(RiderText.get(context, R.string.rider_channel_reached))
+      .setSound(null, null)
+      .setVibrationEnabled(true)
+      .build()
+    manager.createNotificationChannelsCompat(listOf(offers, online, trip, reached))
   }
 
   /** Returns true when this is the first arrival of a valid, unexpired offer. */
@@ -249,6 +263,57 @@ object RiderOffers {
       .setPriority(NotificationCompat.PRIORITY_DEFAULT)
       .build()
     NotificationManagerCompat.from(context).notify(tag, NOTICE_NOTIFICATION_ID, notification)
+  }
+
+  /**
+   * "Reached <kitchen>?" while the app isn't in front (R-03): a heads-up with Yes (opens the app, which posts arrived-pickup)
+   * and Not yet (answered by the service); on a sleeping phone it opens the app's own sheet.
+   */
+  fun askReached(context: Context, prompt: RiderReached.Prompt) {
+    if (Build.VERSION.SDK_INT >= 33 &&
+      ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) {
+      Log.w(TAG, "notifications are not allowed; reached can't be asked")
+      return
+    }
+    createChannels(context)
+    val open = reachedIntent(context, prompt.tripId, yes = false)
+    val yes = reachedIntent(context, prompt.tripId, yes = true)
+    val notYet = PendingIntent.getService(
+      context, 2, Intent(context, RiderOnlineService::class.java).setAction(RiderOnlineService.ACTION_REACHED_NOT_YET),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+    val builder = NotificationCompat.Builder(context, REACHED_CHANNEL)
+      .setSmallIcon(context.applicationInfo.icon)
+      .setContentTitle(RiderText.get(context, R.string.rider_reached_title, prompt.kitchenName))
+      .setContentText(RiderText.get(context, R.string.rider_reached_body, prompt.distanceM))
+      .setContentIntent(open)
+      .addAction(0, RiderText.get(context, R.string.rider_reached_yes), yes)
+      .addAction(0, RiderText.get(context, R.string.rider_reached_not_yet), notYet)
+      .setAutoCancel(true)
+      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+      .setPriority(NotificationCompat.PRIORITY_HIGH)
+    if (canShowFullScreen(context)) builder.setFullScreenIntent(open, true)
+    NotificationManagerCompat.from(context).notify(REACHED_NOTIFICATION_ID, builder.build())
+  }
+
+  fun cancelReached(context: Context) {
+    NotificationManagerCompat.from(context).cancel(REACHED_NOTIFICATION_ID)
+  }
+
+  /** Opens the app with what the rider tapped on the trip notification (R-04); JS reads it once (getPendingTap). */
+  fun tapIntent(context: Context, step: String?, sos: Boolean): PendingIntent {
+    val intent = (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent(Intent.ACTION_MAIN).setPackage(context.packageName))
+      .putExtra(EXTRA_TAP_SOS, sos)
+    step?.let { intent.putExtra(EXTRA_TAP_STEP, it) }
+    return PendingIntent.getActivity(context, if (sos) 5 else 6, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+  }
+
+  private fun reachedIntent(context: Context, tripId: String, yes: Boolean): PendingIntent {
+    val intent = (context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent(Intent.ACTION_MAIN).setPackage(context.packageName))
+      .putExtra(EXTRA_REACHED, tripId)
+      .putExtra(EXTRA_REACHED_YES, yes)
+    return PendingIntent.getActivity(context, if (yes) 3 else 4, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
   }
 
   /** Takes a notice down: "You're offline" once the service runs again, however the rider came back. */

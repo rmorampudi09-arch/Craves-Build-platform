@@ -219,6 +219,7 @@ class FleetTripControllerTest {
         return new Trip(TRIP.toString(), 2, "TO_KITCHEN", "#0BDE0101", 3, 5350,
             new Kitchen("Madhapur", "Plot 7, Road 1", "Near the metro", 17.4483, 78.3915, "Lakshmi's Kitchen", "+914012345678"),
             new Customer("Kondapur", "Flat 2", null, 17.46, 78.36, "Anil", "+919876500000"), null, 480, 600, 150L, null,
-            List.of(new PayLine("base", "base", 4000), new PayLine("drop-km", "drop distance", 1350)), false, null);
+            List.of(new PayLine("base", "base", 4000), new PayLine("drop-km", "drop distance", 1350)), false, null,
+            "2026-10-v1", 5350L, 1200, 3400, null, null);
     }
 }

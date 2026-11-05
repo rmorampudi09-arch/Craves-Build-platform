@@ -236,6 +236,16 @@ const calls: RiderApi = {
   async reportIssue(issue) {
     await apiClient.post(`${BASE}/support/issues`, issue);
   },
+  getSlots: () => get('/slots'),
+  async bookSlot(capacityId) {
+    return (await apiClient.post(`${BASE}/slots/${capacityId}/book`)).data;
+  },
+  async standbySlot(capacityId) {
+    return (await apiClient.post(`${BASE}/slots/${capacityId}/standby`)).data;
+  },
+  async cancelSlotBooking(bookingId) {
+    return (await apiClient.delete(`${BASE}/slots/bookings/${bookingId}`)).data;
+  },
   async sendSos(input) {
     await apiClient.post(`${BASE}/sos`, input);
   },

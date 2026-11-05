@@ -203,8 +203,9 @@ class FleetSetupDatabaseTest {
         tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 3, 1, 0, notice)));
         TermsChange change = new FleetPolicyStore(fleet.db, json).nextTermsChange().orElseThrow();
         assertThat(change.at()).isEqualTo(notice);
-        assertThat(change.rulesBefore()).isEqualTo(new DispatchRules(1, 3, 1500));
-        assertThat(change.rulesAfter()).isEqualTo(DispatchRules.TODAY);
+        // The 2026-11-v2 lines (V184) are on the draft riders saw, and every version ops sets keeps them.
+        assertThat(change.rulesBefore()).isEqualTo(new DispatchRules(1, 3, 1500, false, true, true));
+        assertThat(change.rulesAfter()).isEqualTo(new DispatchRules(3, 1, 0, false, true, true));
         assertThat(change.detourAfter()).isEqualTo(change.detourBefore());
 
         assertThatThrownBy(() -> fleet.db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, "

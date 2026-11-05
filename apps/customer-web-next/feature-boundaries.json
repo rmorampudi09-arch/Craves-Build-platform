@@ -46,6 +46,7 @@
     "addresses -> src/features/orders/screens/OrderHistory.tsx",
     "addresses -> src/features/profile/components/ProfileHeader.tsx",
     "addresses -> src/features/sign-in/components/AuthModal.tsx",
+    "admin -> src/features/account-deletion/domain/deletion-contract.ts",
     "admin -> src/features/auth/lib/refresh-policy.ts",
     "admin -> src/features/auth/lib/session-refresh-lock.ts",
     "admin -> src/features/chef-onboarding/lib/chef-onboarding-flow.ts",

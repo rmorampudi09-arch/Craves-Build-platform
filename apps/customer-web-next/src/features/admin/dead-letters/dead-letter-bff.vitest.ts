@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 const backend = vi.hoisted(() => ({ fetch: vi.fn() }));
 vi.mock("@/shared/lib/server-api", () => ({ authenticatedApiFetch: backend.fetch, SessionRequiredError: class extends Error {} }));
-import { GET } from "@/app/api/admin/dead-letters/route";
+import { GET, POST } from "@/app/api/admin/dead-letters/route";
 
 const origin = "https://admin.craves.in";
 const reason = "INC-42 Borzo webhooks stuck since 9 pm";
@@ -60,5 +60,45 @@ describe("dead-letter admin BFF", () => {
     expect((await get("?source=DELIVERY_WEBHOOK")).status).toBe(502);
     backend.fetch.mockResolvedValueOnce(Response.json(page));
     expect((await get("?source=DELIVERY_COMMAND")).status).toBe(502);
+  });
+
+  const retry = (query: string, headers: Record<string, string> = { Origin: origin, "X-Admin-Reason": reason }) =>
+    POST(new NextRequest(`${origin}/api/admin/dead-letters${query}`, { method: "POST", headers }));
+
+  it("asks integration-service for one more attempt on one delivery webhook, audited with the reason", async () => {
+    backend.fetch.mockResolvedValue(Response.json({ ...item, status: "FAILED", attemptCount: 7, nextAttemptAt: "2026-11-04T22:40:00Z" }));
+    const response = await retry(`?id=${item.id}&source=DELIVERY_WEBHOOK`);
+    expect(response.status).toBe(200);
+    expect((await response.json()).status).toBe("FAILED");
+    const [, target, init] = backend.fetch.mock.calls[0];
+    expect(target).toBe(`/admin/operations/dead-letters/${item.id}/retry?source=DELIVERY_WEBHOOK`);
+    expect(init.method).toBe("POST");
+    expect(init.headers["X-Admin-Reason"]).toBe(reason);
+    expect(response.headers.get("X-Correlation-ID")).toBe(init.headers["X-Correlation-ID"]);
+    expect(response.headers.get("Cache-Control")).toBe("no-store, private");
+  });
+
+  it("refuses other sources, bad ids, extra filters, a missing reason and other origins before calling integration-service", async () => {
+    for (const query of ["", `?id=${item.id}`, `?id=${item.id}&source=CASHFREE_WEBHOOK`, `?id=${item.id}&source=DELIVERY_COMMAND`,
+      "?id=not-a-uuid&source=DELIVERY_WEBHOOK", `?id=${item.id}&source=DELIVERY_WEBHOOK&status=FAILED`,
+      `?id=${item.id}&id=${item.id}&source=DELIVERY_WEBHOOK`]) {
+      expect((await retry(query)).status, query).toBe(400);
+    }
+    expect((await retry(`?id=${item.id}&source=DELIVERY_WEBHOOK`, { Origin: origin })).status).toBe(400);
+    expect((await retry(`?id=${item.id}&source=DELIVERY_WEBHOOK`, { Origin: "https://evil.example", "X-Admin-Reason": reason })).status).toBe(403);
+    expect(backend.fetch).not.toHaveBeenCalled();
+  });
+
+  it("explains a switched-off retry and a record that cannot be retried, and refuses an answer for another record", async () => {
+    backend.fetch.mockResolvedValueOnce(Response.json({ status: 404 }, { status: 404 }));
+    const off = await retry(`?id=${item.id}&source=DELIVERY_WEBHOOK`);
+    expect(off.status).toBe(404);
+    expect((await off.json()).message).toMatch(/CRAVES_DEAD_LETTER_RETRY_ENABLED/);
+    backend.fetch.mockResolvedValueOnce(Response.json({ message: "this one is PROCESSED" }, { status: 409 }));
+    const conflict = await retry(`?id=${item.id}&source=DELIVERY_WEBHOOK`);
+    expect(conflict.status).toBe(409);
+    expect((await conflict.json()).message).not.toMatch(/PROCESSED/);
+    backend.fetch.mockResolvedValueOnce(Response.json({ ...item, id: "7212c931-b8ac-4cc7-8cf6-3a9672046b11" }));
+    expect((await retry(`?id=${item.id}&source=DELIVERY_WEBHOOK`)).status).toBe(502);
   });
 });

@@ -16,7 +16,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Handbook 008: staff suspend a kitchen and lift it again. Public reads and checkout already require
- * kitchen status ACTIVE, so a suspended kitchen leaves discovery and new orders at once; placed orders carry on.
+ * kitchen status ACTIVE, so a suspended kitchen leaves discovery and new orders at once. Placed orders are not cancelled,
+ * but the order and subscription apps then treat the kitchen as INACTIVE (docs/advanced-features/modules.md, 008).
  */
 @Service
 public class KitchenSuspensionService {
@@ -63,6 +64,7 @@ public class KitchenSuspensionService {
         String current = (String) kitchen.get("status");
         // Only undo our own SUSPENDED; if something else changed the status since (account erasure closes a kitchen), keep it.
         String after = "SUSPENDED".equals(current) ? prior : current;
+        // Asked under the lock on purpose: whether finance is asked at all depends on the hold and status the lock keeps still.
         if ("ACTIVE".equals(after)) finance.requireChef((UUID) kitchen.get("identity_id"));
         jdbc.update("DELETE FROM catalog_schema.kitchen_suspension_hold WHERE kitchen_id = ?", kitchenId);
         jdbc.update("UPDATE catalog_schema.kitchen_profile SET status = ?, updated_at = now() WHERE id = ?", after, kitchenId);
@@ -71,10 +73,13 @@ public class KitchenSuspensionService {
     }
 
     private Map<String, Object> lockKitchen(CravesPrincipal principal, UUID kitchenId) {
+        // Lock in a statement of its own and read in the next: a statement that waited for the lock still sees the hold as
+        // it was before the wait (READ COMMITTED), so suspends, lifts and chef saves would act on a stale hold.
+        jdbc.queryForList("SELECT 1 FROM catalog_schema.kitchen_profile WHERE id = ? FOR UPDATE", kitchenId);
         List<Map<String, Object>> rows = jdbc.queryForList("""
             SELECT k.identity_id, k.status, h.prior_status FROM catalog_schema.kitchen_profile k
               LEFT JOIN catalog_schema.kitchen_suspension_hold h ON h.kitchen_id = k.id
-             WHERE k.id = ? FOR UPDATE OF k""", kitchenId);
+             WHERE k.id = ?""", kitchenId);
         if (rows.isEmpty()) throw ApiException.notFound("KITCHEN_NOT_FOUND", "Kitchen was not found.");
         if (principal.identityId().equals(rows.get(0).get("identity_id")))
             throw ApiException.forbidden("KITCHEN_SUSPENSION_OWN_KITCHEN", "Staff cannot suspend or reinstate their own kitchen.");

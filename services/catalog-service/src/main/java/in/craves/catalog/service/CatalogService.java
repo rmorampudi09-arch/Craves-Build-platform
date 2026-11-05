@@ -118,12 +118,10 @@ public class CatalogService {
             );
         } else {
             // Handbook 008: while staff hold the kitchen suspended, a save keeps SUSPENDED and its status becomes what reinstating restores.
-            // Lock the kitchen row first so a suspension cannot commit between this check and the update.
-            boolean held = jdbcTemplate.queryForList(
-                "SELECT h.prior_status FROM catalog_schema.kitchen_profile k LEFT JOIN catalog_schema.kitchen_suspension_hold h ON h.kitchen_id = k.id WHERE k.id = ? FOR UPDATE OF k",
-                String.class, existingId.get()).stream().anyMatch(java.util.Objects::nonNull);
-            if (held) {
-                jdbcTemplate.update("UPDATE catalog_schema.kitchen_suspension_hold SET prior_status = ? WHERE kitchen_id = ?", status.name(), existingId.get());
+            // Lock the kitchen row in a statement of its own, then touch the hold: a statement that waited for the lock
+            // still sees other tables as they were before the wait, so it could miss a hold added or lifted meanwhile.
+            jdbcTemplate.queryForList("SELECT 1 FROM catalog_schema.kitchen_profile WHERE id = ? FOR UPDATE", existingId.get());
+            if (jdbcTemplate.update("UPDATE catalog_schema.kitchen_suspension_hold SET prior_status = ? WHERE kitchen_id = ?", status.name(), existingId.get()) > 0) {
                 status = KitchenStatus.SUSPENDED;
             }
             jdbcTemplate.update(

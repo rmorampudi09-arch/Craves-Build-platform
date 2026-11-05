@@ -250,6 +250,8 @@ $restrictions
     secrets:
     - {name: jwt-pem, keyVaultUrl: ${kv_uri}secrets/craves-jwt-verification-pem-base64, identity: $uai_id}
     - {name: db-password, keyVaultUrl: ${kv_uri}secrets/adv-db-password, identity: $uai_id}
+    # Key Vault secret must exist before app, or the revision cannot start (runbook step 2).
+    - {name: internal-service-secret, keyVaultUrl: ${kv_uri}secrets/craves-internal-service-secret, identity: $uai_id}
   template:
     revisionSuffix: m${tag:0:8}
     containers:
@@ -266,6 +268,7 @@ $restrictions
       - {name: CRAVES_JWT_AUDIENCE, value: craves-api}
       - {name: CRAVES_API_ORIGIN, value: https://api.craves.in}
       - {name: CRAVES_PUBLIC_WEB_ORIGIN, value: https://craves.in}
+      - {name: CRAVES_INTERNAL_SERVICE_SECRET, secretRef: internal-service-secret}
       probes:
       - {type: Liveness, httpGet: {path: /actuator/health/liveness, port: 8080}, initialDelaySeconds: 20, periodSeconds: 10, failureThreshold: 6}
       - {type: Readiness, httpGet: {path: /actuator/health/readiness, port: 8080}, initialDelaySeconds: 15, periodSeconds: 5, failureThreshold: 6}

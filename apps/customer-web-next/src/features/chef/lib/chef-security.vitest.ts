@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe("Login & security", () => {
-  it("shows the masked mobile number, the email's state, and Delete my account as a ticket", async () => {
+  it("shows the masked mobile number, the email's state, and Delete my account leading to the delete page", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json(chef)));
     setSessionIdentity(chef);
     render(createElement(ChefSecurity));
@@ -28,7 +28,8 @@ describe("Login & security", () => {
     expect(screen.getByText("+91 ••••• 43210 · used to log in")).toBeTruthy();
     expect(screen.getByText("Not added")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Add your email" }).getAttribute("href")).toBe("/chef/finance");
-    expect(screen.getByRole("link", { name: /Delete my account/ }).getAttribute("href")).toBe("/chef/support/new?topic=Delete%20my%20account&from=/chef/security");
+    expect(screen.getByRole("link", { name: /Delete my account/ }).getAttribute("href")).toBe("/account/delete?side=chef");
+    expect(screen.getByText("Your chef side, or your whole account")).toBeTruthy();
 
     act(() => setSessionIdentity({ ...chef, email: "asha@gmail.com", emailVerified: false }));
     expect(screen.getByText("a•••@gmail.com")).toBeTruthy();

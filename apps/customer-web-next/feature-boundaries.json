@@ -18,6 +18,8 @@
   ],
   "sharedHint": "src/shared",
   "allowed": [
+    "account-deletion -> src/features/auth/api/cravesAuth.ts",
+    "account-deletion -> src/features/profile/components/SignOutFlow.tsx",
     "addresses -> src/features/auth/api/cravesAuth.ts",
     "addresses -> src/features/cart/components/CartHeader.tsx",
     "addresses -> src/features/cart/screens/Cart.tsx",

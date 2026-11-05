@@ -17,6 +17,8 @@ describe("public account deletion explainer", () => {
     expect(screen.getByRole("link", { name: "craves.in/account/delete" }).getAttribute("href")).toBe("/account/delete");
     expect(screen.getAllByRole("link", { name: "support@craves.in" }).map((link) => link.getAttribute("href")).filter((href) => href === "mailto:support@craves.in")).toHaveLength(3);
     expect(screen.getByText("Customer accounts are deleted 30 days after you ask.")).toBeTruthy();
+    expect(document.body.textContent).toContain("or send the phone number on the account, and Craves will help.");
+    expect(document.body.textContent).not.toMatch(/\b(?:we|us)\b/i);
   });
 
   it("is linked from the privacy page, which names both payment providers", () => {

@@ -20,7 +20,7 @@ export default function AccountDeletionPage() {
         <PolicyList>
           <li>In the Craves app: customers go to Profile → Settings → Privacy &amp; security → Delete account. Chefs go to Profile → Login &amp; security → Delete my account.</li>
           <li>On the website: sign in at <Link className={linkClass} href="/account/delete">craves.in/account/delete</Link> with the phone number on your account.</li>
-          <li>If you can&apos;t sign in, email {support} from the email on your account, or tell us the phone number on the account, and Craves will help.</li>
+          <li>If you can&apos;t sign in, email {support} from the email on your account, or send the phone number on the account, and Craves will help.</li>
         </PolicyList>
       </PolicySection>
 

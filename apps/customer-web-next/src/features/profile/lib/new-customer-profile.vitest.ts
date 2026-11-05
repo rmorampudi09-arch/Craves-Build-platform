@@ -69,6 +69,20 @@ describe("a new customer", () => {
     expect(getSession()?.profileComplete).toBe(false);
   });
 
+  it.each(["/account-deletion", "/account/delete"])("is never asked on the account deletion pages (%s)", async (pathname) => {
+    route.pathname = pathname;
+    render(createElement(NewCustomerProfileGate));
+    await act(async () => {});
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("still asks on other account pages", async () => {
+    route.pathname = "/account";
+    render(createElement(NewCustomerProfileGate));
+    await screen.findByRole("dialog", { name: "Welcome to Craves" });
+  });
+
   it("is never asked inside Chef Mode", async () => {
     route.pathname = "/chef/menu";
     render(createElement(NewCustomerProfileGate));

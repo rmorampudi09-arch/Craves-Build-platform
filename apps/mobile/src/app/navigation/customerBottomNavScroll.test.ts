@@ -5,6 +5,7 @@ import {
   reduceCustomerBottomNavScroll,
   revealCustomerBottomNav,
 } from './customerBottomNavScroll';
+import {resolveCustomerBottomNavKeyboardEvents} from './CustomerBottomNavController';
 
 describe('customerBottomNavScroll', () => {
   it('keeps navigation visible at the top including Android overscroll', () => {
@@ -83,5 +84,16 @@ describe('customerBottomNavScroll', () => {
 
     expect(state.lastOffset).toBe(18);
     expect(state.visibility).toBe('visible');
+  });
+
+  it('uses iOS keyboard will-events so the floating tab hides before keyboard overlap', () => {
+    expect(resolveCustomerBottomNavKeyboardEvents('ios')).toEqual({
+      show: 'keyboardWillShow',
+      hide: 'keyboardWillHide',
+    });
+    expect(resolveCustomerBottomNavKeyboardEvents('android')).toEqual({
+      show: 'keyboardDidShow',
+      hide: 'keyboardDidHide',
+    });
   });
 });

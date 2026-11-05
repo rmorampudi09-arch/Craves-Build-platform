@@ -43,7 +43,11 @@ export function ScreenShell({
 }: ScreenShellProps) {
   const content = scroll ? (
     <ScrollView
+      automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
       contentContainerStyle={[styles.scrollContent, contentContainerStyle]}
+      contentInsetAdjustmentBehavior={
+        Platform.OS === 'ios' ? 'automatic' : undefined
+      }
       keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}>

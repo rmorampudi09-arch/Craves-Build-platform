@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "phase": "P119",
+  "generatedAt": "2026-09-22T14:16:24.838Z",
+  "provenance": "Generated from current apps/mobile/src HTTP call surface for iOS factory P119 coverage. Replace with APIM-published manifests when the APIM pipeline source of truth is available.",
+  "actions": [
+    {
+      "id": "features-cart-api-cartserviceabilityapi-get-bearer-1",
+      "source": "src/features/cart/api/cartServiceabilityApi.ts",
+      "method": "GET",
+      "path": "/api/v1/discovery/kitchens?{value}",
+      "auth": "bearer",
+      "requestModel": "features-cart-api-cartserviceabilityapi-get-bearer-1.request",
+      "responseModel": "features-cart-api-cartserviceabilityapi-get-bearer-1.response",
+      "requestValidator": "features-cart-api-cartserviceabilityapi-get-bearer-1.requestValidator",
+      "responseValidator": "features-cart-api-cartserviceabilityapi-get-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-cart-api-cartserviceabilityapi-get-bearer-2",
+      "source": "src/features/cart/api/cartServiceabilityApi.ts",
+      "method": "GET",
+      "path": "/api/v1/discovery/menu-items?{value}",
+      "auth": "bearer",
+      "requestModel": "features-cart-api-cartserviceabilityapi-get-bearer-2.request",
+      "responseModel": "features-cart-api-cartserviceabilityapi-get-bearer-2.response",
+      "requestValidator": "features-cart-api-cartserviceabilityapi-get-bearer-2.requestValidator",
+      "responseValidator": "features-cart-api-cartserviceabilityapi-get-bearer-2.responseValidator"
+    },
+    {
+      "id": "features-chefdiscovery-api-nearbychefdiscoveryapi-get-bearer-1",
+      "source": "src/features/chefDiscovery/api/nearbyChefDiscoveryApi.ts",
+      "method": "GET",
+      "path": "/api/v1/discovery/kitchens",
+      "auth": "bearer",
+      "requestModel": "features-chefdiscovery-api-nearbychefdiscoveryapi-get-bearer-1.request",
+      "responseModel": "features-chefdiscovery-api-nearbychefdiscoveryapi-get-bearer-1.response",
+      "requestValidator": "features-chefdiscovery-api-nearbychefdiscoveryapi-get-bearer-1.requestValidator",
+      "responseValidator": "features-chefdiscovery-api-nearbychefdiscoveryapi-get-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-chefdiscovery-api-nearbychefdiscoveryapi-get-bearer-2",
+      "source": "src/features/chefDiscovery/api/nearbyChefDiscoveryApi.ts",
+      "method": "GET",
+      "path": "/api/v1/catalog/kitchens",
+      "auth": "bearer",
+      "requestModel": "features-chefdiscovery-api-nearbychefdiscoveryapi-get-bearer-2.request",
+      "responseModel": "features-chefdiscovery-api-nearbychefdiscoveryapi-get-bearer-2.response",
+      "requestValidator": "features-chefdiscovery-api-nearbychefdiscoveryapi-get-bearer-2.requestValidator",
+      "responseValidator": "features-chefdiscovery-api-nearbychefdiscoveryapi-get-bearer-2.responseValidator"
+    },
+    {
+      "id": "features-dishdetail-api-dishdetailapi-get-bearer-1",
+      "source": "src/features/dishDetail/api/dishDetailApi.ts",
+      "method": "GET",
+      "path": "/api/v1/catalog/menu-items/{value}",
+      "auth": "bearer",
+      "requestModel": "features-dishdetail-api-dishdetailapi-get-bearer-1.request",
+      "responseModel": "features-dishdetail-api-dishdetailapi-get-bearer-1.response",
+      "requestValidator": "features-dishdetail-api-dishdetailapi-get-bearer-1.requestValidator",
+      "responseValidator": "features-dishdetail-api-dishdetailapi-get-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-dishdetail-api-dishdetailapi-get-bearer-2",
+      "source": "src/features/dishDetail/api/dishDetailApi.ts",
+      "method": "GET",
+      "path": "/api/v1/catalog/kitchens/{value}",
+      "auth": "bearer",
+      "requestModel": "features-dishdetail-api-dishdetailapi-get-bearer-2.request",
+      "responseModel": "features-dishdetail-api-dishdetailapi-get-bearer-2.response",
+      "requestValidator": "features-dishdetail-api-dishdetailapi-get-bearer-2.requestValidator",
+      "responseValidator": "features-dishdetail-api-dishdetailapi-get-bearer-2.responseValidator"
+    },
+    {
+      "id": "features-home-api-homefeedapi-get-bearer-1",
+      "source": "src/features/home/api/homeFeedApi.ts",
+      "method": "GET",
+      "path": "/api/v1/discovery/menu-items",
+      "auth": "bearer",
+      "requestModel": "features-home-api-homefeedapi-get-bearer-1.request",
+      "responseModel": "features-home-api-homefeedapi-get-bearer-1.response",
+      "requestValidator": "features-home-api-homefeedapi-get-bearer-1.requestValidator",
+      "responseValidator": "features-home-api-homefeedapi-get-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-kitchenprofile-api-kitchenprofileapi-get-bearer-1",
+      "source": "src/features/kitchenProfile/api/kitchenProfileApi.ts",
+      "method": "GET",
+      "path": "/api/v1/catalog/kitchens/{value}",
+      "auth": "bearer",
+      "requestModel": "features-kitchenprofile-api-kitchenprofileapi-get-bearer-1.request",
+      "responseModel": "features-kitchenprofile-api-kitchenprofileapi-get-bearer-1.response",
+      "requestValidator": "features-kitchenprofile-api-kitchenprofileapi-get-bearer-1.requestValidator",
+      "responseValidator": "features-kitchenprofile-api-kitchenprofileapi-get-bearer-1.responseValidator"
+    },
+    {
+      "id": "features-kitchenprofile-api-kitchenprofileapi-get-bearer-2",
+      "source": "src/features/kitchenProfile/api/kitchenProfileApi.ts",
+      "method": "GET",
+      "path": "/api/v1/catalog/kitchens/{value}/menu-items",
+      "auth": "bearer",
+      "requestModel": "features-kitchenprofile-api-kitchenprofileapi-get-bearer-2.request",
+      "responseModel": "features-kitchenprofile-api-kitchenprofileapi-get-bearer-2.response",
+      "requestValidator": "features-kitchenprofile-api-kitchenprofileapi-get-bearer-2.requestValidator",
+      "responseValidator": "features-kitchenprofile-api-kitchenprofileapi-get-bearer-2.responseValidator"
+    },
+    {
+      "id": "shared-catalog-customercatalogpresentationapi-get-bearer-1",
+      "source": "src/shared/catalog/customerCatalogPresentationApi.ts",
+      "method": "GET",
+      "path": "/api/v1/catalog/kitchens/{value}",
+      "auth": "bearer",
+      "requestModel": "shared-catalog-customercatalogpresentationapi-get-bearer-1.request",
+      "responseModel": "shared-catalog-customercatalogpresentationapi-get-bearer-1.response",
+      "requestValidator": "shared-catalog-customercatalogpresentationapi-get-bearer-1.requestValidator",
+      "responseValidator": "shared-catalog-customercatalogpresentationapi-get-bearer-1.responseValidator"
+    },
+    {
+      "id": "shared-catalog-customercatalogpresentationapi-get-bearer-2",
+      "source": "src/shared/catalog/customerCatalogPresentationApi.ts",
+      "method": "GET",
+      "path": "/api/v1/catalog/menu-items/{value}",
+      "auth": "bearer",
+      "requestModel": "shared-catalog-customercatalogpresentationapi-get-bearer-2.request",
+      "responseModel": "shared-catalog-customercatalogpresentationapi-get-bearer-2.response",
+      "requestValidator": "shared-catalog-customercatalogpresentationapi-get-bearer-2.requestValidator",
+      "responseValidator": "shared-catalog-customercatalogpresentationapi-get-bearer-2.responseValidator"
+    }
+  ],
+  "quarantined": []
+}

@@ -27,14 +27,15 @@ export function entryStateFor(latest: DeletionView | null): EntryState {
 export type ScopeChoice = { scope: DeletionScope; title: string; subtitle: string };
 export type ScopePlan = { kind: "direct"; scope: DeletionScope } | { kind: "choose"; options: ScopeChoice[]; riderNote: boolean };
 
-/** What to ask the person: one side only when they are signed in on it; all three choices when the page cannot tell (the explainer's sign-in link). */
+/** What to ask the person: only the sides the account has, narrowed to the one they are signed in on; all of them when the page cannot tell (the explainer's sign-in link). */
 export function scopePlanFor(roles: readonly string[], side: DeletionSide): ScopePlan {
   const isChef = roles.includes("CHEF");
   const isRider = roles.includes("RIDER");
-  if (side !== "chef" && !isChef) return { kind: "direct", scope: isRider ? "CUSTOMER" : "ALL" };
+  // No chef side: the customer account is the whole account, whatever side the page says.
+  if (!isChef) return { kind: "direct", scope: isRider ? "CUSTOMER" : "ALL" };
   const { chefSide, customerSide, whole } = deletionCopy.chooser;
   const sides: ScopeChoice[] = [
-    ...(side !== "chef" ? [{ scope: "CUSTOMER" as const, ...customerSide }] : []),
+    ...(side !== "chef" && roles.includes("CUSTOMER") ? [{ scope: "CUSTOMER" as const, ...customerSide }] : []),
     ...(side !== "customer" ? [{ scope: "CHEF" as const, ...chefSide }] : []),
   ];
   // A rider account is not deleted on the website, so the whole account is never offered.

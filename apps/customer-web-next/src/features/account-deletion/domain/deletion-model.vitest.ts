@@ -29,7 +29,14 @@ describe("deletion model", () => {
     expect(options(scopePlanFor(["CUSTOMER", "CHEF"], "customer"))).toEqual(["CUSTOMER", "ALL"]);
     expect(scopePlanFor(["CUSTOMER", "CHEF"], "chef")).toEqual({ kind: "choose", riderNote: false, options: [
       { scope: "CHEF", ...deletionCopy.chooser.chefSide }, { scope: "ALL", ...deletionCopy.chooser.whole }] });
-    expect(scopePlanFor(["CHEF"], "chef").kind).toBe("choose"); // chef whose customer side is gone
+  });
+
+  it("scopePlanFor offers only the sides the account has", () => {
+    // a chef whose customer side is gone
+    expect(options(scopePlanFor(["CHEF"], "chef"))).toEqual(["CHEF", "ALL"]);
+    expect(options(scopePlanFor(["CHEF"], null))).toEqual(["CHEF", "ALL"]);
+    // no chef side to delete: the customer account is the whole account, whatever side the page says
+    expect(scopePlanFor(["CUSTOMER"], "chef")).toEqual({ kind: "direct", scope: "ALL" });
   });
 
   it("scopePlanFor offers three choices, in the copy's order, when the side is unknown", () => {
@@ -43,6 +50,8 @@ describe("deletion model", () => {
     expect(options(scopePlanFor(["CUSTOMER", "CHEF", "RIDER"], null))).toEqual(["CUSTOMER", "CHEF"]);
     expect(options(scopePlanFor(["CUSTOMER", "CHEF", "RIDER"], "chef"))).toEqual(["CHEF"]);
     expect(options(scopePlanFor(["CUSTOMER", "CHEF", "RIDER"], "customer"))).toEqual(["CUSTOMER"]);
+    expect(scopePlanFor(["CHEF", "RIDER"], null)).toMatchObject({ kind: "choose", riderNote: true });
+    expect(options(scopePlanFor(["CHEF", "RIDER"], null))).toEqual(["CHEF"]);
   });
 
   it("summaryKindFor", () => {

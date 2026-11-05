@@ -19,6 +19,24 @@ export function formatKm(meters: number): string {
 }
 
 /** 12-hour clock with am/pm, in the phone's time zone. */
+/** "0BDE0101" or "#0BDE0101" reads "0BDE 0101" (app 1.3.3): a space after the 4th of 8 characters; other codes stay. */
+export function formatOrderCode(code: string): string {
+  const bare = code.replace(/^#/, '');
+  return /^[0-9A-Za-z]{8}$/.test(bare) ? `${bare.slice(0, 4)} ${bare.slice(4)}` : code;
+}
+
+/** About 20 km/h on a two-wheeler, as the server's estMinutes: minutes for a distance in metres. */
+export function minutesFor(metres: number): number {
+  return Math.max(1, Math.ceil(metres / 333));
+}
+
+/** "2 h 36 min", "45 min". */
+export function formatHoursMinutes(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? `${h} h ${m} min` : `${m} min`;
+}
+
 export function formatClock(value: string | number): string {
   const date = new Date(value);
   const hours = date.getHours();

@@ -31,6 +31,20 @@ class FleetLocationServiceTest {
             .as("clipped to the slot").isEqualTo(10);
     }
 
+    /** App 1.3.3 (R-07): a booked slot counts a gap only when the fix that ends it is inside the cluster's circle. */
+    @Test
+    void aBookedSlotCountsOnlyFixesInsideItsZone() {
+        RiderFix inside = new RiderFix(17.4490, 78.3915, 8.0, T.plusSeconds(10), false);
+        RiderFix outside = new RiderFix(17.4700, 78.3915, 8.0, T.plusSeconds(20), false);
+        RiderFix back = new RiderFix(17.4483, 78.3920, 8.0, T.plusSeconds(30), false);
+        List<RiderFix> fixes = List.of(inside, outside, back);
+        assertThat(FleetLocationService.inZoneSeconds(T, false, fixes, T.minusSeconds(60), T.plusSeconds(60), 17.4483, 78.3915, 1500))
+            .as("10 s to the inside fix, nothing to the one 2.4 km north, 10 s to the one back inside").isEqualTo(20);
+        assertThat(FleetLocationService.inZoneSeconds(T, false, fixes, T.minusSeconds(60), T.plusSeconds(60), null, null, null))
+            .as("an ops slot has no geometry: the whole window counts").isEqualTo(30);
+        assertThat(FleetLocationService.inZone(new RiderFix(null, null, null, T, false), 17.4483, 78.3915, 1500)).isFalse();
+    }
+
     /** Blueprint A6: with ageMs the database clock times the fix, capped at an hour; without it the phone's stamp stays. */
     @Test
     void ageMsTimesAFixByTheServerClockAndIsCappedAtAnHour() {

@@ -17,6 +17,9 @@ export interface RiderNotice {
   checking?: string;
   /** The one trip whose pay is on hold, if any. */
   tripId?: string;
+  /** App 1.3.3 (R-06): who decides, by name and team, and the pay on hold meanwhile; the screen says when they are missing. */
+  decidedBy?: string;
+  heldPaise?: Paise;
 }
 
 export interface RiderMe {
@@ -39,7 +42,8 @@ export interface RiderMe {
    * nativeTripOutbox (P2-02): trip steps go through the phone's native outbox, which sends them after a kill or reboot.
    * riderChoices (Phase 4): the rider can take a break while online and choose the farthest pickup and drop.
    */
-  features: {payoutsEnabled: boolean; withdrawEnabled: boolean; nativeTripOutbox?: boolean; riderChoices?: boolean};
+  /** maskedCalls (app 1.3.3): calls go through Craves's relay numbers, so the trip screen says so; off by default. */
+  features: {payoutsEnabled: boolean; withdrawEnabled: boolean; nativeTripOutbox?: boolean; riderChoices?: boolean; maskedCalls?: boolean};
   /** P2-09: the privacy notice in force, absent while none is set; url may hold {language}. */
   privacyNotice?: {version: string; url: string; accepted: boolean};
 }
@@ -145,6 +149,10 @@ export interface OfferRules {
    * fair band counts minutes (bandMinutes); left out: by distance.
    */
   byTravelTime?: boolean;
+  /** Policy 2026-11-v2 (app 1.3.3), present only when true: orders near each other are shared out together, not one by one. */
+  jointMatching?: boolean;
+  /** Policy 2026-11-v2 (app 1.3.3), present only when true: a rider may hear of the next order before this one ends. */
+  nextOrderOffers?: boolean;
 }
 
 /** Why this rider heard of this order, stored with the offer: the rider and ops see the same reason. */
@@ -219,6 +227,21 @@ export interface Offer {
   payLines: PayLine[];
   /** Why this offer came to this rider (Phase 4); left out by older servers. */
   reason?: OfferReason;
+  /** App 1.3.3 (docs/riders/REDESIGN.md): the offer reads as drawn. Each is optional, so older servers still show the offer. */
+  kitchenName?: string;
+  /** Minutes from where the rider is to the kitchen. */
+  pickupMinutes?: number;
+  /** Minutes until the chef says the food is ready; left out when the kitchen hasn't said. */
+  foodReadyInMinutes?: number;
+  /**
+   * A next-order offer: this order starts after the rider's current drop (DISPATCH.md, "next-order offers"). pickupDistanceM
+   * is then measured from that drop. Accepting works as any offer; the trip opens once the current one ends.
+   */
+  afterTrip?: {dropLocality: string; dropMinutes: number; foodReadyAt?: string};
+  /** The kitchen, for the map preview (R-02); left out by older servers, and the map with it. */
+  kitchenAt?: {lat: number; lng: number};
+  /** The centre of the customer's AREA, never the door: the preview shades 300 m around it. */
+  customerAreaAt?: {lat: number; lng: number};
 }
 
 export type TripStep =
@@ -259,6 +282,15 @@ export interface Trip {
   sealed: boolean;
   /** When the chef marked the food ready; the free wait starts at the later of this and arrival. */
   chefReadyAt?: string;
+  /** App 1.3.3 (R-05): the trip and trip-complete screens as drawn; older servers leave these out and the lines hide. */
+  rateCardVersion?: string;
+  /** The locked pay the offer showed ("Offer said at least ₹61"). */
+  offerPayPaise?: Paise;
+  /** The offer's distances, the ones pay counts, not the route ridden. */
+  pickupDistanceM?: number;
+  dropDistanceM?: number;
+  pickedUpAt?: string;
+  finishedAt?: string;
 }
 
 export interface PayLine {
@@ -305,6 +337,68 @@ export interface PayoutsPage {
   nextPayoutOn?: string;
   withdrawablePaise: Paise;
   payouts: Payout[];
+}
+
+/** GET /slots (app 1.3.3, R-07): booked peak slots. */
+export interface SlotsPage {
+  clusters: SlotCluster[];
+  slots: SlotOffer[];
+  /** The booked slot running now, if any. */
+  running?: RunningSlot;
+  maxHoursPerDay: number;
+  /** This rider books from Thursday 10:00 IST (a slot completed in the last 14 days, no two no-shows). */
+  earlyWave: boolean;
+}
+
+export interface SlotCluster {
+  clusterId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radiusM: number;
+}
+
+export interface SlotOffer {
+  capacityId: string;
+  clusterId: string;
+  clusterName: string;
+  startsAt: string;
+  endsAt: string;
+  /** The guarantee an hour while online inside the cluster. */
+  ratePerHourPaise: Paise;
+  places: number;
+  placesLeft: number;
+  /** When this rider may book it (their wave). */
+  opensAt: string;
+  /** Present when this rider holds a place. */
+  bookingId?: string;
+  standby: boolean;
+}
+
+export interface RunningSlot {
+  bookingId: string;
+  clusterName: string;
+  startsAt: string;
+  endsAt: string;
+  ratePerHourPaise: Paise;
+  inZoneMinutes: number;
+  /** The guarantee the minutes so far cover. */
+  coveredPaise: Paise;
+}
+
+export interface SlotBooking {
+  bookingId: string;
+  capacityId: string;
+  status: 'BOOKED' | 'CANCELLED' | 'NO_SHOW' | 'COMPLETED';
+  clusterName: string;
+  startsAt: string;
+  endsAt: string;
+  ratePerHourPaise: Paise;
+}
+
+export interface SlotStandby {
+  capacityId: string;
+  position: number;
 }
 
 /** POST /shift/start. The credential is opaque: the native online service keeps it, JS never stores it. */

@@ -3,8 +3,8 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {FlashList} from '@shopify/flash-list';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {Icon, LoadingIndicator, SkeletonBlock} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {LoadingIndicator, SkeletonBlock} from '../../../shared/components';
+import {borderWidth, colors, fontWeight, radius, spacing, touchTarget, typography} from '../../../design/tokens';
 import type {EarningsRange, TripEarning} from '../api/contract';
 import {BottomAction} from '../components/BottomAction';
 import {Segmented} from '../components/Choices';
@@ -12,15 +12,22 @@ import {RiderHeader} from '../components/RiderHeader';
 import {StateCard} from '../components/StateCard';
 import {StatusBadge} from '../components/StatusBadge';
 import {Money} from '../components/ui';
-import {formatClock, formatDay, formatRupees} from '../domain/format';
+import {formatClock, formatDay, formatHoursMinutes, formatKm, formatRupees} from '../domain/format';
 import type {RiderNav} from '../navigation';
-import {useEarnings} from '../state/riderQueries';
+import {useEarnings, usePayouts, useProfile, useRiderHome} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {LoadFailed} from './TripDetailScreen';
 
 type EarningsStrings = ReturnType<typeof useStrings>['strings']['earnings'];
 
-/** One trip: route and time on the left, the server's amount and its status on the right. Memoised for 200-row lists. */
+/** "wait ₹6 · tip ₹8.90": the server's extra lines, by component, after the distance. */
+function extras(item: TripEarning, e: EarningsStrings): string[] {
+  return item.lines
+    .filter(line => line.component && line.component in e.lineShort)
+    .map(line => `${e.lineShort[line.component as keyof typeof e.lineShort]} ${formatRupees(line.amountPaise)}`);
+}
+
+/** One trip, as drawn: time and route, then distance and extras, the server's amount on the right. Memoised for 200-row lists. */
 const TripRow = memo(function TripRowView({
   item,
   withDay,
@@ -35,42 +42,62 @@ const TripRow = memo(function TripRowView({
   const route = e.route(item.kitchenArea, item.customerLocality);
   const time = formatClock(item.completedAt);
   const when = withDay ? `${e.weekdays[new Date(item.completedAt).getDay()]} ${formatDay(item.completedAt)}, ${time}` : time;
-  const sub = item.status === 'HELD' ? `${when}, ${e.seeWhy}` : when;
+  const sub = [formatKm(item.dropDistanceM), ...extras(item, e), ...(item.status === 'HELD' ? [e.seeWhy] : [])].join(' · ');
   const amount = formatRupees(item.amountPaise);
   const status = e.status[item.status];
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${route}, ${sub}, ${amount}, ${status}`}
+      accessibilityLabel={`${when}, ${route}, ${sub}, ${amount}, ${status}`}
       onPress={() => onOpen(item.tripId)}
       style={({pressed}) => [styles.row, pressed && styles.pressed]}
       testID={`earning-${item.tripId}`}>
       <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{route}</Text>
+        <Text style={styles.rowTitle}>{`${when} · ${route}`}</Text>
         <Text style={styles.meta}>{sub}</Text>
       </View>
       <View style={styles.rowEnd}>
         <Text style={styles.amount}>{amount}</Text>
-        <StatusBadge status={item.status} label={status} compact />
+        {item.status === 'CREDITED' ? null : <StatusBadge status={item.status} label={status} compact />}
       </View>
     </Pressable>
   );
 });
 
-/** Today / This week, drawn to the design: a muted track with a white selected segment. */
-function RangeSwitch({value, onChange, e}: {value: EarningsRange; onChange: (range: EarningsRange) => void; e: EarningsStrings}) {
+type Tab = EarningsRange | 'payouts';
+
+/** Today / This week / Payouts, as drawn; Payouts opens its own screen. */
+function RangeSwitch({value, onChange, e}: {value: EarningsRange; onChange: (tab: Tab) => void; e: EarningsStrings}) {
   return (
-    <Segmented
+    <Segmented<Tab>
       value={value}
       options={[
         {value: 'today', label: e.today},
         {value: 'week', label: e.week},
+        {value: 'payouts', label: e.payoutsTab},
       ]}
       onChange={onChange}
       label={e.range}
       role="tab"
       testID="rider-range"
     />
+  );
+}
+
+/** The first trip on hold, as drawn: what the server says, by when a person decides, and the way to add the rider's side. */
+function HoldCard({item, e, onAddSide}: {item: TripEarning; e: EarningsStrings; onAddSide: () => void}) {
+  const day = item.releaseOn ? `${e.weekdays[new Date(item.releaseOn).getDay()]} ${formatDay(item.releaseOn)}` : null;
+  return (
+    <View style={styles.hold} testID="rider-earnings-hold">
+      <View style={styles.spread}>
+        <Text style={styles.holdTitle}>{e.onHold(e.route(item.kitchenArea, item.customerLocality))}</Text>
+        <Text style={[styles.holdTitle, styles.tabular]}>{formatRupees(item.amountPaise)}</Text>
+      </View>
+      <Text style={styles.holdBody}>{[item.holdReason, day ? e.reviewBy(day) : null, e.nothingElse].filter(Boolean).join(' ')}</Text>
+      <Pressable accessibilityRole="link" onPress={onAddSide} style={styles.holdLink} testID="rider-earnings-add-side">
+        <Text style={styles.linkText}>{e.addSide}</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -96,38 +123,54 @@ export function EarningsScreen() {
   const navigation = useNavigation<RiderNav>();
   const [range, setRange] = useState<EarningsRange>('today');
   const earnings = useEarnings(range);
+  const home = useRiderHome().data;
+  const profile = useProfile().data;
+  const payouts = usePayouts().data;
   const trips = earnings.data?.pages.flatMap(page => page.trips) ?? [];
   const first = earnings.data?.pages[0];
   const open = useCallback((tripId: string) => navigation.navigate('TripDetail', {tripId}), [navigation]);
   const today = new Date();
+  const onTab = (tab: Tab) => (tab === 'payouts' ? navigation.navigate('Payouts') : setRange(tab));
+  const held = trips.find(item => item.status === 'HELD');
+  // "5 trips · 2 h 36 min online · ₹184 per online hour": today's online time and rate come with Home; the week has only its count.
+  const summary = [
+    earnings.hasNextPage ? null : e.trips(trips.length),
+    range === 'today' && home?.todayOnlineMinutes ? e.onlineFor(formatHoursMinutes(home.todayOnlineMinutes)) : null,
+    range === 'today' && home?.todayPerHourPaise !== undefined ? e.perOnlineHour(formatRupees(home.todayPerHourPaise)) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const lastPaid = payouts?.payouts.find(payout => payout.status === 'PAID');
 
   const top = (
     <View style={styles.top}>
-      <RangeSwitch value={range} onChange={setRange} e={e} />
+      <RangeSwitch value={range} onChange={onTab} e={e} />
       {first ? (
-        <View>
+        <View style={styles.summary}>
           <Text style={styles.meta}>
             {range === 'today' ? e.dated(first.rangeLabel, `${e.weekdays[today.getDay()]} ${formatDay(today.getTime())}`) : first.rangeLabel}
           </Text>
-          <View style={styles.totalRow}>
-            <Money paise={first.totalPaise} testID="rider-earnings-total" />
-            {/* Counted only once every page is here, so it never undercounts. */}
-            {earnings.hasNextPage ? null : <Text style={styles.trips}>{e.trips(trips.length)}</Text>}
-          </View>
+          <Money paise={first.totalPaise} testID="rider-earnings-total" />
+          {/* Counted only once every page is here, so it never undercounts. */}
+          {summary ? <Text style={styles.trips}>{summary}</Text> : null}
+          {range === 'today' && home?.fleetPerHourPaise !== undefined ? <Text style={styles.meta}>{e.fleetLine(formatRupees(home.fleetPerHourPaise))}</Text> : null}
         </View>
       ) : earnings.isLoading ? (
         <SkeletonBlock width="40%" height={36} />
       ) : null}
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => navigation.navigate('Payouts')}
-        style={({pressed}) => [styles.navRow, pressed && styles.pressed]}
-        testID="rider-open-payouts">
-        <Text style={styles.navText}>{e.payouts}</Text>
-        <Icon name="chevron-right" size={iconSize.lg} color={colors.textPrimary} surface={false} />
-      </Pressable>
+      {held ? <HoldCard item={held} e={e} onAddSide={() => navigation.navigate('Notice')} /> : null}
     </View>
   );
+  // "Paid every Monday to HDFC ···4417. Last payout Mon 27 Oct, ₹2,640, UTR …": only the parts the server has sent.
+  const payoutLine = [
+    profile?.payoutAccountMasked ? e.paidEvery(profile.payoutAccountMasked) : null,
+    lastPaid?.paidAt
+      ? e.lastPayout(`${e.weekdays[new Date(lastPaid.paidAt).getDay()]} ${formatDay(lastPaid.paidAt)}`, formatRupees(lastPaid.amountPaise), lastPaid.utr)
+      : null,
+    e.freeWithdraw,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <SafeAreaView edges={['top']} style={styles.screen} testID="rider-earnings">
@@ -159,7 +202,11 @@ export function EarningsScreen() {
             <View style={styles.pad}>
               <BottomAction label={strings.common.retry} variant="outline" onPress={() => earnings.fetchNextPage()} />
             </View>
-          ) : null
+          ) : earnings.hasNextPage ? null : (
+            <Text style={[styles.meta, styles.pad]} testID="rider-earnings-payout-line">
+              {payoutLine}
+            </Text>
+          )
         }
         onEndReached={() => earnings.hasNextPage && !earnings.isFetchingNextPage && earnings.fetchNextPage()}
         onEndReachedThreshold={0.5}
@@ -178,20 +225,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: borderWidth.standard,
     borderBottomColor: colors.border,
   },
-  totalRow: {flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm},
+  summary: {gap: spacing.xxs},
   trips: {fontSize: typography.body, color: colors.textSecondary},
-  navRow: {
-    minHeight: touchTarget.minimum,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xxs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.borderStrong,
-  },
-  navText: {flex: 1, fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  spread: {flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm},
+  // The hold card as drawn: warm amber, dark amber words, the link in deep red.
+  hold: {backgroundColor: colors.warningSoft, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xxs},
+  holdTitle: {fontSize: typography.body, fontWeight: fontWeight.medium, color: colors.textPrimary},
+  holdBody: {fontSize: typography.body, lineHeight: 20, color: colors.warningText},
+  holdLink: {minHeight: touchTarget.minimum, justifyContent: 'center'},
+  linkText: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.flameRedAccessible},
+  tabular: {fontVariant: ['tabular-nums']},
   row: {
     minHeight: 69,
     flexDirection: 'row',

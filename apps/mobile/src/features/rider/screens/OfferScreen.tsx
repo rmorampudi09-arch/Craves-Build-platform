@@ -2,16 +2,16 @@ import React, {memo, useEffect, useRef, useState} from 'react';
 import {AccessibilityInfo, BackHandler, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useQueryClient} from '@tanstack/react-query';
-import {Icon} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
+import {borderWidth, colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
 import {AppApiError} from '../../../core/http/apiError';
 import {idempotencyKey, riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
 import {CountdownBar} from '../components/CountdownBar';
+import {OfferMap} from '../components/OfferMap';
 import {OfflineBanner} from '../components/OfflineBanner';
-import {Card} from '../components/ui';
-import {formatKm, formatRupees} from '../domain/format';
+import {RateRow} from '../components/ui';
+import {formatClock, formatKm, formatRupees} from '../domain/format';
 import {whyHome, whyOffer} from '../domain/offerRules';
 import {offerDeadlineMs, secondsLeft} from '../domain/offerTiming';
 import {problemOf, riderMessage} from '../domain/problem';
@@ -46,7 +46,10 @@ const SecondsLeft = memo(function SecondsLeftView({deadline, label}: {deadline: 
   return <Text style={styles.heading}>{label(seconds)}</Text>;
 });
 
-/** The ringing offer (08-Offer.png): locked pay first, distances, route, and a free decline. */
+/**
+ * The ringing offer (REDESIGN.md, Offer and OfferNext): locked pay first, the trip in rows, why it came, and a free decline.
+ * A next-order offer (afterTrip) shows the current trip on top and starts after its drop.
+ */
 export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
   const {strings, language} = useStrings();
   const o = strings.offer;
@@ -138,65 +141,75 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
   const pay = formatRupees(offer.payPaise);
   // The server's own breakdown, joined into one sentence; the app adds nothing up.
   const parts = offer.payLines.map(line => `${formatRupees(line.amountPaise)} ${payLabel(line, strings.pay.offer, language)}`).join(' + ');
-  const breakdown = parts ? `${parts}. ${o.locked}` : o.locked;
-  const why = whyOffer(offer.reason, o);
+  const next = offer.afterTrip;
+  const kitchen = offer.kitchenName ?? offer.kitchenArea;
+  const pickupKm = formatKm(offer.pickupDistanceM);
+  // The reason, as drawn: the rule in one line, plus "only you" when nobody else is asked, or the next-order wording.
+  const why = next ? o.whyNext : [whyOffer(offer.reason, o), offer.reason?.atOnce === 1 ? o.onlyYou : null].filter(Boolean).join(' ');
   const home = whyHome(offer.reason, o);
+  const rows: [string, string][] = next
+    ? [
+        [o.fromDropToKitchen, offer.pickupMinutes == null ? pickupKm : o.kmMinutes(pickupKm, offer.pickupMinutes)],
+        [o.toCustomer, `${formatKm(offer.dropDistanceM)} · ${offer.customerLocality}`],
+        ...(next.foodReadyAt ? [[o.foodReadyAt, o.readyWhenArrive(formatClock(next.foodReadyAt))] as [string, string]] : []),
+      ]
+    : [
+        [o.toKitchen, offer.pickupMinutes == null ? pickupKm : o.kmMinutes(pickupKm, offer.pickupMinutes)],
+        [o.toCustomer, `${formatKm(offer.dropDistanceM)} · ${offer.customerLocality}`],
+        ...(offer.foodReadyInMinutes == null ? [] : [[o.foodReadyIn, o.aboutMinutes(offer.foodReadyInMinutes)] as [string, string]]),
+        [o.wholeTrip, o.aboutMinutes(offer.estMinutes)],
+      ];
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.screen} testID="rider-offer">
       <OfflineBanner />
+      {next ? (
+        <View style={styles.currentTrip} testID="rider-offer-current-trip">
+          <Text style={styles.currentTripLabel}>{o.currentTrip(next.dropLocality)}</Text>
+          <Text style={styles.currentTripValue}>{o.minutesToDrop(next.dropMinutes)}</Text>
+        </View>
+      ) : null}
       <ScrollView contentContainerStyle={styles.content}>
-        <CountdownBar deadlineMs={deadline} totalMs={offer.expiresInSec * 1000} testID="rider-offer-countdown" />
         <View style={styles.titleRow}>
-          <Text accessibilityRole="header" style={[styles.heading, styles.flex]}>
-            {o.title}
+          <Text accessibilityRole="header" style={[styles.secondary, styles.flex]}>
+            {next ? o.nextTitle : o.titleFor(kitchen)}
           </Text>
           {ended ? null : <SecondsLeft deadline={deadline} label={o.secondsLeft} />}
         </View>
+        <CountdownBar deadlineMs={deadline} totalMs={offer.expiresInSec * 1000} testID="rider-offer-countdown" />
         {ended ? <Banner tone="info" text={ended} testID="rider-offer-ended" /> : null}
-        <View accessible accessibilityLabel={`${o.atLeast} ${pay}. ${breakdown}`} style={styles.pay}>
-          <Text style={styles.secondary}>{o.atLeast}</Text>
+        <View accessible accessibilityLabel={`${o.atLeast} ${pay}. ${o.locked} ${parts}`} style={styles.pay}>
           <Text style={styles.payHero} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} testID="rider-offer-pay">
             {pay}
           </Text>
-          <Text style={styles.small}>{breakdown}</Text>
+          <Text style={styles.secondary}>{next ? o.fromDrop(kitchen, pickupKm) : o.locked}</Text>
+          {parts ? <Text style={styles.small}>{parts}</Text> : null}
         </View>
-        <View style={styles.distances}>
-          <Card style={styles.flex}>
-            <Text style={styles.small}>{o.toKitchen}</Text>
-            <Text style={styles.hero}>{formatKm(offer.pickupDistanceM)}</Text>
-          </Card>
-          <Card style={styles.flex}>
-            <Text style={styles.small}>{o.toCustomer}</Text>
-            <Text style={styles.hero}>{formatKm(offer.dropDistanceM)}</Text>
-          </Card>
+        <OfferMap key={offer.offerId} kitchen={offer.kitchenAt} customerArea={offer.customerAreaAt} label={o.mapLabel} />
+        <View style={styles.rows}>
+          {rows.map(([label, value]) => (
+            <RateRow key={label} label={label} value={value} />
+          ))}
         </View>
-        <Card>
-          <View accessible accessibilityLabel={o.route(offer.kitchenArea, offer.customerLocality)} style={styles.route}>
-            <Text style={styles.heading}>{offer.kitchenArea}</Text>
-            <Icon name="arrow-right" size={iconSize.sm} color={colors.textSecondary} surface={false} />
-            <Text style={styles.heading}>{offer.customerLocality}</Text>
-          </View>
-          <Text style={styles.secondary}>{o.total(offer.estMinutes, offer.itemsCount)}</Text>
-        </Card>
-        <View style={styles.push} />
         {why ? (
-          <Text style={styles.secondary} testID="rider-offer-why">
-            {why}
-          </Text>
+          <View style={styles.whyCard}>
+            <Text style={styles.why} testID="rider-offer-why">
+              {why}
+            </Text>
+          </View>
         ) : null}
         {home ? (
           <Text style={styles.secondary} testID="rider-offer-home">
             {home}
           </Text>
         ) : null}
-        <Text style={styles.note}>{o.freeDecline}</Text>
+        <View style={styles.push} />
       </ScrollView>
       {ended ? null : (
         <View style={styles.footer}>
           {failed ? <Banner tone="warning" text={failed} testID="rider-offer-failed" /> : null}
           <BottomAction
-            label={o.accept}
+            label={next ? o.takeAfterDrop : o.accept}
             size="tall"
             onPress={accept}
             disabled={answering === 'decline'}
@@ -209,6 +222,7 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
             disabled={answering === 'accept'}
             testID="rider-offer-decline"
           />
+          <Text style={styles.note}>{next ? o.freeDeclineNext : o.freeDecline}</Text>
         </View>
       )}
     </SafeAreaView>
@@ -219,17 +233,21 @@ const styles = StyleSheet.create({
   screen: {flex: 1, backgroundColor: colors.white},
   content: {flexGrow: 1, gap: spacing.md, padding: spacing.md},
   flex: {flex: 1},
-  titleRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: -spacing.xxs},
-  pay: {marginTop: spacing.xs},
+  titleRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+  pay: {marginTop: spacing.xs, gap: spacing.xxs},
   payHero: {...OFFER_PAY, color: colors.textPrimary, fontVariant: ['tabular-nums']},
-  distances: {flexDirection: 'row', gap: spacing.sm},
-  route: {flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs},
+  rows: {gap: spacing.xs},
+  // The reason card and the current-trip strip, as drawn: warm grey, and espresso with light text.
+  whyCard: {backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, padding: spacing.md},
+  why: {fontSize: typography.body, color: colors.textSecondary},
+  currentTrip: {backgroundColor: colors.espresso, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.xxs},
+  currentTripLabel: {fontSize: typography.small, color: colors.surfaceMuted},
+  currentTripValue: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.white},
   push: {flexGrow: 1},
   heading: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
-  hero: {fontSize: typography.hero, fontWeight: fontWeight.bold, color: colors.textPrimary},
   secondary: {fontSize: typography.body, color: colors.textSecondary},
   small: {fontSize: typography.small, color: colors.textSecondary},
-  note: {fontSize: typography.body, color: colors.textPrimary, textAlign: 'center'},
+  note: {fontSize: typography.small, color: colors.textSecondary, textAlign: 'center'},
   footer: {
     padding: spacing.md,
     gap: spacing.xs,

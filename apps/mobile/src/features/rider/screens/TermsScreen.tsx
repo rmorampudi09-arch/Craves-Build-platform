@@ -1,5 +1,6 @@
 import React from 'react';
 import {Alert, Linking, StyleSheet, Text, View} from 'react-native';
+import {useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import {Badge} from '../../../shared/components';
 import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
@@ -13,12 +14,12 @@ import {Card, RateRow, RiderScreen} from '../components/ui';
 import {formatDay} from '../domain/format';
 import {offerRulesLines} from '../domain/offerRules';
 import {riderMessage} from '../domain/problem';
-import {openAfterGate, type RiderScreenProps} from '../navigation';
+import {openAfterGate, type RiderNav, type RiderScreenProps} from '../navigation';
 import {riderKeys, useRiderMe, useTerms} from '../state/riderQueries';
 import {RIDER_LANGUAGES, useStrings} from '../strings/StringsProvider';
 
 /** Switches the whole app's language; each label is in its own script. 40 dp to see, 48 dp to touch. */
-function LanguageChips() {
+export function LanguageChips() {
   const {strings, language, setLanguage} = useStrings();
   if (RIDER_LANGUAGES.length < 2) {
     return null;
@@ -51,6 +52,7 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
   const {strings, language} = useStrings();
   const t = strings.terms;
   const queryClient = useQueryClient();
+  const navigation = useNavigation<RiderNav>();
   const terms = useTerms();
   const me = useRiderMe();
   const accepting = route.params.mode === 'accept';
@@ -125,6 +127,7 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
       <LanguageChips />
       <View style={styles.meta}>
         <Text style={styles.small}>{t.version(version, formatDay(effectiveFrom))}</Text>
+        <Text style={styles.body}>{t.changesAhead}</Text>
         {draft ? <Badge label={t.draft} tone="warning" style={styles.badge} testID="rider-terms-draft" /> : null}
       </View>
       {changed ? (
@@ -179,8 +182,11 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
       ) : null}
       <Card>
         <CardTitle>{t.howPaidTitle}</CardTitle>
+        <Text style={styles.body}>{t.seePay}</Text>
         <Text style={styles.body}>{t.howPaid}</Text>
         <Text style={styles.body}>{t.noFees}</Text>
+        <Text style={styles.body}>{t.coverAndAccount}</Text>
+        <BottomAction label={t.rulesLink} variant="outline" size="compact" onPress={() => navigation.navigate('Rules')} testID="rider-terms-rules" />
       </Card>
       <Card>
         <CardTitle>{t.grievance}</CardTitle>

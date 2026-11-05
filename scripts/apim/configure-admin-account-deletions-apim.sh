@@ -19,6 +19,8 @@ CONFIRM_APIM_WRITE="${CONFIRM_APIM_WRITE:-false}"
 fail() { echo "ERROR: $*" >&2; exit 1; }
 # Azure CLI output is captured and never echoed: on failure only this script's own message is printed.
 azq() { local what="$1" out; shift; out=$("$@" 2>/dev/null) || fail "Azure command failed: $what"; printf '%s' "$out"; }
+# Writes: az rest prints the response body even with -o none, so it is dropped.
+azw() { local what="$1"; shift; "$@" >/dev/null 2>&1 || fail "Azure command failed: $what"; }
 # The gate comes first, so a missing tool never hides it.
 [[ "${DRY_RUN,,}" == "true" || "${CONFIRM_APIM_WRITE,,}" == "true" ]] || fail "Set DRY_RUN=true to check only, or CONFIRM_APIM_WRITE=true for the controlled APIM write"
 
@@ -104,7 +106,7 @@ fi
 
 # Writes.
 if [[ -z "$OWNER" ]]; then
-  azq "create the API" az apim api create -g "$APIM_RG" --service-name "$APIM" --api-id "$API_ID" \
+  azw "create the API" az apim api create -g "$APIM_RG" --service-name "$APIM" --api-id "$API_ID" \
     --display-name "Craves Admin Account Deletions" --path "$API_PATH" --service-url "$BASE/api/v1/admin/account-deletions" \
     --protocols https --subscription-required false -o none
 fi
@@ -114,10 +116,10 @@ for ROW in "${OPERATIONS[@]}"; do
   PARAMS=$(grep -oE '\{[A-Za-z]+\}' <<<"$TEMPLATE" | tr -d '{}' | jq -R '{name: ., type: "string", required: true}' | jq -s . || true)
   jq -n --arg name "$NAME" --arg method "$METHOD" --arg template "$TEMPLATE" --argjson params "${PARAMS:-[]}" \
     '{properties: {displayName: $name, method: $method, urlTemplate: $template, templateParameters: $params, responses: []}}' >"$TEMP_DIR/operation.json"
-  azq "write operation $OP" az rest --method put --url "${API_MGMT}/operations/${OP}?api-version=${API_VERSION}" --body @"$TEMP_DIR/operation.json" -o none
+  azw "write operation $OP" az rest --method put --url "${API_MGMT}/operations/${OP}?api-version=${API_VERSION}" --body @"$TEMP_DIR/operation.json" -o none
   sed -e "s|__BACKEND_BASE_URL__|${BASE}|" -e "s|__REWRITE_TEMPLATE__|${TARGET}|" "$POLICY_TEMPLATE" >"$TEMP_DIR/policy.xml"
   jq -Rs '{properties: {format: "rawxml", value: .}}' "$TEMP_DIR/policy.xml" >"$TEMP_DIR/policy.json"
-  azq "write policy of $OP" az rest --method put --url "${API_MGMT}/operations/${OP}/policies/policy?api-version=${API_VERSION}" --body @"$TEMP_DIR/policy.json" -o none
+  azw "write policy of $OP" az rest --method put --url "${API_MGMT}/operations/${OP}/policies/policy?api-version=${API_VERSION}" --body @"$TEMP_DIR/policy.json" -o none
   POLICY=$(azq "read back policy of $OP" az rest --method get --url "${API_MGMT}/operations/${OP}/policies/policy?api-version=${API_VERSION}" --query properties.value -o tsv)
   [[ "$POLICY" == *"$BASE"* && "$POLICY" == *"$TARGET"* && "$POLICY" == *Bearer* ]] || fail "Policy read-back failed for $METHOD $TARGET"
   echo "WRITTEN $METHOD $TARGET ($API_ID/$OP)"

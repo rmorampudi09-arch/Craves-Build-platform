@@ -84,8 +84,22 @@ jest.mock('../native/riderOnlineService', () => ({
     fcmToken: async () => null,
     onFcmToken: () => () => undefined,
     pendingOffer: async () => null,
+    onReached: (cb: (prompt: unknown) => void) => {
+      mockReached.listener = cb;
+      return () => undefined;
+    },
+    pendingReached: async () => mockReached.pending,
+    reachedNotYet: jest.fn(),
+    reachedDone: jest.fn(),
+    takeStepTap: () => {
+      const step = mockTap.step;
+      mockTap.step = null;
+      return step;
+    },
   },
 }));
+const mockTap: {step: string | null} = {step: null};
+const mockReached: {listener: ((prompt: unknown) => void) | null; pending: unknown} = {listener: null, pending: null};
 const mockFix: {value: {lat: number; lng: number; accuracyM: number; at: string} | null} = {value: null};
 
 const me: RiderMe = {
@@ -284,16 +298,18 @@ describe('Trip: to the kitchen (step 1)', () => {
   it('shows the kitchen, the order and the locked pay', async () => {
     await render(trip);
     const text = allText();
-    expect(text).toContain('Go to the kitchen');
-    expect(text).toContain('Pick up from');
-    expect(text).toContain("Lakshmi's Kitchen");
-    expect(text).toContain('Plot 41, Ayyappa Society, Madhapur');
-    expect(text).toContain('Landmark: near Image Gardens');
-    expect(text).toContain('Navigate opens Google Maps in two-wheeler mode.');
-    expect(text).toContain('CR-4107');
-    expect(text).toContain('2, in a sealed bag');
-    expect(text).toContain('₹67');
+    expect(text).toContain("Order #CR-4107 | Trip · step 1 of 4");
+    expect(text).toContain("₹67 locked · Lakshmi's Kitchen | Ride to | Lakshmi's Kitchen | Plot 41, Ayyappa Society, Madhapur | Landmark: near Image Gardens");
+    // No fix and no offer distance: no distance row; the chef hasn't said when the food is ready.
+    expect(text).toContain("Food ready | the chef hasn't said yet | Navigate | Call chef");
+    expect(text).toContain('Navigate opens Google Maps in two-wheeler mode. Come back here with the notification.');
+    expect(text).toContain("I've reached the kitchen | The app will ask you when you are within 50 m, so you tap less.");
     expect(tree.root.findByProps({testID: 'rider-step-bar'}).props.accessibilityLabel).toBe('Trip step 1 of 4');
+  });
+
+  it("shows the offer's distance and the chef's ready time when the server sends them", async () => {
+    await render({...trip, pickupDistanceM: 600, chefReadyAt: new Date(2026, 10, 3, 20, 12).toISOString()});
+    expect(allText()).toContain('Distance | 0.6 km, about 2 min | Food ready | about 8:12 pm');
   });
 
   it('calls the chef and opens Google Maps in two-wheeler mode', async () => {
@@ -339,8 +355,73 @@ describe('Trip: to the kitchen (step 1)', () => {
     mockPending.offline = true;
     await press('rider-reached-kitchen');
     expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
-    expect(allText()).toContain('At the kitchen');
+    expect(allText()).toContain("Lakshmi's Kitchen | Trip · step 1 of 4");
     expect(allText()).toContain('Saved · will sync');
+  });
+});
+
+describe('Trip: "Reached the kitchen?" (R-03)', () => {
+  const {riderOnlineService} = jest.requireMock('../native/riderOnlineService');
+  const prompt = {tripId: 't1', kitchenName: "Lakshmi's Kitchen", distanceM: 30};
+  afterEach(() => {
+    mockReached.pending = null;
+  });
+
+  it('asks when native says the phone has been at the kitchen, and Yes posts arrived-pickup', async () => {
+    await render(trip);
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+    await act(async () => mockReached.listener?.(prompt));
+    const text = allText();
+    expect(text).toContain("Reached Lakshmi's Kitchen?");
+    expect(text).toContain('Your phone looks about 30 m from the gate. Confirming starts the kitchen wait.');
+    expect(text).toContain('The first 8 minutes are free for the chef; after that you are paid ₹1.50 a minute.');
+    expect(text).toContain('If you tap Not yet, the question comes back once you stop moving.');
+    await press('rider-reached-yes');
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
+    expect(riderOnlineService.reachedDone).toHaveBeenCalled();
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+  });
+
+  it('Not yet closes the sheet and tells native, which asks again once the phone stops', async () => {
+    await render(trip);
+    await act(async () => mockReached.listener?.(prompt));
+    await press('rider-reached-not-yet');
+    expect(riderOnlineService.reachedNotYet).toHaveBeenCalled();
+    expect(tripQueue.enqueue).not.toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup'}));
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+  });
+
+  it('a question still open when the screen opens shows, and Yes from the heads-up posts the step with no sheet', async () => {
+    mockReached.pending = prompt;
+    await render(trip);
+    expect(allText()).toContain("Reached Lakshmi's Kitchen?");
+    mockReached.pending = {...prompt, yes: true};
+    await render(trip);
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
+  });
+
+  it('ignores a question about another trip or another step', async () => {
+    await render(trip);
+    await act(async () => mockReached.listener?.({...prompt, tripId: 'other'}));
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+    await render({...trip, step: 'AT_KITCHEN', arrivedKitchenAt: new Date(Date.now() - 60_000).toISOString()});
+    await act(async () => mockReached.listener?.(prompt));
+    expect(tree.root.findAllByProps({testID: 'rider-reached-sheet'})).toHaveLength(0);
+  });
+});
+
+describe('Trip: a step tapped on the notification (R-04)', () => {
+  it('posts the tapped step once the screen shows that step, and ignores a tap for another step', async () => {
+    mockTap.step = 'arrived-pickup';
+    await render(trip);
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'arrived-pickup', tripId: 't1'}));
+    (tripQueue.enqueue as jest.Mock).mockClear();
+    // "Picked up" tapped while the trip is still on its way to the kitchen: nothing is posted.
+    mockTap.step = 'picked-up';
+    await render(trip);
+    expect(tripQueue.enqueue).not.toHaveBeenCalled();
+    expect(mockTap.step).toBeNull();
   });
 });
 
@@ -362,12 +443,15 @@ describe('Trip: at the kitchen (step 2)', () => {
   it('shows the order code big, on one line, spelled out for TalkBack', async () => {
     await render({...atKitchen, orderCode: '#0BDE0101'});
     const code = tree.root.findByProps({testID: 'rider-order-code'});
-    expect(code.props.children).toBe('#0BDE0101');
+    // As drawn: a space after the 4th character, the # left off; TalkBack hears the characters one by one.
+    expect(code.props.children).toBe('0BDE 0101');
     expect(code.props.numberOfLines).toBe(1);
     expect(code.props.adjustsFontSizeToFit).toBe(true);
-    expect(code.props.accessibilityLabel).toBe('Order code # 0 B D E 0 1 0 1');
-    expect(allText()).toContain("Match this code with the chef's screen");
-    expect(allText()).toContain("2 items from Lakshmi's Kitchen");
+    expect(code.props.accessibilityLabel).toBe('Order code 0 B D E 0 1 0 1');
+    expect(allText()).toContain('Tell the chef this order number | 0BDE 0101 | 2 items · for Anil, Kondapur');
+    // A code of another shape stays as the server sends it.
+    await render(atKitchen);
+    expect(tree.root.findByProps({testID: 'rider-order-code'}).props.children).toBe('CR-4107');
     expect(tree.root.findByProps({testID: 'rider-step-bar'}).props.accessibilityLabel).toBe('Trip step 2 of 4');
   });
 
@@ -422,21 +506,50 @@ describe('Trip: at the kitchen (step 2)', () => {
   });
 });
 
+describe('Trip: the two checks at the kitchen (R-05)', () => {
+  it('lets the rider tick the bag and the count, and never holds up Picked up', async () => {
+    await render({...trip, step: 'AT_KITCHEN', arrivedKitchenAt: new Date(Date.now() - 60_000).toISOString()});
+    expect(allText()).toContain('Bag is sealed and the name on it is Anil | 2 packets, as on the order');
+    expect(byId('rider-check-bag').props.accessibilityState).toEqual({checked: false});
+    expect(byId('rider-picked-up').props.disabled).toBeFalsy();
+    await press('rider-check-bag');
+    expect(byId('rider-check-bag').props.accessibilityState).toEqual({checked: true});
+    expect(byId('rider-check-count').props.accessibilityState).toEqual({checked: false});
+    await press('rider-picked-up');
+    expect(tripQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({action: 'picked-up', tripId: 't1'}));
+  });
+});
+
 describe('Trip: to the customer (step 3)', () => {
   const toCustomer: Trip = {...trip, step: 'PICKED_UP'};
 
   it('shows the customer, the order and the no-deadline note, never a time', async () => {
     await render(toCustomer);
     const text = allText();
-    expect(text).toContain('Go to the customer');
-    expect(text).toContain('Deliver to');
-    expect(text).toContain('Anil');
-    expect(text).toContain('Flat 302, Sai Residency, Kothaguda, Kondapur');
-    expect(text).toContain('Landmark: opposite Botanical Garden gate');
-    expect(text).toContain('2, in a sealed bag');
-    expect(text).not.toContain('₹67'); // no pay row on this step
-    expect(text).toContain("Ride at your own pace. There's no delivery deadline on this screen");
+    expect(text).toContain('Order #CR-4107 | Trip · step 3 of 4');
+    expect(text).toContain('₹67 locked | Deliver to | Anil | Flat 302, Sai Residency, Kothaguda, Kondapur | Landmark: opposite Botanical Garden gate');
+    expect(text).toContain('Hand over | Customer tells you a 4-digit code | Pay for this trip | ₹67, plus kitchen wait if any | Navigate | Call Anil');
+    expect(text).toContain("I'm at the door | No delivery deadline. Ride safely; your pay does not depend on speed.");
     expect(text).not.toMatch(/\d{1,2}:\d{2}\s?(am|pm)/); // no promised time anywhere
+    // Calls go through Craves only when the server says the relay is on.
+    expect(text).not.toContain('Calls go through Craves');
+  });
+
+  it('says calls go through Craves only when the server turns masked calls on', async () => {
+    client = new QueryClient({defaultOptions: {queries: {retry: false, staleTime: Infinity}}});
+    client.setQueryData(riderKeys.activeTrip, toCustomer);
+    client.setQueryData(riderKeys.me, {...me, features: {...me.features, maskedCalls: true}});
+    client.setQueryData(riderKeys.home, home);
+    await act(async () => {
+      tree = renderer.create(
+        <QueryClientProvider client={client}>
+          <RiderShellContext.Provider value={{riderId: 'r1', signOut: async () => undefined}}>
+            <TripScreen navigation={mockNavigation as never} route={{key: 'Trip', name: 'Trip'}} />
+          </RiderShellContext.Provider>
+        </QueryClientProvider>,
+      );
+    });
+    expect(allText()).toContain("Calls go through Craves, so neither of you sees the other's number.");
     expect(tree.root.findByProps({testID: 'rider-step-bar'}).props.accessibilityLabel).toBe('Trip step 3 of 4');
   });
 
@@ -467,10 +580,12 @@ describe('Trip: deliver with the OTP (step 4)', () => {
     mockFix.value = nearFix;
     await render(atDrop);
     const text = allText();
-    expect(text).toContain('At the customer');
-    expect(text).toContain('Flat 302, Sai Residency, Kothaguda, Kondapur');
+    expect(text).toContain('Anil | Trip · step 4 of 4');
+    expect(text).toContain('₹67 locked · Order #CR-4107 | Anil | Flat 302, Sai Residency, Kothaguda, Kondapur');
     expect(text).toContain('Near drop point');
-    expect(text).toContain('Ask Anil for the 4-digit OTP');
+    expect(text).toContain("It is on the customer's order screen. Type it here, then hand over the bag. | Ask Anil for the 4-digit code");
+    expect(text).toContain("If Anil isn't answering | Call twice through the app. After 8 minutes at the door you are paid in full for this trip either way, and a photo of the bag at the door completes it. | Customer not answering?");
+    expect(text).toContain('Delivered | Delivered is enabled once all 4 digits match.');
     expect(text).toContain('Use only the OTP Anil reads to you at the door. Craves never asks for it on a call.');
     expect(tree.root.findByProps({testID: 'rider-step-bar'}).props.accessibilityLabel).toBe('Trip step 4 of 4');
     expect(byId('rider-delivered').props.disabled).toBe(true);
@@ -548,7 +663,7 @@ describe('Trip: deliver with the OTP (step 4)', () => {
       mockSetEntries([]);
       answer({kind: 'sent', trip: {...atDrop, step: 'DELIVERED', version: 5}});
     });
-    expect(allText()).toContain('Trip complete');
+    expect(allText()).toContain('Delivered to Anil');
   });
 
   it('says the delivery is saved and the rider can go when the OTP waits offline (P1-05)', async () => {
@@ -556,9 +671,9 @@ describe('Trip: deliver with the OTP (step 4)', () => {
     mockPending.offline = true;
     await typeOtp('4719');
     await press('rider-delivered');
-    expect(allText()).toContain("Delivery saved | We'll check the code when you're back online. You can go.");
+    expect(allText()).toContain("Delivery saved | ₹67 | We'll check the code when you're back online. You can go.");
     expect(allText()).toContain('Saved · will sync');
-    expect(allText()).not.toContain('Trip complete');
+    expect(allText()).not.toContain('Delivered to Anil');
   });
 
   it('calls the customer from the door', async () => {
@@ -742,20 +857,27 @@ describe('Trip: complete, failed and cancelled', () => {
   it('shows what was earned, with the lines from the server, and today so far', async () => {
     await render(delivered);
     const text = allText();
-    expect(text).toContain('Trip complete');
-    expect(text).toMatch(/CR-4107 delivered to Anil at \d{1,2}:\d{2} (am|pm)/);
+    expect(text).toMatch(/Delivered to Anil · \d{1,2}:\d{2} (am|pm) \| ₹67 \| Added to today's earnings\. Paid on Monday\./);
     expect(tree.root.findByProps({testID: 'rider-earned'}).props.paise).toBe(6700);
-    expect(text).toContain('₹67');
-    expect(text).toContain('Drop distance, 2.0 km more at ₹9 | ₹18');
-    expect(text).toContain('Credited now. You can withdraw it 24 hours from now.');
-    expect(text).toContain('₹414');
-    expect(text).toContain('6 trips');
+    expect(text).toContain('Base pay, first 2 km | ₹40 | Drop distance, 2.0 km more at ₹9 | ₹18 | Ride to the kitchen, 1.0 km at ₹9 | ₹9 | Your pay | ₹67');
+    expect(text).toContain('Today | 6 trips | ₹414 | Ready for the next order | Report a problem with this trip');
     expect(has('rider-step-bar')).toBe(false);
   });
 
-  it('shows the order code exactly as the server sends it', async () => {
+  it("shows the rate card, the offer's promise, the server's end time and today's online time when sent", async () => {
+    await render(
+      {...delivered, rateCardVersion: '2026-11-v1', offerPayPaise: 6100, finishedAt: new Date(2026, 10, 3, 20, 31).toISOString()},
+      {...home, todayTrips: 5, todayOnlineMinutes: 156},
+    );
+    const text = allText();
+    expect(text).toContain('Delivered to Anil · 8:31 pm | ₹67');
+    expect(text).toContain('Your pay | ₹67 | Rate card 2026-11-v1. Distances are the ones on the offer, not the route you rode. Offer said at least ₹61.');
+    expect(text).toContain('Today | 5 trips · 2 h 36 min online | ₹414');
+  });
+
+  it('keeps the order code off the receipt: it is for the kitchen', async () => {
     await render({...delivered, orderCode: '#0BDE0101'});
-    expect(allText()).toMatch(/\| #0BDE0101 delivered to Anil at /);
+    expect(allText()).not.toContain('0BDE');
   });
 
   it('reports a problem on this trip and goes back to waiting', async () => {

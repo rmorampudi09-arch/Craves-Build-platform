@@ -11,7 +11,7 @@ name: Craves Rider APK
 # one, so it can never replace or pass for the rider app; a check below fails a live APK that isn't com.cravesapp.rider.
 # Optional secrets: RIDER_GOOGLE_SERVICES_JSON (real Firebase config for the rider app),
 # RIDER_KEYSTORE_BASE64 + RIDER_KEYSTORE_PASSWORD + RIDER_KEY_ALIAS (a fixed signing key).
-# After a live run from main, ship-rider-app puts the APK at one fixed link (release rider-latest, the "one-tap
+# After a live run from main, ship-rider-app puts the APK at one fixed link (release delivery-app-latest, the "one-tap
 # install") and, with RIDER_PLAY_WIF_PROVIDER + RIDER_PLAY_SERVICE_ACCOUNT set, sends the bundle to Play internal testing.
 
 on:
@@ -45,13 +45,11 @@ jobs:
   build-rider-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    # Read by ship-rider-app below.
+    # Read by ship-rider-app below. Not the file names: GitHub drops a job output that contains a secret's value, and
+    # one secret is "rider" (the run summary shows com.cravesapp.***), so ship-rider-app finds the files itself.
     outputs:
       mode: ${{ steps.mode.outputs.mode }}
       version: ${{ steps.version.outputs.name }}
-      apk: ${{ steps.apk.outputs.name }}
-      mapping: ${{ steps.apk.outputs.mapping }}
-      aab: ${{ steps.aab.outputs.name }}
     defaults:
       run:
         working-directory: apps/mobile
@@ -397,12 +395,11 @@ jobs:
           path: ship
           merge-multiple: true
 
-      - name: Put the APK at the one-tap link (release rider-latest)
+      - name: Put the APK at the one-tap link (release delivery-app-latest)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          APK: ${{ needs.build-rider-apk.outputs.apk }}
           VERSION: ${{ needs.build-rider-apk.outputs.version }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -410,19 +407,24 @@ jobs:
           PLAY_ON: ${{ vars.RIDER_PLAY_WIF_PROVIDER != '' && vars.RIDER_PLAY_SERVICE_ACCOUNT != '' }}
         run: |
           set -euo pipefail
-          tag=rider-latest
+          shopt -s nullglob
+          apks=(ship/*.apk)
+          [[ ${#apks[@]} -eq 1 ]] || { echo "ERROR: expected 1 APK in the build's artifacts, found ${#apks[@]}: ${apks[*]:-none}" >&2; exit 1; }
+          # The tag and file name avoid the word in that secret, so the link is not shown as *** in the log and summary.
+          tag=delivery-app-latest
+          asset=craves-delivery-app.apk
           # One file name for every build, so the link never changes; the title and notes say which build it is.
-          cp "ship/$APK" ship/craves-rider.apk
+          cp "${apks[0]}" "ship/$asset"
           title="Craves Rider $VERSION (build $RUN_NUMBER)"
           notes="Newest live rider app: $VERSION, versionCode $RUN_NUMBER, commit ${SHA:0:9}, built $(date -u '+%d %b %Y %H:%M') UTC by $RUN_URL. It installs over the last build (same signing key). The tag stays where it was first made; this text names the build. Earlier builds and every mapping file: the run artifacts, kept 14 days."
           if gh release view "$tag" > /dev/null 2>&1; then
-            gh release upload "$tag" ship/craves-rider.apk --clobber
+            gh release upload "$tag" "ship/$asset" --clobber
             gh release edit "$tag" --title "$title" --notes "$notes" --prerelease
           else
             # A pre-release, so it never becomes the repository's "Latest" release.
-            gh release create "$tag" ship/craves-rider.apk --target "$SHA" --title "$title" --notes "$notes" --prerelease
+            gh release create "$tag" "ship/$asset" --target "$SHA" --title "$title" --notes "$notes" --prerelease
           fi
-          link="$GITHUB_SERVER_URL/$GH_REPO/releases/download/$tag/craves-rider.apk"
+          link="$GITHUB_SERVER_URL/$GH_REPO/releases/download/$tag/$asset"
           echo "One-tap install: $link"
           {
             echo "**One-tap install of $title:** $link"
@@ -450,25 +452,26 @@ jobs:
         shell: bash
         env:
           TOKEN: ${{ steps.google.outputs.access_token }}
-          AAB: ${{ needs.build-rider-apk.outputs.aab }}
-          MAPPING: ${{ needs.build-rider-apk.outputs.mapping }}
           VERSION: ${{ needs.build-rider-apk.outputs.version }}
           # draft (default): Play holds the release until someone presses Start rollout after the phone check.
           STATUS: ${{ vars.RIDER_PLAY_RELEASE_STATUS || 'draft' }}
         run: |
           set -euo pipefail
           case "$STATUS" in draft|completed) ;; *) echo "ERROR: RIDER_PLAY_RELEASE_STATUS must be draft or completed, got '$STATUS'" >&2; exit 1 ;; esac
-          [[ -s "ship/$AAB" && -s "ship/$MAPPING" ]] || { echo "ERROR: the bundle or the mapping is missing from the build's artifacts" >&2; exit 1; }
+          shopt -s nullglob
+          aabs=(ship/*.aab)
+          maps=(ship/*-mapping.txt)
+          [[ ${#aabs[@]} -eq 1 && ${#maps[@]} -eq 1 ]] || { echo "ERROR: expected 1 bundle and 1 mapping in the build's artifacts, found ${#aabs[@]} and ${#maps[@]}" >&2; exit 1; }
           api=https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.cravesapp.rider
           upload=https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/com.cravesapp.rider
           call() { curl --fail-with-body --silent --show-error -H "Authorization: Bearer $TOKEN" "$@"; }
           # One edit: bundle, its mapping, the internal track, then commit. Nothing reaches Play until the commit.
           edit="$(call -X POST "$api/edits" | jq -r '.id // empty')"
           [[ -n "$edit" ]] || { echo 'ERROR: Play did not open an edit' >&2; exit 1; }
-          code="$(call -X POST -H 'Content-Type: application/octet-stream' --data-binary "@ship/$AAB" \
+          code="$(call -X POST -H 'Content-Type: application/octet-stream' --data-binary "@${aabs[0]}" \
             "$upload/edits/$edit/bundles?uploadType=media" | jq -r '.versionCode // empty')"
           [[ "$code" =~ ^[0-9]+$ ]] || { echo "ERROR: Play returned no versionCode for the bundle" >&2; exit 1; }
-          call -X POST -H 'Content-Type: application/octet-stream' --data-binary "@ship/$MAPPING" \
+          call -X POST -H 'Content-Type: application/octet-stream' --data-binary "@${maps[0]}" \
             "$upload/edits/$edit/deobfuscationFiles/$code/proguard?uploadType=media" > /dev/null
           release="$(jq -nc --arg name "$VERSION ($code)" --arg code "$code" --arg status "$STATUS" \
             '{track: "internal", releases: [{name: $name, versionCodes: [$code], status: $status}]}')"

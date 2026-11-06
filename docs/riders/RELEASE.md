@@ -21,13 +21,14 @@ Keep the mapping file of every build you hand out: it turns a crash stack trace 
 
 ## One-tap install (the newest live build)
 
-After every live manual run on `main`, the job **ship-rider-app** replaces the APK on the pre-release **rider-latest**, so one link always installs the newest live build:
+After every live manual run on `main`, the job **ship-rider-app** replaces the APK on the pre-release **delivery-app-latest**, so one link always installs the newest live build:
 
-`https://github.com/rmorampudi09-arch/Craves-Build-platform/releases/download/rider-latest/craves-rider.apk`
+`https://github.com/rmorampudi09-arch/Craves-Build-platform/releases/download/delivery-app-latest/craves-delivery-app.apk`
 
 - **Once per phone:** sign in to GitHub in Chrome, open the link, and add it to the home screen (Chrome ⋮ → Add to home screen). The first install asks to allow "Install unknown apps" for Chrome, and Chrome may say the file type can be harmful; choose Download anyway. The repository is private, so only people with access can download.
 - **Every new build:** tap the icon, then Install. It updates over the last build because the signing key never changes.
-- The release's title and notes name the build (version, versionCode, commit, run); the run summary prints the link. The tag `rider-latest` stays on the commit where it was first made: read the notes, not the tag. Earlier builds and every mapping file stay in the run artifacts for 14 days.
+- The release's title and notes name the build (version, versionCode, commit, run); the run summary prints the link. The tag `delivery-app-latest` stays on the commit where it was first made: read the notes, not the tag. Earlier builds and every mapping file stay in the run artifacts for 14 days.
+- Why the names avoid "rider": one repository secret's value is `rider` (the build summary shows the package as `com.cravesapp.***`). GitHub hides a secret's value wherever it appears in logs and summaries, and drops any job output that contains it. So the job finds the APK, bundle and mapping in the downloaded artifacts instead of being told their names, and the tag and file name leave the word out so the printed link stays readable.
 - This link is for the team's own phones. Riders on the pilot install from Play (below).
 
 The step needs nothing to set up. The job has its own token (`contents: write` for the release, `id-token: write` for Play); the build job, which also runs for pull requests, stays read-only.

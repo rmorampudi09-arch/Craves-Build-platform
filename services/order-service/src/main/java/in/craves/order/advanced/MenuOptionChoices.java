@@ -39,6 +39,6 @@ public final class MenuOptionChoices {
     public static String describe(String itemName, String choices) {
         List<OrderItemChoice> parsed = parse(choices);
         if (parsed == null || parsed.isEmpty()) return itemName;
-        return itemName + " (" + parsed.stream().map(c -> c.group() + ": " + c.choice()).collect(Collectors.joining(", ")) + ")";
+        return itemName + " (" + parsed.stream().filter(c -> !c.choice().isBlank()).map(c -> (c.group().isBlank() ? "" : c.group() + ": ") + c.choice()).collect(Collectors.joining(", ")) + ")";
     }
 }

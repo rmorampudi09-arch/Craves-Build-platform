@@ -34,5 +34,6 @@ class MenuOptionChoicesTest {
         assertEquals("Thali (Spice: Hot, Extras: Raita)", MenuOptionChoices.describe("Thali", FROZEN));
         assertEquals("Thali", MenuOptionChoices.describe("Thali", null));
         assertEquals("Thali", MenuOptionChoices.describe("Thali", "[]"));
+        assertEquals("Thali (Raita)", MenuOptionChoices.describe("Thali", "[{\"groupName\":\"\",\"choiceName\":\"Raita\"},{\"groupName\":\"X\",\"choiceName\":\" \"}]"));
     }
 }

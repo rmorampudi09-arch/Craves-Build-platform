@@ -1,5 +1,6 @@
 package in.craves.advanced.promotions;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -80,6 +81,21 @@ class PromotionsInternalIT extends IntegrationTestBase {
         var request = post(INTERNAL + redemption + "/" + action).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body));
         if (secret != null) request.header("X-Craves-Internal-Secret", secret);
         return mvc.perform(request);
+    }
+
+    @Test
+    void checkoutTermsShowFundingAndLimitToTheSecretHolderForTheOwnerOnly() throws Exception {
+        live(2000, 100_000, null);
+        String redemption = reserve(alice);
+        String path = INTERNAL + redemption + "/checkout-terms";
+        mvc.perform(get(path).param("personId", alice.toString())).andExpect(status().isUnauthorized());
+        mvc.perform(get(path).param("personId", alice.toString()).header("Authorization", bearer(alice, "CUSTOMER"))).andExpect(status().isUnauthorized());
+        mvc.perform(get(path).param("personId", bob.toString()).header("X-Craves-Internal-Secret", SECRET)).andExpect(status().isNotFound());
+        mvc.perform(get(path).param("personId", new UUID(0, 0).toString()).header("X-Craves-Internal-Secret", SECRET)).andExpect(status().isNotFound());
+        mvc.perform(get(path).param("personId", alice.toString()).header("X-Craves-Internal-Secret", SECRET)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(redemption)).andExpect(jsonPath("$.fundedBy").value("CRAVES"))
+                .andExpect(jsonPath("$.perPersonLimit").value(5)).andExpect(jsonPath("$.discountPaise").value(2000))
+                .andExpect(jsonPath("$.status").value("RESERVED"));
     }
 
     @Test

@@ -87,6 +87,9 @@ public class CorporateMealsController {
 
     @DeleteMapping("/charges/{chargeId}")
     public ResponseEntity<Void> releaseCompanyMeal(@PathVariable UUID chargeId) {
+        // M24d: a checkout's share is released by order-service on cancellation; a person releasing it themselves before paying would
+        // pay only their part while the company's share no longer counts (and a later confirm finds no room). Unused ones lapse in 10 minutes.
+        if (checkoutHoldsCharges) throw ApiProblem.conflict("COMPANY_SHARE_RELEASED_BY_CHECKOUT", "Company payments are released by checkout");
         service.release(CurrentUser.id(), chargeId);
         return ResponseEntity.noContent().build();
     }

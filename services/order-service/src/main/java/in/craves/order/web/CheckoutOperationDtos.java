@@ -9,7 +9,9 @@ public final class CheckoutOperationDtos {
     private CheckoutOperationDtos() {}
     public record Request(@NotNull UUID deliveryAddressId, @Size(max=2000) String note,
         @NotNull @Valid ApiDtos.CartSnapshotRequest expectedCart, com.fasterxml.jackson.databind.JsonNode batchHolds,
-        com.fasterxml.jackson.databind.JsonNode promotion, com.fasterxml.jackson.databind.JsonNode menuOptions) {
+        com.fasterxml.jackson.databind.JsonNode promotion, com.fasterxml.jackson.databind.JsonNode menuOptions,
+        com.fasterxml.jackson.databind.JsonNode companyCharge) {
+        public Request(UUID deliveryAddressId, String note, ApiDtos.CartSnapshotRequest expectedCart, com.fasterxml.jackson.databind.JsonNode batchHolds, com.fasterxml.jackson.databind.JsonNode promotion, com.fasterxml.jackson.databind.JsonNode menuOptions) { this(deliveryAddressId, note, expectedCart, batchHolds, promotion, menuOptions, null); }
         public Request(UUID deliveryAddressId, String note, ApiDtos.CartSnapshotRequest expectedCart, com.fasterxml.jackson.databind.JsonNode batchHolds, com.fasterxml.jackson.databind.JsonNode promotion) { this(deliveryAddressId, note, expectedCart, batchHolds, promotion, null); }
         public Request(UUID deliveryAddressId, String note, ApiDtos.CartSnapshotRequest expectedCart, com.fasterxml.jackson.databind.JsonNode batchHolds) { this(deliveryAddressId, note, expectedCart, batchHolds, null); }
         public Request(UUID deliveryAddressId, String note, ApiDtos.CartSnapshotRequest expectedCart) { this(deliveryAddressId, note, expectedCart, null); }

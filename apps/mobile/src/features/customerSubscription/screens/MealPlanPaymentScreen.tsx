@@ -23,6 +23,7 @@ import {
   RecoverableErrorBanner,
   ScreenShell,
 } from '../../../shared/components';
+import {DeletionPausedNotice} from '../../accountDeletion/components/DeletionPausedNotice';
 import {
   customerAddressDisplayLine,
   customerAddressLabel,
@@ -334,6 +335,8 @@ export function MealPlanPaymentScreen({navigation, route}: Props) {
               })
             }
           />
+        ) : notice?.kind === 'not-completed' && notice.deletionPaused ? (
+          <DeletionPausedNotice kind="mealPlans" />
         ) : notice ? (
           <RecoverableErrorBanner message={notice.message} />
         ) : null}

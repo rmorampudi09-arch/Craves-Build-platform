@@ -148,6 +148,23 @@ describe('chefMenuApi contract model', () => {
     ).toBeNull();
   });
 
+  it('keeps a dish from before the delivery-details migration, where weight and thermobox are null', () => {
+    const legacy = {
+      ...menuItem,
+      description: null,
+      servesCount: null,
+      preparationTimeMinutes: null,
+      spiceLevel: null,
+      unitPackageWeightGrams: null,
+      thermoboxRequired: null,
+    };
+    expect(parseChefMenuItem(legacy)).toEqual(legacy);
+    expect(parseChefMenuItems([menuItem, legacy])).toEqual([menuItem, legacy]);
+    expect(
+      parseChefMenuItem({...menuItem, thermoboxRequired: 'false'}),
+    ).toBeNull();
+  });
+
   it('rejects a list when any row violates the exact item contract', () => {
     expect(parseChefMenuItems([menuItem, {...menuItem, status: 'ARCHIVED'}])).toBeNull();
   });
@@ -352,8 +369,19 @@ describe('chefMenuApi contract model', () => {
     expect(post).toHaveBeenCalledWith(
       `/api/v1/kitchens/me/menu-items/${MENU_ITEM_ID}/images?primary=true`,
       formData,
-      {signal: undefined},
+      // A photo over mobile data needs more than the default 12 s.
+      {signal: undefined, timeout: 45000},
     );
+  });
+
+  it('deletes one dish photo with DELETE /images/{imageId}', async () => {
+    const remove = jest.spyOn(httpClient, 'delete').mockResolvedValue(menuItem);
+    const imageId = '123e4567-e89b-42d3-a456-426614174055';
+
+    await chefMenuApi.deleteImage(MENU_ITEM_ID, imageId);
+
+    expect(remove).toHaveBeenCalledWith(`/api/v1/kitchens/me/menu-items/${MENU_ITEM_ID}/images/${imageId}`, {signal: undefined});
+    await expect(chefMenuApi.deleteImage(MENU_ITEM_ID, 'not-an-image-id')).rejects.toThrow('Chef menu image ID must be a UUID.');
   });
 
   it('rejects malformed menu item identifiers before a write is sent', async () => {

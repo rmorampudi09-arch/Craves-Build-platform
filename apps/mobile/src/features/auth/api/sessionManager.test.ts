@@ -51,6 +51,14 @@ function createTokenPair(
 }
 
 describe('sessionManager', () => {
+  // Rotation listeners are module state, so a failing assertion must not leave one behind.
+  const rotationUnsubscribes: Array<() => void> = [];
+  function listenForRotation(listener: (tokens: AuthTokenResponse) => void) {
+    const unsubscribe = sessionManager.onTokensRotated(listener);
+    rotationUnsubscribes.push(unsubscribe);
+    return unsubscribe;
+  }
+
   beforeEach(() => {
     tokenMemory.clear();
     jest.resetAllMocks();
@@ -61,6 +69,7 @@ describe('sessionManager', () => {
 
   afterEach(() => {
     tokenMemory.clear();
+    rotationUnsubscribes.splice(0).forEach(unsubscribe => unsubscribe());
   });
 
   it('persists the refresh credential before exposing the access token', async () => {
@@ -127,6 +136,69 @@ describe('sessionManager', () => {
       rotated.refreshTokenExpiresAt,
     );
     expect(tokenMemory.get()).toBe(rotated.accessToken);
+  });
+
+  it('tells rotation listeners once per refresh, after the refresh token is saved, until they unsubscribe', async () => {
+    loadMock.mockResolvedValue({
+      refreshToken: 'old-refresh-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    const rotated = createTokenPair('new-access-token', 'new-refresh-token');
+    postMock.mockResolvedValue({data: rotated});
+    let savesWhenNotified = -1;
+    const listener = jest.fn(() => {
+      savesWhenNotified = saveMock.mock.calls.length;
+    });
+    const unsubscribe = listenForRotation(listener);
+
+    await Promise.all([sessionManager.refresh(), sessionManager.refresh()]);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(rotated);
+    expect(savesWhenNotified).toBe(1);
+
+    unsubscribe();
+    await sessionManager.refresh();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps refreshing when one rotation listener throws and still tells the others', async () => {
+    loadMock.mockResolvedValue({
+      refreshToken: 'old-refresh-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    const rotated = createTokenPair('new-access-token', 'new-refresh-token');
+    postMock.mockResolvedValue({data: rotated});
+    const broken = jest.fn(() => {
+      throw new Error('listener broke');
+    });
+    const healthy = jest.fn();
+    listenForRotation(broken);
+    listenForRotation(healthy);
+
+    await expect(sessionManager.refresh()).resolves.toEqual(rotated);
+
+    expect(broken).toHaveBeenCalledTimes(1);
+    expect(healthy).toHaveBeenCalledWith(rotated);
+  });
+
+  it('does not tell rotation listeners about failed or empty refreshes', async () => {
+    const listener = jest.fn();
+    listenForRotation(listener);
+
+    await expect(sessionManager.refresh()).resolves.toBeNull();
+
+    loadMock.mockResolvedValue({
+      refreshToken: 'old-refresh-token',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    postMock.mockRejectedValue(
+      new AppApiError('NETWORK_ERROR', 'offline', undefined, undefined, true),
+    );
+    await expect(sessionManager.refresh()).rejects.toBeDefined();
+
+    expect(listener).not.toHaveBeenCalled();
   });
 
   it('coalesces concurrent refresh attempts into one in-flight rotation', async () => {

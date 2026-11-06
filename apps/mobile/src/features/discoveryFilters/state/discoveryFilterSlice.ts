@@ -12,7 +12,10 @@ export type DiscoverySpiceLevel = 'MILD' | 'MEDIUM' | 'SPICY';
 
 export interface DiscoveryFilterSnapshot {
   sort: DiscoverySortOption;
+  /** Taxonomy cuisine codes. */
   cuisineIds: string[];
+  /** Taxonomy diet codes; `diets` below stays Veg / Non-veg / Egg. */
+  dietTags: string[];
   diets: DiscoveryDietOption[];
   minPrice: number | null;
   maxPrice: number | null;
@@ -35,6 +38,7 @@ export function createDefaultDiscoveryFilters(): DiscoveryFilterSnapshot {
   return {
     sort: 'RECOMMENDED',
     cuisineIds: [],
+    dietTags: [],
     diets: [],
     minPrice: null,
     maxPrice: null,
@@ -78,9 +82,11 @@ function positiveInteger(value: number | null): number | null {
   return value !== null && Number.isInteger(value) && value > 0 ? value : null;
 }
 
+function normalizeCodes(codes: readonly string[] | undefined): string[] {
+  return [...new Set((codes ?? []).map(value => value.trim()).filter(Boolean))].sort();
+}
+
 function normalizeFilters(filters: DiscoveryFilterSnapshot): DiscoveryFilterSnapshot {
-  const cuisineIds = [...new Set(filters.cuisineIds.map(value => value.trim()).filter(Boolean))]
-    .sort();
   const dietSet = new Set(filters.diets);
   let minPrice = nonNegativeFinite(filters.minPrice);
   let maxPrice = nonNegativeFinite(filters.maxPrice);
@@ -91,7 +97,9 @@ function normalizeFilters(filters: DiscoveryFilterSnapshot): DiscoveryFilterSnap
 
   return {
     sort: filters.sort,
-    cuisineIds,
+    cuisineIds: normalizeCodes(filters.cuisineIds),
+    // Older state has no dietTags yet.
+    dietTags: normalizeCodes(filters.dietTags),
     diets: DIET_ORDER.filter(diet => dietSet.has(diet)),
     minPrice,
     maxPrice,
@@ -171,6 +179,7 @@ export function areDiscoveryFiltersEqual(
   return (
     normalizedLeft.sort === normalizedRight.sort &&
     normalizedLeft.cuisineIds.join('|') === normalizedRight.cuisineIds.join('|') &&
+    normalizedLeft.dietTags.join('|') === normalizedRight.dietTags.join('|') &&
     normalizedLeft.diets.join('|') === normalizedRight.diets.join('|') &&
     normalizedLeft.minPrice === normalizedRight.minPrice &&
     normalizedLeft.maxPrice === normalizedRight.maxPrice &&
@@ -186,6 +195,7 @@ export function getActiveDiscoveryFilterCount(
   return (
     (filters.sort === 'RECOMMENDED' ? 0 : 1) +
     filters.cuisineIds.length +
+    filters.dietTags.length +
     filters.diets.length +
     (filters.minPrice === null ? 0 : 1) +
     (filters.maxPrice === null ? 0 : 1) +

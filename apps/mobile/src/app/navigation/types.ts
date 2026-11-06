@@ -17,6 +17,7 @@ export type RootStackParamList = {
   OtpVerification: {role: AuthRole};
   ForgotPassword: {role: AuthRole};
   PasswordResetSent: {role: AuthRole};
+  AccountUnavailable: {signedIn: boolean};
   AccountRouter: undefined;
   CustomerRegistration: undefined;
   CustomerAccountStatus: undefined;
@@ -35,6 +36,7 @@ export type AuthStackParamList = Pick<
   | 'OtpVerification'
   | 'ForgotPassword'
   | 'PasswordResetSent'
+  | 'AccountUnavailable'
   | 'StartupError'
 >;
 
@@ -105,6 +107,7 @@ export type CustomerSettingsChildStackParamList = {
   CustomerSettingsNotifications: undefined;
   CustomerSettingsPrivacySecurity: undefined;
   CustomerSettingsChangePassword: undefined;
+  CustomerSettingsDeleteAccount: undefined;
   CustomerSettingsLanguage: undefined;
   CustomerSettingsAppearance: undefined;
   CustomerSettingsAbout: undefined;
@@ -184,6 +187,7 @@ export type ChefProfileStackParamList = {
   ChefScheduledOrders: undefined;
   ChefReviews: undefined;
   ChefSecurity: undefined;
+  ChefDeleteAccount: undefined;
   ChefBankAccount: {from?: 'earnings' | 'home'} | undefined;
   ChefEditProfile: undefined;
 };

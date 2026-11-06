@@ -4,7 +4,7 @@ import {
   type CustomerOrder,
   type CustomerOrderStatus,
 } from '../domain/customerOrderTypes';
-import {parseCustomerOrderResponse} from './customerOrdersApi';
+import {parseCustomerOrderRows} from './customerOrdersApi';
 
 export const CUSTOMER_ORDER_HISTORY_V2_AVAILABLE = false;
 export const CUSTOMER_ORDER_HISTORY_PAGE_SIZE = 20;
@@ -48,7 +48,7 @@ export function parseCustomerOrderHistoryPage(
     return null;
   }
 
-  const orders = raw.orders.map(parseCustomerOrderResponse);
+  const parsedOrders = parseCustomerOrderRows(raw.orders);
   const nextCursor =
     raw.nextCursor == null
       ? null
@@ -59,7 +59,6 @@ export function parseCustomerOrderHistoryPage(
         : undefined;
 
   if (
-    orders.some(order => order === null) ||
     nextCursor === undefined ||
     typeof raw.hasMore !== 'boolean' ||
     (raw.hasMore && nextCursor === null)
@@ -67,7 +66,6 @@ export function parseCustomerOrderHistoryPage(
     return null;
   }
 
-  const parsedOrders = orders as CustomerOrder[];
   const seen = new Set<string>();
   let previousCreatedAt = Number.POSITIVE_INFINITY;
   let previousId = '';

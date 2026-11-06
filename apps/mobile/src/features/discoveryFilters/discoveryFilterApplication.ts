@@ -1,3 +1,5 @@
+import {dishMatchesLabels} from '../dishLabels/domain/dishLabels';
+import type {NearbyDishLabels} from '../dishLabels/state/nearbyDishLabels';
 import type {NearbyDish} from '../home/api/homeFeedApi';
 import type {
   DiscoveryFilterSnapshot,
@@ -103,4 +105,54 @@ export function applyHomeDiscoveryFilters(
   }
 
   return filtered;
+}
+
+/** Keeps dishes carrying the picked cuisine/diet labels. No labels loaded (off, failed, loading) means no filtering. */
+export function applyDishLabelFilters(
+  dishes: readonly NearbyDish[],
+  filters: DiscoveryFilterSnapshot,
+  labels: NearbyDishLabels | null,
+): NearbyDish[] {
+  if (!labels || (filters.cuisineIds.length === 0 && filters.dietTags.length === 0)) {
+    return dishes as NearbyDish[];
+  }
+  const selection = {cuisines: filters.cuisineIds, diets: filters.dietTags};
+  return dishes.filter(dish => {
+    const codes = labels.byId.get(dish.id);
+    return codes !== undefined && dishMatchesLabels(codes, selection, labels.vocabulary);
+  });
+}
+
+/**
+ * The labels Home filters with. While labels reload, useNearbyDishLabels keeps the last settled ones, so a new page
+ * never flashes unfiltered dishes; null (no label filtering) only before the first load or after a failed one.
+ */
+export function labelsForHomeFilter(dishLabels: {
+  labels: NearbyDishLabels | null;
+  pending: boolean;
+}): NearbyDishLabels | null {
+  return dishLabels.labels;
+}
+
+/** Label filters run on loaded pages only, so Home keeps loading pages until this many dishes match... */
+const LABEL_FILTER_TARGET_MATCHES = 20;
+/** ...or this many pages are loaded (the feed keeps at most 10). */
+export const LABEL_FILTER_MAX_PAGES = 10;
+
+export function shouldLoadMoreForLabelFilter(state: {
+  labelSelectionActive: boolean;
+  labelsPending: boolean;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  matchingCount: number;
+  loadedPages: number;
+}): boolean {
+  return (
+    state.labelSelectionActive &&
+    !state.labelsPending &&
+    state.hasNextPage &&
+    !state.isFetchingNextPage &&
+    state.matchingCount < LABEL_FILTER_TARGET_MATCHES &&
+    state.loadedPages < LABEL_FILTER_MAX_PAGES
+  );
 }

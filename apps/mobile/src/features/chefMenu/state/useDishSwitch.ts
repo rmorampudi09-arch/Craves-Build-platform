@@ -6,7 +6,7 @@ import type {ChefMenuModel} from './useChefMenuModel';
  * The on/off switch of a dish, the same on the list and on the dish page: it changes at once,
  * says "<dish> is off" with Undo for a few seconds, and says so when the server did not save it.
  */
-export function useDishSwitch(updateAvailability: ChefMenuModel['updateAvailability']) {
+export function useDishSwitch({updateAvailability, lastRefusal}: Pick<ChefMenuModel, 'updateAvailability' | 'lastRefusal'>) {
   const toast = useChefToast();
   const inFlight = React.useRef(new Set<string>());
 
@@ -19,13 +19,15 @@ export function useDishSwitch(updateAvailability: ChefMenuModel['updateAvailabil
       try {
         const saved = await updateAvailability(dish.id, on);
         toast.show(
-          saved ? `${dish.itemName} is ${on ? 'on' : 'off'}` : `We couldn't update ${dish.itemName}. Try again.`,
+          saved
+            ? `${dish.itemName} is ${on ? 'on' : 'off'}`
+            : lastRefusal() ?? `We couldn't update ${dish.itemName}. Try again.`,
           saved && withUndo ? {label: 'Undo', onPress: () => setOn(dish, !on, false)} : undefined,
         );
       } finally {
         inFlight.current.delete(dish.id);
       }
     },
-    [toast, updateAvailability],
+    [toast, updateAvailability, lastRefusal],
   );
 }

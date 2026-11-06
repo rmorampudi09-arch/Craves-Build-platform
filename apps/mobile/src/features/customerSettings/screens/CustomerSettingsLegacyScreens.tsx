@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import {useNavigation, useRoute, type RouteProp} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {CustomerProfileStackParamList} from '../../../app/navigation/types';
 import {useAppDispatch} from '../../../app/store/hooks';
 import {
@@ -26,9 +27,12 @@ import {
   touchTarget,
   typography,
 } from '../../../design/tokens';
+import {getBottomActionPadding} from '../../../design/responsive';
 import {Icon} from '../../../shared/components/Icon';
 import {IconButton} from '../../../shared/components/IconButton';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
+import {deletionCopy} from '../../accountDeletion/domain/deletionCopy';
+import {useLatestDeletion} from '../../accountDeletion/query/useLatestDeletion';
 import {firebaseAuth} from '../../auth/firebase/firebaseAuth';
 import {completeLogout} from '../../auth/state/logoutCoordinator';
 import {CustomerReferralScreen} from '../../referralsV2/screens/CustomerReferralScreens';
@@ -46,6 +50,8 @@ interface ChildScaffoldProps {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
+  /** Pinned white dock under the scrolling content, for the screen's main button. */
+  footer?: React.ReactNode;
 }
 
 /** Asks first, then signs this phone out. Shared by Settings and Privacy & security. */
@@ -76,8 +82,13 @@ export function useConfirmLogout() {
   return {loggingOut, logout};
 }
 
+function FooterDock({children}: {children: React.ReactNode}) {
+  const {bottom} = useSafeAreaInsets();
+  return <View style={[styles.footer, {paddingBottom: getBottomActionPadding(bottom)}]}>{children}</View>;
+}
+
 // These routes are immersive (navigationPolicy), so the bottom menu hides itself; never set tabBarStyle here.
-function ChildScaffold({title, subtitle, children}: ChildScaffoldProps) {
+export function ChildScaffold({title, subtitle, children, footer}: ChildScaffoldProps) {
   const navigation = useNavigation<SettingsNavigation>();
   return (
     <ScreenShell
@@ -102,6 +113,7 @@ function ChildScaffold({title, subtitle, children}: ChildScaffoldProps) {
             {children}
           </View>
         </ScrollView>
+        {footer ? <FooterDock>{footer}</FooterDock> : null}
       </KeyboardAvoidingView>
     </ScreenShell>
   );
@@ -179,9 +191,10 @@ export function CustomerSettingsNotificationsScreen() {
 export function CustomerSettingsPrivacySecurityScreen() {
   const navigation = useNavigation<SettingsNavigation>();
   const {loggingOut, logout} = useConfirmLogout();
+  const {showRow} = useLatestDeletion();
 
   return (
-    <ChildScaffold title="Privacy & security" subtitle="Password and sign-out">
+    <ChildScaffold title="Privacy & security" subtitle={deletionCopy.row.privacySubtitle}>
       <View style={styles.card}>
         <ActionRow
           title="Change password"
@@ -202,6 +215,21 @@ export function CustomerSettingsPrivacySecurityScreen() {
           title="Other devices"
           body="Logging out your other phones from here is coming soon."
         />
+      ) : null}
+      {showRow ? (
+        <>
+          <Text accessibilityRole="header" style={styles.sectionLabel}>
+            {deletionCopy.row.customerSection}
+          </Text>
+          <View style={styles.card}>
+            <ActionRow
+              title={deletionCopy.row.customerTitle}
+              subtitle={deletionCopy.row.customerSubtitle}
+              destructive
+              onPress={() => navigation.navigate('CustomerSettingsDeleteAccount')}
+            />
+          </View>
+        </>
       ) : null}
     </ChildScaffold>
   );
@@ -396,6 +424,7 @@ const styles = StyleSheet.create({
   headerSubtitle: {color: colors.textSecondary, fontSize: typography.small},
   scrollContent: {flexGrow: 1, paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.xxl},
   content: {width: '100%', maxWidth: 640, alignSelf: 'center', gap: spacing.md},
+  footer: {gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.sm, backgroundColor: colors.white, borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
   card: {
     overflow: 'hidden',
     borderRadius: radius.lg,
@@ -409,6 +438,7 @@ const styles = StyleSheet.create({
   rowTitle: {color: colors.espressoBrown, fontSize: typography.body, fontWeight: fontWeight.semibold},
   rowSubtitle: {marginTop: 3, color: colors.textSecondary, fontSize: typography.small},
   divider: {height: borderWidth.standard, marginLeft: spacing.md, backgroundColor: colors.border},
+  sectionLabel: {color: colors.textSecondary, fontSize: typography.tiny, fontWeight: fontWeight.semibold, textTransform: 'uppercase'},
   dangerText: {color: colors.flameRedAccessible},
   notice: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, borderWidth: borderWidth.standard, borderColor: colors.border, backgroundColor: colors.white},
   noticeCopy: {minWidth: 0, flex: 1},

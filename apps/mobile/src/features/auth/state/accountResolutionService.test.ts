@@ -207,6 +207,32 @@ describe('P21 account resolution', () => {
     });
   });
 
+  it('opens Chef mode for a chef who deleted only the Customer side', async () => {
+    const chefOnlyIdentity = identity(['CHEF']);
+    meMock.mockResolvedValue(chefOnlyIdentity);
+    chefApplicationMock.mockResolvedValue(chefApplication('APPROVED'));
+
+    await expect(accountResolutionService.resolve('CHEF')).resolves.toEqual({
+      identity: chefOnlyIdentity,
+      resolution: {
+        flow: 'CHEF',
+        requestedRole: 'CHEF',
+        authorizedRole: 'CHEF',
+        onboardingStatus: 'APPROVED',
+      },
+    });
+  });
+
+  it('keeps a Rider-only identity out of Chef mode', async () => {
+    meMock.mockResolvedValue(identity(['RIDER']));
+
+    await expect(accountResolutionService.resolve('CHEF')).rejects.toMatchObject({
+      code: 'ACCOUNT_ROLE_NOT_AUTHORIZED',
+      status: 403,
+    });
+    expect(chefApplicationMock).not.toHaveBeenCalled();
+  });
+
   it('fails closed when Chef application status and backend role authority disagree', async () => {
     meMock.mockResolvedValue(identity(['CUSTOMER']));
     chefApplicationMock.mockResolvedValue(chefApplication('APPROVED'));

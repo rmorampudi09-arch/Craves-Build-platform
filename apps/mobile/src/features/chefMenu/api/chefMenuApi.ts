@@ -99,8 +99,9 @@ export interface ChefMenuItem {
   servesCount: number | null;
   preparationTimeMinutes: number | null;
   spiceLevel: ChefMenuSpiceLevel | null;
-  unitPackageWeightGrams: number;
-  thermoboxRequired: boolean;
+  /** Null on a dish created before delivery details were required. */
+  unitPackageWeightGrams: number | null;
+  thermoboxRequired: boolean | null;
   available: boolean;
   status: ChefMenuItemStatus;
   images: ChefMenuItemImage[];
@@ -310,8 +311,11 @@ export function parseChefMenuItem(value: unknown): ChefMenuItem | null {
     raw.spiceLevel == null
       ? null
       : parseEnum<ChefMenuSpiceLevel>(raw.spiceLevel, SPICE_LEVEL_SET);
-  const unitPackageWeightGrams = positiveInteger(raw.unitPackageWeightGrams);
-  const thermoboxRequired = exactBoolean(raw.thermoboxRequired);
+  const unitPackageWeightGrams = optionalPositiveInteger(
+    raw.unitPackageWeightGrams,
+  );
+  const thermoboxRequired =
+    raw.thermoboxRequired == null ? null : exactBoolean(raw.thermoboxRequired);
   const available = exactBoolean(raw.available);
   const status = parseEnum<ChefMenuItemStatus>(raw.status, STATUS_SET);
   const createdAt = instant(raw.createdAt);
@@ -331,8 +335,8 @@ export function parseChefMenuItem(value: unknown): ChefMenuItem | null {
     (raw.servesCount != null && servesCount === null) ||
     (raw.preparationTimeMinutes != null && preparationTimeMinutes === null) ||
     (raw.spiceLevel != null && spiceLevel === null) ||
-    unitPackageWeightGrams === null ||
-    thermoboxRequired === null ||
+    (raw.unitPackageWeightGrams != null && unitPackageWeightGrams === null) ||
+    (raw.thermoboxRequired != null && thermoboxRequired === null) ||
     available === null ||
     !status ||
     !createdAt ||
@@ -642,8 +646,20 @@ export const chefMenuApi = {
         primary ? 'true' : 'false'
       }`,
       formData,
-      {signal},
+      // A photo over mobile data needs more than the default 12 s.
+      {signal, timeout: 45000},
     );
     return requireImageResponse(response);
+  },
+  /** Removes one saved photo of a dish (the next one becomes the cover). The server answers with the dish; nothing here needs it. */
+  async deleteImage(menuItemId: string, imageId: string, signal?: AbortSignal): Promise<void> {
+    const id = requireMenuItemId(menuItemId);
+    if (!isChefMenuItemId(imageId)) {
+      throw new Error('Chef menu image ID must be a UUID.');
+    }
+    await httpClient.delete<unknown>(
+      `/api/v1/kitchens/me/menu-items/${encodeURIComponent(id)}/images/${encodeURIComponent(imageId)}`,
+      {signal},
+    );
   },
 };

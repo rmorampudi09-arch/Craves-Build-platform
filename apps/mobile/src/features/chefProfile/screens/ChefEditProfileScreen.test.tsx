@@ -368,7 +368,8 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
     await ui.press('Choose from gallery');
     await ui.settle();
     expect(mockPickPhoto).toHaveBeenCalledWith('gallery');
-    expect(mockApi.uploadPhoto).toHaveBeenCalledWith('KITCHEN', {uri: 'file:///k.jpg', name: 'k.jpg', type: 'image/jpeg'});
+    // The photo is shrunk before it is sent (the global image-manipulator mock returns this file).
+    expect(mockApi.uploadPhoto).toHaveBeenCalledWith('KITCHEN', {uri: 'file:///mock/small.jpg', name: 'craves-photo.jpg', type: 'image/jpeg'});
     expect(ui.has('Photo saved')).toBe(true);
     expect(mockApi.deletePhoto).not.toHaveBeenCalled();
   });
@@ -399,6 +400,18 @@ describe('ChefEditProfileScreen (Kitchen details)', () => {
     await ui.press('Take a photo');
     await ui.settle();
     expect(mockApi.getKitchen.mock.calls.length).toBeGreaterThan(readsBefore);
+  });
+
+  it('reads the kitchen again after any failed upload, so a photo the server stored before the timeout shows up', async () => {
+    mockPickPhoto.mockResolvedValue({photo: {uri: 'file:///k.jpg', fileName: 'k.jpg', mimeType: 'image/jpeg'}});
+    mockApi.uploadPhoto.mockRejectedValue(new Error('timeout of 45000ms exceeded'));
+    await mount(PUBLISHED);
+    const readsBefore = mockApi.getKitchen.mock.calls.length;
+    await ui.press('Cooking setup');
+    await ui.press('Take a photo');
+    await ui.settle();
+    expect(mockApi.getKitchen.mock.calls.length).toBeGreaterThan(readsBefore);
+    expect(ui.has("We couldn't save that photo. Please try again.")).toBe(true);
   });
 
   it('shows the support message when the server says kitchen photos are locked', async () => {

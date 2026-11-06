@@ -350,6 +350,18 @@ describe('Home: kitchen status', () => {
     expect(mockSetOpen).toHaveBeenCalledWith(true);
   });
 
+  it('says why the kitchen cannot open yet when the server holds the chef back', async () => {
+    mockKitchen = baseKitchen({status: 'closed', closedReason: 'chef', opensAt: null});
+    mockSetOpen.mockRejectedValueOnce(
+      new AppApiError('CHEF_SELLING_NOT_READY', 'Complete the required finance review before accepting new orders', 409),
+    );
+    await mount();
+    await press('Open kitchen');
+    await finishInteractions();
+    expect(hasText('You can start selling once Craves approves your kitchen.')).toBe(true);
+    expect(hasText(/check your connection/)).toBe(false);
+  });
+
   it('says "not taking orders" when the schedule has orders switched off, and can switch them on', async () => {
     mockKitchen = baseKitchen({status: 'closed', closedReason: 'not-accepting'});
     await mount();

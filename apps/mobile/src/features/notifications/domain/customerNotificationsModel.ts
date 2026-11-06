@@ -24,7 +24,8 @@ export const CUSTOMER_NOTIFICATION_CATEGORIES: readonly CustomerNotificationCate
 export type CustomerNotificationDestination =
   | {route: 'CustomerOrderDetail'; orderId: string}
   | {route: 'CustomerOrderTracking'; orderId: string}
-  | {route: 'CustomerKitchenProfile'; kitchenId: string};
+  | {route: 'CustomerKitchenProfile'; kitchenId: string}
+  | {route: 'CustomerSettingsDeleteAccount'};
 
 export interface CustomerNotificationGroup {
   title: 'Today' | 'Earlier';
@@ -174,6 +175,8 @@ export function resolveCustomerNotificationDestination(
       return {route: 'CustomerOrderTracking', orderId: notice.targetId};
     case 'KITCHEN':
       return {route: 'CustomerKitchenProfile', kitchenId: notice.targetId};
+    case 'ACCOUNT_DELETION':
+      return {route: 'CustomerSettingsDeleteAccount'};
     default:
       return null;
   }

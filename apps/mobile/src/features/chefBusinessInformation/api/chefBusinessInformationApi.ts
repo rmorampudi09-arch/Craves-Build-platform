@@ -17,7 +17,12 @@ export type ChefBusinessDocumentType =
   | 'GOVERNMENT_ID_BACK'
   | 'TAX_ID_CARD'
   | 'AADHAAR_CARD'
-  | 'PAN_CARD';
+  | 'PAN_CARD'
+  | 'KITCHEN_PHOTO_1'
+  | 'KITCHEN_PHOTO_2'
+  | 'FSSAI_LICENSE'
+  | 'SELECTED_PROOF_FRONT'
+  | 'SELECTED_PROOF_BACK';
 
 export const CHEF_REQUIRED_APPLICATION_DOCUMENT_TYPES = [
   'APPLICANT_PHOTO',
@@ -33,6 +38,9 @@ export const CHEF_PROOF_FILES_ROUTE =
   '/api/v1/chef/application/proof-files' as const;
 export const CHEF_APPLICATION_EVIDENCE_ROUTE =
   '/api/v1/chef/application?evidence=true' as const;
+
+/** A document photo over mobile data needs more than the default 12 s (same as onboarding). */
+const SLOW_UPLOAD_MS = 45000;
 
 export interface ChefProofUploadFile {
   uri: string;
@@ -100,6 +108,11 @@ const DOCUMENT_TYPES = new Set<ChefBusinessDocumentType>([
   'TAX_ID_CARD',
   'AADHAAR_CARD',
   'PAN_CARD',
+  'KITCHEN_PHOTO_1',
+  'KITCHEN_PHOTO_2',
+  'FSSAI_LICENSE',
+  'SELECTED_PROOF_FRONT',
+  'SELECTED_PROOF_BACK',
 ]);
 const DOCUMENT_STATUSES = new Set<ChefBusinessDocumentStatus>([
   'UPLOADED',
@@ -116,6 +129,17 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+// A document type this app does not know is left out, so a new server type never hides the whole record.
+function withoutOtherTypes(
+  items: unknown[],
+  known: ReadonlySet<string>,
+): unknown[] {
+  return items.filter(item => {
+    const type = asRecord(item)?.documentType;
+    return typeof type !== 'string' || known.has(type);
+  });
 }
 
 function requiredString(value: unknown, maxLength: number): string | null {
@@ -282,13 +306,14 @@ export function parseChefBusinessVerificationRecord(
     rejectionReason === undefined ||
     submittedAt === undefined ||
     reviewedAt === undefined ||
-    !Array.isArray(raw.documents) ||
-    raw.documents.length > DOCUMENT_TYPES.size
+    !Array.isArray(raw.documents)
   ) {
     return null;
   }
 
-  const documents = raw.documents.map(parseChefBusinessProofDocument);
+  const documents = withoutOtherTypes(raw.documents, DOCUMENT_TYPES).map(
+    parseChefBusinessProofDocument,
+  );
   if (documents.some(document => document === null)) return null;
 
   const typedDocuments = documents as ChefBusinessProofDocument[];
@@ -379,19 +404,19 @@ export function parseChefBusinessVerificationRecord(
 export function parseChefBusinessEvidence(
   value: unknown,
 ): ChefBusinessProofDocument[] | null {
-  if (!Array.isArray(value) || value.length > CHEF_REQUIRED_APPLICATION_DOCUMENT_TYPES.length) {
-    return null;
-  }
+  if (!Array.isArray(value)) return null;
 
-  const parsed = value.map(parseChefBusinessProofDocument);
+  // The panel offers four types; a v2 chef's list also holds kitchen photos, FSSAI and the chosen proof.
+  const parsed = withoutOtherTypes(
+    value,
+    new Set<string>(CHEF_REQUIRED_APPLICATION_DOCUMENT_TYPES),
+  ).map(parseChefBusinessProofDocument);
   if (parsed.some(document => document === null)) return null;
 
   const documents = parsed as ChefBusinessProofDocument[];
-  const allowed = new Set<string>(CHEF_REQUIRED_APPLICATION_DOCUMENT_TYPES);
   if (
-    documents.some(document => !allowed.has(document.documentType)) ||
     new Set(documents.map(document => document.documentType)).size !==
-      documents.length
+    documents.length
   ) {
     return null;
   }
@@ -456,7 +481,7 @@ export const chefBusinessInformationApi = {
     const response = await httpClient.post<unknown>(
       CHEF_PROOF_FILES_ROUTE,
       formData,
-      {signal},
+      {signal, timeout: SLOW_UPLOAD_MS},
     );
     const parsed = parseChefBusinessProofDocument(response);
     if (!parsed || parsed.documentType !== documentType) {

@@ -1,6 +1,10 @@
 import {Alert, Linking} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import {CHEF_MENU_IMAGE_CONTENT_TYPES, chefMenuApi} from '../api/chefMenuApi';
+import {toAppApiError} from '../../../core/http/apiError';
+import {shrinkPhoto} from '../../../core/media/shrinkPhoto';
+import {CHEF_MENU_IMAGE_CONTENT_TYPES, chefMenuApi, type ChefMenuItemImage} from '../api/chefMenuApi';
+
+const MENU_IMAGE_LIMIT_REACHED = 'MENU_IMAGE_LIMIT_REACHED';
 
 export type DishPhoto = ImagePicker.ImagePickerAsset;
 export type DishPhotoSource = 'camera' | 'gallery';
@@ -51,21 +55,49 @@ export async function pickDishPhoto(source: DishPhotoSource): Promise<{photo: Di
   }
 }
 
-/** Sends the photo as the dish's main one. False when it did not upload (the dish itself is already saved). */
-export async function uploadDishPhoto(menuItemId: string, photo: DishPhoto): Promise<boolean> {
+/** Deletes one dish photo. One that will not delete is left: the save must not fail over it. */
+async function removeImage(menuItemId: string, image: ChefMenuItemImage): Promise<void> {
   try {
-    const formData = new FormData();
-    formData.append(
-      'file',
-      {
-        uri: photo.uri,
-        name: photo.fileName?.trim() || `craves-dish-${menuItemId}.jpg`,
-        type: photo.mimeType || 'image/jpeg',
-      } as unknown as Blob,
-    );
-    await chefMenuApi.uploadImage(menuItemId, formData, true);
-    return true;
+    await chefMenuApi.deleteImage(menuItemId, image.id);
   } catch {
-    return false;
+    // Left in place: it is replaced again on the next photo change.
+  }
+}
+
+/**
+ * Sends the photo as the dish's main one and then deletes the main photo it replaces, so replacing does not pile up to
+ * the server's limit of 5. Other (gallery) photos are never deleted: the website lets chefs keep them. False when it did
+ * not upload (the dish itself is already saved), 'limit' when the dish holds 5 photos and none is the main one to replace.
+ */
+export async function uploadDishPhoto(
+  menuItemId: string,
+  photo: DishPhoto,
+  oldImages: readonly ChefMenuItemImage[] = [],
+): Promise<boolean | 'limit'> {
+  try {
+    const file = await shrinkPhoto(photo, `craves-dish-${menuItemId}.jpg`);
+    const send = () => {
+      const formData = new FormData();
+      formData.append('file', file as unknown as Blob);
+      return chefMenuApi.uploadImage(menuItemId, formData, true);
+    };
+    const cover = oldImages.find(image => image.primary);
+    try {
+      await send();
+    } catch (error) {
+      if (toAppApiError(error).code !== MENU_IMAGE_LIMIT_REACHED || !cover) {
+        throw error;
+      }
+      // Full dish: the main photo being replaced is the one photo that may go first, then send once more.
+      await removeImage(menuItemId, cover);
+      await send();
+      return true;
+    }
+    if (cover) {
+      await removeImage(menuItemId, cover);
+    }
+    return true;
+  } catch (error) {
+    return toAppApiError(error).code === MENU_IMAGE_LIMIT_REACHED ? 'limit' : false;
   }
 }

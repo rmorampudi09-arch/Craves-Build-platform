@@ -41,7 +41,7 @@ describe('authenticated workspace restoration', () => {
     const state = makeStore();
     state.dispatch(authActions.roleSelected(role));
     expect(await activeRoleStorage.read(identity.id)).toBeNull();
-    state.dispatch(authActions.authenticated(identity));
+    state.dispatch(authActions.signedInFresh(identity));
     expect(await activeRoleStorage.read(identity.id)).toBe(role);
     expect(state.getState().auth.accountResolution).toBeNull();
   });

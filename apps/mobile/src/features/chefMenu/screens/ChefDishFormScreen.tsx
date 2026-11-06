@@ -29,9 +29,10 @@ import {
   VegMark,
   useChefToast,
 } from '../../chefShell/components/ui';
-import {CHEF_MENU_FOOD_TYPES, CHEF_MENU_SPICE_LEVELS, type ChefMenuItem} from '../api/chefMenuApi';
+import {CHEF_MENU_FOOD_TYPES, CHEF_MENU_SPICE_LEVELS, type ChefMenuItem, type ChefMenuItemImage} from '../api/chefMenuApi';
 import {ChefMenuCategorySelector} from '../components/ChefMenuCategorySelector';
 import {FormField, GroupLabel, OptionChip} from '../components/DishFormField';
+import {DishLabelsSection} from '../components/DishLabelsSection';
 import {pickDishPhoto, uploadDishPhoto, type DishPhoto, type DishPhotoSource} from '../components/dishPhoto';
 import {
   EMPTY_CHEF_MENU_FORM,
@@ -42,6 +43,7 @@ import {
 } from '../domain/chefMenuForm';
 import {getChefMenuPrimaryImageUrl} from '../domain/chefMenuPresentation';
 import {useChefAddMenuItemModel} from '../state/useChefAddMenuItemModel';
+import {useChefDishLabels} from '../state/useChefDishLabels';
 import {useChefEditMenuItemModel} from '../state/useChefEditMenuItemModel';
 import {useChefMenuModel, type ChefMenuModel} from '../state/useChefMenuModel';
 import {useDishSwitch} from '../state/useDishSwitch';
@@ -155,7 +157,9 @@ function DishForm({
   const toast = useChefToast();
   const addModel = useChefAddMenuItemModel();
   const editModel = useChefEditMenuItemModel();
-  const setOn = useDishSwitch(menu.updateAvailability);
+  const setOn = useDishSwitch(menu);
+  // The labels sit at the bottom of a long form, so their messages also show as a toast the chef sees from the Save button.
+  const labels = useChefDishLabels(editing ? dish.id : null, toast.show);
 
   const [photo, setPhoto] = React.useState<DishPhoto | null>(null);
   const [photoBusy, setPhotoBusy] = React.useState(false);
@@ -193,7 +197,7 @@ function DishForm({
   const busy = model.submitState === 'submitting' || photoBusy || saving;
   // The switch saves by itself; a Save sent while it is still being saved could undo it.
   const switchBusy = Boolean(dish && menu.availabilityStateByItem[dish.id]);
-  const changed = isDirty || photo !== null;
+  const changed = isDirty || photo !== null || labels.changed;
 
   // Leaving with something typed asks first; every way out (X, Back, the system back) goes through here.
   usePreventRemove(changed && !leaving, ({data}) => setPendingLeave(data.action));
@@ -255,8 +259,8 @@ function DishForm({
 
   // A second tap must not send the photo again, even before the busy state has reached the buttons.
   const photoLock = React.useRef(false);
-  /** True when sent (or nothing to send), false when it did not upload, null when it is already being sent. */
-  const sendPhoto = async (menuItemId: string): Promise<boolean | null> => {
+  /** True when sent (or nothing to send), false when it did not upload, 'limit' when the dish is full of photos, null when it is already being sent. */
+  const sendPhoto = async (menuItemId: string, oldImages: ChefMenuItemImage[] = []): Promise<boolean | 'limit' | null> => {
     if (!photo) {
       return true;
     }
@@ -266,9 +270,9 @@ function DishForm({
     photoLock.current = true;
     setPhotoBusy(true);
     try {
-      const uploaded = await uploadDishPhoto(menuItemId, photo);
+      const uploaded = await uploadDishPhoto(menuItemId, photo, oldImages);
       // After a good upload the screen is on its way out: the lock stays so a late tap cannot send it again.
-      photoLock.current = uploaded;
+      photoLock.current = uploaded === true;
       return uploaded;
     } finally {
       setPhotoBusy(false);
@@ -277,6 +281,9 @@ function DishForm({
 
   const saveNew = (intent: ChefMenuSubmitIntent) =>
     runSave(handleSubmit(async values => {
+      if (!labels.ready()) {
+        return;
+      }
       addModel.clearError();
       setPhotoError(null);
       const created = await addModel.submit(values, intent);
@@ -290,18 +297,21 @@ function DishForm({
       if (photo) {
         await menu.refresh().catch(() => undefined);
       }
+      const labelled = await labels.save(created.id);
       finish(
-        !uploaded
+        uploaded !== true
           ? `${created.itemName} is saved, but the photo didn't upload. Open the dish to add it again.`
-          : intent === 'ADD_ITEM'
-            ? `${created.itemName} is live`
-            : 'Draft saved',
+          : !labelled
+            ? `${created.itemName} ${intent === 'ADD_ITEM' ? 'is live' : 'is saved'}, but its labels didn't save. Open the dish to add them again.`
+            : intent === 'ADD_ITEM'
+              ? `${created.itemName} is live`
+              : 'Draft saved',
       );
     }));
 
   const saveEdit = (publish: boolean) =>
     runSave(handleSubmit(async values => {
-      if (!dish) {
+      if (!dish || !labels.ready()) {
         return;
       }
       editModel.clearError();
@@ -315,15 +325,25 @@ function DishForm({
         }
         saved = submitted;
       }
+      // Labels go before the photo, so a failed upload's "Your other changes are saved" is true. A label failure stays on
+      // the form with its message under the labels, the dish's other changes already saved and the photo not sent yet.
+      if (!(await labels.save(dish.id))) {
+        reset(chefMenuItemToFormValues(saved));
+        return;
+      }
       if (photo) {
-        const uploaded = await sendPhoto(dish.id);
+        const uploaded = await sendPhoto(dish.id, dish.images);
         if (uploaded === null) {
           return;
         }
         await menu.refresh().catch(() => undefined);
-        if (!uploaded) {
+        if (uploaded !== true) {
           reset(chefMenuItemToFormValues(saved));
-          setPhotoError("The new photo didn't upload. Your other changes are saved. Try the photo again.");
+          setPhotoError(
+            uploaded === 'limit'
+              ? 'This dish already has 5 photos. Remove one on the Craves website first, then try again.'
+              : "The new photo didn't upload. Your other changes are saved. Try the photo again.",
+          );
           return;
         }
       }
@@ -660,6 +680,15 @@ function DishForm({
             </ListGroup>
           )}
         />
+        {labels.enabled && labels.vocabulary ? (
+          <DishLabelsSection
+            disabled={busy}
+            error={labels.error}
+            onChange={labels.setSelection}
+            selection={labels.selection}
+            vocabulary={labels.vocabulary}
+          />
+        ) : null}
       </View>
 
       <ChefSheet onClose={() => setSheet(null)} title="Dish photo" visible={sheet === 'photo'}>

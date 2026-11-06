@@ -1,8 +1,10 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {ActivityIndicator, StyleSheet, Text, View} from 'react-native';
 import {useAppDispatch, useAppSelector} from '../../../app/store/hooks';
-import {toAppApiError} from '../../../core/http/apiError';
+import {toAppApiError, type AppApiError} from '../../../core/http/apiError';
 import {colors, spacing} from '../../../design/tokens';
+import {deletionCopy} from '../../accountDeletion/domain/deletionCopy';
+import {AccountUnavailableScreen} from '../../accountDeletion/screens/AccountUnavailableScreen';
 import {PrimaryButton} from '../components/PrimaryButton';
 import {accountResolutionService} from '../state/accountResolutionService';
 import {authService} from '../state/authService';
@@ -11,10 +13,18 @@ import {authActions} from '../state/authSlice';
 export function AccountRouterScreen() {
   const dispatch = useAppDispatch();
   const requestedRole = useAppSelector(state => state.auth.selectedRole);
+  const pendingDeletion = useAppSelector(state => state.auth.identity?.pendingDeletion);
+  const roles = useAppSelector(state => state.auth.identity?.roles);
+  // A restored session can still ask for CUSTOMER after the customer side was deleted; a chef keeps CHEF.
+  const customerRoleLost =
+    requestedRole === 'CUSTOMER' && roles?.includes('CHEF') === true && !roles.includes('CUSTOMER');
+  // Chef mode has nothing to open while the chef side is erased; the customer side still works.
+  const chefSideErasing =
+    requestedRole === 'CHEF' && pendingDeletion?.scope === 'CHEF' && pendingDeletion.status === 'ERASING';
   const mounted = useRef(true);
   const requestInFlight = useRef(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppApiError | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
@@ -39,7 +49,7 @@ export function AccountRouterScreen() {
       }
     } catch (caught) {
       if (mounted.current) {
-        setError(toAppApiError(caught).message);
+        setError(toAppApiError(caught));
       }
     } finally {
       requestInFlight.current = false;
@@ -50,8 +60,12 @@ export function AccountRouterScreen() {
   }, [dispatch, requestedRole]);
 
   useEffect(() => {
-    resolveAccount();
-  }, [resolveAccount]);
+    if (customerRoleLost) {
+      dispatch(authActions.roleSelected('CHEF'));
+    } else if (!chefSideErasing) {
+      resolveAccount();
+    }
+  }, [dispatch, resolveAccount, chefSideErasing, customerRoleLost]);
 
   const signOut = async () => {
     if (signingOut || requestInFlight.current) {
@@ -71,6 +85,25 @@ export function AccountRouterScreen() {
     }
   };
 
+  if (chefSideErasing) {
+    return (
+      <View style={styles.root}>
+        <Text style={styles.title}>{deletionCopy.state.erasingTitle.CHEF}</Text>
+        <Text style={styles.text}>{deletionCopy.state.erasingBody}</Text>
+        <View style={styles.actions}>
+          <PrimaryButton
+            label={deletionCopy.state.goToCustomerSide}
+            onPress={() => dispatch(authActions.roleSelected('CUSTOMER'))}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  if (error?.code === 'IDENTITY_NOT_ACTIVE') {
+    return <AccountUnavailableScreen signedIn />;
+  }
+
   return (
     <View style={styles.root}>
       {busy ? <ActivityIndicator color={colors.flameRed} size="large" /> : null}
@@ -78,7 +111,7 @@ export function AccountRouterScreen() {
         {error ? 'We could not verify your account' : 'Checking your Craves account…'}
       </Text>
       <Text style={styles.text}>
-        {error ??
+        {error?.message ??
           'We are securely confirming your account role and onboarding status.'}
       </Text>
       {error ? (

@@ -1,14 +1,15 @@
 import type {CustomerBrowsingLocation} from '../../customerShell/state/customerShellSlice';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ADDRESS_LABELS = new Set<CustomerAddressLabel>(['HOME', 'WORK', 'OTHER']);
+const ADDRESS_LABEL_MAX_LENGTH = 80;
 
+/** The three presets in the editor; a saved label can also be a custom name typed on the website. */
 export type CustomerAddressLabel = 'HOME' | 'WORK' | 'OTHER';
 
 export interface CustomerAddress {
   id: string;
   identityId: string | null;
-  addressLabel: CustomerAddressLabel | null;
+  addressLabel: string | null;
   recipientName: string | null;
   contactPhoneNumber: string;
   addressLine1: string;
@@ -28,7 +29,7 @@ export interface CustomerAddress {
 }
 
 export interface CustomerAddressUpdateRequest {
-  addressLabel: CustomerAddressLabel | null;
+  addressLabel: string | null;
   recipientName: string;
   contactPhoneNumber: string;
   addressLine1: string;
@@ -103,14 +104,10 @@ function parseCoordinate(
     : undefined;
 }
 
-function parseAddressLabel(value: unknown): CustomerAddressLabel | null {
-  if (value == null) {
-    return null;
-  }
-  return typeof value === 'string' &&
-    ADDRESS_LABELS.has(value as CustomerAddressLabel)
-    ? (value as CustomerAddressLabel)
-    : null;
+// An unreadable label reads as no label, so the address and the list still load.
+function parseAddressLabel(value: unknown): string | null {
+  const label = typeof value === 'string' ? value.trim() : '';
+  return label && label.length <= ADDRESS_LABEL_MAX_LENGTH ? label : null;
 }
 
 export function parseCustomerAddress(value: unknown): CustomerAddress | null {
@@ -149,10 +146,6 @@ export function parseCustomerAddress(value: unknown): CustomerAddress | null {
     !createdAt ||
     !updatedAt
   ) {
-    return null;
-  }
-
-  if (item.addressLabel != null && parseAddressLabel(item.addressLabel) === null) {
     return null;
   }
 
@@ -200,8 +193,10 @@ export function customerAddressLabel(address: CustomerAddress): string {
       return 'Work';
     case 'OTHER':
       return 'Other';
-    default:
+    case null:
       return 'Saved address';
+    default:
+      return address.addressLabel;
   }
 }
 

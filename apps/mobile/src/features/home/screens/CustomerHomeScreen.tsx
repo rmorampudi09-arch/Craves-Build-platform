@@ -82,7 +82,13 @@ import {
   useCustomerFavoritesQuery,
   useToggleCustomerFavorite,
 } from '../../favorites/query/customerFavoritesQueries';
-import {applyHomeDiscoveryFilters} from '../../discoveryFilters/discoveryFilterApplication';
+import {
+  applyDishLabelFilters,
+  applyHomeDiscoveryFilters,
+  labelsForHomeFilter,
+  shouldLoadMoreForLabelFilter,
+} from '../../discoveryFilters/discoveryFilterApplication';
+import {useNearbyDishLabels} from '../../dishLabels/state/nearbyDishLabels';
 import {
   discoveryFilterActions,
   getActiveDiscoveryFilterCount,
@@ -101,6 +107,7 @@ import {
   formatDishPrice,
 } from '../homePresentation';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
+import {useDeletionStripVisible} from '../../accountDeletion/state/useDeletionStripVisible';
 import {launchAlertErrorText, useLaunchAlert} from '../api/launchAlertApi';
 import {HomeComingSoonPage} from '../components/HomeComingSoonPage';
 import {TOP_KITCHENS_PAGE_SIZE} from '../components/HomePromoAndKitchens';
@@ -525,14 +532,38 @@ export function CustomerHomeScreen() {
     () => flattenNearbyDishPages(feed.data?.pages),
     [feed.data?.pages],
   );
+  const dishLabels = useNearbyDishLabels(dishes.map(dish => dish.id));
+  const labelsForFilter = labelsForHomeFilter(dishLabels);
   const filteredAndSortedDishes = useMemo(
-    () => applyHomeDiscoveryFilters(dishes, appliedFilters),
-    [appliedFilters, dishes],
+    () =>
+      applyDishLabelFilters(
+        applyHomeDiscoveryFilters(dishes, appliedFilters),
+        appliedFilters,
+        labelsForFilter,
+      ),
+    [appliedFilters, dishes, labelsForFilter],
   );
   const visibleDishes = useMemo(
     () => filterHomeDishes(filteredAndSortedDishes, search.query, selectedCategory),
     [filteredAndSortedDishes, search.query, selectedCategory],
   );
+  const labelFilterActive =
+    appliedFilters.cuisineIds.length > 0 || appliedFilters.dietTags.length > 0;
+  // A failed page load must not retry in a loop, so an error stops the extra loading.
+  const loadMoreForLabels =
+    !feed.isFetchNextPageError &&
+    shouldLoadMoreForLabelFilter({
+      labelSelectionActive: labelFilterActive,
+      labelsPending: dishLabels.pending,
+      hasNextPage: feed.hasNextPage,
+      isFetchingNextPage: feed.isFetchingNextPage,
+      matchingCount: visibleDishes.length,
+      loadedPages: feed.data?.pages.length ?? 0,
+    });
+  const fetchNextFeedPage = feed.fetchNextPage;
+  useEffect(() => {
+    if (loadMoreForLabels) void fetchNextFeedPage();
+  }, [loadMoreForLabels, fetchNextFeedPage]);
   const listData = useMemo<HomeFeedListItem[]>(() => {
     if (feed.locationRequired) {
       return [{kind: 'empty', key: 'empty'}];
@@ -591,7 +622,9 @@ export function CustomerHomeScreen() {
   const launchAlert = useLaunchAlert(selectedLocation, noKitchensHere);
 
   // The coming-soon page is white, so it takes the dark status bar icons like the white header.
-  const darkStatusBar = headerWhite || noKitchensHere;
+  // The delete-request strip is pale amber, so it takes them too.
+  const stripVisible = useDeletionStripVisible();
+  const darkStatusBar = headerWhite || noKitchensHere || stripVisible;
   headerWhiteRef.current = darkStatusBar;
   useEffect(() => {
     if (homeFocusedRef.current) applyStatusBar(darkStatusBar);
@@ -863,6 +896,13 @@ export function CustomerHomeScreen() {
             testID="customer-home-no-search-results"
           />
         );
+      }
+      // Label filters match loaded pages only: keep loading before saying nothing matches.
+      if (
+        loadMoreForLabels ||
+        (labelFilterActive && (feed.isFetchingNextPage || dishLabels.pending))
+      ) {
+        return <HomeFeedSkeleton />;
       }
       return (
         <TerminalState

@@ -88,8 +88,8 @@ export interface OptionChipProps {
   /** Before the label, such as the veg mark. */
   mark?: React.ReactNode;
   accessibilityLabel?: string;
-  /** `button` for a chip that opens more choices ("More…") rather than being one of them. */
-  accessibilityRole?: 'radio' | 'button';
+  /** `checkbox` when several can be chosen; `button` for a chip that opens more choices ("More…") rather than being one of them. */
+  accessibilityRole?: 'radio' | 'checkbox' | 'button';
 }
 
 /** One choice of a few (Veg / Non-veg / Egg, a category, a spice level). The chosen one is outlined red. */
@@ -106,7 +106,7 @@ export function OptionChip({
     <ChipTap
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole={accessibilityRole}
-      accessibilityState={accessibilityRole === 'radio' ? {checked: selected, disabled: Boolean(disabled)} : undefined}
+      accessibilityState={accessibilityRole === 'button' ? undefined : {checked: selected, disabled: Boolean(disabled)}}
       disabled={disabled}
       onPress={onPress}
       style={chipTapOverlap(CHIP_HEIGHT)}>

@@ -173,6 +173,21 @@ describe('chef menu item form', () => {
     });
   });
 
+  it('leaves the weight empty and thermobox off for a dish that has neither yet', () => {
+    expect(
+      chefMenuItemToFormValues({
+        ...existingItem,
+        unitPackageWeightGrams: null,
+        thermoboxRequired: null,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        unitPackageWeightGrams: '',
+        thermoboxRequired: false,
+      }),
+    );
+  });
+
   it('builds a full PUT replacement while preserving currency and status', () => {
     expect(
       buildChefMenuReplacementRequest(

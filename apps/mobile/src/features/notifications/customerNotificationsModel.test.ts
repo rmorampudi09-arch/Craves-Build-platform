@@ -98,6 +98,25 @@ describe('customerNotificationsModel', () => {
     ).toBeNull();
   });
 
+  it('opens the Delete account screen for an ACCOUNT_DELETION notice with a UUID target, and nothing for any other id', () => {
+    expect(
+      resolveCustomerNotificationDestination(notice({targetType: 'ACCOUNT_DELETION'})),
+    ).toEqual({route: 'CustomerSettingsDeleteAccount'});
+    expect(
+      resolveCustomerNotificationDestination(notice({targetType: ' account_deletion '})),
+    ).toEqual({route: 'CustomerSettingsDeleteAccount'});
+    expect(
+      resolveCustomerNotificationDestination(
+        notice({targetType: 'ACCOUNT_DELETION', targetId: 'not-a-uuid'}),
+      ),
+    ).toBeNull();
+    expect(
+      resolveCustomerNotificationDestination(
+        notice({targetType: 'ACCOUNT_DELETION', targetId: null}),
+      ),
+    ).toBeNull();
+  });
+
   it('applies a successful read exactly once and preserves an existing server read time', () => {
     const firstReadAt = '2026-08-09T10:00:00.000Z';
     const secondReadAt = '2026-08-09T10:05:00.000Z';

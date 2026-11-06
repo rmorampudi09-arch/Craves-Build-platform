@@ -8,6 +8,7 @@ import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {colors, fontWeight, spacing, typography} from '../../design/tokens';
 import {useAppDispatch} from '../store/hooks';
+import {ChefDeleteAccountScreen} from '../../features/accountDeletion/screens/ChefDeleteAccountScreen';
 import {ChefBusinessInformationScreen} from '../../features/chefBusinessInformation/screens/ChefBusinessInformationScreen';
 import {ChefBankAccountScreen} from '../../features/chefBankOnboarding/screens/ChefBankAccountScreen';
 import {ChefDashboardScreen} from '../../features/chefDashboard/screens/ChefDashboardScreen';
@@ -148,6 +149,7 @@ function ChefProfileNavigator() {
         />
         <ProfileStack.Screen name="ChefReviews" component={ChefReviewsScreen} />
         <ProfileStack.Screen name="ChefSecurity" component={ChefSecurityScreen} />
+        <ProfileStack.Screen name="ChefDeleteAccount" component={ChefDeleteAccountScreen} />
         <ProfileStack.Screen name="ChefBankAccount" component={ChefBankAccountScreen} />
         <ProfileStack.Screen
           name="ChefEditProfile"

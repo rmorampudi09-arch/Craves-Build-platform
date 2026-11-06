@@ -159,10 +159,10 @@ function lunchSchedule(extra: Array<Record<string, unknown>> = []) {
   };
 }
 
-async function attachPhoto() {
+async function attachPhoto(size: {width: number; height: number; fileSize: number} = {width: 800, height: 600, fileSize: 1000}) {
   jest.mocked(ImagePicker.launchImageLibraryAsync).mockResolvedValueOnce({
     canceled: false,
-    assets: [{uri: 'file:///plan.jpg', width: 800, height: 600, mimeType: 'image/jpeg', fileSize: 1000, fileName: 'plan.jpg'}],
+    assets: [{uri: 'file:///plan.jpg', ...size, mimeType: 'image/jpeg', fileName: 'plan.jpg'}],
   } as never);
   await act(async () => pressable('Add plan photo').props.onPress());
 }
@@ -688,6 +688,27 @@ describe('ChefMealPlanEditorScreen', () => {
       expect(mockGoBack).toHaveBeenCalled();
     });
 
+    it('shrinks a large camera photo instead of refusing it, and uploads the small JPEG', async () => {
+      const append = jest.spyOn(FormData.prototype, 'append');
+      mockPlans = [plan({imageUrl: null})];
+      mockSchedule = lunchSchedule();
+      mockUpdatePlan.mockResolvedValueOnce(plan({imageUrl: null}));
+      mockPutSchedule.mockResolvedValueOnce(undefined);
+      mockUploadPlanImage.mockResolvedValueOnce(plan({}));
+      mockSubmit.mockResolvedValueOnce(plan({status: 'PENDING_APPROVAL'}));
+      render(PLAN_ID);
+      await attachPhoto({width: 8160, height: 6120, fileSize: 9_000_000});
+      expect(allText()).not.toContain('Photo is too large');
+      reachReview();
+      await submit(true);
+
+      // The global image-manipulator mock returns this file.
+      expect(append).toHaveBeenCalledWith('file', {uri: 'file:///mock/small.jpg', name: `craves-plan-${PLAN_ID}.jpg`, type: 'image/jpeg'});
+      expect(mockUploadPlanImage).toHaveBeenCalledTimes(1);
+      expect(mockSubmit).toHaveBeenCalledWith(PLAN_ID, '');
+      append.mockRestore();
+    });
+
     it('keeps the saved plan and does not submit when the photo is rejected', async () => {
       mockPlans = [plan({imageUrl: null})];
       mockSchedule = lunchSchedule();
@@ -737,6 +758,19 @@ describe('ChefMealPlanEditorScreen', () => {
       expect(allText()).toContain('Draft saved');
     });
 
+    it('keeps the form locked once a save sends the chef back, so nothing re-renders while the screen leaves', async () => {
+      // Clearing the busy state during the exit re-rendered the screen as Android removed it and crashed the app.
+      mockCreatePlan.mockResolvedValueOnce(plan({}));
+      render();
+      fillDetails();
+      tryLeave();
+
+      await act(async () => pressable('Save draft').props.onPress());
+
+      expect(mockGoBack).toHaveBeenCalled();
+      expect(input('Plan name').props.editable).toBe(false);
+    });
+
     it('takes the chef back to the step with the problem when a draft saved from a later step is not complete', async () => {
       // A draft that came back without a description, opened on the Meals step.
       mockPlans = [plan({description: null})];
@@ -764,6 +798,23 @@ describe('ChefMealPlanEditorScreen', () => {
       press('Discard');
       expect(mockDispatch).toHaveBeenCalledWith({type: 'GO_BACK'});
       expect(mockCreatePlan).not.toHaveBeenCalled();
+    });
+
+    it('leaves for real on Discard: the guard is off by the time the exit is sent, so the sheet does not come back', () => {
+      // Like React Navigation: an exit sent while the guard is on is caught again.
+      mockDispatch.mockImplementation(action => {
+        const [guarded, onPrevent] = leaveGuard();
+        if (guarded) onPrevent({data: {action}});
+      });
+      render();
+      type('Plan name', 'Half done');
+      tryLeave();
+
+      press('Discard');
+
+      expect(mockDispatch).toHaveBeenCalledWith({type: 'GO_BACK'});
+      expect(leaveGuard()[0]).toBe(false);
+      expect(allText()).not.toContain('Save as draft?');
     });
 
     it('brings the chef to the Meals step to read why removing every meal keeps the old schedule', async () => {

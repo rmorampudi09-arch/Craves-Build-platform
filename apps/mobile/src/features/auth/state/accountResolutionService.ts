@@ -55,9 +55,12 @@ async function resolveCustomer(identity: Identity): Promise<AccountResolution> {
 }
 
 async function resolveChef(identity: Identity): Promise<AccountResolution> {
-  requireRole(identity, 'CUSTOMER');
-  const application = await profileApi.getChefApplication();
   const hasChefRole = identity.roles.includes('CHEF');
+  // A chef who deleted only their customer side keeps CHEF without CUSTOMER.
+  if (!hasChefRole) {
+    requireRole(identity, 'CUSTOMER');
+  }
+  const application = await profileApi.getChefApplication();
 
   if (application.identityId !== identity.id) {
     throw new AppApiError(

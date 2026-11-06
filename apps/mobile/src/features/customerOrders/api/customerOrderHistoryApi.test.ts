@@ -84,6 +84,20 @@ describe('customerOrderHistoryApi contract', () => {
     );
   });
 
+  it('drops a broken row and keeps the rest and the paging fields', () => {
+    const parsed = parseCustomerOrderHistoryPage({
+      orders: [
+        order({id: '99999999-9999-4999-8999-999999999999', status: 'UNKNOWN'}),
+        order({createdAt: '2026-09-19T11:00:00Z'}),
+      ],
+      nextCursor: 'cursor-1',
+      hasMore: true,
+    });
+
+    expect(parsed?.orders.map(item => item.id)).toEqual(['11111111-1111-4111-8111-111111111111']);
+    expect(parsed).toMatchObject({nextCursor: 'cursor-1', hasMore: true});
+  });
+
   it('requires a cursor whenever more history exists', () => {
     expect(
       parseCustomerOrderHistoryPage({

@@ -3,6 +3,7 @@ import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {createPrivateQueryKey} from '../../../app/query/queryKeys';
 import {useAppSelector} from '../../../app/store/hooks';
 import {chefMenuApi, type ChefMenuItem} from '../api/chefMenuApi';
+import {SELLING_NOT_READY, isSellingNotReady} from '../../chefShell/domain/sellingNotReady';
 import {buildChefMenuPublishRequest, chefMenuItemToFormValues} from '../domain/chefMenuForm';
 import {createChefMenuItemsQueryKey, chefMenuItemsQueryPrefix} from './chefMenuQuery';
 
@@ -17,12 +18,15 @@ export interface ChefMenuModel {
   updateAvailability: (menuItemId: string, available: boolean) => Promise<boolean>;
   /** Saves a draft as ACTIVE and on, at once; puts it back if the server says no. True when saved. */
   publishDraft: (item: ChefMenuItem) => Promise<boolean>;
+  /** Why the last change failed, when it is the chef who cannot sell yet; null for any other failure. */
+  lastRefusal: () => string | null;
 }
 
 export function useChefMenuModel(): ChefMenuModel {
   const identityId = useAppSelector(state => state.auth.identity?.id ?? null);
   const queryClient = useQueryClient();
   const activeMutations = React.useRef(new Set<string>());
+  const refusal = React.useRef<string | null>(null);
   const [availabilityStateByItem, setAvailabilityStateByItem] = React.useState<Record<string, boolean>>({});
 
   const dashboardMenuQueryKey = React.useMemo(
@@ -66,6 +70,7 @@ export function useChefMenuModel(): ChefMenuModel {
         return false;
       }
       activeMutations.current.add(menuItemId);
+      refusal.current = null;
       setAvailabilityStateByItem(current => ({...current, [menuItemId]: true}));
 
       const keys = dashboardMenuQueryKey ? [queryKey, dashboardMenuQueryKey] : [queryKey];
@@ -87,7 +92,8 @@ export function useChefMenuModel(): ChefMenuModel {
           void queryClient.invalidateQueries({queryKey: key});
         }
         return true;
-      } catch {
+      } catch (error) {
+        refusal.current = isSellingNotReady(error) ? SELLING_NOT_READY : null;
         // Put back this dish only: another dish saved meanwhile must keep what the server holds.
         for (const [key, data] of previous) {
           const before = data?.find(item => item.id === menuItemId);
@@ -145,5 +151,6 @@ export function useChefMenuModel(): ChefMenuModel {
     refresh,
     updateAvailability,
     publishDraft,
+    lastRefusal: () => refusal.current,
   };
 }

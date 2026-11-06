@@ -106,6 +106,17 @@ describe('P111 process restoration policy', () => {
     },
   );
 
+  it('restores Delete account inside the customer Profile stack', () => {
+    const root = state([{name: 'Profile', state: state([{name: 'CustomerProfileRoot'}, {name: 'CustomerSettingsDeleteAccount'}], 1)}]);
+    const snapshot = captureProcessRestorationSnapshot(root, 'CUSTOMER');
+    expect(snapshot).toEqual({
+      version: 1,
+      role: 'CUSTOMER',
+      target: {kind: 'CUSTOMER_SCREEN', tab: 'Profile', screen: 'CustomerSettingsDeleteAccount'},
+    });
+    expect(parseProcessRestorationSnapshot(snapshot)).toEqual(snapshot);
+  });
+
   it('collapses customer draft-bearing routes to their safe owner tab', () => {
     const root = state([
       {

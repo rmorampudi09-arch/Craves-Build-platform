@@ -9,6 +9,7 @@ import {useAppDispatch, useAppSelector} from '../store/hooks';
 import {resolveReducedMotionAnimation} from '../../design/motion';
 import {useReducedMotionPreference} from '../../design/reducedMotion';
 import {bottomMenu, fontWeight, typography} from '../../design/tokens';
+import {CustomerDeleteAccountScreen} from '../../features/accountDeletion/screens/CustomerDeleteAccountScreen';
 import {CustomerCartScreen} from '../../features/cart/screens/CustomerCartScreen';
 import {KitchenSwitchHost} from '../../features/cart/components/KitchenSwitchDialog';
 import {refreshCartSnapshot} from '../../features/cart/state/cartRefresh';
@@ -463,6 +464,7 @@ function CustomerProfileStackNavigator() {
       <ProfileStack.Screen name="CustomerSettings" component={CustomerSettingsRouteScreen} />
       <ProfileStack.Screen name="CustomerSettingsNotifications" component={CustomerSettingsNotificationsScreen} />
       <ProfileStack.Screen name="CustomerSettingsPrivacySecurity" component={CustomerSettingsPrivacySecurityScreen} />
+      <ProfileStack.Screen name="CustomerSettingsDeleteAccount" component={CustomerDeleteAccountScreen} />
       <ProfileStack.Screen name="CustomerSettingsChangePassword" component={CustomerSettingsChangePasswordScreen} />
       <ProfileStack.Screen name="CustomerSettingsLanguage" component={CustomerSettingsLanguageScreen} />
       <ProfileStack.Screen name="CustomerSettingsAppearance" component={CustomerSettingsAppearanceScreen} />

@@ -72,7 +72,7 @@ public class PromotionRefundService {
         }
     }
 
-    static Map<UUID, Long> shares(long amount, Map<UUID, Long> weights) {
+    public static Map<UUID, Long> shares(long amount, Map<UUID, Long> weights) {
         var ids = new ArrayList<>(weights.keySet());
         ids.sort(Comparator.comparing(UUID::toString));
         long total = 0;

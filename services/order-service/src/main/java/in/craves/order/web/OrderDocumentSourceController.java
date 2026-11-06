@@ -1,5 +1,6 @@
 package in.craves.order.web;
 
+import in.craves.order.advanced.MenuOptionChoices;
 import in.craves.order.security.CravesPrincipal;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
@@ -52,8 +53,9 @@ public class OrderDocumentSourceController {
         if(!currency.equals(order.currency())) throw error(409,"DOCUMENT_CURRENCY_MISMATCH");
         if(receipt && (!"ON_DEMAND".equals(order.source())||!"PAID".equals(order.checkoutStatus())))
             throw error(409,"PAID_ON_DEMAND_CHECKOUT_REQUIRED");
-        List<List<String>> items=jdbc.query("SELECT item_name_snapshot,quantity,unit_price_snapshot,line_total FROM order_schema.order_item "+
-            "WHERE order_id=? ORDER BY created_at,id LIMIT 1001",(rs,n)->List.of(text(rs.getString(1)),Integer.toString(rs.getInt(2)),
+        List<List<String>> items=jdbc.query("SELECT oi.item_name_snapshot,oi.quantity,oi.unit_price_snapshot,oi.line_total,"+MenuOptionChoices.COLUMN+
+            " FROM order_schema.order_item oi"+MenuOptionChoices.JOIN+"WHERE oi.order_id=? ORDER BY oi.created_at,oi.id LIMIT 1001",
+            (rs,n)->List.of(text(MenuOptionChoices.describe(rs.getString(1),rs.getString(5))),Integer.toString(rs.getInt(2)),
                 money(rs.getBigDecimal(3)),money(rs.getBigDecimal(4))),id);
         bounded(items.size());
         List<Map<String,String>> facts=List.of(field("Kitchen",text(order.kitchen())),field("Order status",order.status()),

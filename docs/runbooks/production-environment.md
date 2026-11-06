@@ -40,6 +40,7 @@ Each service's resources (from the 30 Oct 2026 migration report):
 
 Two things every change to an app has to respect:
 - **Each app runs as its own user-assigned identity** (`id-craves-<feature>-prod`) and must name it in `AZURE_CLIENT_ID`. The services' Azure SDK (`DefaultAzureCredential`) needs that setting to reach Service Bus; without it, the call fails with "Unable to load the proper Managed Identity" and no event leaves the service. Order, integration and subscription ran without it from the move until 1 Nov 2026, so no order event reached Service Bus in that time.
+- **Guest support chat trusts the web server only once told to.** On `ca-craves-user-chef-prod`, set `CRAVES_SUPPORT_GUEST_FORWARDER_HEADER=X-Azure-SocketIP` and `CRAVES_SUPPORT_GUEST_FORWARDER_IPS=20.198.84.102` (the web app's outbound address above, same value as auth's `CRAVES_CENTRAL_OTP_FORWARDING_IPS`). Until then any caller that reaches the API directly can name its own `X-Craves-Visitor` and take the whole shared guest chat budget. The header without the list stops the service from starting; remove the header first. Like any setting change, it only takes effect once traffic is moved to the new revision (next bullet).
 - **Traffic is pinned to a named revision** (multiple-revision mode). A setting changed with `az containerapp update` makes a new revision that gets no traffic until it is moved to it (`docs/riders/GO-LIVE.md` §8).
 
 ## Previous: subscription 721906c9 (idle since 29 Oct 2026, read only)

@@ -28,7 +28,8 @@ export async function fleetProxy(request: NextRequest, segments: string[], route
 
   const query = new URLSearchParams();
   for (const [name, value] of request.nextUrl.searchParams) {
-    if (!route.query?.[name]?.safeParse(value).success) return fail(400, "INVALID_FLEET_QUERY", `The ${name} filter is not valid.`);
+    // Own keys only: `?constructor=1` would otherwise reach Object.prototype and throw instead of answering 400.
+    if (!route.query || !Object.hasOwn(route.query, name) || !route.query[name].safeParse(value).success) return fail(400, "INVALID_FLEET_QUERY", `The ${name} filter is not valid.`);
     query.set(name, value);
   }
 

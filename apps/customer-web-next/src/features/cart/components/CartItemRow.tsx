@@ -45,7 +45,7 @@ function FoodMark({ type }: { type: FoodType }) {
 
 // Buttons need `!`: the global :where(button) colours are unlayered, so they beat plain utilities.
 const STEP =
-  "flex h-11 w-11 items-center justify-center !border-0 !bg-transparent !text-[#CF1F1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-[#FDEAE8] active:!bg-[#FBD5D0] active:duration-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#22553A] disabled:pointer-events-none";
+  "flex h-11 w-11 items-center justify-center !border-0 !bg-transparent !text-[#C92716] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-[#FDEAE8] active:!bg-[#FBD5D0] active:duration-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#22553A] disabled:pointer-events-none";
 
 /** One line of the Banana Leaf cart: photo, mark and name, the red stepper, the line's price. One less at 1 removes it. */
 export function CartItemRow({
@@ -82,7 +82,7 @@ export function CartItemRow({
           {foodType ? <FoodMark type={foodType} /> : null}
           <span className="min-w-0">{item.name}</span>
         </h2>
-        <div className="mt-2 inline-flex h-11 items-center overflow-hidden rounded-full border-[1.5px] border-[#F62E18] bg-white">
+        <div className="mt-2 inline-flex h-11 items-center overflow-hidden rounded-full border-[1.5px] border-[#C92716] bg-white">
           <button
             type="button"
             data-craves-borderless="true"
@@ -95,7 +95,7 @@ export function CartItemRow({
           {/* Announced with its dish ("Egg Dum Biryani, quantity 3"), not as a bare number. */}
           <span aria-live="polite" aria-atomic="true">
             <span className="sr-only">{item.name}, quantity </span>
-            <AnimateCount className="w-8 text-center text-base font-bold text-[#CF1F1A] tabular-nums">{item.qty}</AnimateCount>
+            <AnimateCount className="w-8 text-center text-base font-bold text-[#C92716] tabular-nums">{item.qty}</AnimateCount>
           </span>
           <button
             type="button"

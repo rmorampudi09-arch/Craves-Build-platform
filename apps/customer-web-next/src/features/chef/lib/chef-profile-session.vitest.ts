@@ -289,7 +289,7 @@ describe("profile owner privacy", () => {
     await confirmSignOut();
     await act(async () => { late.resolve(Response.json({ signedOut: false }, { status: 503 })); });
     await screen.findByRole("button", { name: "Try again" });
-    await screen.findByText("Your account details are temporarily unavailable. Sign-out controls remain available below.");
+    await screen.findByText("Your account details are temporarily unavailable. You can still sign out below.");
     expect(navigate).not.toHaveBeenCalled();
     expect(screen.queryByText(/Chef A private address/)).toBeNull();
     expect(getSession()?.id).toBe(a.id);

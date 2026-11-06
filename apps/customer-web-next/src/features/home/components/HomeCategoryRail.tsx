@@ -1,15 +1,18 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
 import { X } from "lucide-react";
 
 import type { MenuCategory } from "@/features/home/lib/dishCategories";
 import { scrollRow, useRowEdges } from "@/features/home/lib/row-scroll";
 import { useScrollChrome } from "@/shared/components/navigation/AutoHideCustomerHeader";
-import { duration, ease } from "@/shared/lib/motion";
+import { duration, ease, spring } from "@/shared/lib/motion";
 
-/** The chefs' menu categories with the app's photos (app assets/categories); All shows every dish. */
-const categories: readonly { label: string; value: MenuCategory | null; image: string }[] = [
-  { label: "All", value: null, image: "/home/categories/all.webp" },
+/**
+ * The chefs' menu categories with the app's photos (app assets/categories). No "All" (owner,
+ * 5 Nov 2026): nothing chosen shows every dish, and tapping the chosen one again clears it.
+ */
+const categories: readonly { label: string; value: MenuCategory; image: string }[] = [
   { label: "Biryani", value: "Biryani", image: "/home/categories/biryani.webp" },
   { label: "Curry", value: "Curry", image: "/home/categories/curry.webp" },
   { label: "Tiffin", value: "Tiffin", image: "/home/categories/tiffin.webp" },
@@ -113,8 +116,10 @@ export function HomeCategoryRail({
 
       <div className="border-b border-[#F1F3F5] bg-white">
         <div className="relative mx-auto max-w-[88rem] bg-white px-3 pb-0 pt-0.5 md:px-7 lg:px-10">
-          <div
+          {/* layoutScroll: the red ring glides between circles correctly even after the row scrolls. */}
+          <motion.div
             ref={setScroller}
+            layoutScroll
             className="flex snap-x snap-mandatory gap-3 overflow-x-auto bg-transparent px-1 pb-2 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-4 md:pb-2.5"
             role="group"
             aria-label="Categories"
@@ -132,12 +137,20 @@ export function HomeCategoryRail({
                 >
                   <span
                     className={[
-                      "relative flex h-16 w-16 items-center justify-center rounded-full bg-[#F7F5F3] transition-[box-shadow,translate,scale] duration-(--dur-component) ease-out group-hover:-translate-y-0.5 group-active:scale-[0.96] group-active:duration-(--dur-micro) motion-reduce:transform-none md:h-[4.5rem] md:w-[4.5rem]",
-                      active
-                        ? "ring-2 ring-[#F62E18] ring-offset-2"
-                        : "group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]",
+                      "relative flex h-16 w-16 items-center justify-center rounded-full bg-[#F7F5F3] transition-[box-shadow,translate,scale] duration-(--dur-component) ease-out group-hover:-translate-y-0.5 group-active:scale-[0.94] group-active:duration-(--dur-micro) motion-reduce:transform-none md:h-[4.5rem] md:w-[4.5rem]",
+                      active ? "" : "group-focus-visible:ring-2 group-focus-visible:ring-[#1A1A1A]",
                     ].join(" ")}
                   >
+                    {/* One red ring that glides from the last choice to this one (a shared layout
+                        animation, critically damped, so it lands without bouncing). */}
+                    {active ? (
+                      <motion.span
+                        layoutId="category-ring"
+                        transition={spring.ui}
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -inset-[5px] rounded-full border-2 border-[#F62E18]"
+                      />
+                    ) : null}
                     <img
                       src={image}
                       alt=""
@@ -148,21 +161,19 @@ export function HomeCategoryRail({
                       draggable={false}
                       className="pointer-events-none h-full w-full select-none rounded-full object-cover"
                     />
-                    {/* A chosen category wears an × (as on Swiggy and Zomato chips): tap again for All.
-                        It pops in on the compositor; reduced motion just shows it. */}
-                    {value ? (
-                      <span
-                        aria-hidden="true"
-                        className={[
-                          "pointer-events-none absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#F62E18] text-white ring-2 ring-white transition-[opacity,scale] motion-reduce:transition-none",
-                          active
-                            ? "scale-100 opacity-100 duration-(--dur-component) ease-[cubic-bezier(0.34,1.56,0.64,1)]"
-                            : "scale-50 opacity-0 duration-(--dur-micro) ease-in",
-                        ].join(" ")}
-                      >
-                        <X className="h-3.5 w-3.5" strokeWidth={3} />
-                      </span>
-                    ) : null}
+                    {/* A chosen category wears an × (as on Swiggy and Zomato chips): tap again to clear.
+                        It pops in on the compositor just after the ring lands; reduced motion just shows it. */}
+                    <span
+                      aria-hidden="true"
+                      className={[
+                        "pointer-events-none absolute -right-1.5 -top-1.5 z-[1] flex h-6 w-6 items-center justify-center rounded-full bg-[#F62E18] text-white ring-2 ring-white transition-[opacity,scale] motion-reduce:transition-none",
+                        active
+                          ? "scale-100 opacity-100 delay-100 duration-(--dur-component) ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+                          : "scale-50 opacity-0 duration-(--dur-micro) ease-in",
+                      ].join(" ")}
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={3} />
+                    </span>
                   </span>
                   <span
                     className={[
@@ -175,7 +186,7 @@ export function HomeCategoryRail({
                 </button>
               );
             })}
-          </div>
+          </motion.div>
 
           <div
             className={[
@@ -242,8 +253,9 @@ export function HomeCategoryRail({
           ].join(" ")}
         >
           <div className="relative mx-auto flex h-full max-w-[88rem] items-center px-4 md:px-7 lg:px-10">
-            <div
+            <motion.div
               ref={setPills}
+              layoutScroll
               className="flex flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               role="group"
               aria-label="Category shortcuts"
@@ -257,17 +269,26 @@ export function HomeCategoryRail({
                     onClick={() => onSelect(value)}
                     aria-pressed={active}
                     className={[
-                      "inline-flex h-10 shrink-0 items-center gap-2 rounded-full !border !bg-white pl-1 pr-3.5 text-[0.8125rem] font-bold !shadow-none transition-[background-color,border-color,scale] duration-(--dur-micro) active:scale-[0.97]",
-                      active ? "!border-[#F62E18] !text-[#D92714]" : "!border-[#E5E7EB] !text-[#1A1A1A] hover:!bg-[#F1F3F5]",
+                      "relative isolate inline-flex h-10 shrink-0 items-center gap-2 rounded-full !border !bg-white pl-1 pr-3.5 text-[0.8125rem] font-bold !shadow-none transition-[border-color,color,scale] duration-(--dur-micro) active:scale-[0.97]",
+                      active ? "!border-transparent !text-[#C92716]" : "!border-[#E5E7EB] !text-[#1A1A1A] hover:!bg-[#F1F3F5]",
                     ].join(" ")}
                   >
+                    {/* The tinted fill slides from the last choice to this one, like the big rail's ring. */}
+                    {active ? (
+                      <motion.span
+                        layoutId="category-pill"
+                        transition={spring.ui}
+                        aria-hidden="true"
+                        className="absolute inset-0 -z-10 rounded-full border-[1.5px] border-[#C92716] bg-[#FDEAE8]"
+                      />
+                    ) : null}
                     <img src={image} alt="" width={128} height={128} loading="lazy" decoding="async" className="h-8 w-8 rounded-full object-cover" />
                     {label}
-                    {active && value ? <X className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                    {active ? <X className="h-3.5 w-3.5" aria-hidden="true" /> : null}
                   </button>
                 );
               })}
-            </div>
+            </motion.div>
             {pillEdges.left ? (
               <button
                 type="button"

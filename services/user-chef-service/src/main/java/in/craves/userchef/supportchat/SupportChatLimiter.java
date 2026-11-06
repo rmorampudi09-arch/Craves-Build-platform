@@ -1,5 +1,6 @@
 package in.craves.userchef.supportchat;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
@@ -16,6 +17,7 @@ public class SupportChatLimiter {
     static final long MINUTE_MILLIS = 60_000;
     static final long DAY_MILLIS = 86_400_000;
     static final int MAX_TRACKED = 20_000;
+    static final UUID OVERFLOW = UUID.nameUUIDFromBytes("support-limit:overflow".getBytes(StandardCharsets.UTF_8));
 
     // shortcut: counters live in each replica (user-chef runs at most 2), so real caps are up to 2x;
     // move them to Redis or Postgres if User/Chef scales out further.
@@ -42,6 +44,9 @@ public class SupportChatLimiter {
         long day = now - Math.floorMod(now, DAY_MILLIS);
         if (usage.size() >= MAX_TRACKED && !usage.containsKey(user)) {
             usage.values().removeIf(entry -> entry.day() != day);
+            // Still full: that many new keys in one day is a flood of made-up visitor hashes, not visitors.
+            // They share one bucket rather than growing the map until the heap goes.
+            if (usage.size() >= MAX_TRACKED) { user = OVERFLOW; }
         }
         Usage current = usage.compute(user, (ignored, previous) -> {
             boolean sameDay = previous != null && previous.day() == day;

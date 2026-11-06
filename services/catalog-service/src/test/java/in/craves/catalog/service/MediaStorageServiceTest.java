@@ -111,4 +111,14 @@ class MediaStorageServiceTest {
         assertNull(storage.ownedBlobName("old-account-container", "public/dishes/a.png"));
         assertNull(storage.ownedBlobName("media", "public/chef-avatars/chef-avatar-04.jpg"));
     }
+
+    @Test void aWebPThatIsNotOneIsA400ButARealOnePasses() {
+        byte[] html = "<html><script>alert(1)</script></html>".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        in.craves.catalog.exception.ApiException error = org.junit.jupiter.api.Assertions.assertThrows(
+            in.craves.catalog.exception.ApiException.class, () -> MediaStorageService.publishable(html, "image/webp"));
+        org.junit.jupiter.api.Assertions.assertEquals("PHOTO_UNREADABLE", error.getCode());
+
+        byte[] webp = "RIFF\0\0\0\0WEBPVP8 ".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+        assertEquals("image/webp", MediaStorageService.publishable(webp, "image/webp").contentType());
+    }
 }

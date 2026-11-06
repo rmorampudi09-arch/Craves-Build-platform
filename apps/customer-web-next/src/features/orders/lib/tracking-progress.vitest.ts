@@ -65,7 +65,7 @@ it('keeps a customer whose sign-in could not be checked on the page, with Try ag
   expect(fixture.navigate).not.toHaveBeenCalledWith({ to: '/' });
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
   // The day sheet's heading matches the order page's.
-  expect(await screen.findByRole('heading', { name: 'Preparing your food' })).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'The kitchen is cooking your order' })).toBeTruthy();
 });
 
 it('draws a failed load in its own words and tries again', async () => {

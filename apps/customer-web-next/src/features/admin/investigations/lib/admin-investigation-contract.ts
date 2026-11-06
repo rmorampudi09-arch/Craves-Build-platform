@@ -82,7 +82,8 @@ export function parseAdminInvestigationRequest(value: unknown): {
   const resource = text(raw.resource, 40) as AdminInvestigationResource | null;
   const resourceId = uuid(raw.resourceId);
   const reason = text(raw.reason, 500);
-  if (!resource || !RESOURCE_TYPES.has(resource) || !resourceId || !reason || reason.length < 10) return null;
+  // The reason travels as an HTTP header, which holds printable ASCII only: anything else made fetch throw (503).
+  if (!resource || !RESOURCE_TYPES.has(resource) || !resourceId || !reason || !/^[\x20-\x7E]{10,500}$/.test(reason)) return null;
   return { resource, resourceId, reason };
 }
 

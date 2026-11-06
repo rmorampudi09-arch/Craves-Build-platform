@@ -137,6 +137,13 @@ public class OrderFinancialFinalizationService {
             var f=promotion.getFirst();if(expected.compareTo(BigDecimal.valueOf(((Number)f.get("gross_paise")).longValue(),2))!=0)return null;
             discount=BigDecimal.valueOf(((Number)f.get("discount_paise")).longValue(),2);collected=BigDecimal.valueOf(((Number)f.get("net_paise")).longValue(),2);
         }
+        // M24d: a frozen company share means the provider collected only the person's part; the company's part is a receivable on its M10 statement.
+        var companyShare=jdbc.queryForList("SELECT gross_paise,company_share_paise,person_paise FROM payment_schema.company_share_checkout_funding WHERE checkout_id=? AND buyer_id=?",checkout,customer);
+        String discountAccount="PROMOTION_MARKETING_EXPENSE";
+        if(!companyShare.isEmpty()) {
+            var f=companyShare.getFirst();if(!promotion.isEmpty() || expected.compareTo(BigDecimal.valueOf(((Number)f.get("gross_paise")).longValue(),2))!=0)return null;
+            discount=BigDecimal.valueOf(((Number)f.get("company_share_paise")).longValue(),2);collected=BigDecimal.valueOf(((Number)f.get("person_paise")).longValue(),2);discountAccount="COMPANY_SHARE_RECEIVABLE";
+        }
         if(expected.signum()<=0 || collected.compareTo((BigDecimal)payment.get("amount"))!=0)return null;
         var existing=jdbc.queryForList("SELECT * FROM payment_schema.finance_capture WHERE checkout_id=?",checkout);
         if(!existing.isEmpty()) {
@@ -144,7 +151,7 @@ public class OrderFinancialFinalizationService {
         }
         String key="checkout/"+checkout+"/verified-capture/v1";UUID paymentId=(UUID)payment.get("id");
         var lines=new ArrayList<LedgerJournal.Line>();lines.add(new LedgerJournal.Line("GATEWAY_CLEARING","INR",LedgerMoney.text(collected),"0.00",null,null,null,paymentId,null,null));
-        if(discount.signum()>0)lines.add(new LedgerJournal.Line("PROMOTION_MARKETING_EXPENSE","INR",LedgerMoney.text(discount),"0.00",null,null,null,paymentId,null,null));
+        if(discount.signum()>0)lines.add(new LedgerJournal.Line(discountAccount,"INR",LedgerMoney.text(discount),"0.00",null,null,null,paymentId,null,null));
         lines.add(new LedgerJournal.Line("CUSTOMER_FUNDS","INR","0.00",LedgerMoney.text(expected),null,null,null,paymentId,null,null));
         var posted=ledger.post(new LedgerJournal.Entry(key,stable(key),"integration-payment","PAYMENT_CAPTURED",checkout,null,"INR",((Timestamp)payment.get("updated_at")).toInstant(),"razorpay/"+ref,null,"SERVICE","verified-capture-recognizer",lines));
         if(posted.outcome()==LedgerJournal.Outcome.CONFLICT)return null;

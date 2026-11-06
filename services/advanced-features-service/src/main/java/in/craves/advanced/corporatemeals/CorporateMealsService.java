@@ -62,6 +62,8 @@ public class CorporateMealsService implements PersonalDataContributor {
     static final Duration RESERVATION = Duration.ofMinutes(10);
     /** Reservations keep counting this long after they expire, so replicas whose clocks differ slightly never overspend a budget. */
     static final Duration EXPIRY_GRACE = Duration.ofSeconds(30);
+    /** M24d: a reservation that lapsed or that the person released is honoured on a late paid callback only this long after it was made. */
+    static final Duration LATE_CONFIRM = Duration.ofHours(24);
     static final int MAX_LIVE_INVITES = 20;
     /** shortcut: managers see their newest 50 invites; add paging if companies keep more. */
     static final int INVITE_LIST_LIMIT = 50;
@@ -341,6 +343,88 @@ public class CorporateMealsService implements PersonalDataContributor {
             throw ApiProblem.conflict("ORDER_HAS_COMPANY_CHARGE", "This order already has a company payment");
         }
         return view(repository.charge(chargeId, false).orElseThrow());
+    }
+
+    /**
+     * M24d: order-service confirms after Finance saw the person's part paid. The person may have paid after the reservation lapsed
+     * or after releasing it themselves; their part was already taken off what they paid, so the company share is honoured while the
+     * company's monthly budget still has room for it. Company status and membership changes after payment do not take it back.
+     */
+    @Transactional
+    public CompanyCharge confirmPaid(UUID person, UUID chargeId, UUID orderId) {
+        notErased(person);
+        Charge found = own(person, chargeId, false);
+        Company company = repository.company(found.companyId(), true).orElseThrow(); // same lock order as reserve()
+        Charge charge = own(person, chargeId, true);
+        if (charge.status() == ChargeStatus.CONFIRMED) {
+            if (orderId.equals(charge.orderId())) return view(charge);
+            throw ApiProblem.conflict("CHARGE_CONFIRMED", "This company payment is already used for another order");
+        }
+        boolean releasedByPerson = charge.status() == ChargeStatus.RELEASED && charge.orderId() == null;
+        if (charge.status() != ChargeStatus.RESERVED && !releasedByPerson) {
+            throw ApiProblem.conflict("CHARGE_RELEASED", "This company payment was released");
+        }
+        Instant now = clock.instant();
+        if (releasedByPerson || !charge.expiresAt().isAfter(counted(now))) lateConfirmHasRoom(company, charge, now);
+        try {
+            repository.setCharge(chargeId, ChargeStatus.CONFIRMED, orderId, now);
+        } catch (DuplicateKeyException taken) {
+            throw ApiProblem.conflict("ORDER_HAS_COMPANY_CHARGE", "This order already has a company payment");
+        }
+        return view(repository.charge(chargeId, false).orElseThrow());
+    }
+
+    /**
+     * A lapsed or self-released charge stopped counting, so confirming it is a new spending decision: only for an active company,
+     * within a day of the reservation, and only while the company's month budget and the person's daily meals and monthly cap have room.
+     */
+    private void lateConfirmHasRoom(Company company, Charge charge, Instant now) {
+        CompanyTerms terms = company.terms();
+        if (company.status() != CompanyStatus.ACTIVE || terms == null || !charge.createdAt().isAfter(now.minus(LATE_CONFIRM))) {
+            throw ApiProblem.conflict("CHARGE_EXPIRED", "This company payment lapsed and can no longer be used");
+        }
+        YearMonth month = YearMonth.from(charge.indiaDate());
+        Instant after = counted(now);
+        long used = repository.committed(company.id(), month.atDay(1), month.atEndOfMonth(), after).getOrDefault(company.id(), 0L);
+        boolean room = used + charge.sharePaise() <= terms.monthlyBudgetPaise();
+        if (room && charge.kind() == MealKind.MEAL) {
+            room = repository.mealsOn(company.id(), charge.personId(), charge.indiaDate(), after) < terms.mealsPerDay()
+                    && (terms.memberMonthlyCapPaise() == null || repository.memberCommitted(company.id(), charge.personId(), month.atDay(1),
+                    month.atEndOfMonth(), after) + charge.sharePaise() <= terms.memberMonthlyCapPaise());
+        }
+        if (!room) throw ApiProblem.conflict("CHARGE_EXPIRED", "This company payment lapsed and the company's limits have no room left");
+    }
+
+    /** M24d: what order-service checks at checkout before keeping a reservation: the person's own charge and its share. */
+    @Transactional(readOnly = true)
+    public CompanyCharge checkoutCharge(UUID person, UUID chargeId) {
+        notErased(person);
+        return view(own(person, chargeId, false));
+    }
+
+    /**
+     * M24d: order-service gives the share back when payment fails or lapses, or the order is cancelled before fulfilment.
+     * A confirmed charge is released only for the order it was confirmed with; the released row keeps that order. Repeats are harmless.
+     */
+    @Transactional
+    public CompanyCharge releaseForOrder(UUID person, UUID chargeId, UUID orderId) {
+        notErased(person);
+        Charge found = own(person, chargeId, false);
+        repository.company(found.companyId(), true); // same lock order as reserve()
+        Charge charge = own(person, chargeId, true);
+        if (charge.status() == ChargeStatus.CONFIRMED && (orderId == null || !orderId.equals(charge.orderId()))) {
+            throw ApiProblem.conflict("CHARGE_CONFIRMED", "This company payment is used for another order");
+        }
+        if (charge.status() == ChargeStatus.RESERVED || charge.status() == ChargeStatus.CONFIRMED) {
+            // Recording the order (checkout) it was released for keeps a late paid callback from bringing it back.
+            repository.setCharge(chargeId, ChargeStatus.RELEASED, charge.orderId() != null ? charge.orderId() : orderId, clock.instant());
+        }
+        return view(repository.charge(chargeId, false).orElseThrow());
+    }
+
+    /** The placeholder that erased charges carry is nobody: internal callers cannot act on erased people's rows. */
+    private static void notErased(UUID person) {
+        if (ERASED.equals(person)) throw chargeNotFound();
     }
 
     @Transactional

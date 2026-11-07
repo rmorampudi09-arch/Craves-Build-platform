@@ -25,13 +25,21 @@ After every live manual run on `main`, the job **ship-rider-app** replaces the A
 
 `https://github.com/rmorampudi09-arch/Craves-Build-platform/releases/download/delivery-app-latest/craves-delivery-app.apk`
 
-- **Once per phone:** sign in to GitHub in Chrome, open the link, and add it to the home screen (Chrome ⋮ → Add to home screen). The first install asks to allow "Install unknown apps" for Chrome, and Chrome may say the file type can be harmful; choose Download anyway. The repository is private, so only people with access can download.
+- **Once per phone:** open `craves.in/rider` (the QR on the rider flyers), which redirects to this link, and add it to the home screen (Chrome ⋮ → Add to home screen). The first install asks to allow "Install unknown apps" for Chrome, and Chrome may say the file type can be harmful; choose Download anyway. The repository is public, so no GitHub sign-in is needed.
 - **Every new build:** tap the icon, then Install. It updates over the last build because the signing key never changes.
 - The release's title and notes name the build (version, versionCode, commit, run); the run summary prints the link. The tag `delivery-app-latest` stays on the commit where it was first made: read the notes, not the tag. Earlier builds and every mapping file stay in the run artifacts for 14 days.
 - Why the names avoid "rider": one repository secret's value is `rider` (the build summary shows the package as `com.cravesapp.***`). GitHub hides a secret's value wherever it appears in logs and summaries, and drops any job output that contains it. So the job finds the APK, bundle and mapping in the downloaded artifacts instead of being told their names, and the tag and file name leave the word out so the printed link stays readable.
-- This link is for the team's own phones. Riders on the pilot install from Play (below).
 
 The step needs nothing to set up. The job has its own token (`contents: write` for the release, `id-token: write` for Play); the build job, which also runs for pull requests, stays read-only.
+
+### Updates are required
+
+Beside the APK, ship-rider-app writes `craves-delivery-app.json` (`{"versionName":"1.3.4","versionCode":57}`), served at `craves.in/rider/version`. A live app from 1.3.4 on reads it with `/me` (at most every 10 minutes) and takes the higher of it and the server's `minAppVersion` as the minimum.
+
+- **Raising versionName forces the update:** every older app shows "Please update the app before your next shift" with an **Update now** button that opens `craves.in/rider`. Never during a shift or a trip (`domain/gate.ts`).
+- **A rebuild with the same versionName forces nothing.** Raise the version only when riders must move to it.
+- The file is written only after the APK upload succeeds, so no app asks for a version the link can't give yet.
+- If the file can't be read (offline, GitHub or craves.in down), the server's `minAppVersion` alone applies. `CRAVES_FLEET_MIN_APP_VERSION` on integration-service stays the hard control, and the only one that reaches apps older than 1.3.4.
 
 ## Mock or live
 

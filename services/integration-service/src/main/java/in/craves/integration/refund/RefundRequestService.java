@@ -19,6 +19,9 @@ public class RefundRequestService {
     private in.craves.integration.referrals.checkout.ReferralRefundService referralRefunds;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     public void setReferralRefunds(in.craves.integration.referrals.checkout.ReferralRefundService service){this.referralRefunds=service;}
+    private in.craves.integration.promotions.PromotionRefundService promotionRefunds;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void setPromotionRefunds(in.craves.integration.promotions.PromotionRefundService service){this.promotionRefunds=service;}
 
     public RefundRequestService(JdbcTemplate jdbcTemplate, RefundEventValidator validator) {
         this.jdbcTemplate = jdbcTemplate;
@@ -60,6 +63,7 @@ public class RefundRequestService {
 
         BigDecimal requestedAmount = data.refundAmount().setScale(2, RoundingMode.HALF_UP);
         if(referralRefunds!=null)requestedAmount=referralRefunds.allocate(event,rawPayload,requestedAmount);
+        if(promotionRefunds!=null)requestedAmount=promotionRefunds.allocate(data,requestedAmount);
         validateFinancialBounds(paymentOrder, data, requestedAmount);
 
         String refundReference = refundReference(data.chefSubOrderId());

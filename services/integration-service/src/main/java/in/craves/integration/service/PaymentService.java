@@ -42,6 +42,9 @@ public class PaymentService {
     private in.craves.integration.referrals.checkout.ReferralCheckoutFundingService referralFunding;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     public void setReferralFunding(in.craves.integration.referrals.checkout.ReferralCheckoutFundingService funding){this.referralFunding=funding;}
+    private in.craves.integration.promotions.PromotionCheckoutFundingService promotionFunding;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void setPromotionFunding(in.craves.integration.promotions.PromotionCheckoutFundingService funding){this.promotionFunding=funding;}
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final PaymentProviderProperties provider;
@@ -86,6 +89,13 @@ public class PaymentService {
             if(referralFunding==null || !routing.razorpay())throw new ResponseStatusException(HttpStatus.CONFLICT,"Referral checkout funding is not enabled for this provider");
             BigDecimal net=referralFunding.prepare(authorizationHeader,checkout.id(),checkout.customerIdentityId(),checkout.grandTotal(),checkout.currency());
             checkout=new CheckoutResponse(checkout.id(),checkout.customerIdentityId(),checkout.status(),checkout.currency(),net,true);
+        } else if(promotionFunding!=null) {
+            // M24a: collect only the net amount of a Craves-funded promotion; a payment already created keeps its frozen amount.
+            BigDecimal net=promotionFunding.prepare(checkout.id(),checkout.customerIdentityId(),checkout.grandTotal(),checkout.currency());
+            if(net!=null) {
+                if(!routing.razorpay())throw new ResponseStatusException(HttpStatus.CONFLICT,"Promotion checkout funding is not enabled for this provider");
+                checkout=new CheckoutResponse(checkout.id(),checkout.customerIdentityId(),checkout.status(),checkout.currency(),net,false);
+            }
         }
         Optional<PaymentOrderResponse> existing = findByCheckout(checkout.id());
         if (existing.isPresent() && (

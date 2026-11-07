@@ -28,6 +28,10 @@ public class ReferralFinanceObservation {
         var captures=db.queryForList("SELECT c.* FROM payment_schema.finance_capture c JOIN payment_schema.payment_order p ON p.id=c.payment_order_id WHERE c.checkout_id=? AND p.status='PAID' AND p.provider='RAZORPAY' AND p.provider_payment_id=c.provider_payment_id AND p.amount=c.captured_amount AND p.currency='INR' AND lower(p.provider_status) IN ('captured','paid')",checkout);
         var funding=db.queryForList("SELECT c.gross_paise FROM payment_schema.referral_funding_capture c JOIN payment_schema.payment_order p ON p.id=c.payment_order_id WHERE c.checkout_id=? AND p.status='PAID' AND p.currency='INR' AND p.amount*100=c.gateway_paise AND ((c.gateway_paise=0 AND p.provider='REFERRAL_WALLET') OR (c.gateway_paise>0 AND p.provider='RAZORPAY' AND p.provider_payment_id=c.provider_payment_id AND lower(p.provider_status) IN ('captured','paid')))",checkout);
         long captured=captures.size()==1?paise((BigDecimal)captures.getFirst().get("captured_amount")):0;
+        // M24a: a Craves-funded promotion is part of what the checkout was paid with (customer funds = gross).
+        if(captured>0)captured+=db.queryForList("SELECT discount_paise FROM payment_schema.promotion_checkout_funding WHERE checkout_id=?",Long.class,checkout).stream().mapToLong(Long::longValue).sum();
+        // M24d: so is a company share (billed to the company on its M10 statement).
+        if(captured>0)captured+=db.queryForList("SELECT company_share_paise FROM payment_schema.company_share_checkout_funding WHERE checkout_id=?",Long.class,checkout).stream().mapToLong(Long::longValue).sum();
         if(captured==0 && funding.size()==1)captured=((Number)funding.getFirst().get("gross_paise")).longValue();
         long food=paise(new BigDecimal(snapshot.path("customerFood").asText()));
         BigDecimal total=new BigDecimal(snapshot.path("customerTotal").asText());

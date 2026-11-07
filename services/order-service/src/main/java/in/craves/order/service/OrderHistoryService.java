@@ -4,6 +4,7 @@ import in.craves.order.domain.OrderHistoryCursor;
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
 import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
+import in.craves.order.advanced.MenuOptionChoices;
 import in.craves.order.web.ApiDtos.OrderItemResponse;
 import in.craves.order.web.ApiDtos.OrderResponse;
 import in.craves.order.web.ApiDtos.OrderStatus;
@@ -124,12 +125,12 @@ public class OrderHistoryService {
         Map<UUID, List<OrderItemResponse>> itemsByOrder = new LinkedHashMap<>();
         jdbc.query(
             """
-                SELECT order_id, id, menu_item_id, item_name_snapshot, category_snapshot,
-                       food_type_snapshot, unit_price_snapshot, quantity, line_total, created_at
-                  FROM order_schema.order_item
-                 WHERE order_id IN (:orderIds)
-                 ORDER BY order_id, created_at ASC, id ASC
-                """,
+                SELECT oi.order_id, oi.id, oi.menu_item_id, oi.item_name_snapshot, oi.category_snapshot,
+                       oi.food_type_snapshot, oi.unit_price_snapshot, oi.quantity, oi.line_total, oi.created_at, %s
+                  FROM order_schema.order_item oi %s
+                 WHERE oi.order_id IN (:orderIds)
+                 ORDER BY oi.order_id, oi.created_at ASC, oi.id ASC
+                """.formatted(MenuOptionChoices.COLUMN, MenuOptionChoices.JOIN),
             new MapSqlParameterSource("orderIds", orderIds),
             (rs, rowNum) -> {
                 UUID orderId = rs.getObject("order_id", UUID.class);
@@ -141,7 +142,8 @@ public class OrderHistoryService {
                     rs.getString("food_type_snapshot"),
                     rs.getBigDecimal("unit_price_snapshot"),
                     rs.getInt("quantity"),
-                    rs.getBigDecimal("line_total")
+                    rs.getBigDecimal("line_total"),
+                    MenuOptionChoices.parse(rs.getString("chosen_options"))
                 );
                 itemsByOrder.computeIfAbsent(orderId, ignored -> new java.util.ArrayList<>()).add(item);
                 return item;

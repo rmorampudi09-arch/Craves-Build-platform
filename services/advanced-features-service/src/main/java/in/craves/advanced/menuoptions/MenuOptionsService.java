@@ -145,7 +145,21 @@ public class MenuOptionsService {
     /** The price of one dish with the chosen options, checked against Catalog's live price and availability. */
     @Transactional(readOnly = true)
     public PriceQuote quote(PriceQuoteRequest request) {
-        MenuItem item = catalog.purchasable(List.of(request.menuItemId())).get(request.menuItemId());
+        return priced(request, catalog.purchasable(List.of(request.menuItemId())).get(request.menuItemId()));
+    }
+
+    /**
+     * M24c: order-service prices a checkout's dishes with their options at the order's real time. One Catalog call for every line,
+     * made before any database read (no transaction is held while Catalog answers). Any line that cannot be priced fails the whole
+     * quote with that line's problem, so a checkout is never priced in part.
+     */
+    public List<PriceQuote> checkoutQuote(Instant at, List<PriceQuoteRequest> lines) {
+        Map<UUID, MenuItem> items = catalog.purchasable(lines.stream().map(PriceQuoteRequest::menuItemId).toList());
+        return lines.stream().map(line -> priced(new PriceQuoteRequest(line.menuItemId(), line.quantity(), line.choiceIds(), at),
+                items.get(line.menuItemId()))).toList();
+    }
+
+    private PriceQuote priced(PriceQuoteRequest request, MenuItem item) {
         if (item == null) throw ApiProblem.conflict("ITEM_UNAVAILABLE", "This dish cannot be ordered right now");
         if (item.pricePaise() == null) throw ApiProblem.conflict("PRICE_UNAVAILABLE", "Catalog did not give this dish's price");
         Optional<Row> row = repository.find(request.menuItemId(), false);

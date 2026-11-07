@@ -106,13 +106,7 @@ export const hi: RiderStrings = {
   account: {
     headerBlocked: 'आपका अकाउंट',
     updateBody: (current: string, needed: string) => `आपके पास वर्शन ${current} है। ऑनलाइन जाने के लिए वर्शन ${needed} या नया चाहिए। आपका साइन-इन, ट्रिप और कमाई वैसे ही रहते हैं।`,
-    whatsNewTitle: 'नया क्या है',
-    whatsNew: [
-      'हर ऑफ़र पर नक्शे की झलक, ताकि स्वीकार करने से पहले किचन दिखे।',
-      '"किचन पहुँच गए?" पहुँचते ही ऐप पूछता है, कम दबाना पड़ता है।',
-      'Google Maps खुला हो तब भी नोटिफ़िकेशन से Craves पर लौटें और अगला कदम दबाएँ।',
-      'स्लॉट में अपने पीक स्लॉट खुद बुक करें।',
-    ],
+    updateNow: 'अभी अपडेट करें',
     checkAgain: 'फिर से देखें',
     ratesChecked: (time: string) => `${time} पर देखा। पे रेट अभी नहीं आए।`,
     titles: {

@@ -306,6 +306,33 @@ class FleetSetupDatabaseTest {
         assertThat(tx(setup::setup).dispatchPolicy().mode()).isEqualTo("off");
     }
 
+    /** 6 Nov 2026: with V184's 2026-11-v2 scheduled, Live was refused with RULES_NEED_NOTICE; it keeps the rules riders see. */
+    @Test
+    void liveSavesAtOnceWhileV184sCopyIsScheduledAndKeepsTheRuleLinesRidersSee() {
+        productionAfterV184();
+        DispatchPolicyVersion live = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("live", null, null, null, null, null, null, null, null)));
+        assertThat(live.effectiveFrom()).as("at once").isEqualTo(live.publishedAt());
+        assertThat(tx(setup::setup).dispatchPolicy().mode()).isEqualTo("live");
+        assertThat(ruleLines(live.version())).containsExactly(false, false);
+
+        DispatchPolicyVersion stop = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("off", null, null, null, null, null, null, null, null)));
+        assertThat(tx(setup::setup).dispatchPolicy().version()).isEqualTo(stop.version());
+        assertThat(ruleLines(stop.version())).containsExactly(false, false);
+    }
+
+    /** The same day the emergency stop was refused too; it saves at once and withdraws the scheduled 2026-11-v2. */
+    @Test
+    void theEmergencyStopSavesAtOnceWhileV184sCopyIsScheduled() {
+        productionAfterV184();
+        DispatchPolicyVersion stop = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("off", null, null, null, null, null, null, null, null)));
+        assertThat(tx(setup::setup).dispatchPolicy().version()).isEqualTo(stop.version());
+        assertThat(ruleLines(stop.version())).containsExactly(false, false);
+        assertThat(version("2026-11-v2").withdrawnAt()).isEqualTo(stop.publishedAt());
+    }
+
     @Test
     void pilotRidersAndKitchensAreUpsertedAndRemoved() {
         UUID rider = fleet.rider("Ravi Kumar", "+919876543210");
@@ -376,6 +403,47 @@ class FleetSetupDatabaseTest {
         refused(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), new RateCardDraft(4000L, 2000, 900L, 1000, 900L, 8, 150L, 8000L,
             2000L, 900L, 10, Instant.now().plus(15, ChronoUnit.DAYS), Map.of("en", List.of("Too much.")), null, null, 10_001L)),
             400, "VALIDATION_FAILED");
+    }
+
+    /**
+     * Production before V185: a rate card in force; 2026-10-v5 in force (Shadow, the built-in values, 1 at once, 3 rounds,
+     * 1.5 km, neither 2026-11-v2 line); and V184's copy of it, 2026-11-v2, published by no one with both lines, in 14 days.
+     */
+    private void productionAfterV184() {
+        fleet.db.execute("""
+            DO $$
+            DECLARE p fleet_schema.dispatch_policy%ROWTYPE;
+            BEGIN
+                SELECT * INTO p FROM fleet_schema.dispatch_policy WHERE version = '2026-10-v1';
+                p.version := '2026-10-v5'; p.status := 'PUBLISHED'; p.mode := 'shadow';
+                p.published_at := now() - INTERVAL '1 day'; p.effective_from := p.published_at; p.created_at := p.published_at;
+                p.offer_seconds := 30; p.fleet_stage_seconds := 120; p.radius_m := 5000; p.per_order_overhead_paise := 500;
+                p.cost_guard_premium_paise := 1000; p.pidge_stage_seconds := 600;
+                p.pickup_detour_percent := 130; p.offers_at_once := 1; p.offer_rounds := 3; p.fair_band_m := 1500;
+                p.rank_by_travel_time := false; p.joint_matching := false; p.next_order_offers := false;
+                INSERT INTO fleet_schema.dispatch_policy VALUES (p.*);
+            END $$""");
+        RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
+        // V184's own statements for the copy.
+        fleet.db.execute("""
+            DO $$
+            DECLARE copy fleet_schema.dispatch_policy%ROWTYPE;
+            BEGIN
+                SELECT * INTO copy FROM fleet_schema.dispatch_policy WHERE version = '2026-10-v5';
+                copy.version := '2026-11-v2'; copy.status := 'PUBLISHED'; copy.published_at := now(); copy.published_by := NULL;
+                copy.effective_from := now() + INTERVAL '14 days'; copy.withdrawn_at := NULL; copy.withdrawn_by := NULL;
+                copy.created_at := now(); copy.joint_matching := true; copy.next_order_offers := true;
+                INSERT INTO fleet_schema.dispatch_policy VALUES (copy.*);
+            END $$""");
+        assertThat(version("2026-11-v2").withdrawnAt()).isNull();
+        assertThat(tx(setup::setup).dispatchPolicy().version()).isEqualTo("2026-10-v5");
+    }
+
+    /** joint_matching and next_order_offers of a version. */
+    private List<Boolean> ruleLines(String version) {
+        return fleet.db.queryForObject("SELECT joint_matching, next_order_offers FROM fleet_schema.dispatch_policy WHERE version = ?",
+            (row, n) -> List.of(row.getBoolean(1), row.getBoolean(2)), version);
     }
 
     private DispatchPolicyVersion version(String version) {

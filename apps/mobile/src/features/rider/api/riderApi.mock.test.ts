@@ -244,12 +244,9 @@ describe('mock rider server', () => {
     ).resolves.toMatchObject({ shiftCredential: expect.any(String) });
   });
 
-  it('has demo data for every screen: slot, rest point, banner, pay lines, sealed bag, WhatsApp', async () => {
+  it('has demo data for every screen: banner, pay lines, sealed bag, WhatsApp', async () => {
     const mock = setup();
     expect(await mock.api.getHome()).toMatchObject({
-      nextSlot: { zoneName: 'Madhapur & Kondapur' },
-      guaranteedPerHourPaise: 8000,
-      restPoint: { name: "Lakshmi's Kitchen", area: 'Madhapur' },
       banner: { tone: 'warning', text: expect.stringContaining('rain') },
     });
     expect((await mock.api.getMe()).supportWhatsappUrl).toBe(

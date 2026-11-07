@@ -1073,17 +1073,12 @@ describe('Home', () => {
     online: false,
     todayEarningsPaise: 34700,
     todayTrips: 5,
-    nextSlot: {startsAt: at(19), endsAt: at(22), zoneName: 'Madhapur and Kondapur'},
-    guaranteedPerHourPaise: 8000,
-    restPoint: {name: "Lakshmi's Kitchen", area: 'Madhapur'},
     banner: {tone: 'warning', text: 'Heavy rain expected after 8 pm.'},
   };
   const onlineHome: HomeSummary = {
     ...offlineHome,
     online: true,
     shiftStartedAt: new Date(Date.now() - 42 * 60_000).toISOString(),
-    slotEndsAt: at(22),
-    zoneName: 'Madhapur and Kondapur',
   };
   const seed = (home: HomeSummary, rider: RiderMe = me): Array<[readonly unknown[], unknown]> => [
     [riderKeys.home, home],
@@ -1091,14 +1086,12 @@ describe('Home', () => {
     [riderKeys.activeTrip, null],
   ];
 
-  it('offline: the server banner, today, and the next slot with its guaranteed pay from the server', async () => {
+  it('offline: the server banner and today', async () => {
     await render(<HomeScreen />, seed(offlineHome));
     const text = allText();
     expect(text).toContain('Hi, Ravi');
     expect(text).toContain('Heavy rain expected after 8 pm.');
     expect(text).toContain('Today | ₹347 | Trips | 5');
-    expect(text).toContain('Your next slot | 7:00 pm to 10:00 pm | Madhapur and Kondapur');
-    expect(text).toContain("At least ₹80 an hour while you're online in this slot, even when orders are slow.");
     await act(async () => press('rider-go-online').props.onPress());
     expect(mockNavigation.navigate).toHaveBeenCalledWith('GoOnline');
   });
@@ -1113,10 +1106,19 @@ describe('Home', () => {
     expect(allText()).toContain('Per online hour | ₹92.53 | Fleet middle today | ₹85 | Trips | 5');
   });
 
-  it('never makes up a guaranteed rate the server did not send', async () => {
-    await render(<HomeScreen />, seed({...offlineHome, guaranteedPerHourPaise: undefined}));
-    expect(allText()).toContain('Your next slot');
-    expect(allText()).not.toContain('an hour');
+  // Booked slots were removed in 1.3.4; until the server's own change it may still send a slot, which Home ignores.
+  it('shows no slot, guarantee or rest point even when the server still sends them', async () => {
+    const fromServer = {
+      nextSlot: {startsAt: at(19), endsAt: at(22), zoneName: 'Madhapur and Kondapur'},
+      slotEndsAt: at(22),
+      zoneName: 'Madhapur and Kondapur',
+      guaranteedPerHourPaise: 8000,
+      restPoint: {name: "Lakshmi's Kitchen", area: 'Madhapur'},
+    };
+    for (const home of [offlineHome, onlineHome]) {
+      await render(<HomeScreen />, seed({...home, ...fromServer} as HomeSummary));
+      expect(allText()).not.toMatch(/slot|an hour|Madhapur|Rest point/i);
+    }
   });
 
   it('opens phone setup by itself right after the first pay terms, once', async () => {
@@ -1128,14 +1130,12 @@ describe('Home', () => {
     expect(mockNavigation.navigate).toHaveBeenCalledTimes(1);
   });
 
-  it('online: the shift with paid waiting, today, the rest point, and Go offline', async () => {
+  it('online: the shift, today, and Go offline', async () => {
     await render(<HomeScreen />, seed(onlineHome));
     const text = allText();
     expect(text).toContain('Online · waiting for orders');
-    expect(text).toContain('On shift | Slot ends 10:00 pm');
+    expect(text).toContain('On shift');
     expect(tree.root.findByProps({testID: 'rider-shift-timer'}).props.children).toMatch(/^0:4[23]:\d\d$/);
-    expect(text).toContain('Waiting is paid: at least ₹80 an hour in this slot.');
-    expect(text).toContain("Rest point: Lakshmi's Kitchen, Madhapur");
     expect(text).toContain('Offers ring even with the screen off.');
     // Going offline asks once, so a pocket tap never ends the shift; Stay online keeps it.
     (riderApi.endShift as jest.Mock).mockResolvedValueOnce(undefined);
@@ -1168,17 +1168,6 @@ describe('Home', () => {
     expect(press('rider-head-home')).toBeDefined();
   });
 
-  // The server sends slotEndsAt and zoneName only while a slot runs; nextSlot is then the running one.
-  it('never promises paid waiting before the slot starts, and calls a running slot "now"', async () => {
-    const count = (testID: string) => tree.root.findAll(node => node.props.testID === testID).length;
-    await render(<HomeScreen />, seed({...onlineHome, slotEndsAt: undefined, zoneName: undefined}));
-    expect(count('rider-waiting-paid')).toBe(0);
-    expect(allText()).toContain('Your slot starts at 7:00 pm. From then, waiting is paid: at least ₹80 an hour.');
-    await render(<HomeScreen />, seed({...offlineHome, slotEndsAt: at(22), zoneName: 'Madhapur and Kondapur'}));
-    expect(allText()).toContain('Your slot now | 7:00 pm to 10:00 pm');
-    expect(allText()).not.toContain('Your next slot');
-  });
-
   it('takes a break of the chosen minutes, only when rider choices are on', async () => {
     await render(<HomeScreen />, seed(onlineHome));
     expect(press('rider-break-start')).toBeUndefined();
@@ -1187,7 +1176,6 @@ describe('Home', () => {
     await render(<HomeScreen />, seed(onlineHome, choosing));
     await act(async () => press('rider-break-start').props.onPress());
     expect(allText()).toContain('How long? You stay online, and no offers come. | 10 min | 20 min | 30 min');
-    expect(allText()).toContain("Break time doesn't count toward a slot's guaranteed minimum.");
     await act(async () => press('rider-break-20').props.onPress());
     expect(riderApi.pauseShift).toHaveBeenCalledWith(20);
     expect(press('rider-break-20')).toBeUndefined();

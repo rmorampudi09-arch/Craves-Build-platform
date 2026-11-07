@@ -16,6 +16,7 @@ public class WorkerSchedulingConfiguration {
     public static final String OUTBOX_SCHEDULER = "orderOutboxScheduler";
     public static final String CHEF_ACCEPTANCE_SCHEDULER = "chefAcceptanceScheduler";
     public static final String SUBSCRIPTION_CALLBACK_SCHEDULER = "subscriptionCallbackScheduler";
+    public static final String PROMOTION_SCHEDULER = "promotionCheckoutScheduler";
 
     // Declaring any scheduler makes Spring Boot back off its default one, so keep it for jobs added later.
     @Bean(name = "taskScheduler")
@@ -33,6 +34,12 @@ public class WorkerSchedulingConfiguration {
     @Bean(name = CHEF_ACCEPTANCE_SCHEDULER)
     ThreadPoolTaskScheduler chefAcceptanceScheduler() {
         return pool("chef-acceptance-", 1);
+    }
+
+    // M24a: confirms and releases checkout promotions over HTTP, so it never delays the outboxes.
+    @Bean(name = PROMOTION_SCHEDULER)
+    ThreadPoolTaskScheduler promotionCheckoutScheduler() {
+        return pool("promotion-checkout-", 1);
     }
 
     @Bean(name = SUBSCRIPTION_CALLBACK_SCHEDULER)

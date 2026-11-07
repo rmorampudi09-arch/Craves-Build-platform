@@ -11,6 +11,8 @@ import jakarta.validation.Valid;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
+import in.craves.advanced.platform.web.ApiProblem;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,10 +32,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class PromotionsController {
     private final PromotionsService service;
     private final Idempotency idempotency;
+    private final boolean checkoutHoldsRedemptions;
 
-    public PromotionsController(PromotionsService service, Idempotency idempotency) {
+    public PromotionsController(PromotionsService service, Idempotency idempotency,
+                                @Value("${CRAVES_ADVANCED_CHECKOUT_PROMOTIONS_ENABLED:false}") boolean checkoutHoldsRedemptions) {
         this.service = service;
         this.idempotency = idempotency;
+        this.checkoutHoldsRedemptions = checkoutHoldsRedemptions;
     }
 
     /** kitchenId: only offers valid at that kitchen (all-kitchen offers included); every listed live offer when omitted. */
@@ -59,6 +64,8 @@ public class PromotionsController {
     @PostMapping("/redemptions/{redemptionId}/confirm")
     public ResponseEntity<PromotionRedemption> confirmPromotionRedemption(@PathVariable UUID redemptionId,
                                                                           @Valid @RequestBody PromotionRedemptionConfirm request) {
+        // M24a: once checkout applies offers, order-service confirms them after payment; a customer could otherwise bind one to another order.
+        if (checkoutHoldsRedemptions) throw ApiProblem.conflict("PROMO_CONFIRMED_BY_CHECKOUT", "Offers are confirmed by checkout after payment");
         return ok(service.confirm(CurrentUser.id(), redemptionId, request.orderId()));
     }
 

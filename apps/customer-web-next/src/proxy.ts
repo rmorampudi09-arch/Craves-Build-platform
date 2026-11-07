@@ -5,6 +5,8 @@ import { webLaunchGate } from "@/features/pilot-launch/lib/web-launch-gate";
 import { FRONT_DOOR_ID_HEADER, frontDoorCheckMisconfigured, frontDoorOriginDecision } from "@/shared/lib/front-door-origin";
 
 let originCheckMisconfiguredLogged = false;
+// The newest live rider APK (docs/riders/RELEASE.md, "One-tap install"); the Play Store listing once there is one.
+const RIDER_APP_DOWNLOAD_URL = "https://github.com/rmorampudi09-arch/Craves-Build-platform/releases/download/delivery-app-latest/craves-delivery-app.apk";
 
 // Answer only our Front Door (src/shared/lib/front-door-origin.ts). Off unless CRAVES_FRONT_DOOR_CHECK is set.
 function frontDoorOriginGate(request: NextRequest): NextResponse | null {
@@ -29,6 +31,13 @@ export async function proxy(request: NextRequest) {
   // and on the separately deployed admin portal. HTML aliases must be gated.
   if (path.includes(".") && (process.env.CRAVES_ADMIN_PORTAL === "true" || !process.env.CRAVES_WEB_LAUNCH_BLOB_URL)) return NextResponse.next();
   if (process.env.CRAVES_ADMIN_PORTAL !== "true") {
+    // The QR printed on the rider flyers opens craves.in/rider: keep this path. Not cached, so it can
+    // point somewhere else later without a reprint.
+    if (path === "/rider" && ["GET", "HEAD"].includes(request.method)) {
+      const response = NextResponse.redirect(RIDER_APP_DOWNLOAD_URL, 307);
+      response.headers.set("Cache-Control", "private, no-store, max-age=0");
+      return response;
+    }
     // Customer sessions cannot satisfy the dedicated administrator session policy.
     // Send old admin bookmarks to the owning portal before any OTP is requested.
     if (process.env.NODE_ENV === "production" && ["GET", "HEAD"].includes(request.method)) {

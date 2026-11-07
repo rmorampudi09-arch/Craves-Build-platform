@@ -18,6 +18,7 @@ import in.craves.order.web.ApiDtos.CheckoutStatus;
 import in.craves.order.web.ApiDtos.CustomerAddressSnapshotResponse;
 import in.craves.order.web.ApiDtos.DeliveryPartnerResponse;
 import in.craves.order.web.ApiDtos.KitchenPickupSnapshotResponse;
+import in.craves.order.advanced.MenuOptionChoices;
 import in.craves.order.web.ApiDtos.OrderItemResponse;
 import in.craves.order.web.ApiDtos.OrderResponse;
 import in.craves.order.web.ApiDtos.OrderStatus;
@@ -831,8 +832,8 @@ public class OrderService {
 
     private List<OrderItemResponse> listOrderItems(UUID orderId) {
         return jdbcTemplate.query(
-            "SELECT * FROM order_schema.order_item WHERE order_id = ? ORDER BY created_at ASC",
-            (rs, rowNum) -> new OrderItemResponse(rs.getObject("id", UUID.class), rs.getObject("menu_item_id", UUID.class), rs.getString("item_name_snapshot"), rs.getString("category_snapshot"), rs.getString("food_type_snapshot"), rs.getBigDecimal("unit_price_snapshot"), rs.getInt("quantity"), rs.getBigDecimal("line_total")),
+            "SELECT oi.*, " + MenuOptionChoices.COLUMN + " FROM order_schema.order_item oi" + MenuOptionChoices.JOIN + "WHERE oi.order_id = ? ORDER BY oi.created_at ASC",
+            (rs, rowNum) -> new OrderItemResponse(rs.getObject("id", UUID.class), rs.getObject("menu_item_id", UUID.class), rs.getString("item_name_snapshot"), rs.getString("category_snapshot"), rs.getString("food_type_snapshot"), rs.getBigDecimal("unit_price_snapshot"), rs.getInt("quantity"), rs.getBigDecimal("line_total"), MenuOptionChoices.parse(rs.getString("chosen_options"))),
             orderId
         );
     }

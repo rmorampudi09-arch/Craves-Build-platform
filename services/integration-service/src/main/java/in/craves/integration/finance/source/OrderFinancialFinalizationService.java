@@ -29,6 +29,9 @@ public class OrderFinancialFinalizationService {
     private in.craves.integration.referrals.checkout.ReferralCheckoutFundingService referralFunding;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     public void setReferralFunding(in.craves.integration.referrals.checkout.ReferralCheckoutFundingService service){this.referralFunding=service;}
+    private in.craves.integration.corporatemeals.CompanyShareCheckoutFundingService companyShareFunding;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void setCompanyShareFunding(in.craves.integration.corporatemeals.CompanyShareCheckoutFundingService service){this.companyShareFunding=service;}
     private final JdbcTemplate jdbc;private final ObjectMapper json;private final LedgerPostingService ledger;private final ChefPayoutService payouts;private final boolean enabled;
     public OrderFinancialFinalizationService(JdbcTemplate jdbc,ObjectMapper json,LedgerPostingService ledger,ChefPayoutService payouts,
         @Value("${CRAVES_FINANCE_FINALIZATION_ENABLED:false}") boolean enabled){this.jdbc=jdbc;this.json=json;this.ledger=ledger;this.payouts=payouts;this.enabled=enabled;}
@@ -81,6 +84,8 @@ public class OrderFinancialFinalizationService {
         var rows=jdbc.queryForList("SELECT s.payload::text FROM payment_schema.finance_order_binding b JOIN payment_schema.finance_issued_snapshot s ON s.id=b.snapshot_id WHERE b.chef_order_id=?",order);
         if(rows.isEmpty())return new Receipt(order,"NO_BINDING",null);
         JsonNode snapshot=parse(rows.getFirst().get("payload").toString());UUID chef=id(snapshot,"chefIdentityId"),checkout=id(snapshot,"checkoutId");
+        // M24d: ask order-service about a company share before taking the capture locks (the answer is remembered once CONFIRMED).
+        if(companyShareFunding!=null)companyShareFunding.confirmedForCheckout(checkout);
         lock("chef-payout/"+chef);lock("finance-source/"+order);
         var binding=jdbc.queryForMap("SELECT * FROM payment_schema.finance_order_binding WHERE chef_order_id=? FOR UPDATE",order);
         if("REVIEW_REQUIRED".equals(binding.get("state")))return new Receipt(order,"SOURCE_REVIEW_REQUIRED",(UUID)binding.get("earning_journal_id"));
@@ -130,17 +135,38 @@ public class OrderFinancialFinalizationService {
         if(!customer.equals(payment.get("customer_identity_id")) || !"INR".equals(payment.get("currency")) || !"RAZORPAY".equals(provider)
             || ref==null || !ref.matches("pay_[A-Za-z0-9]+") || providerStatus==null || !Set.of("captured","paid").contains(providerStatus.toLowerCase(java.util.Locale.ROOT)))return null;
         BigDecimal expected=new BigDecimal(jdbc.queryForObject("SELECT response->>'total' FROM payment_schema.finance_checkout_quote WHERE checkout_id=?",String.class,checkout));
-        if(expected.signum()<=0 || expected.compareTo((BigDecimal)payment.get("amount"))!=0)return null;
+        // M24a: a frozen Craves-funded promotion means the provider collected gross - discount; customer funds still equal the quoted gross.
+        var promotion=jdbc.queryForList("SELECT gross_paise,discount_paise,net_paise FROM payment_schema.promotion_checkout_funding WHERE checkout_id=? AND buyer_id=?",checkout,customer);
+        BigDecimal discount=BigDecimal.ZERO.setScale(2),collected=expected;
+        if(!promotion.isEmpty()) {
+            var f=promotion.getFirst();if(expected.compareTo(BigDecimal.valueOf(((Number)f.get("gross_paise")).longValue(),2))!=0)return null;
+            discount=BigDecimal.valueOf(((Number)f.get("discount_paise")).longValue(),2);collected=BigDecimal.valueOf(((Number)f.get("net_paise")).longValue(),2);
+        }
+        // M24d: a frozen company share means the provider collected only the person's part; the company's part is a receivable on its M10 statement.
+        var companyShare=jdbc.queryForList("SELECT gross_paise,company_share_paise,person_paise FROM payment_schema.company_share_checkout_funding WHERE checkout_id=? AND buyer_id=?",checkout,customer);
+        String discountAccount="PROMOTION_MARKETING_EXPENSE";
+        if(!companyShare.isEmpty()) {
+            var f=companyShare.getFirst();if(!promotion.isEmpty() || expected.compareTo(BigDecimal.valueOf(((Number)f.get("gross_paise")).longValue(),2))!=0)return null;
+            discount=BigDecimal.valueOf(((Number)f.get("company_share_paise")).longValue(),2);collected=BigDecimal.valueOf(((Number)f.get("person_paise")).longValue(),2);discountAccount="COMPANY_SHARE_RECEIVABLE";
+        }
+        if(expected.signum()<=0 || collected.compareTo((BigDecimal)payment.get("amount"))!=0)return null;
         var existing=jdbc.queryForList("SELECT * FROM payment_schema.finance_capture WHERE checkout_id=?",checkout);
         if(!existing.isEmpty()) {
             var prior=existing.getFirst();if(!payment.get("id").equals(prior.get("payment_order_id")) || !ref.equals(prior.get("provider_payment_id")))return null;return prior;
         }
+        // M24d slice 3b-2: the company's share becomes a receivable only once order-service confirmed it in M10 for this checkout.
+        if(!companyShare.isEmpty() && (companyShareFunding==null || !companyShareFunding.confirmedForCheckout(checkout,false))) {
+            if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT created_at<now()-interval '24 hours' FROM payment_schema.company_share_checkout_funding WHERE checkout_id=?",Boolean.class,checkout)))
+                org.slf4j.LoggerFactory.getLogger(OrderFinancialFinalizationService.class).warn("CRAVES_ALERT alert=COMPANY_SHARE_CAPTURE_WAITING checkoutId={} (company share not confirmed for 24 h: staff resolve the M10 charge)",checkout);
+            return null;
+        }
         String key="checkout/"+checkout+"/verified-capture/v1";UUID paymentId=(UUID)payment.get("id");
-        var lines=List.of(new LedgerJournal.Line("GATEWAY_CLEARING","INR",LedgerMoney.text(expected),"0.00",null,null,null,paymentId,null,null),
-            new LedgerJournal.Line("CUSTOMER_FUNDS","INR","0.00",LedgerMoney.text(expected),null,null,null,paymentId,null,null));
+        var lines=new ArrayList<LedgerJournal.Line>();lines.add(new LedgerJournal.Line("GATEWAY_CLEARING","INR",LedgerMoney.text(collected),"0.00",null,null,null,paymentId,null,null));
+        if(discount.signum()>0)lines.add(new LedgerJournal.Line(discountAccount,"INR",LedgerMoney.text(discount),"0.00",null,null,null,paymentId,null,null));
+        lines.add(new LedgerJournal.Line("CUSTOMER_FUNDS","INR","0.00",LedgerMoney.text(expected),null,null,null,paymentId,null,null));
         var posted=ledger.post(new LedgerJournal.Entry(key,stable(key),"integration-payment","PAYMENT_CAPTURED",checkout,null,"INR",((Timestamp)payment.get("updated_at")).toInstant(),"razorpay/"+ref,null,"SERVICE","verified-capture-recognizer",lines));
         if(posted.outcome()==LedgerJournal.Outcome.CONFLICT)return null;
-        jdbc.update("INSERT INTO payment_schema.finance_capture(checkout_id,payment_order_id,provider_payment_id,captured_amount,currency,journal_id) VALUES (?,?,?,?,'INR',?)",checkout,paymentId,ref,expected,posted.transactionId());
+        jdbc.update("INSERT INTO payment_schema.finance_capture(checkout_id,payment_order_id,provider_payment_id,captured_amount,currency,journal_id) VALUES (?,?,?,?,'INR',?)",checkout,paymentId,ref,collected,posted.transactionId());
         return jdbc.queryForMap("SELECT * FROM payment_schema.finance_capture WHERE checkout_id=?",checkout);
     }
     private void receive(UUID event,UUID order,String hash){jdbc.update("INSERT INTO payment_schema.finance_source_receipt(event_id,chef_order_id,payload_hash) VALUES (?,?,?) ON CONFLICT(event_id) DO NOTHING",event,order,hash);}

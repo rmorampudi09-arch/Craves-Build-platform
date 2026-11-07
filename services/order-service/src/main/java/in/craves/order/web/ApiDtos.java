@@ -87,7 +87,11 @@ public final class ApiDtos {
     }
 
     public record CheckoutRequest(UUID deliveryAddressId, String note, com.fasterxml.jackson.databind.JsonNode referralBenefits,
-                                  com.fasterxml.jackson.databind.JsonNode batchHolds) {
+                                  com.fasterxml.jackson.databind.JsonNode batchHolds, com.fasterxml.jackson.databind.JsonNode promotion,
+                                  com.fasterxml.jackson.databind.JsonNode menuOptions, com.fasterxml.jackson.databind.JsonNode companyCharge) {
+        public CheckoutRequest(UUID deliveryAddressId,String note,com.fasterxml.jackson.databind.JsonNode referralBenefits,com.fasterxml.jackson.databind.JsonNode batchHolds,com.fasterxml.jackson.databind.JsonNode promotion,com.fasterxml.jackson.databind.JsonNode menuOptions) { this(deliveryAddressId,note,referralBenefits,batchHolds,promotion,menuOptions,null); }
+        public CheckoutRequest(UUID deliveryAddressId,String note,com.fasterxml.jackson.databind.JsonNode referralBenefits,com.fasterxml.jackson.databind.JsonNode batchHolds,com.fasterxml.jackson.databind.JsonNode promotion) { this(deliveryAddressId,note,referralBenefits,batchHolds,promotion,null); }
+        public CheckoutRequest(UUID deliveryAddressId,String note,com.fasterxml.jackson.databind.JsonNode referralBenefits,com.fasterxml.jackson.databind.JsonNode batchHolds) { this(deliveryAddressId,note,referralBenefits,batchHolds,null); }
         public CheckoutRequest(UUID deliveryAddressId,String note,com.fasterxml.jackson.databind.JsonNode referralBenefits) { this(deliveryAddressId,note,referralBenefits,null); }
         public CheckoutRequest(UUID deliveryAddressId,String note) { this(deliveryAddressId,note,null); }
         public CheckoutRequest(String note) {
@@ -190,8 +194,17 @@ public final class ApiDtos {
         String foodType,
         BigDecimal unitPrice,
         int quantity,
-        BigDecimal lineTotal
+        BigDecimal lineTotal,
+        // M24c: the menu options this line was priced with (unitPrice already includes them); absent without options.
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<OrderItemChoice> chosenOptions
     ) {
+        public OrderItemResponse(UUID id, UUID menuItemId, String itemName, String category, String foodType,
+            BigDecimal unitPrice, int quantity, BigDecimal lineTotal) {
+            this(id, menuItemId, itemName, category, foodType, unitPrice, quantity, lineTotal, null);
+        }
+    }
+
+    public record OrderItemChoice(String group, String choice, BigDecimal price) {
     }
 
     public record OrderResponse(

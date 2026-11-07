@@ -116,6 +116,39 @@ class OrderFinancialFinalizationDatabaseTest {
         assertEquals(new BigDecimal("338.52"),jdbc.queryForObject("SELECT payable FROM payment_schema.finance_earning_projection",BigDecimal.class));
         assertEquals(new BigDecimal("25.83"),jdbc.queryForObject("SELECT service_fee FROM payment_schema.finance_earning_projection",BigDecimal.class));
     }
+    void promotion(long discountPaise){long gross=new BigDecimal(quote.total()).movePointRight(2).longValueExact();jdbc.update("INSERT INTO payment_schema.promotion_checkout_funding(checkout_id,buyer_id,redemption_id,promotion_id,gross_paise,discount_paise,net_paise) VALUES (?,?,?,?,?,?,?)",checkout,customer,UUID.randomUUID(),UUID.randomUUID(),gross,discountPaise,gross-discountPaise);}
+    @Test void promotionCaptureBooksCravesExpenseAndPaysTheChefInFull(){
+        promotion(5000);BigDecimal net=new BigDecimal(quote.total()).subtract(new BigDecimal("50.00"));payment(net.toPlainString(),"PAID",customer);
+        assertEquals("POSTED",accept(event(snapshot,"DELIVERED")).result());
+        assertEquals("50.00",jdbc.queryForObject("SELECT debit_amount::text FROM payment_schema.ledger_line WHERE account_code='PROMOTION_MARKETING_EXPENSE'",String.class));
+        assertEquals(0,net.compareTo(jdbc.queryForObject("SELECT debit_amount FROM payment_schema.ledger_line WHERE account_code='GATEWAY_CLEARING'",BigDecimal.class)));
+        assertEquals(0,net.compareTo(jdbc.queryForObject("SELECT captured_amount FROM payment_schema.finance_capture",BigDecimal.class)));
+        assertEquals(0,new BigDecimal(snapshot.path("chefPayable").asText()).compareTo(jdbc.queryForObject("SELECT payable FROM payment_schema.finance_earning_projection",BigDecimal.class)));}
+    @Test void promotionCheckoutPaidInFullWaits(){promotion(5000);payment(quote.total(),"PAID",customer);assertEquals("WAITING_VERIFIED_CAPTURE",accept(event(snapshot,"DELIVERED")).result());assertEquals(0,count("ledger_transaction"));}
+    @Test void promotionCheckoutUnderpaidWaits(){promotion(5000);payment(new BigDecimal(quote.total()).subtract(new BigDecimal("50.01")).toPlainString(),"PAID",customer);assertEquals("WAITING_VERIFIED_CAPTURE",accept(event(snapshot,"DELIVERED")).result());assertEquals(0,count("ledger_transaction"));}
+    @Test void anotherCustomersPromotionIsIgnored(){long gross=new BigDecimal(quote.total()).movePointRight(2).longValueExact();jdbc.update("INSERT INTO payment_schema.promotion_checkout_funding(checkout_id,buyer_id,redemption_id,promotion_id,gross_paise,discount_paise,net_paise) VALUES (?,?,?,?,?,?,?)",checkout,UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),gross,5000,gross-5000);
+        payment(new BigDecimal(quote.total()).subtract(new BigDecimal("50.00")).toPlainString(),"PAID",customer);assertEquals("WAITING_VERIFIED_CAPTURE",accept(event(snapshot,"DELIVERED")).result());assertEquals(0,count("ledger_transaction"));}
+    void companyShare(long sharePaise){long gross=new BigDecimal(quote.total()).movePointRight(2).longValueExact();jdbc.update("INSERT INTO payment_schema.company_share_checkout_funding(checkout_id,buyer_id,charge_id,company_id,gross_paise,company_share_paise,person_paise) VALUES (?,?,?,?,?,?,?)",checkout,customer,UUID.randomUUID(),UUID.randomUUID(),gross,sharePaise,gross-sharePaise);
+        // order-service is unreachable here: only a remembered confirmation lets capture book the receivable
+        finalizer.setCompanyShareFunding(new in.craves.integration.corporatemeals.CompanyShareCheckoutFundingService(jdbc,new in.craves.integration.config.OrderClientProperties("http://127.0.0.1:1","http://127.0.0.1:1","k"),org.springframework.web.client.RestClient.builder(),false,"","",java.time.Clock.systemUTC()));}
+    void companyShareConfirmed(){jdbc.update("INSERT INTO payment_schema.company_share_checkout_confirmation(checkout_id,charge_id) SELECT checkout_id,charge_id FROM payment_schema.company_share_checkout_funding WHERE checkout_id=?",checkout);}
+    @Test void companyShareCaptureWaitsUntilTheChargeIsConfirmed(){
+        companyShare(7000);payment(new BigDecimal(quote.total()).subtract(new BigDecimal("70.00")).toPlainString(),"PAID",customer);
+        assertEquals("WAITING_VERIFIED_CAPTURE",accept(event(snapshot,"DELIVERED")).result());assertEquals(0,count("ledger_transaction"));
+        companyShareConfirmed();assertEquals("POSTED",tx.execute(s->finalizer.finish(order)).result());}
+    @Test void companyShareCaptureWithoutTheFundingServiceWaits(){
+        companyShare(7000);companyShareConfirmed();finalizer.setCompanyShareFunding(null);payment(new BigDecimal(quote.total()).subtract(new BigDecimal("70.00")).toPlainString(),"PAID",customer);
+        assertEquals("WAITING_VERIFIED_CAPTURE",accept(event(snapshot,"DELIVERED")).result());assertEquals(0,count("ledger_transaction"));}
+    @Test void companyShareCaptureBooksAReceivableAndPaysTheChefInFull(){
+        companyShare(7000);companyShareConfirmed();BigDecimal person=new BigDecimal(quote.total()).subtract(new BigDecimal("70.00"));payment(person.toPlainString(),"PAID",customer);
+        assertEquals("POSTED",accept(event(snapshot,"DELIVERED")).result());
+        assertEquals("70.00",jdbc.queryForObject("SELECT debit_amount::text FROM payment_schema.ledger_line WHERE account_code='COMPANY_SHARE_RECEIVABLE'",String.class));
+        assertEquals(0,count("ledger_line WHERE account_code='PROMOTION_MARKETING_EXPENSE'"));
+        assertEquals(0,person.compareTo(jdbc.queryForObject("SELECT debit_amount FROM payment_schema.ledger_line WHERE account_code='GATEWAY_CLEARING'",BigDecimal.class)));
+        assertEquals(0,new BigDecimal(quote.total()).compareTo(jdbc.queryForObject("SELECT credit_amount FROM payment_schema.ledger_line WHERE account_code='CUSTOMER_FUNDS' AND credit_amount>0",BigDecimal.class)));
+        assertEquals(0,new BigDecimal(snapshot.path("chefPayable").asText()).compareTo(jdbc.queryForObject("SELECT payable FROM payment_schema.finance_earning_projection",BigDecimal.class)));}
+    @Test void companyShareCheckoutPaidInFullWaits(){companyShare(7000);payment(quote.total(),"PAID",customer);assertEquals("WAITING_VERIFIED_CAPTURE",accept(event(snapshot,"DELIVERED")).result());assertEquals(0,count("ledger_transaction"));}
+    @Test void companyShareTogetherWithAPromotionWaits(){companyShare(7000);promotion(5000);payment(new BigDecimal(quote.total()).subtract(new BigDecimal("70.00")).toPlainString(),"PAID",customer);assertEquals("WAITING_VERIFIED_CAPTURE",accept(event(snapshot,"DELIVERED")).result());assertEquals(0,count("ledger_transaction"));}
     @Test void captureAmountMismatchCannotCreateEarnings(){payment("433.46","PAID",customer);assertEquals("WAITING_VERIFIED_CAPTURE",accept(event(snapshot,"DELIVERED")).result());assertEquals(0,count("ledger_transaction"));}
     @Test void anotherCustomersCaptureCannotCreateEarnings(){payment(quote.total(),"PAID",UUID.randomUUID());assertEquals("WAITING_VERIFIED_CAPTURE",accept(event(snapshot,"DELIVERED")).result());assertEquals(0,count("finance_payable"));}
     @Test void uncapturedPaymentCannotCreateEarnings(){payment(quote.total(),"CREATED",customer);assertEquals("WAITING_VERIFIED_CAPTURE",accept(event(snapshot,"DELIVERED")).result());assertEquals(0,count("finance_payable"));}

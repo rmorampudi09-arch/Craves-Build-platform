@@ -33,7 +33,9 @@ class CorporateMealsRepository {
     record Invite(UUID id, UUID companyId, int maxUses, int uses, Instant expiresAt, Instant revokedAt, Instant createdAt) { }
 
     record Charge(UUID id, UUID companyId, UUID personId, MealKind kind, Integer headcount, LocalDate indiaDate, long subtotalPaise,
-                  long sharePaise, ChargeStatus status, UUID orderId, Instant expiresAt, Instant createdAt) { }
+                  long sharePaise, ChargeStatus status, UUID orderId, Instant expiresAt, Instant createdAt, long creditedPaise) { }
+
+    record Credit(UUID refundId, UUID chargeId, UUID orderId, long amountPaise, Instant createdAt) { }
 
     record StatementRow(UUID personId, String displayName, int meals, int teamMeals, long subtotalPaise, long sharePaise) { }
 
@@ -42,7 +44,7 @@ class CorporateMealsRepository {
     private static final String MEMBER = "person_id, company_id, role, display_name, joined_at";
     private static final String INVITE = "id, company_id, max_uses, uses, expires_at, revoked_at, created_at";
     private static final String CHARGE = "id, company_id, person_id, kind, headcount, india_date, subtotal_paise, company_share_paise, status, "
-            + "order_id, expires_at, created_at";
+            + "order_id, expires_at, created_at, credited_paise";
     /** Charges that count against budgets and limits; the parameter is the instant reservations must expire after. */
     private static final String COUNTS = "(status = 'CONFIRMED' OR (status = 'RESERVED' AND expires_at > ?))";
     private final JdbcTemplate jdbc;
@@ -175,7 +177,7 @@ class CorporateMealsRepository {
     /** Company share confirmed or reserved (still counting) per company for India dates from..to; companyId null: every company. */
     Map<UUID, Long> committed(UUID companyId, LocalDate from, LocalDate to, Instant reservedAfter) {
         Map<UUID, Long> committed = new HashMap<>();
-        jdbc.query("SELECT company_id, sum(company_share_paise) AS paise FROM adv_corporate_meals.charge WHERE (CAST(? AS uuid) IS NULL OR company_id = ?) "
+        jdbc.query("SELECT company_id, sum(company_share_paise - credited_paise) AS paise FROM adv_corporate_meals.charge WHERE (CAST(? AS uuid) IS NULL OR company_id = ?) "
                         + "AND india_date BETWEEN ? AND ? AND status IN ('RESERVED', 'CONFIRMED') AND " + COUNTS + " GROUP BY company_id",
                 rs -> {
                     committed.put(rs.getObject("company_id", UUID.class), rs.getLong("paise"));
@@ -191,17 +193,31 @@ class CorporateMealsRepository {
     }
 
     long memberCommitted(UUID companyId, UUID person, LocalDate from, LocalDate to, Instant reservedAfter) {
-        Long paise = jdbc.queryForObject("SELECT coalesce(sum(company_share_paise), 0) FROM adv_corporate_meals.charge WHERE company_id = ? "
+        Long paise = jdbc.queryForObject("SELECT coalesce(sum(company_share_paise - credited_paise), 0) FROM adv_corporate_meals.charge WHERE company_id = ? "
                         + "AND person_id = ? AND kind = 'MEAL' AND india_date BETWEEN ? AND ? AND " + COUNTS,
                 Long.class, companyId, person, from, to, Sql.ts(reservedAfter));
         return paise == null ? 0 : paise;
+    }
+
+    Optional<Credit> credit(UUID refundId) {
+        return jdbc.query("SELECT refund_id, charge_id, order_id, amount_paise, created_at FROM adv_corporate_meals.charge_credit WHERE refund_id = ?",
+                (rs, i) -> new Credit(rs.getObject("refund_id", UUID.class), rs.getObject("charge_id", UUID.class), rs.getObject("order_id", UUID.class),
+                        rs.getLong("amount_paise"), Sql.instant(rs, "created_at")), refundId).stream().findFirst();
+    }
+
+    /** Records one refund's credit and adds it to the charge's total; the caller holds the charge row lock. */
+    void insertCredit(Credit c) {
+        jdbc.update("INSERT INTO adv_corporate_meals.charge_credit (refund_id, charge_id, order_id, amount_paise, created_at) VALUES (?,?,?,?,?)",
+                c.refundId(), c.chargeId(), c.orderId(), c.amountPaise(), Sql.ts(c.createdAt()));
+        jdbc.update("UPDATE adv_corporate_meals.charge SET credited_paise = credited_paise + ?, updated_at = ? WHERE id = ?",
+                c.amountPaise(), Sql.ts(c.createdAt()), c.chargeId());
     }
 
     /** Confirmed charges of India dates from..to, one row per person (the newest name they charged under). */
     List<StatementRow> statement(UUID companyId, LocalDate from, LocalDate to) {
         return jdbc.query("SELECT person_id, (array_agg(member_name ORDER BY created_at DESC))[1] AS display_name, "
                         + "count(*) FILTER (WHERE kind = 'MEAL') AS meals, count(*) FILTER (WHERE kind = 'TEAM_MEAL') AS team_meals, "
-                        + "sum(subtotal_paise) AS subtotal, sum(company_share_paise) AS share FROM adv_corporate_meals.charge "
+                        + "sum(subtotal_paise) AS subtotal, sum(company_share_paise - credited_paise) AS share FROM adv_corporate_meals.charge "
                         + "WHERE company_id = ? AND status = 'CONFIRMED' AND india_date BETWEEN ? AND ? GROUP BY person_id ORDER BY share DESC, person_id",
                 (rs, i) -> new StatementRow(rs.getObject("person_id", UUID.class), rs.getString("display_name"), rs.getInt("meals"),
                         rs.getInt("team_meals"), rs.getLong("subtotal"), rs.getLong("share")), companyId, from, to);
@@ -259,6 +275,6 @@ class CorporateMealsRepository {
         return new Charge(rs.getObject("id", UUID.class), rs.getObject("company_id", UUID.class), rs.getObject("person_id", UUID.class),
                 MealKind.valueOf(rs.getString("kind")), rs.getObject("headcount", Integer.class), rs.getObject("india_date", LocalDate.class),
                 rs.getLong("subtotal_paise"), rs.getLong("company_share_paise"), ChargeStatus.valueOf(rs.getString("status")),
-                rs.getObject("order_id", UUID.class), Sql.instant(rs, "expires_at"), Sql.instant(rs, "created_at"));
+                rs.getObject("order_id", UUID.class), Sql.instant(rs, "expires_at"), Sql.instant(rs, "created_at"), rs.getLong("credited_paise"));
     }
 }

@@ -12,7 +12,8 @@ name: Craves Rider APK
 # Optional secrets: RIDER_GOOGLE_SERVICES_JSON (real Firebase config for the rider app),
 # RIDER_KEYSTORE_BASE64 + RIDER_KEYSTORE_PASSWORD + RIDER_KEY_ALIAS (a fixed signing key).
 # After a live run from main, ship-rider-app puts the APK at one fixed link (release delivery-app-latest, the "one-tap
-# install") and, with RIDER_PLAY_WIF_PROVIDER + RIDER_PLAY_SERVICE_ACCOUNT set, sends the bundle to Play internal testing.
+# install"), then its version beside it, which makes every older app ask for the update before the next shift, and, with
+# RIDER_PLAY_WIF_PROVIDER + RIDER_PLAY_SERVICE_ACCOUNT set, sends the bundle to Play internal testing.
 
 on:
   pull_request:
@@ -424,12 +425,18 @@ jobs:
             # A pre-release, so it never becomes the repository's "Latest" release.
             gh release create "$tag" "ship/$asset" --target "$SHA" --title "$title" --notes "$notes" --prerelease
           fi
+          # The version older apps compare themselves with (craves.in/rider/version, riderApi.live.ts). Only after the APK
+          # is up, so no app asks for an update the link can't give yet.
+          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]] || { echo "ERROR: '$VERSION' is not a version the app can compare" >&2; exit 1; }
+          jq -nc --arg name "$VERSION" --argjson code "$RUN_NUMBER" '{versionName: $name, versionCode: $code}' > ship/craves-delivery-app.json
+          gh release upload "$tag" ship/craves-delivery-app.json --clobber
           link="$GITHUB_SERVER_URL/$GH_REPO/releases/download/$tag/$asset"
           echo "One-tap install: $link"
           {
             echo "**One-tap install of $title:** $link"
             echo
             echo "Open it on a phone signed in to GitHub; the same link always installs the newest live build."
+            echo "Apps older than $VERSION now ask the rider to update before the next shift (never during one)."
             if [[ "$PLAY_ON" != true ]]; then
               echo
               echo "Play internal testing: off. Set RIDER_PLAY_WIF_PROVIDER and RIDER_PLAY_SERVICE_ACCOUNT (docs/riders/RELEASE.md) to send the bundle there too."

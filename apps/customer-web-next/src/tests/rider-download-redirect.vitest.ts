@@ -5,11 +5,15 @@ import { proxy } from "../proxy";
 beforeEach(() => { vi.stubEnv("NODE_ENV", "production"); vi.stubEnv("CRAVES_ADMIN_PORTAL", "false"); });
 afterEach(() => vi.unstubAllEnvs());
 
-// Printed as a QR on the rider flyers: renaming or removing the path breaks every printed copy.
-it("craves.in/rider sends the phone straight to the rider app download, never edge-cached", async () => {
-  const response = await proxy(new NextRequest("https://craves.in/rider"));
+// /rider is printed as a QR on the rider flyers: renaming or removing the path breaks every printed copy. /rider/version
+// is what installed apps read to ask for an update; a cached answer would hold riders on an old build.
+it.each([
+  ["/rider", /^https:\/\/.+\.apk$/],
+  ["/rider/version", /^https:\/\/.+\.json$/],
+])("craves.in%s redirects to the newest release, never edge-cached", async (path, location) => {
+  const response = await proxy(new NextRequest(`https://craves.in${path}`));
   expect(response.status).toBe(307);
-  expect(response.headers.get("location")).toMatch(/^https:\/\//);
+  expect(response.headers.get("location")).toMatch(location);
   expect(response.headers.get("cache-control")).toContain("no-store");
 });
 

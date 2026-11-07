@@ -19,6 +19,8 @@ final class CheckoutOperationFingerprint {
             append(canonical, Integer.toString(item.quantity()));
             append(canonical, item.updatedAt().toString());
         });
+        // Only a request with a promotion hashes it, so earlier attempts keep their fingerprint.
+        if (request.promotion() != null && !request.promotion().isNull()) append(canonical, "promotion=" + request.promotion());
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));

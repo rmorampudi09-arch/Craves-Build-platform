@@ -106,13 +106,7 @@ export const en = {
   account: {
     headerBlocked: 'Your account',
     updateBody: (current: string, needed: string) => `You have version ${current}. Version ${needed} or newer is needed to go online. Your sign-in, trips and earnings stay as they are.`,
-    whatsNewTitle: 'What is new',
-    whatsNew: [
-      'A map preview on every offer, so you see where the kitchen is before you accept.',
-      '"Reached the kitchen?" asks you when you arrive, so you tap less.',
-      'Back to Craves and the next step, right in the notification while Google Maps is open.',
-      'Book your own peak slots under Slots.',
-    ],
+    updateNow: 'Update now',
     checkAgain: 'Check again',
     ratesChecked: (time: string) => `Checked at ${time}. No pay rates yet.`,
     titles: {

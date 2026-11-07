@@ -34,6 +34,7 @@ export interface RiderMe {
   termsVersion: string;
   acceptedTermsVersion?: string;
   language: Language;
+  /** The server's minimum; a live app raises it to the newest published version (riderApi.live.ts, getMe). */
   minAppVersion: string;
   supportPhone: string;
   /** The riders' WhatsApp group, opened from Help. */

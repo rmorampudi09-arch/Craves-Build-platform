@@ -5,8 +5,13 @@ import { webLaunchGate } from "@/features/pilot-launch/lib/web-launch-gate";
 import { FRONT_DOOR_ID_HEADER, frontDoorCheckMisconfigured, frontDoorOriginDecision } from "@/shared/lib/front-door-origin";
 
 let originCheckMisconfiguredLogged = false;
-// The newest live rider APK (docs/riders/RELEASE.md, "One-tap install"); the Play Store listing once there is one.
-const RIDER_APP_DOWNLOAD_URL = "https://github.com/rmorampudi09-arch/Craves-Build-platform/releases/download/delivery-app-latest/craves-delivery-app.apk";
+// The newest live rider APK (docs/riders/RELEASE.md, "One-tap install") and its version, which an older app reads to ask
+// the rider to update before the next shift; the Play Store listing once there is one.
+const RIDER_RELEASE = "https://github.com/rmorampudi09-arch/Craves-Build-platform/releases/download/delivery-app-latest";
+const RIDER_LINKS = new Map([
+  ["/rider", `${RIDER_RELEASE}/craves-delivery-app.apk`],
+  ["/rider/version", `${RIDER_RELEASE}/craves-delivery-app.json`],
+]);
 
 // Answer only our Front Door (src/shared/lib/front-door-origin.ts). Off unless CRAVES_FRONT_DOOR_CHECK is set.
 function frontDoorOriginGate(request: NextRequest): NextResponse | null {
@@ -33,8 +38,9 @@ export async function proxy(request: NextRequest) {
   if (process.env.CRAVES_ADMIN_PORTAL !== "true") {
     // The QR printed on the rider flyers opens craves.in/rider: keep this path. Not cached, so it can
     // point somewhere else later without a reprint.
-    if (path === "/rider" && ["GET", "HEAD"].includes(request.method)) {
-      const response = NextResponse.redirect(RIDER_APP_DOWNLOAD_URL, 307);
+    const riderLink = RIDER_LINKS.get(path);
+    if (riderLink && ["GET", "HEAD"].includes(request.method)) {
+      const response = NextResponse.redirect(riderLink, 307);
       response.headers.set("Cache-Control", "private, no-store, max-age=0");
       return response;
     }

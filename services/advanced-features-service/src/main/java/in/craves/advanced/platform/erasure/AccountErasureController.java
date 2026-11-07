@@ -2,11 +2,10 @@ package in.craves.advanced.platform.erasure;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import in.craves.advanced.platform.erasure.AccountErasureService.Scope;
+import in.craves.advanced.platform.security.InternalSecret;
 import in.craves.advanced.platform.web.ApiProblem;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -39,7 +38,7 @@ public class AccountErasureController {
 
     public record ErasureResponse(String service, String status, Map<String, Integer> counts) { }
 
-    private static final String HEADER = "X-Craves-Internal-Secret";
+    private static final String HEADER = InternalSecret.HEADER;
 
     private final AccountErasureService erasure;
     private final Environment environment;
@@ -75,12 +74,7 @@ public class AccountErasureController {
     }
 
     private void requireSecret(String given) {
-        // Read per request, so an unset secret can never be mistaken for a matching empty header.
-        String configured = environment.getProperty("craves.internal.service-secret", "");
-        if (configured.isBlank()) throw ApiProblem.unavailable("INTERNAL_SECRET_NOT_CONFIGURED", "Internal calls are not set up on this service");
-        if (given == null || !MessageDigest.isEqual(given.getBytes(StandardCharsets.UTF_8), configured.getBytes(StandardCharsets.UTF_8))) {
-            throw new ApiProblem(401, "INTERNAL_SECRET_REQUIRED", "A valid internal service secret is required");
-        }
+        InternalSecret.require(environment, given);
     }
 
     private static <T> ResponseEntity<T> reply(T body) {

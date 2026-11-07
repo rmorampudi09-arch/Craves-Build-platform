@@ -19,6 +19,10 @@ final class CheckoutOperationFingerprint {
             append(canonical, Integer.toString(item.quantity()));
             append(canonical, item.updatedAt().toString());
         });
+        // Only a request with a promotion hashes it, so earlier attempts keep their fingerprint.
+        if (request.promotion() != null && !request.promotion().isNull()) append(canonical, "promotion=" + request.promotion());
+        // Same rule for options: hashed in canonical (sorted) form, so the same picks in another order are the same attempt.
+        if (request.menuOptions() != null && !request.menuOptions().isNull()) append(canonical, "menuOptions=" + in.craves.order.advanced.MenuOptionCheckout.canonical(request.menuOptions()));
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));

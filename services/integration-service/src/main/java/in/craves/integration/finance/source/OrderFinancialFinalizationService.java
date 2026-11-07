@@ -130,17 +130,25 @@ public class OrderFinancialFinalizationService {
         if(!customer.equals(payment.get("customer_identity_id")) || !"INR".equals(payment.get("currency")) || !"RAZORPAY".equals(provider)
             || ref==null || !ref.matches("pay_[A-Za-z0-9]+") || providerStatus==null || !Set.of("captured","paid").contains(providerStatus.toLowerCase(java.util.Locale.ROOT)))return null;
         BigDecimal expected=new BigDecimal(jdbc.queryForObject("SELECT response->>'total' FROM payment_schema.finance_checkout_quote WHERE checkout_id=?",String.class,checkout));
-        if(expected.signum()<=0 || expected.compareTo((BigDecimal)payment.get("amount"))!=0)return null;
+        // M24a: a frozen Craves-funded promotion means the provider collected gross - discount; customer funds still equal the quoted gross.
+        var promotion=jdbc.queryForList("SELECT gross_paise,discount_paise,net_paise FROM payment_schema.promotion_checkout_funding WHERE checkout_id=? AND buyer_id=?",checkout,customer);
+        BigDecimal discount=BigDecimal.ZERO.setScale(2),collected=expected;
+        if(!promotion.isEmpty()) {
+            var f=promotion.getFirst();if(expected.compareTo(BigDecimal.valueOf(((Number)f.get("gross_paise")).longValue(),2))!=0)return null;
+            discount=BigDecimal.valueOf(((Number)f.get("discount_paise")).longValue(),2);collected=BigDecimal.valueOf(((Number)f.get("net_paise")).longValue(),2);
+        }
+        if(expected.signum()<=0 || collected.compareTo((BigDecimal)payment.get("amount"))!=0)return null;
         var existing=jdbc.queryForList("SELECT * FROM payment_schema.finance_capture WHERE checkout_id=?",checkout);
         if(!existing.isEmpty()) {
             var prior=existing.getFirst();if(!payment.get("id").equals(prior.get("payment_order_id")) || !ref.equals(prior.get("provider_payment_id")))return null;return prior;
         }
         String key="checkout/"+checkout+"/verified-capture/v1";UUID paymentId=(UUID)payment.get("id");
-        var lines=List.of(new LedgerJournal.Line("GATEWAY_CLEARING","INR",LedgerMoney.text(expected),"0.00",null,null,null,paymentId,null,null),
-            new LedgerJournal.Line("CUSTOMER_FUNDS","INR","0.00",LedgerMoney.text(expected),null,null,null,paymentId,null,null));
+        var lines=new ArrayList<LedgerJournal.Line>();lines.add(new LedgerJournal.Line("GATEWAY_CLEARING","INR",LedgerMoney.text(collected),"0.00",null,null,null,paymentId,null,null));
+        if(discount.signum()>0)lines.add(new LedgerJournal.Line("PROMOTION_MARKETING_EXPENSE","INR",LedgerMoney.text(discount),"0.00",null,null,null,paymentId,null,null));
+        lines.add(new LedgerJournal.Line("CUSTOMER_FUNDS","INR","0.00",LedgerMoney.text(expected),null,null,null,paymentId,null,null));
         var posted=ledger.post(new LedgerJournal.Entry(key,stable(key),"integration-payment","PAYMENT_CAPTURED",checkout,null,"INR",((Timestamp)payment.get("updated_at")).toInstant(),"razorpay/"+ref,null,"SERVICE","verified-capture-recognizer",lines));
         if(posted.outcome()==LedgerJournal.Outcome.CONFLICT)return null;
-        jdbc.update("INSERT INTO payment_schema.finance_capture(checkout_id,payment_order_id,provider_payment_id,captured_amount,currency,journal_id) VALUES (?,?,?,?,'INR',?)",checkout,paymentId,ref,expected,posted.transactionId());
+        jdbc.update("INSERT INTO payment_schema.finance_capture(checkout_id,payment_order_id,provider_payment_id,captured_amount,currency,journal_id) VALUES (?,?,?,?,'INR',?)",checkout,paymentId,ref,collected,posted.transactionId());
         return jdbc.queryForMap("SELECT * FROM payment_schema.finance_capture WHERE checkout_id=?",checkout);
     }
     private void receive(UUID event,UUID order,String hash){jdbc.update("INSERT INTO payment_schema.finance_source_receipt(event_id,chef_order_id,payload_hash) VALUES (?,?,?) ON CONFLICT(event_id) DO NOTHING",event,order,hash);}

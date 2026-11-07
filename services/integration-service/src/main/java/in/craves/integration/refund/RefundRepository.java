@@ -20,6 +20,9 @@ public class RefundRepository {
     private in.craves.integration.referrals.checkout.ReferralRefundService referralRefunds;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     public void setReferralRefunds(in.craves.integration.referrals.checkout.ReferralRefundService service){this.referralRefunds=service;}
+    private in.craves.integration.promotions.PromotionRefundService promotionRefunds;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void setPromotionRefunds(in.craves.integration.promotions.PromotionRefundService service){this.promotionRefunds=service;}
 
     public RefundRepository(JdbcTemplate jdbcTemplate, RefundStatusEventFactory statusEventFactory) {
         this.jdbcTemplate = jdbcTemplate;
@@ -226,6 +229,7 @@ public class RefundRepository {
 
     private void insertStatusOutbox(SerializedRefundStatusEvent event) {
         if(referralRefunds!=null){event=referralRefunds.customerEvent(event);if(event==null)return;}
+        if(promotionRefunds!=null)event=promotionRefunds.customerEvent(event);
         jdbcTemplate.update(
             """
                 INSERT INTO payment_schema.refund_status_outbox (

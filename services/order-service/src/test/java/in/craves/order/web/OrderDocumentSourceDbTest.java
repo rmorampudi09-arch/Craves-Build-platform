@@ -31,6 +31,7 @@ class OrderDocumentSourceDbTest {
             "food_subtotal numeric,platform_fee numeric,tax_amount numeric,delivery_fee numeric,grand_total numeric,"+
             "dropoff_recipient_name text,dropoff_address_line1 text,dropoff_address_line2 text,dropoff_city text,dropoff_postal_code text)");
         jdbc.execute("CREATE TABLE order_schema.order_item(id uuid,order_id uuid,item_name_snapshot text,quantity integer,unit_price_snapshot numeric,line_total numeric,created_at timestamptz)");
+        jdbc.execute("CREATE TABLE order_schema.menu_option_checkout_line(order_item_id uuid primary key,choices jsonb not null)");
         jdbc.update("INSERT INTO order_schema.checkout VALUES (?,?,'PAID')",checkout,customer);
         jdbc.update("INSERT INTO order_schema.customer_order VALUES (?,?,?,?, 'ON_DEMAND','Demo kitchen','PAID','INR','2026-09-05T00:00Z','2026-09-05T00:00Z',241.00,0,0,25,266.00,'Demo customer','Demo road',NULL,'Hyderabad','500000')",order,checkout,customer,chef);
         jdbc.update("INSERT INTO order_schema.order_item VALUES (?,?, 'Demo meal',2,120.50,241.00,'2026-09-05T00:00Z')",UUID.randomUUID(),order);

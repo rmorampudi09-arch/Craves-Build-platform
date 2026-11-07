@@ -808,11 +808,14 @@ describe('Account status and the application', () => {
       expect(text).not.toContain('Apply to ride');
     });
 
-    it('asks for an update when the app is too old', async () => {
+    it('asks for an update when the app is too old, with the download one tap away', async () => {
       await render(<AccountStatusScreen />, [[riderKeys.me, {...me, minAppVersion: '9.0.0'}]]);
       expect(allText()).toContain('Please update the app before your next shift | You have version');
-      expect(allText()).toContain('What is new | A map preview on every offer');
+      expect(allText()).toContain('Version 9.0.0 or newer is needed to go online');
       expect(allText()).not.toContain('Disagree?');
+      jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+      await act(async () => press('rider-update-now').props.onPress());
+      expect(Linking.openURL).toHaveBeenCalledWith('https://craves.in/rider');
     });
   });
 });

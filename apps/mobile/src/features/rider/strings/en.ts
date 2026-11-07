@@ -133,7 +133,7 @@ export const en = {
     join: {
       language: 'App language',
       vehicle: 'What will you ride?',
-      vehicles: {PETROL: 'Petrol bike or scooter', ELECTRIC: 'Electric bike or scooter', BICYCLE: 'Bicycle'},
+      vehicles: {PETROL: 'Petrol bike or scooter', ELECTRIC: 'Electric bike or scooter'},
       plate: 'Number plate, as on the RC',
       adult: 'I am 18 or older',
     },

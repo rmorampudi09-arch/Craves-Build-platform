@@ -28,7 +28,6 @@ const DEMO_PHONE = '+910000000000';
 const VEHICLE_LABELS: Record<VehicleKind, string> = {
   PETROL: 'Petrol two-wheeler',
   ELECTRIC: 'Electric two-wheeler',
-  BICYCLE: 'Bicycle',
 };
 /** The words of a name in any order or case, like the server's FleetRules.sameName. */
 const nameWords = (name: string) => name.toLowerCase().split(/[^a-z]+/).filter(Boolean).sort().join(' ');
@@ -847,8 +846,8 @@ export function createMockRiderApi(options: MockOptions = {}) {
       respond(() => {
         if (state.me.status === 'NOT_RIDER' || state.me.status === 'PENDING') {
           // A PENDING rider corrects their details; an empty plate keeps the one on file.
-          const plate = input.vehicleKind === 'BICYCLE' ? undefined : input.vehicleRegNumber || state.vehicle?.plate;
-          if (input.vehicleKind !== 'BICYCLE' && !plate) {
+          const plate = input.vehicleRegNumber || state.vehicle?.plate;
+          if (!plate) {
             throw apiError('VALIDATION_FAILED', 'Enter the number plate as on the RC, like TS09EA1234.', 400);
           }
           if (state.me.status === 'PENDING') {

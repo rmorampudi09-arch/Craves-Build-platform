@@ -138,7 +138,7 @@ export const hi: RiderStrings = {
     join: {
       language: 'ऐप की भाषा',
       vehicle: 'आप क्या चलाएँगे?',
-      vehicles: {PETROL: 'पेट्रोल बाइक या स्कूटर', ELECTRIC: 'इलेक्ट्रिक बाइक या स्कूटर', BICYCLE: 'साइकिल'},
+      vehicles: {PETROL: 'पेट्रोल बाइक या स्कूटर', ELECTRIC: 'इलेक्ट्रिक बाइक या स्कूटर'},
       plate: 'नंबर प्लेट, जैसी RC में है',
       adult: 'मेरी उम्र 18 साल या उससे ज़्यादा है',
     },

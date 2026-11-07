@@ -137,7 +137,7 @@ export const te: RiderStrings = {
     join: {
       language: 'ఆప్ భాష',
       vehicle: 'మీరు ఏ వాహనం నడుపుతారు?',
-      vehicles: {PETROL: 'పెట్రోల్ బైక్ లేదా స్కూటర్', ELECTRIC: 'ఎలక్ట్రిక్ బైక్ లేదా స్కూటర్', BICYCLE: 'సైకిల్'},
+      vehicles: {PETROL: 'పెట్రోల్ బైక్ లేదా స్కూటర్', ELECTRIC: 'ఎలక్ట్రిక్ బైక్ లేదా స్కూటర్'},
       plate: 'నంబర్ ప్లేట్, RCలో ఉన్నట్లు',
       adult: 'నా వయసు 18 లేదా అంతకంటే ఎక్కువ',
     },

@@ -265,10 +265,7 @@ describe('Account status and the application', () => {
   };
   // Everything in, ops's turn (the bank proof was accepted early).
   const sent = (kind: VehicleKind = 'PETROL', extra: Partial<RiderProfile> = {}): RiderProfile => ({
-    vehicle:
-      kind === 'BICYCLE'
-        ? {label: 'Bicycle', kind}
-        : {label: kind === 'PETROL' ? 'Honda Activa 6G' : 'Electric two-wheeler', kind, regNumberMasked: 'TS08xx4821'},
+    vehicle: {label: kind === 'PETROL' ? 'Honda Activa 6G' : 'Electric two-wheeler', kind, regNumberMasked: 'TS08xx4821'},
     documents: requiredDocuments(kind).map(type => doc(type, type === 'BANK' ? 'VERIFIED' : 'PENDING')),
     payoutAccountSubmitted: 'ra****@okaxis',
     ...extra,
@@ -353,20 +350,20 @@ describe('Account status and the application', () => {
       expect(press('rider-apply-next').props.disabled).toBe(true);
     });
 
-    it('needs no plate or model for a bicycle and shows a phone already in use', async () => {
+    it('offers no bicycle (removed in 1.3.4) and shows a phone already in use', async () => {
       await render(<AccountStatusScreen />, [[riderKeys.me, notRider]]);
       await act(async () => input('rider-join-name').props.onChangeText('Sita Devi'));
       await act(async () => press('rider-join-adult').props.onPress());
       await act(async () => press('rider-apply-next').props.onPress());
-      await act(async () => press('rider-join-BICYCLE').props.onPress());
-      expect(none('rider-join-plate')).toBe(true);
-      expect(none('rider-join-model')).toBe(true);
-      expect(allText()).toContain('Next, you send photos of: PAN card, Bank proof, Selfie.');
+      expect(none('rider-join-BICYCLE')).toBe(true);
+      await act(async () => press('rider-join-ELECTRIC').props.onPress());
+      await act(async () => input('rider-join-plate').props.onChangeText('TS09EA1234'));
+      expect(allText()).toContain('Next, you send photos of: Driving licence, Vehicle RC, Vehicle insurance, PAN card, Bank proof, Selfie.');
       (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
         new AppApiError('PHONE_IN_USE', 'This number is already a Craves rider on another account. Call rider support.', 409),
       );
       await act(async () => press('rider-apply-next').props.onPress());
-      expect(riderApi.signUp).toHaveBeenCalledWith({name: 'Sita Devi', language: 'en', vehicleKind: 'BICYCLE', adult: true});
+      expect(riderApi.signUp).toHaveBeenCalledWith({name: 'Sita Devi', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: 'TS09EA1234', adult: true});
       expect(allText()).toContain('This number is already a Craves rider on another account.');
       expect(allText()).toContain('Step 2 of 4');
     });
@@ -638,7 +635,12 @@ describe('Account status and the application', () => {
       const signedUp: RiderMe = {...pending, name: 'K Gopi'};
 
       it('changes them, warning that a new name means sending the payout account again', async () => {
-        const bicycle = sent('BICYCLE', {payoutAccountSubmitted: '90****@axl'});
+        // A bicycle sign-up from before 1.3.4: the server still sends the kind, the app reads it as no choice made.
+        const bicycle: RiderProfile = {
+          vehicle: {label: 'Bicycle', kind: 'BICYCLE'},
+          documents: ['PAN', 'BANK', 'SELFIE'].map(type => doc(type, type === 'BANK' ? 'VERIFIED' : 'PENDING')),
+          payoutAccountSubmitted: '90****@axl',
+        };
         const client = await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, bicycle]]);
         expect(allText()).toContain('Your details | Name | K Gopi | App language | English | Vehicle | Bicycle');
         expect(allText()).not.toContain('Number plate |');
@@ -650,7 +652,8 @@ describe('Account status and the application', () => {
         await act(async () => input('rider-join-name').props.onChangeText('Kancharla Gopi Nishanth'));
         expect(allText()).toContain('Your payout account is in your old name. After you save, send it again in the new name.');
 
-        // A bicycle had no plate, so a scooter needs one.
+        // A bicycle had no plate, so a scooter needs one; neither form offers the bicycle again.
+        expect(none('rider-join-BICYCLE')).toBe(true);
         await act(async () => press('rider-join-ELECTRIC').props.onPress());
         await act(async () => press('rider-join-submit').props.onPress());
         expect(allText()).toContain('Enter the number plate as on your RC, like TS09EA1234.');

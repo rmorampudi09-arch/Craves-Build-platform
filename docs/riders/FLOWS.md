@@ -60,7 +60,7 @@ kind sends the petrol set.
 |---|---|
 | Petrol bike or scooter | Driving licence (DL), Vehicle RC (RC), Vehicle insurance (INSURANCE), PUC certificate (PUC), PAN card (PAN), Bank proof (BANK) |
 | Electric bike or scooter | The same without PUC |
-| Bicycle | PAN card, Bank proof |
+| Bicycle | Removed from the app in 1.3.4 (the server still accepts it until its own change); PAN card, Bank proof |
 
 ## 3. The application (rider)
 

@@ -1014,7 +1014,7 @@ tapped through, from sign-in to payouts. What a rider would have hit, fixed (`FL
 Gopi: "A clear flow like chef and after accepting the app should directly go to the next step… the admin side also need
 to be sorted… what the hack is demo data, we are about to release the production version of the apk."
 - **Admin side.** The console's Riders & fleet group reads in the order ops works (Riders, Go-online selfies, Rider
-  support, Fleet trips & dispatch, Rider payouts, Rider slots & banner, Rider pilot setup, Rider pilot health), with
+  support, Fleet trips & dispatch, Rider payouts, Rider banner (slots removed in 1.3.4), Rider pilot setup, Rider pilot health), with
   selfies in the sidebar at last; the overview says what riders are waiting for, under the chef box; an active rider's
   single documents use the review's words (Looks good, Needs a fix).
 - **The next step by itself.** Ops's decision reaches the phone at once: the rider's phone is registered when they apply

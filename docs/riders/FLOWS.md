@@ -120,7 +120,7 @@ usually within a day."
 ## 5. Ops: the queue and one decision (console)
 
 **Where it is.** The console's sidebar has a Riders & fleet group, in the order ops works: Riders (start here), Go-online
-selfies, Rider support, Fleet trips & dispatch, Rider payouts, Rider slots & banner, Rider pilot setup, Rider pilot
+selfies, Rider support, Fleet trips & dispatch, Rider payouts, Rider banner (slots removed in 1.3.4), Rider pilot setup, Rider pilot
 health. The admin overview shows, under the chef box, "Riders are waiting for you": applications to review, selfies to
 check, rider problems open and SOS presses this week, each a link to its page (hidden for an admin with no rider role).
 

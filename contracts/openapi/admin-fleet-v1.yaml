@@ -1,5 +1,5 @@
 # Admin fleet API: the ops console for Craves riders (apps/customer-web-next /admin/riders, /admin/fleet-trips,
-# /admin/fleet-slots, /admin/fleet-setup, /admin/fleet-health, /admin/fleet-support and /admin/fleet-payouts).
+# /admin/fleet-banner, /admin/fleet-setup, /admin/fleet-health, /admin/fleet-support and /admin/fleet-payouts).
 # Implemented by integration-service, package in.craves.integration.fleet (schema fleet_schema). The web BFF under
 # /api/admin/fleet only forwards these paths; this service is the authority for roles, validation and the audit trail.
 openapi: 3.0.3

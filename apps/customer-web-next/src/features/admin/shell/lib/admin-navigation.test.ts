@@ -6,7 +6,7 @@ test("every workspace has a unique stable destination", () => {
   assert.equal(ADMIN_MODULES.length, 32);
   assert.equal(new Set(ADMIN_MODULES.map(module => module.id)).size, ADMIN_MODULES.length);
   assert.equal(new Set(ADMIN_MODULES.map(module => module.href)).size, ADMIN_MODULES.length);
-  for (const id of ["chefs", "chef-onboarding", "accounts", "finance", "plans", "subscriptions", "capacity", "notifications", "academy", "delivery", "delivery-exceptions", "dead-letters", "operations", "search", "support", "home-banners", "customer-reviews", "account-deletions", "riders", "fleet-selfies", "fleet-trips", "fleet-slots", "fleet-setup", "fleet-health", "fleet-support", "fleet-payouts"]) assert.ok(ADMIN_MODULES.find(module => module.id === id));
+  for (const id of ["chefs", "chef-onboarding", "accounts", "finance", "plans", "subscriptions", "capacity", "notifications", "academy", "delivery", "delivery-exceptions", "dead-letters", "operations", "search", "support", "home-banners", "customer-reviews", "account-deletions", "riders", "fleet-selfies", "fleet-trips", "fleet-banner", "fleet-setup", "fleet-health", "fleet-support", "fleet-payouts"]) assert.ok(ADMIN_MODULES.find(module => module.id === id));
 });
 
 test("active routes use path boundaries, not shared prefixes", () => {
@@ -24,7 +24,7 @@ test("active routes use path boundaries, not shared prefixes", () => {
 
 test("riders and fleet read in the order ops works", () => {
   const riders = ADMIN_MODULES.filter(module => module.group === "Riders & fleet").map(module => module.id);
-  assert.deepEqual(riders, ["riders", "fleet-selfies", "fleet-support", "fleet-trips", "fleet-payouts", "fleet-slots", "fleet-setup", "fleet-health"]);
+  assert.deepEqual(riders, ["riders", "fleet-selfies", "fleet-support", "fleet-trips", "fleet-payouts", "fleet-banner", "fleet-setup", "fleet-health"]);
 });
 
 test("module search covers work language without pretending to search customer data", () => {

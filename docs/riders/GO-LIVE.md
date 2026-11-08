@@ -31,7 +31,7 @@ Until a release's new routes are published they answer 404: for example "Share a
 
 ## 3. Ops console
 
-The console (`ca-craves-admin-prod`) deploys itself with each merge that changes it. It has Riders, Fleet trips & dispatch, Rider slots & banner, **Rider pilot setup**, Rider pilot health, Rider support and Rider payouts. Until step 5 these pages show an error, because the fleet API exists only once `CRAVES_FLEET_ENABLED` is on.
+The console (`ca-craves-admin-prod`) deploys itself with each merge that changes it. It has Riders, Fleet trips & dispatch, Rider banner (slots removed in 1.3.4), **Rider pilot setup**, Rider pilot health, Rider support and Rider payouts. Until step 5 these pages show an error, because the fleet API exists only once `CRAVES_FLEET_ENABLED` is on.
 
 ## 4. Wire the runtime (`scripts/riders/rider_pilot_runtime.py`)
 

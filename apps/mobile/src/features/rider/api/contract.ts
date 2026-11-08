@@ -50,8 +50,11 @@ export interface RiderMe {
 }
 
 export interface RiderProfile {
-  /** kind: as the rider signed up; absent for a rider ops added before sign-up existed. */
-  vehicle: {label: string; regNumberMasked?: string; kind?: VehicleKind};
+  /**
+   * kind: as the rider signed up; absent for a rider ops added before sign-up existed. A string, not VehicleKind: the server
+   * still sends BICYCLE for a rider who signed up as one before 1.3.4 (knownKind reads it as no choice made).
+   */
+  vehicle: {label: string; regNumberMasked?: string; kind?: string};
   documents: {
     /**
      * DL, RC, INSURANCE, PUC, PAN, BANK or SELFIE (app 1.3.0: the reference selfie, every vehicle, front camera, JPEG only);
@@ -84,7 +87,8 @@ export interface OrderPreferences {
   maxDropM?: number | null;
 }
 
-export type VehicleKind = 'PETROL' | 'ELECTRIC' | 'BICYCLE';
+/** Bicycle removed in 1.3.4. */
+export type VehicleKind = 'PETROL' | 'ELECTRIC';
 
 /**
  * POST /apply: anyone signed in with an Indian mobile number becomes a PENDING rider. A PENDING rider sends it again to
@@ -95,7 +99,7 @@ export interface RiderSignUp {
   name: string;
   language: 'en' | 'te' | 'hi';
   vehicleKind: VehicleKind;
-  /** Required unless vehicleKind is BICYCLE; when a PENDING rider corrects their details, empty keeps the plate on file. */
+  /** Required; when a PENDING rider corrects their details, empty keeps the plate on file. */
   vehicleRegNumber?: string;
   /** The make and model, like "Honda Activa 6G" (app 1.2.0); ops sees it beside the RC. Absent keeps the one on file. */
   vehicleModel?: string;
@@ -179,16 +183,9 @@ export interface OfferReason {
 export interface HomeSummary {
   online: boolean;
   shiftStartedAt?: string;
-  zoneName?: string;
-  slotEndsAt?: string;
   todayEarningsPaise: Paise;
   todayTrips: number;
   activeTripId?: string;
-  nextSlot?: {startsAt: string; endsAt: string; zoneName: string};
-  /** The minimum paid per online hour in a booked slot. */
-  guaranteedPerHourPaise?: Paise;
-  /** Where to wait between orders: water, washroom, shade and charging. */
-  restPoint?: {name: string; area: string};
   /** A message from ops, e.g. a rain warning. */
   banner?: {tone: 'info' | 'warning'; text: string};
   /** Phase 4: on a break, with no offers, until then. */
@@ -338,68 +335,6 @@ export interface PayoutsPage {
   nextPayoutOn?: string;
   withdrawablePaise: Paise;
   payouts: Payout[];
-}
-
-/** GET /slots (app 1.3.3, R-07): booked peak slots. */
-export interface SlotsPage {
-  clusters: SlotCluster[];
-  slots: SlotOffer[];
-  /** The booked slot running now, if any. */
-  running?: RunningSlot;
-  maxHoursPerDay: number;
-  /** This rider books from Thursday 10:00 IST (a slot completed in the last 14 days, no two no-shows). */
-  earlyWave: boolean;
-}
-
-export interface SlotCluster {
-  clusterId: string;
-  name: string;
-  lat: number;
-  lng: number;
-  radiusM: number;
-}
-
-export interface SlotOffer {
-  capacityId: string;
-  clusterId: string;
-  clusterName: string;
-  startsAt: string;
-  endsAt: string;
-  /** The guarantee an hour while online inside the cluster. */
-  ratePerHourPaise: Paise;
-  places: number;
-  placesLeft: number;
-  /** When this rider may book it (their wave). */
-  opensAt: string;
-  /** Present when this rider holds a place. */
-  bookingId?: string;
-  standby: boolean;
-}
-
-export interface RunningSlot {
-  bookingId: string;
-  clusterName: string;
-  startsAt: string;
-  endsAt: string;
-  ratePerHourPaise: Paise;
-  inZoneMinutes: number;
-  /** The guarantee the minutes so far cover. */
-  coveredPaise: Paise;
-}
-
-export interface SlotBooking {
-  bookingId: string;
-  capacityId: string;
-  status: 'BOOKED' | 'CANCELLED' | 'NO_SHOW' | 'COMPLETED';
-  clusterName: string;
-  startsAt: string;
-  endsAt: string;
-  ratePerHourPaise: Paise;
-}
-
-export interface SlotStandby {
-  capacityId: string;
-  position: number;
 }
 
 /** POST /shift/start. The credential is opaque: the native online service keeps it, JS never stores it. */

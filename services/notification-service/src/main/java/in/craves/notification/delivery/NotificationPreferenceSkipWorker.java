@@ -27,6 +27,7 @@ public class NotificationPreferenceSkipWorker {
                    updated_at = now()
              WHERE request.status IN ('PENDING', 'FAILED')
                AND request.channel IN ('PUSH', 'EMAIL')
+               AND request.target_type IS DISTINCT FROM 'TEAM_ALERT'
                AND EXISTS (
                    SELECT 1
                      FROM notification_schema.notification_preference preference

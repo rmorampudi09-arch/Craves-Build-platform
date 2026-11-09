@@ -87,7 +87,8 @@ public class ChefSignupAlertJob {
             if (!send(a, "help-" + help.get().id(), subject(a), helpBody(a, rank, help.get().message()))) return false;
             store.helpAlerted(id, help.get().id());
         }
-        if (!advanced && rank < SUBMITTED && !row.stallAlerted() && row.lastRankAt().isBefore(now.minus(STALL))) {
+        // row.lastRank() < SUBMITTED: no "stopped" email for someone sent back for changes after submitting.
+        if (!advanced && row.lastRank() < SUBMITTED && !row.stallAlerted() && row.lastRankAt().isBefore(now.minus(STALL))) {
             if (!send(a, "stall", stallSubject(a), stallBody(a, rank, row.lastRankAt()))) return false;
             store.stallAlerted(id);
         }

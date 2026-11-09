@@ -36,7 +36,11 @@ Some people who start the chef registration stop halfway, from confusion or othe
 - Sending goes through notification-service `POST /internal/v1/notifications` with `channel: "EMAIL"` and `address: "Waitlist@craves.in"`:
   - user-chef-service is already an allowed caller, and its base URL and key are already set in production: `KitchenLaunchAlertJob` uses the same `NotificationInternalClient.post` path and has been live since 24 Oct.
   - It must not go through `sendSafely`, which is gated by `CRAVES_NOTIFICATION_DIRECT_DISPATCH_ENABLED` (off in production).
-  - When `address` contains `@`, notification-service uses it as-is and skips the Auth lookup (`AuthRecipientEmailResolver`).
+  - **Corrected 10 Nov after review:** on `main`, notification-service ignores `address` on purpose: every EMAIL goes to the recipient's own verified Auth email (`AuthRecipientEmailResolver`). This build therefore also changes notification-service:
+    - user-chef sends these emails with `targetType: "TEAM_ALERT"` (role `CHEF`, so chef-scoped account erasure clears them too).
+    - A `TEAM_ALERT` goes only to `address`, and only if that address is on the new list `CRAVES_NOTIFICATION_TEAM_EMAIL_ADDRESSES` (case-insensitive). Otherwise it fails and is retried, then dead-lettered. It never falls back to the applicant's email.
+    - A `TEAM_ALERT` ignores the recipient's own channel preference (the claim query and `NotificationPreferenceSkipWorker`).
+    - Every other notification is unchanged: its `address` is still ignored, even when it is on the team list.
   - notification-service stores the request, retries it, and sends `title` as the subject and `body` as plain text, from `ACS_EMAIL_SENDER_ADDRESS`, with reply-to `ACS_EMAIL_REPLY_TO_ADDRESS` (default support@craves.in).
   - It drops a repeated `requestKey`, so each email needs a fixed key.
 - `recipient_identity_id` is NOT NULL, so `userId` is set to the applicant's identity ID. This is safe: the in-app notification list reads only `in_app_notification`, which only `IN_APP` requests write, so the chef never sees these rows. It also means account erasure removes them along with the applicant's other notification rows.
@@ -139,10 +143,17 @@ Admins: https://admin.craves.in/admin/chef-reviews
 
 ## Switch-on (after merge)
 
+The one merge deploys both notification-service and user-chef-service. Do these steps in this order, and soon after the deploy (see the note below):
+
 1. Owner: confirm Waitlist@craves.in receives mail from the production ACS sender. If the sender is an `azurecomm.net` address, mark it as safe in that mailbox.
-2. Set `CRAVES_CHEF_SIGNUP_ALERT_EMAIL=Waitlist@craves.in` on the user-chef container app in subscription 34eefd95. Who runs this, and how, is the owner's call. The ~250 root `azure-pipelines-*.yml` files target the old org and must not be used.
-3. Check: sign in with a test phone and open the chef application. An email should arrive within about 7 minutes.
-4. Rollback: clear the variable. Nothing else changes.
+2. Set `CRAVES_NOTIFICATION_TEAM_EMAIL_ADDRESSES=Waitlist@craves.in` on the **notification-service** container app in subscription 34eefd95.
+3. Then set `CRAVES_CHEF_SIGNUP_ALERT_EMAIL=Waitlist@craves.in` on the **user-chef** container app.
+   - If step 2 is skipped, the alerts fail and are dead-lettered. They never reach the chef.
+   - Who runs these steps, and how, is the owner's call. The ~250 root `azure-pipelines-*.yml` files target the old org and must not be used.
+4. Check: sign in with a test phone and open the chef application. An email should arrive within about 7 minutes.
+5. Rollback: clear the user-chef variable. Nothing else changes.
+
+**Note (ruling, 10 Nov):** V24 mutes everyone in the flow at deploy time, not at switch-on. People who start between the deploy and step 3 get a sign-up email on the first run, and a "stopped" email 24 hours later if they don't move forward. These are real half-registered chefs that support wants to hear about. Switching on soon after the deploy keeps that number small.
 
 ## Tests
 

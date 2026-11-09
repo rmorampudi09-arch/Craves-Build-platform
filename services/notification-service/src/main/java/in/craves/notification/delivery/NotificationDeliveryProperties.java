@@ -23,6 +23,8 @@ public class NotificationDeliveryProperties {
     private String acsEmailReplyToAddress = "support@craves.in";
     private String authInternalBaseUrl = "";
     private String authInternalServiceSecret = "";
+    /** Craves team mailboxes a TEAM_ALERT may be sent to (comma-separated, such as Waitlist@craves.in); empty = none. */
+    private String teamEmailAddresses = "";
 
     @PostConstruct
     void validate() {
@@ -48,7 +50,23 @@ public class NotificationDeliveryProperties {
         if (workerEnabled && !pushEnabled && !emailEnabled) {
             throw new IllegalStateException("At least one provider channel must be enabled with the delivery worker");
         }
+        if (teamEmails().stream().anyMatch(address -> !address.matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+"))) {
+            throw new IllegalStateException("CRAVES_NOTIFICATION_TEAM_EMAIL_ADDRESSES holds an invalid address");
+        }
     }
+
+    private java.util.List<String> teamEmails() {
+        return java.util.Arrays.stream(teamEmailAddresses == null ? new String[0] : teamEmailAddresses.split(","))
+            .map(value -> value.trim().toLowerCase(java.util.Locale.ROOT)).filter(value -> !value.isEmpty()).toList();
+    }
+
+    /** True only for an address on the configured team list, compared without case or surrounding spaces. */
+    public boolean isTeamEmailAddress(String address) {
+        return address != null && teamEmails().contains(address.trim().toLowerCase(java.util.Locale.ROOT));
+    }
+
+    public String getTeamEmailAddresses() { return teamEmailAddresses; }
+    public void setTeamEmailAddresses(String value) { this.teamEmailAddresses = value; }
 
     public boolean isWorkerEnabled() { return workerEnabled; }
     public void setWorkerEnabled(boolean value) { this.workerEnabled = value; }

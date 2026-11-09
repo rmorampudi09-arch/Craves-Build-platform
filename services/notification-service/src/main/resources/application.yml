@@ -64,6 +64,8 @@ craves:
       acs-email-reply-to-address: ${ACS_EMAIL_REPLY_TO_ADDRESS:support@craves.in}
       auth-internal-base-url: ${CRAVES_AUTH_INTERNAL_BASE_URL:}
       auth-internal-service-secret: ${CRAVES_AUTH_INTERNAL_SERVICE_SECRET:}
+      # Craves team mailboxes a TEAM_ALERT email may go to (chef sign-up alerts: Waitlist@craves.in); empty = none.
+      team-email-addresses: ${CRAVES_NOTIFICATION_TEAM_EMAIL_ADDRESSES:}
     # Ops leads emailed by POST /internal/v1/ops-alerts (rider SOS, dispatch queue); comma-separated, empty = off.
     ops-alert:
       emails: ${CRAVES_OPS_ALERT_EMAILS:}

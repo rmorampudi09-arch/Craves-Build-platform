@@ -142,8 +142,10 @@ public class NotificationInternalClient {
     }
 
     /**
-     * Plain-text email to a Craves team mailbox about one applicant (the chef sign-up alerts). EMAIL rows never reach the
-     * applicant's in-app list; applicantId only ties the row to them for account erasure. Same direct path as kitchenLaunched.
+     * Plain-text email to a Craves team mailbox about one applicant (the chef sign-up alerts). notification-service sends a
+     * TEAM_ALERT only to `address`, and only when it is on its CRAVES_NOTIFICATION_TEAM_EMAIL_ADDRESSES list; it never falls
+     * back to the applicant's own email. EMAIL rows never reach the applicant's in-app list; applicantId and the CHEF role tie
+     * the row to them for account erasure. Same direct path as kitchenLaunched.
      */
     public boolean teamEmail(UUID applicantId, String requestKey, String address, String subject, String body) {
         return post(
@@ -152,13 +154,13 @@ public class NotificationInternalClient {
                 "user-chef-service",
                 "CHEF_SIGNUP_ALERT",
                 applicantId,
-                null,
+                "CHEF",
                 "EMAIL",
                 null,
                 address,
                 subject,
                 body,
-                "CHEF_SIGNUP",
+                "TEAM_ALERT",
                 applicantId,
                 Map.of(),
                 5

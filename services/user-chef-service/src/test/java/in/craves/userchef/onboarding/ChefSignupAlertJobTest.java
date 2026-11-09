@@ -176,6 +176,15 @@ class ChefSignupAlertJobTest {
     }
 
     @Test
+    void noStallAfterSentBackForChanges() {
+        // Sent back for changes: submitted turns false, so the rank drops below 7 while the row still says 7.
+        given("documents");
+        row(7, Duration.ofHours(48), null, false, false);
+        job(TO).run(NOW);
+        neverSends();
+    }
+
+    @Test
     void newHelpRequestSendsHelpEmail() {
         UUID helpId = UUID.randomUUID();
         given("kitchen-photos");

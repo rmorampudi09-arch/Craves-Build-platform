@@ -141,6 +141,33 @@ public class NotificationInternalClient {
         );
     }
 
+    /**
+     * Plain-text email to a Craves team mailbox about one applicant (the chef sign-up alerts). notification-service sends a
+     * TEAM_ALERT only to `address`, and only when it is on its CRAVES_NOTIFICATION_TEAM_EMAIL_ADDRESSES list; it never falls
+     * back to the applicant's own email. EMAIL rows never reach the applicant's in-app list; applicantId and the CHEF role tie
+     * the row to them for account erasure. Same direct path as kitchenLaunched.
+     */
+    public boolean teamEmail(UUID applicantId, String requestKey, String address, String subject, String body) {
+        return post(
+            new CreateNotificationRequest(
+                requestKey,
+                "user-chef-service",
+                "CHEF_SIGNUP_ALERT",
+                applicantId,
+                "CHEF",
+                "EMAIL",
+                null,
+                address,
+                subject,
+                body,
+                "TEAM_ALERT",
+                applicantId,
+                Map.of(),
+                5
+            )
+        );
+    }
+
     private void sendSafely(CreateNotificationRequest request) {
         if (!properties.isNotificationDirectDispatchEnabled()) {
             log.info("Direct notification dispatch disabled. Outbox will handle requestKey={}", request.requestKey());

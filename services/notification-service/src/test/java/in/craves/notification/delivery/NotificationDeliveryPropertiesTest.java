@@ -40,4 +40,20 @@ class NotificationDeliveryPropertiesTest {
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("At least one provider channel");
     }
+
+    @Test
+    void teamEmailAddressesMustBeEmailAddressesAndMatchWithoutCase() {
+        NotificationDeliveryProperties properties = new NotificationDeliveryProperties();
+        properties.setTeamEmailAddresses(" Waitlist@craves.in ,ops@craves.in");
+        properties.validate();
+        assertThat(properties.isTeamEmailAddress("waitlist@CRAVES.in ")).isTrue();
+        assertThat(properties.isTeamEmailAddress("someone@craves.in")).isFalse();
+        assertThat(properties.isTeamEmailAddress(null)).isFalse();
+        assertThat(new NotificationDeliveryProperties().isTeamEmailAddress("waitlist@craves.in")).isFalse();
+
+        properties.setTeamEmailAddresses("Waitlist@craves.in,waitlist");
+        assertThatThrownBy(properties::validate)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("CRAVES_NOTIFICATION_TEAM_EMAIL_ADDRESSES");
+    }
 }

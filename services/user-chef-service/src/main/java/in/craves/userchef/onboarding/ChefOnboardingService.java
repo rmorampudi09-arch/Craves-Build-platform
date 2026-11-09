@@ -262,28 +262,36 @@ public class ChefOnboardingService {
         return new HelpPage(page,more?last.createdAt()+"|"+last.id():null);
     }
     private record DraftRow(UUID identityId,Details details,String reviewStatus,UUID applicationId,Instant startedAt,
-        Instant lastActivityAt,String firstName,String lastName,String email,String phone,boolean emailVerified) {}
+        Instant lastActivityAt,String firstName,String lastName,String email,String phone,boolean emailVerified,boolean submitted) {}
 
     /**
      * Everyone who started the Chef application and has not submitted it (including sent back for changes), and everyone who
      * signed in to it with their phone OTP but saved nothing yet, latest activity first.
      */
-    public List<DraftApplicant> drafts(CurrentUser admin) { // no transaction: Auth lookups below must not hold a connection
+    public List<DraftApplicant> drafts(CurrentUser admin) {
         requireAdmin(admin);
+        return applicants(false);
+    }
+
+    /**
+     * The admin drafts list, plus (when asked) applicants who submitted and are not approved yet. No access check: the
+     * admin list checks the caller; the Waitlist sign-up emails run as the service itself.
+     */
+    public List<DraftApplicant> applicants(boolean includeSubmitted) { // no transaction: Auth lookups below must not hold a connection
         // shortcut: newest 1000 only; add paging when unsubmitted applicants pass that.
         var rows=jdbc.query("""
             WITH started AS (
                 SELECT d.identity_id,d.details,d.review_status,d.application_id,d.created_at AS started_at,d.updated_at AS active_at,
-                    a.phone_number AS application_phone
+                    a.phone_number AS application_phone,d.submitted
                 FROM chef_onboarding_draft d LEFT JOIN chef_application a ON a.id=d.application_id
-                WHERE NOT d.submitted AND (a.id IS NULL OR a.status<>'APPROVED')
+                WHERE (? OR NOT d.submitted) AND (a.id IS NULL OR a.status<>'APPROVED')
                 UNION ALL
-                SELECT v.identity_id,NULL,'NOT_STARTED',NULL,v.first_seen_at,v.last_seen_at,NULL
+                SELECT v.identity_id,NULL,'NOT_STARTED',NULL,v.first_seen_at,v.last_seen_at,NULL,false
                 FROM chef_onboarding_visit v
                 WHERE NOT EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.identity_id=v.identity_id)
                     AND NOT EXISTS(SELECT 1 FROM chef_application a WHERE a.identity_id=v.identity_id)
             )
-            SELECT s.identity_id,s.details,s.review_status,s.application_id,s.started_at,s.active_at,
+            SELECT s.identity_id,s.details,s.review_status,s.application_id,s.started_at,s.active_at,s.submitted,
                 COALESCE(NULLIF(s.details->>'firstName',''),p.first_name) AS first_name,
                 COALESCE(NULLIF(s.details->>'lastName',''),p.last_name) AS last_name,
                 COALESCE(NULLIF(s.details->>'email',''),p.email) AS email,
@@ -298,12 +306,14 @@ public class ChefOnboardingService {
             """,(rs,row)->new DraftRow(rs.getObject("identity_id",UUID.class),
                 rs.getString("details")==null ? null : decode(rs.getString("details")),rs.getString("review_status"),
                 rs.getObject("application_id",UUID.class),rs.getTimestamp("started_at").toInstant(),rs.getTimestamp("active_at").toInstant(),
-                rs.getString("first_name"),rs.getString("last_name"),rs.getString("email"),rs.getString("phone"),rs.getBoolean("email_verified")));
+                rs.getString("first_name"),rs.getString("last_name"),rs.getString("email"),rs.getString("phone"),rs.getBoolean("email_verified"),
+                rs.getBoolean("submitted")),includeSubmitted);
         int[] lookups={0};
         return rows.stream().map(r->{
             List<in.craves.userchef.web.ApiDtos.KycDocumentResponse> docs=r.applicationId()==null ? List.of()
-                : applications.listApplicationEvidenceForAdmin(admin,r.applicationId());
-            String step=r.details()==null ? "signed-in" : ChefOnboardingPolicy.resume(r.details(),docs,false);
+                : applications.listApplicationEvidence(r.applicationId());
+            String step=r.details()==null ? "signed-in" : ChefOnboardingPolicy.resume(r.details(),docs,
+                r.submitted() && !"MORE_INFORMATION_REQUIRED".equals(r.reviewStatus()));
             String phone=r.phone(), firstName=r.firstName(), lastName=r.lastName();
             // Older forms never stored the sign-in phone: Auth has it. shortcut: 200 lookups per load, batch if lists grow.
             if ((phone==null || firstName==null && lastName==null) && lookups[0]++<200) {
@@ -313,8 +323,10 @@ public class ChefOnboardingService {
                     if (firstName==null && lastName==null && contact.displayName()!=null && !contact.displayName().isBlank()) firstName=contact.displayName();
                 }
             }
+            Details d=r.details();
             return new DraftApplicant(r.identityId(),firstName,lastName,r.email(),r.emailVerified(),phone,step,
-                r.reviewStatus(),r.applicationId(),r.startedAt(),r.lastActivityAt());
+                r.reviewStatus(),r.applicationId(),r.startedAt(),r.lastActivityAt(),
+                d==null ? null : d.kitchenName(),d==null ? null : d.city(),d==null ? null : d.postalCode());
         }).toList();
     }
 

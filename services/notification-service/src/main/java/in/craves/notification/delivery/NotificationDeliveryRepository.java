@@ -121,12 +121,13 @@ public class NotificationDeliveryRepository {
                 SELECT request.id
                   FROM notification_schema.notification_request request
                  WHERE request.channel = ?
-                   AND COALESCE((
+                   -- A TEAM_ALERT goes to a Craves mailbox, so the recipient's own channel preference does not apply.
+                   AND (request.target_type = 'TEAM_ALERT' OR COALESCE((
                        SELECT preference.enabled
                          FROM notification_schema.notification_preference preference
                         WHERE preference.recipient_identity_id = request.recipient_identity_id
                           AND preference.channel = request.channel
-                   ), true) = true
+                   ), true) = true)
                    AND request.attempt_count < ?
                    AND (
                        (request.status IN ('PENDING', 'FAILED')

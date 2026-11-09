@@ -297,6 +297,40 @@ class ChefOnboardingDatabaseTest {
         assertEquals("Kitchen",a.kitchenName());assertEquals("Hyderabad",a.city());assertEquals("500001",a.postalCode());
         assertEquals("Kitchen",listed().kitchenName());
     }
+    @Test void signupAlertStoreRoundTrip() {
+        var store=new ChefSignupAlertStore(jdbc);UUID id=UUID.randomUUID();
+        assertTrue(store.find(id).isEmpty());
+        store.insert(id,2);store.insert(id,5); // second insert is ignored
+        var at=store.find(id).orElseThrow().lastRankAt();
+        store.advance(id,1); // never goes down, and does not restart the 24 h clock
+        assertEquals(2,store.find(id).orElseThrow().lastRank());
+        assertEquals(at,store.find(id).orElseThrow().lastRankAt());
+        store.advance(id,4);store.stallAlerted(id);UUID help=UUID.randomUUID();store.helpAlerted(id,help);
+        var row=store.find(id).orElseThrow();
+        assertEquals(4,row.lastRank());assertTrue(row.stallAlerted());assertEquals(help,row.helpAlertedId());assertFalse(row.muted());
+        assertNotNull(row.lastRankAt());
+    }
+    @Test void signupAlertLatestHelpIsNewest() {
+        save(null,null);
+        Help first=run(()->service.requestHelp(user,new HelpRequest(UUID.randomUUID(),"First question")));
+        run(()->service.updateHelp(admin,first.id(),new HelpStatusRequest("RESOLVED")));
+        Help second=run(()->service.requestHelp(user,new HelpRequest(UUID.randomUUID(),"Second question")));
+        var latest=new ChefSignupAlertStore(jdbc).latestHelp(user.identityId()).orElseThrow();
+        assertEquals(second.id(),latest.id());assertEquals("Second question",latest.message());
+        assertTrue(new ChefSignupAlertStore(jdbc).latestHelp(UUID.randomUUID()).isEmpty());
+    }
+    @Test void signupAlertMigrationSeedMutesPeopleAlreadyInTheFlow() {
+        service.mine(user);
+        // The V24 seed, re-run: Flyway created the table before this applicant existed.
+        jdbc.update("""
+            INSERT INTO chef_signup_alert(identity_id, last_rank, last_rank_at, muted)
+            SELECT identity_id, 0, now(), true FROM chef_onboarding_visit
+            UNION
+            SELECT identity_id, 0, now(), true FROM chef_onboarding_draft
+            ON CONFLICT (identity_id) DO NOTHING
+            """);
+        assertTrue(new ChefSignupAlertStore(jdbc).find(user.identityId()).orElseThrow().muted());
+    }
     @Test void visitOnlyApplicantIsSignedIn() {
         service.mine(user);
         DraftApplicant a=applicant(true);

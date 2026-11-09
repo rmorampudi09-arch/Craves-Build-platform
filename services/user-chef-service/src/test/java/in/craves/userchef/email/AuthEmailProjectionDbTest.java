@@ -58,8 +58,8 @@ class AuthEmailProjectionDbTest {
         UUID id=UUID.randomUUID();insertProfile(id,"legacy-unverified@example.test");assertEquals(15,flyway(null).migrate().migrationsExecuted);flyway(null).validate();
         assertEquals(0,flyway(null).migrate().migrationsExecuted);assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM auth_email_projection",Integer.class));
         assertEquals("legacy-unverified@example.test",profiles.getProfile(user(id)).email());
-        // V11, V11.1, V12, V13 and the additive V14, V15, V16, V17, V18, V19, V20, V21, V22 and V23 must upgrade and replay safely.
-        assertEquals(24,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
+        // V11, V11.1, V12, V13 and the additive V14, V15, V16, V17, V18, V19, V20, V21, V22, V23 and V24 must upgrade and replay safely.
+        assertEquals(25,jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('email_userchef_test.chef_onboarding_draft')::text",String.class));
         assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM chef_onboarding_draft",Integer.class));
         assertNotNull(jdbc.queryForObject("SELECT to_regclass('public.admin_explorer_audit')::text",String.class));

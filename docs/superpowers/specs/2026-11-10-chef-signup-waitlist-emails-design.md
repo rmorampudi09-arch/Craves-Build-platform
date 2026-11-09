@@ -84,10 +84,11 @@ The migration seeds a muted row for every identity already in `chef_onboarding_v
 
 - `@Scheduled`, initial delay 2 minutes, fixed delay `craves.chef-signup-alerts.fixed-delay-ms` (default 300000).
 - It does nothing unless `craves.chef-signup-alerts.email` (`CRAVES_CHEF_SIGNUP_ALERT_EMAIL`) holds a valid address. An empty value means off, and that is the default.
-- **Candidates:** applicants who are not muted, whose application is neither APPROVED nor REJECTED, and whose row is missing or below rank 7. This means everyone the admin drafts list shows, plus people who have submitted but have not yet had their "Submitted" email.
+- **Candidates:** everyone the admin drafts list shows, plus people who have submitted and are not approved yet. Muted rows are skipped.
+  - Rejected applicants have already reached rank 7, so they can only trigger a "Need help" email.
   - Name, email and phone come the same way `drafts()` gets them, including its Auth contact fallback.
   - Move the row loading out of `drafts()` into a shared method, so the admin list and the emails always agree.
-  - The batch is capped (builder's choice, about 200), newest activity first.
+  - The list keeps the existing cap: the newest 1000 by activity.
 - **Rules for each candidate, in this order:**
   1. **No row:** send the "new sign-up" email (or a step email if they are already past rank 0), then insert the row with the current rank.
   2. **Current rank above `last_rank`:** send one step email describing the current state. A jump of several steps between runs gives one email, and its checklist shows everything done. Rank 7 sends the "Submitted" email. Then store the rank and set `last_rank_at` to now.
@@ -176,7 +177,6 @@ Admins: https://admin.craves.in/admin/chef-reviews
 ## Left to the builder
 
 - Exact candidate SQL, and the shape of the shared row loader taken out of `drafts()`.
-- Batch size.
 - Whether to also list the job class in `live-runtime-lock.txt` (not required; it is not a controller).
 
 ## Risks and unknowns

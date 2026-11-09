@@ -281,6 +281,27 @@ class ChefOnboardingDatabaseTest {
         DraftApplicant draft=service.drafts(admin).stream().filter(d->d.identityId().equals(older)).findFirst().orElseThrow();
         assertEquals("+919111111111",draft.phoneNumber());assertEquals("Asha",draft.firstName());assertEquals("personal",draft.step());
     }
+    DraftApplicant applicant(boolean includeSubmitted) {
+        return service.applicants(includeSubmitted).stream().filter(d->d.identityId().equals(user.identityId())).findFirst().orElse(null);
+    }
+    @Test void applicantsIncludesSubmittedWhenAsked() {
+        save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        assertNull(listed());
+        assertNull(applicant(false));
+        assertEquals("waiting",applicant(true).step());
+    }
+    @Test void applicantsCarriesKitchenCityAndPincode() {
+        save(ProofKind.PAN,null);
+        DraftApplicant a=applicant(false);
+        assertEquals("Kitchen",a.kitchenName());assertEquals("Hyderabad",a.city());assertEquals("500001",a.postalCode());
+        assertEquals("Kitchen",listed().kitchenName());
+    }
+    @Test void visitOnlyApplicantIsSignedIn() {
+        service.mine(user);
+        DraftApplicant a=applicant(true);
+        assertEquals("signed-in",a.step());assertNull(a.kitchenName());assertNull(a.city());assertNull(a.postalCode());
+    }
     @Test void termsAndBankEnrollmentAreRequiredByServerAndCorrectionKeepsDecisionHistory() {
         save(ProofKind.PAN,"12345678901234");photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
         long version=service.mine(user).version();

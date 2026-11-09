@@ -436,7 +436,8 @@ public class ChefApplicationService {
         );
     }
 
-    private List<KycDocumentResponse> listApplicationEvidence(UUID applicationId) {
+    /** No access check: callers check who may see this application's evidence. */
+    public List<KycDocumentResponse> listApplicationEvidence(UUID applicationId) {
         return jdbcTemplate.query(
             "SELECT * FROM chef_kyc_document WHERE application_id = ? AND removed_at IS NULL AND document_type IN ('APPLICANT_PHOTO', 'GOVERNMENT_ID_FRONT', 'GOVERNMENT_ID_BACK', 'TAX_ID_CARD', 'KITCHEN_PHOTO_1', 'KITCHEN_PHOTO_2', 'FSSAI_LICENSE', 'SELECTED_PROOF_FRONT', 'SELECTED_PROOF_BACK') ORDER BY document_type",
             this::mapDocument, applicationId

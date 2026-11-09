@@ -7,6 +7,7 @@ on:
       - 'apps/mobile/**'
       - 'scripts/apim/configure-chef-onboarding-v2-apim.sh'
       - 'scripts/release/**'
+      - 'scripts/chef-onboarding/**'
       - 'azure-pipelines-chef-onboarding-v2-*.yml'
       - '.github/workflows/chef-onboarding-v2-ci.yml'
   push:
@@ -110,6 +111,7 @@ jobs:
         run: npm run lint -- --max-warnings=0
   package:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [backend,web,mobile]
     steps:
       - uses: actions/checkout@v4

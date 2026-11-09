@@ -141,6 +141,31 @@ public class NotificationInternalClient {
         );
     }
 
+    /**
+     * Plain-text email to a Craves team mailbox about one applicant (the chef sign-up alerts). EMAIL rows never reach the
+     * applicant's in-app list; applicantId only ties the row to them for account erasure. Same direct path as kitchenLaunched.
+     */
+    public boolean teamEmail(UUID applicantId, String requestKey, String address, String subject, String body) {
+        return post(
+            new CreateNotificationRequest(
+                requestKey,
+                "user-chef-service",
+                "CHEF_SIGNUP_ALERT",
+                applicantId,
+                null,
+                "EMAIL",
+                null,
+                address,
+                subject,
+                body,
+                "CHEF_SIGNUP",
+                applicantId,
+                Map.of(),
+                5
+            )
+        );
+    }
+
     private void sendSafely(CreateNotificationRequest request) {
         if (!properties.isNotificationDirectDispatchEnabled()) {
             log.info("Direct notification dispatch disabled. Outbox will handle requestKey={}", request.requestKey());

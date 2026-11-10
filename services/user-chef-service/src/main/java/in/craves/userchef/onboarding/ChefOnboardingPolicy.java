@@ -20,7 +20,7 @@ public final class ChefOnboardingPolicy {
     );
     public static final int MINIMUM_AGE = 18;
     /** Sections a reviewer can ask the applicant to correct, in onboarding order. */
-    public static final List<String> SECTIONS = List.of("personal","kitchen","fssai","documents","bank");
+    public static final List<String> SECTIONS = List.of("personal","kitchen","documents","bank");
     public static Set<KycDocumentType> required(Details details) {
         return details == null ? required(null, null) : required(details.proofKind(), details.proofHasBack());
     }
@@ -48,8 +48,7 @@ public final class ChefOnboardingPolicy {
         if (!kitchenComplete(d)) return "kitchen";
         if (!accepted(docs, KycDocumentType.KITCHEN_PHOTO_1) ||
             !accepted(docs, KycDocumentType.KITCHEN_PHOTO_2)) return "kitchen-photos";
-        if (!StringUtils.hasText(d.fssaiNumber()) || !d.fssaiNumber().matches("[0-9]{14}"))
-            return "fssai";
+        // FSSAI is not asked at signup: the Chef adds it before a dish goes live (addFssaiAfterSubmit).
         if (d.proofKind() == null || !required(d).stream().allMatch(t -> accepted(docs,t)))
             return "documents";
         return submitted ? "waiting" : "review";

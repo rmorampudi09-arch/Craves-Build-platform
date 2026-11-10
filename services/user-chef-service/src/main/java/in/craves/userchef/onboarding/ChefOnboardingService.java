@@ -95,7 +95,7 @@ public class ChefOnboardingService {
         if(request.expectedVersion()!=version)
             throw ApiException.conflict("ONBOARDING_VERSION_CHANGED","Your application changed in another tab. Reload it.");
         if(existing!=null && existing.submitted() && !"MORE_INFORMATION_REQUIRED".equals(existing.reviewStatus()))
-            throw ApiException.conflict("ONBOARDING_ALREADY_SUBMITTED","Check your application status before changing submitted details.");
+            return addFssaiAfterSubmit(user,existing,application,trim(request.details().fssaiNumber()));
         if(application.status()==ChefApplicationStatus.REJECTED && existing!=null && !"MORE_INFORMATION_REQUIRED".equals(existing.reviewStatus()))
             throw ApiException.conflict("APPLICATION_REAPPLY_NOT_ALLOWED","Contact support to reopen this application for correction.");
         Details input=request.details();
@@ -159,6 +159,19 @@ public class ChefOnboardingService {
         return mine(user);
     }
 
+    /** A submitted application is locked, except for the FSSAI number: the Chef adds it later, before a dish goes live. */
+    private State addFssaiAfterSubmit(CurrentUser user,Draft existing,in.craves.userchef.web.ApiDtos.ChefApplicationResponse application,String fssai) {
+        if(fssai==null || fssai.equals(existing.details().fssaiNumber()) || application.status()==ChefApplicationStatus.REJECTED)
+            throw ApiException.conflict("ONBOARDING_ALREADY_SUBMITTED","Check your application status before changing submitted details.");
+        if(existing.reviewedFssai()!=null && existing.reviewedFssai().equals(existing.details().fssaiNumber()) ||
+            applications.listMyApplicationEvidence(user).stream().anyMatch(d -> d.documentType()==KycDocumentType.FSSAI_LICENSE && "APPROVED".equals(d.status())))
+            throw ApiException.conflict("REVIEWED_FSSAI_LOCKED","Contact support before changing an approved FSSAI number.");
+        jdbc.update("UPDATE chef_onboarding_draft SET details=jsonb_set(details,'{fssaiNumber}',to_jsonb(?::text)),version=version+1,updated_at=now() WHERE identity_id=?",
+            fssai,user.identityId());
+        audit(user.identityId(),user.identityId(),"FSSAI_ADDED",null);
+        return mine(user);
+    }
+
     @Transactional
     public State submit(CurrentUser user, ChefOnboardingController.SubmitRequest request, String authorization) {
         requireEnabled(); requireApplicant(user); lock(user);
@@ -187,7 +200,7 @@ public class ChefOnboardingService {
             !sameCoordinate(details.latitude(),application.latitude()) || !sameCoordinate(details.longitude(),application.longitude())))
             throw ApiException.conflict("ONBOARDING_DETAILS_NOT_CONFIRMED","Save your completed application before submitting.");
         if(!"review".equals(ChefOnboardingPolicy.resume(draft.details(),state.documents(),false)))
-            throw ApiException.conflict("ONBOARDING_INCOMPLETE","Complete the kitchen photos, FSSAI number and selected proof before submitting.");
+            throw ApiException.conflict("ONBOARDING_INCOMPLETE","Complete the kitchen photos and selected proof before submitting.");
         if(!state.submitted()) {
             UUID enrollment=bankEnrollmentRequired
                 ? bank.requireEnrollment(authorization,draft.details().firstName()+" "+draft.details().lastName()) : null;

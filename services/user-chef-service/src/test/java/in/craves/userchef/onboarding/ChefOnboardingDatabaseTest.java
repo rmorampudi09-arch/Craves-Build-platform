@@ -81,16 +81,16 @@ class ChefOnboardingDatabaseTest {
     }
     void photos() { upload(KycDocumentType.KITCHEN_PHOTO_1);upload(KycDocumentType.KITCHEN_PHOTO_2); }
 
-    @Test void noLicencePersistsAtFssaiAndHelpDoesNotGrantApprovalOrChefRole() {
+    @Test void noLicenceMovesOnToDocumentsAndHelpDoesNotGrantApprovalOrChefRole() {
         save(null,null);photos();
-        assertEquals("fssai",service.mine(user).resumeStep());
+        assertEquals("documents",service.mine(user).resumeStep());
         var key=UUID.randomUUID();
         Help first=run(()->service.requestHelp(user,new HelpRequest(key,"Help me apply for an FSSAI registration")));
         Help retry=run(()->service.requestHelp(user,new HelpRequest(key,"Retry same request")));
         assertEquals(first.id(),retry.id());
         assertEquals("te",first.details().language());
         assertEquals("+919000000000",first.phoneNumber());
-        assertEquals("fssai",service.mine(user).resumeStep());
+        assertEquals("documents",service.mine(user).resumeStep());
         assertEquals("PENDING",jdbc.queryForObject("SELECT status FROM chef_application WHERE identity_id=?",String.class,user.identityId()));
         assertFalse(service.mine(user).submitted());
         assertFalse(applications.listApplications(admin,null).stream().anyMatch(a->user.identityId().equals(a.identityId())));
@@ -118,6 +118,35 @@ class ChefOnboardingDatabaseTest {
         assertTrue(service.mine(user).legacy());
         assertEquals(4,jdbc.queryForObject("SELECT count(*) FROM chef_kyc_document WHERE application_id=?",Integer.class,applicationId));
         assertEquals(0,jdbc.queryForObject("SELECT count(*) FROM chef_kyc_document WHERE application_id=? AND document_type IN ('APPLICANT_PHOTO','TAX_ID_CARD','SELECTED_PROOF_BACK')",Integer.class,applicationId));
+    }
+    @Test void chefWithoutFssaiIsApprovedThenAddsItBeforeGoingLive() {
+        save(ProofKind.PAN,null);photos();upload(KycDocumentType.SELECTED_PROOF_FRONT);
+        assertEquals("review",service.mine(user).resumeStep());
+        var submitted=run(()->service.submit(user,new ChefOnboardingController.SubmitRequest(service.mine(user).version(),true,ChefOnboardingService.TERMS_VERSION),"Bearer test"));
+        UUID id=submitted.application().id();
+        for(var document:submitted.documents()) run(()->review.approve(admin,id,document.id()));
+        assertEquals("APPROVED",run(()->applications.approve(admin,id)).status().name());
+        assertNull(service.mine(user).details().fssaiNumber());
+        assertFalse(applications.listApplications(admin,ChefApplicationStatus.PENDING).stream().anyMatch(a->id.equals(a.id())),"nothing to review until a number is added");
+        // Submitted details stay locked; only the FSSAI number can be added.
+        assertEquals("ONBOARDING_ALREADY_SUBMITTED",assertThrows(ApiException.class,()->save(ProofKind.PAN,null)).getCode());
+        assertEquals("FSSAI_NUMBER_INVALID",assertThrows(ApiException.class,()->save(ProofKind.PAN,"123")).getCode());
+        var base=ChefOnboardingPolicyTest.details(ProofKind.AADHAAR,"12345678901234");
+        var other=new Details(base.email(),"Someone","Else",base.dateOfBirth(),"Other kitchen",null,"Elsewhere",null,null,base.city(),base.state(),
+            base.postalCode(),base.latitude(),base.longitude(),base.proofKind(),null,base.fssaiNumber(),base.language(),null);
+        State added=run(()->service.saveDraft(user,new SaveRequest(service.mine(user).version(),other)));
+        assertEquals("12345678901234",added.details().fssaiNumber());
+        assertEquals(ProofKind.PAN,added.details().proofKind());
+        assertEquals(ChefOnboardingPolicyTest.details(ProofKind.PAN,null).kitchenName(),added.details().kitchenName());
+        assertTrue(added.submitted());
+        assertEquals("APPROVED",added.application().status().name());
+        assertTrue(applications.listApplications(admin,ChefApplicationStatus.PENDING).stream().anyMatch(a->id.equals(a.id())),"the added number waits for Craves to check it");
+        // A typo can be corrected until Craves has checked the number; after that it is locked.
+        assertEquals("12345678901235",save(ProofKind.PAN,"12345678901235").details().fssaiNumber());
+        run(()->service.reviewAction(admin,id,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901235",null)));
+        assertTrue(service.mine(user).progress().fssaiVerified());
+        assertEquals("REVIEWED_FSSAI_LOCKED",assertThrows(ApiException.class,()->save(ProofKind.PAN,"12345678901234")).getCode());
+        assertFalse(applications.listApplications(admin,ChefApplicationStatus.PENDING).stream().anyMatch(a->id.equals(a.id())));
     }
     @Test void aadhaarCannotSubmitWithoutItsBackButBankStatementIsSingleFile() {
         save(ProofKind.AADHAAR,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.SELECTED_PROOF_FRONT);
@@ -201,7 +230,6 @@ class ChefOnboardingDatabaseTest {
         assertFalse(service.review(admin,submitted.application().id()).bankEnrollmentRequired());
         assertThrows(ApiException.class,()->run(()->applications.approve(admin,submitted.application().id())));
         for(var document:submitted.documents()) run(()->review.approve(admin,submitted.application().id(),document.id()));
-        assertThrows(ApiException.class,()->run(()->applications.approve(admin,submitted.application().id())));
         run(()->service.reviewAction(admin,submitted.application().id(),new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901234",null)));
         assertEquals("APPROVED",run(()->applications.approve(admin,submitted.application().id())).status().name());
         verifyNoInteractions(bank);

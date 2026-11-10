@@ -84,7 +84,7 @@ export type OnboardingDetails = {
   /** Other government ID only: false when the document has no back side. */
   proofHasBack: boolean | null;
 };
-export const CORRECTION_SECTIONS = ["personal", "kitchen", "fssai", "documents", "bank"] as const;
+export const CORRECTION_SECTIONS = ["personal", "kitchen", "documents", "bank"] as const;
 export type CallbackRequest = { caseNumber: string; status: "OPEN" | "CONTACTED" | "RESOLVED"; requestedAt: string };
 export type OnboardingState = {
   enabled: boolean;

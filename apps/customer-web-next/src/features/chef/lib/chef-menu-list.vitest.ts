@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ChefMenuItem } from "./chef-menu-contract";
 import { ChefMenuManager } from "../components/chef-menu-manager";
+import { EMPTY_ONBOARDING } from "../../chef-onboarding/lib/chef-onboarding-v2-contract";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/chef/menu", useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
 
@@ -60,5 +61,40 @@ describe("Menu list", () => {
     const put = fetcher.mock.calls.find(([, init]) => init?.method === "PUT")!;
     expect(JSON.parse(String(put[1]!.body))).toMatchObject({ itemName: "Rasmalai", status: "ACTIVE", available: true, unitPackageWeightGrams: 500 });
     await waitFor(() => expect(screen.getByRole("switch", { name: "Rasmalai available to order" })).toBeTruthy());
+  });
+
+  it("asks for the FSSAI number when a dish is refused for it, then publishes the dish", async () => {
+    const draft = dish(4, "Rasmalai", "Sweets", "DRAFT", false);
+    let fssaiNumber = "";
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/chef/kitchen") return Response.json(kitchen);
+      if (url === "/api/chef/menu") return Response.json([draft]);
+      if (url === "/api/chef/onboarding") {
+        if (init?.method === "PATCH") fssaiNumber = JSON.parse(String(init.body)).details.fssaiNumber;
+        return Response.json({
+          enabled: true, legacy: false, version: 3, resumeStep: "waiting", submitted: true, phoneNumber: "+910000000000",
+          details: { ...EMPTY_ONBOARDING, firstName: "Test", lastName: "Chef", fssaiNumber },
+          application: { id: kitchen.id, status: "APPROVED", documents: [] }, documents: [], requiredDocuments: [],
+          supportPhone: "+910000000000", supportEmail: "support@example.invalid",
+        });
+      }
+      if (url === `/api/chef/menu/${draft.id}` && init?.method === "PUT")
+        return fssaiNumber
+          ? Response.json({ ...draft, ...JSON.parse(String(init.body)) })
+          : Response.json({ code: "FSSAI_REQUIRED", message: "Add your FSSAI number before your dishes go live." }, { status: 409 });
+      return Response.json({ code: "FEATURE_NOT_AVAILABLE" }, { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    render(createElement(ChefMenuManager));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish Rasmalai" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "Publish Rasmalai?" })).getByRole("button", { name: "Publish dish" }));
+    const popup = await screen.findByRole("dialog", { name: "Add your FSSAI number" });
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.change(await within(popup).findByLabelText("FSSAI registration number"), { target: { value: "12345678901234" } });
+    fireEvent.click(within(popup).getByRole("button", { name: "Save and go live" }));
+    expect(await screen.findByText("Rasmalai is live")).toBeTruthy();
+    expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(2);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add your FSSAI number" })).toBeNull());
   });
 });

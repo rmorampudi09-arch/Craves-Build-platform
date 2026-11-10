@@ -31,6 +31,7 @@ import { AddressMapPicker } from "@/features/addresses/components/AddressMapPick
 import { searchLocations, type LocationSearchResult } from "@/features/addresses/api/searchLocation";
 import { reverseGeocodeCurrentLocation } from "@/features/addresses/api/reverseGeocode";
 import {
+  type CallbackRequest,
   PROOF_LABELS,
   PROOF_OPTIONS,
   proofNeedsBack,
@@ -64,7 +65,6 @@ import {
   describedBy,
   formatDate,
   formatDateOfBirth,
-  formatFssai,
   formatPhone,
 } from "@/features/chef-onboarding/components/chef-onboarding-ui";
 import { chefOnboardingApi, type ChefOnboardingFlow } from "@/features/chef-onboarding/components/use-chef-onboarding";
@@ -118,7 +118,8 @@ const TEXT = messages({
     receivedText: "Our Craves team will call you on your registered mobile number to help with your FSSAI application.",
     reference: "Reference {case}", requested: " · Requested {date}",
     resolved: "Your last request ({case}) is resolved. Ask again if you still need help.", requestCall: "Request a call from Craves",
-    finishOthers: "You can finish the other sections now. Add your FSSAI number before you submit your application.",
+    finishOthers: "Add your FSSAI number here once you have it. Your dishes can go live after that.",
+    fssaiLater: "You don’t need an FSSAI registration to apply. You will need to add your FSSAI number later, before your dishes go live to customers. The government requires it for every food business.",
     haveFssai: "I have an FSSAI number",
     // Identity
     docType: "Document type", identityDocument: "Identity document",
@@ -182,7 +183,8 @@ const TEXT = messages({
     receivedText: "మీ FSSAI దరఖాస్తుకు సహాయం చేయడానికి మా Craves బృందం మీ రిజిస్టర్డ్ మొబైల్ నంబర్‌కు కాల్ చేస్తుంది.",
     reference: "రెఫరెన్స్ {case}", requested: " · అడిగిన తేదీ {date}",
     resolved: "మీ గత అభ్యర్థన ({case}) పూర్తయింది. ఇంకా సహాయం కావాలంటే మళ్లీ అడగండి.", requestCall: "నాకు కాల్ చేయండి",
-    finishOthers: "మిగతా భాగాలు ఇప్పుడే పూర్తి చేయవచ్చు. దరఖాస్తు పంపే ముందు మీ FSSAI నంబర్ జోడించండి.",
+    fssaiLater: "దరఖాస్తు చేయడానికి FSSAI రిజిస్ట్రేషన్ అవసరం లేదు. మీ వంటకాలు కస్టమర్లకు కనిపించే ముందు మీ FSSAI నంబర్ ఇవ్వాలి. ప్రతి ఆహార వ్యాపారానికి ఇది ప్రభుత్వ నిబంధన.",
+    finishOthers: "మీకు FSSAI నంబర్ వచ్చాక ఇక్కడ జోడించండి. ఆ తర్వాత మీ వంటకాలు కస్టమర్లకు కనిపిస్తాయి.",
     haveFssai: "నా దగ్గర FSSAI నంబర్ ఉంది",
     docType: "ఏ పత్రం", identityDocument: "గుర్తింపు పత్రం",
     removeFirst: "వేరే పత్రం ఎంచుకోవాలంటే, ముందు అప్‌లోడ్ చేసిన ఫైళ్లు తొలగించండి.", chooseOne: "మీ పేరు ఉన్న ఒక సరైన పత్రం ఎంచుకోండి.",
@@ -244,7 +246,8 @@ const TEXT = messages({
     receivedText: "ನಿಮ್ಮ FSSAI ಅರ್ಜಿಗೆ ಸಹಾಯ ಮಾಡಲು ನಮ್ಮ Craves ತಂಡ ನಿಮ್ಮ ನೋಂದಾಯಿತ ಮೊಬೈಲ್ ಸಂಖ್ಯೆಗೆ ಕರೆ ಮಾಡುತ್ತದೆ.",
     reference: "ರೆಫರೆನ್ಸ್ {case}", requested: " · ಕೇಳಿದ ದಿನಾಂಕ {date}",
     resolved: "ನಿಮ್ಮ ಹಿಂದಿನ ಮನವಿ ({case}) ಮುಗಿದಿದೆ. ಇನ್ನೂ ಸಹಾಯ ಬೇಕಾದರೆ ಮತ್ತೆ ಕೇಳಿ.", requestCall: "ನನಗೆ ಕರೆ ಮಾಡಿ",
-    finishOthers: "ಉಳಿದ ಭಾಗಗಳನ್ನು ಈಗಲೇ ಮುಗಿಸಬಹುದು. ಅರ್ಜಿ ಸಲ್ಲಿಸುವ ಮೊದಲು ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಸೇರಿಸಿ.",
+    fssaiLater: "ಅರ್ಜಿ ಹಾಕಲು FSSAI ನೋಂದಣಿ ಬೇಕಿಲ್ಲ. ನಿಮ್ಮ ತಿನಿಸುಗಳು ಗ್ರಾಹಕರಿಗೆ ಕಾಣುವ ಮೊದಲು ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಸೇರಿಸಬೇಕು. ಪ್ರತಿ ಆಹಾರ ವ್ಯಾಪಾರಕ್ಕೂ ಇದು ಸರ್ಕಾರದ ನಿಯಮ.",
+    finishOthers: "ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಸಿಕ್ಕ ನಂತರ ಇಲ್ಲಿ ಸೇರಿಸಿ. ಆಮೇಲೆ ನಿಮ್ಮ ತಿನಿಸುಗಳು ಗ್ರಾಹಕರಿಗೆ ಕಾಣುತ್ತವೆ.",
     haveFssai: "ನನ್ನ ಬಳಿ FSSAI ಸಂಖ್ಯೆ ಇದೆ",
     docType: "ಯಾವ ದಾಖಲೆ", identityDocument: "ಗುರುತಿನ ದಾಖಲೆ",
     removeFirst: "ಬೇರೆ ದಾಖಲೆ ಆಯ್ಕೆಮಾಡಲು, ಮೊದಲು ಅಪ್‌ಲೋಡ್ ಮಾಡಿದ ಫೈಲ್‌ಗಳನ್ನು ತೆಗೆದುಹಾಕಿ.", chooseOne: "ನಿಮ್ಮ ಹೆಸರು ಇರುವ ಒಂದು ಸರಿಯಾದ ದಾಖಲೆ ಆಯ್ಕೆಮಾಡಿ.",
@@ -268,8 +271,8 @@ type Text = (typeof TEXT)["en"];
 /** Short section names on Review; the same words as the Welcome back list. */
 const SECTION_LABELS = messages({
   en: CHEF_SECTION_LABELS,
-  te: { personal: "మీ వివరాలు", kitchen: "వంటగది వివరాలు", fssai: "FSSAI", documents: "గుర్తింపు పత్రం", bank: "బ్యాంక్ వివరాలు" },
-  kn: { personal: "ನಿಮ್ಮ ವಿವರಗಳು", kitchen: "ಅಡುಗೆಮನೆ ವಿವರಗಳು", fssai: "FSSAI", documents: "ಗುರುತಿನ ದಾಖಲೆ", bank: "ಬ್ಯಾಂಕ್ ವಿವರಗಳು" },
+  te: { personal: "మీ వివరాలు", kitchen: "వంటగది వివరాలు", documents: "గుర్తింపు పత్రం", bank: "బ్యాంక్ వివరాలు" },
+  kn: { personal: "ನಿಮ್ಮ ವಿವರಗಳು", kitchen: "ಅಡುಗೆಮನೆ ವಿವರಗಳು", documents: "ಗುರುತಿನ ದಾಖಲೆ", bank: "ಬ್ಯಾಂಕ್ ವಿವರಗಳು" },
 });
 // A missing-detail chip names its field in the words of that field's label.
 const KITCHEN_FIELD_TEXT: Record<string, keyof Text> = {
@@ -282,8 +285,17 @@ const KITCHEN_FIELD_TEXT: Record<string, keyof Text> = {
 };
 
 type Props = { flow: ChefOnboardingFlow };
+/** What the FSSAI screen needs, so the go-live popup can show it without the whole signup form. */
+export type FssaiFlow = Pick<ChefOnboardingFlow, "details" | "field" | "fieldErrors" | "state" | "busy"> & {
+  fssaiGuide: boolean;
+  setFssaiGuide: (open: boolean) => void;
+  /** The latest callback request, and its case number while it is open (a resolved one lets the chef ask again). */
+  callback: CallbackRequest | null;
+  callbackCase: string;
+  requestCallback: () => Promise<void>;
+};
 
-function fieldError(flow: ChefOnboardingFlow, name: string) {
+function fieldError(flow: Pick<ChefOnboardingFlow, "fieldErrors">, name: string) {
   return flow.fieldErrors.find((item) => item.field === name)?.message || null;
 }
 
@@ -883,7 +895,12 @@ export function ChefKitchenDetails({ flow }: Props) {
 
 const FOSCOS_URL = "https://foscos.fssai.gov.in/";
 
-export function ChefFssaiDetails({ flow }: Props) {
+/** Shown at signup: FSSAI is not asked now, but is needed before dishes go live. */
+export function FssaiLaterNote() {
+  return <Note tone="neutral">{useText(TEXT).fssaiLater}</Note>;
+}
+
+export function ChefFssaiDetails({ flow }: { flow: FssaiFlow }) {
   const text = useText(TEXT);
   if (flow.fssaiGuide) return <FssaiGuide flow={flow} />;
   const id = "chef-fssaiNumber";
@@ -962,7 +979,7 @@ function isLearningContent(item: unknown): item is LearningContent {
   );
 }
 
-function FssaiGuide({ flow }: Props) {
+function FssaiGuide({ flow }: { flow: FssaiFlow }) {
   const text = useText(TEXT);
   const [content, setContent] = useState<LearningContent[]>([]),
     [loading, setLoading] = useState(true),
@@ -1439,10 +1456,6 @@ export function ChefReviewDetails({ flow }: Props) {
   if (!saved) return null;
   const completion = completedSections(saved, flow.bank);
   const uploaded = (type: string) => evidenceComplete(saved, type);
-  const fssaiAdded = /^\d{14}$/.test(d.fssaiNumber);
-  const fssaiReviewed = Boolean(
-    saved.progress?.fssaiVerified && saved.details?.fssaiNumber === d.fssaiNumber,
-  );
   const bankDeferred = saved.bankEnrollmentRequired === false;
   return (
     <div className="cob-stack">
@@ -1507,25 +1520,7 @@ export function ChefReviewDetails({ flow }: Props) {
         </div>
       </ReviewCard>
 
-      <ReviewCard
-        flow={flow}
-        section="fssai"
-        icon={<ShieldCheck size={20} aria-hidden="true" />}
-        complete={completion.fssai}
-      >
-        <Rows
-          rows={[
-            [
-              text.status,
-              fssaiReviewed ? text.verifiedByCraves : fssaiAdded ? text.numberAdded : text.notAddedYet,
-            ],
-            [
-              text.registrationNumber,
-              fssaiAdded ? <span className="cob-mono">{formatFssai(d.fssaiNumber)}</span> : "",
-            ],
-          ]}
-        />
-      </ReviewCard>
+      <FssaiLaterNote />
 
       <ReviewCard
         flow={flow}

@@ -5,6 +5,7 @@ import { isSameOrigin } from "@/shared/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefMenuItem, parseChefMenuItemInput, parseChefMenuItems } from "@/features/chef/lib/chef-menu-contract";
 import { chefMenuFailure } from "@/features/chef/lib/chef-menu-errors";
+import { requireFssaiToGoLive } from "@/features/chef-onboarding/lib/fssai-go-live";
 
 export const dynamic = "force-dynamic";
 function apiBaseUrl(): string { const value = process.env.CRAVES_API_BASE_URL?.trim(); if (!value?.startsWith("https://")) throw new Error("CRAVES_API_BASE_URL must use HTTPS"); return value.replace(/\/$/, ""); }
@@ -38,4 +39,8 @@ export async function POST(request: NextRequest) {
   const bounded = await boundBffRequest(request);
   if (bounded instanceof NextResponse) return bounded;
   request = bounded;
- if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 }); const input = parseChefMenuItemInput(await request.json().catch(() => null)); if (!input) return NextResponse.json({ code: "INVALID_MENU_ITEM" }, { status: 400 }); return requestUpstream(request, "POST", input); }
+ if (!isSameOrigin(request)) return NextResponse.json({ code: "ORIGIN_REJECTED" }, { status: 403 }); const input = parseChefMenuItemInput(await request.json().catch(() => null)); if (!input) return NextResponse.json({ code: "INVALID_MENU_ITEM" }, { status: 400 });
+  // A dish that customers can see needs the chef's FSSAI number first.
+  const blocked = input.status === "ACTIVE" ? await requireFssaiToGoLive(request) : null;
+  if (blocked) return blocked;
+  return requestUpstream(request, "POST", input); }

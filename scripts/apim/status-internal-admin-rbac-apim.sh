@@ -38,5 +38,6 @@ check_operation "get-internal-admin-user" "GET" "/users/{identityId}"
 check_operation "put-internal-admin-user-roles" "PUT" "/users/{identityId}/roles"
 check_operation "put-internal-admin-staff-role-grants" "PUT" "/staff-role-grants"
 check_operation "get-internal-admin-role-changes" "GET" "/role-changes"
+check_operation "post-internal-admin-chef-role-revoke" "POST" "/users/{identityId}/chef-role/revoke"
 
 echo "SUCCESS: Internal administrator RBAC APIM status is ready."

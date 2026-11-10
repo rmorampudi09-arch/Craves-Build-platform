@@ -21,17 +21,20 @@ public class NotificationDeliveryWorker {
     private final NotificationDeliveryRepository repository;
     private final ObjectProvider<FcmPushAdapter> pushAdapter;
     private final ObjectProvider<AcsEmailAdapter> emailAdapter;
+    private final ObjectProvider<Msg91SmsAdapter> smsAdapter;
 
     public NotificationDeliveryWorker(
         NotificationDeliveryProperties properties,
         NotificationDeliveryRepository repository,
         ObjectProvider<FcmPushAdapter> pushAdapter,
-        ObjectProvider<AcsEmailAdapter> emailAdapter
+        ObjectProvider<AcsEmailAdapter> emailAdapter,
+        ObjectProvider<Msg91SmsAdapter> smsAdapter
     ) {
         this.properties = properties;
         this.repository = repository;
         this.pushAdapter = pushAdapter;
         this.emailAdapter = emailAdapter;
+        this.smsAdapter = smsAdapter;
     }
 
     @Scheduled(scheduler = in.craves.notification.config.WorkerSchedulingConfiguration.DELIVERY_SCHEDULER, fixedDelayString = "${craves.notification.delivery.fixed-delay-ms:5000}")
@@ -45,6 +48,48 @@ public class NotificationDeliveryWorker {
         }
         if (properties.isEmailEnabled()) {
             deliverEmail();
+        }
+        if (properties.isSmsEnabled()) {
+            deliverSms();
+        }
+    }
+
+    /**
+     * Handbook 082: transactional SMS, retried and dead-lettered like email; one that can never be sent is SKIPPED. A batch
+     * stops after two minutes, well inside the lease, so a slow provider never lets another replica claim and send it again.
+     */
+    private void deliverSms() {
+        Msg91SmsAdapter adapter = smsAdapter.getIfAvailable();
+        if (adapter == null) {
+            throw new IllegalStateException("MSG91 SMS adapter is not available while SMS delivery is enabled");
+        }
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(2);
+        for (DeliveryWorkItem item : repository.claim(
+            "SMS",
+            properties.getBatchSize(),
+            properties.getMaxAttempts(),
+            properties.getStaleLockMinutes()
+        )) {
+            if (System.nanoTime() > deadline) {
+                break; // the rest keep their lease and are claimed again once it lapses, never sent twice
+            }
+            try {
+                repository.markSent(item, adapter.send(item));
+            } catch (Msg91SmsAdapter.SmsNotSent notSent) {
+                repository.skip(item, notSent.getMessage());
+            } catch (RuntimeException exception) {
+                repository.markFailure(
+                    item,
+                    properties.getMaxAttempts(),
+                    properties.getRetryBaseSeconds(),
+                    Msg91SmsAdapter.PROVIDER,
+                    exception
+                );
+                LOGGER.warn(
+                    "SMS delivery failed requestId={} attempt={}",
+                    item.requestId(), item.attemptCount()
+                );
+            }
         }
     }
 

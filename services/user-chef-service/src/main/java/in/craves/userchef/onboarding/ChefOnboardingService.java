@@ -467,6 +467,11 @@ public class ChefOnboardingService {
             if(!Objects.equals(request.fssaiNumber(),draft.details().fssaiNumber()) || request.fssaiNumber()==null || !request.fssaiNumber().matches("[0-9]{14}"))
                 throw ApiException.conflict("FSSAI_NUMBER_CHANGED","Review the current saved FSSAI number.");
             jdbc.update("UPDATE chef_onboarding_draft SET fssai_reviewed_number=?,fssai_reviewed_by=?,fssai_reviewed_at=now(),fssai_review_evidence=?,version=version+1,updated_at=now() WHERE identity_id=?",request.fssaiNumber(),admin.identityId(),reason,application.identityId());
+            // Same outbox as the approval notice (ReviewEventBuffer): the Chef learns that dishes can go live now.
+            jdbc.update("INSERT INTO notification_outbox(event_key,event_type,aggregate_type,aggregate_id,user_identity_id,user_role,channel,template_code,title,body,target_type,target_id,payload) " +
+                "VALUES (?,'CHEF_FSSAI_VERIFIED','CHEF_APPLICATION',?,?,'CHEF','IN_APP','CHEF_FSSAI_VERIFIED_IN_APP','FSSAI number verified'," +
+                "'Craves has verified your FSSAI number. You can now make your dishes live.','CHEF_APPLICATION',?,jsonb_build_object('applicationId',?::text)) ON CONFLICT (event_key) DO NOTHING",
+                "chef-fssai-verified-"+applicationId+"-"+request.fssaiNumber(),applicationId,application.identityId(),applicationId,applicationId.toString());
         } else {
             jdbc.update("UPDATE chef_onboarding_draft SET review_status=?,correction_reason=?,correction_sections=?,submitted=CASE WHEN ?='REQUEST_INFORMATION' THEN false ELSE submitted END,version=version+1,updated_at=now() WHERE identity_id=?",
                 "START_REVIEW".equals(action)?"UNDER_REVIEW":"MORE_INFORMATION_REQUIRED",reason,sections,action,application.identityId());

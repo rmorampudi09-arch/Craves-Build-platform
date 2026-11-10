@@ -150,6 +150,8 @@ const stateSchema = z.object({
   requiredDocuments: z.array(z.string()).max(5),
   supportPhone: z.string().regex(/^[+0-9]{10,15}$/),
   supportEmail: z.string().email(),
+  // Craves has verified the saved FSSAI number; only then can a dish go live.
+  progress: z.object({ fssaiVerified: z.boolean() }).optional(),
 });
 export type OnboardingState = z.infer<typeof stateSchema>;
 export function parseState(value: unknown): OnboardingState {

@@ -127,6 +127,7 @@ class ChefOnboardingDatabaseTest {
         for(var document:submitted.documents()) run(()->review.approve(admin,id,document.id()));
         assertEquals("APPROVED",run(()->applications.approve(admin,id)).status().name());
         assertNull(service.mine(user).details().fssaiNumber());
+        assertFalse(sellingApproved(),"approved, but may not sell before FSSAI is verified");
         assertFalse(applications.listApplications(admin,ChefApplicationStatus.PENDING).stream().anyMatch(a->id.equals(a.id())),"nothing to review until a number is added");
         // Submitted details stay locked; only the FSSAI number can be added.
         assertEquals("ONBOARDING_ALREADY_SUBMITTED",assertThrows(ApiException.class,()->save(ProofKind.PAN,null)).getCode());
@@ -143,10 +144,31 @@ class ChefOnboardingDatabaseTest {
         assertTrue(applications.listApplications(admin,ChefApplicationStatus.PENDING).stream().anyMatch(a->id.equals(a.id())),"the added number waits for Craves to check it");
         // A typo can be corrected until Craves has checked the number; after that it is locked.
         assertEquals("12345678901235",save(ProofKind.PAN,"12345678901235").details().fssaiNumber());
+        assertFalse(sellingApproved(),"saved, not verified");
         run(()->service.reviewAction(admin,id,new ReviewAction(service.mine(user).version(),"VERIFY_FSSAI","Checked official registration record","12345678901235",null)));
         assertTrue(service.mine(user).progress().fssaiVerified());
+        assertTrue(sellingApproved());
+        assertEquals("Craves has verified your FSSAI number. You can now make your dishes live.",jdbc.queryForObject(
+            "SELECT body FROM notification_outbox WHERE event_type='CHEF_FSSAI_VERIFIED' AND user_identity_id=? AND status='PENDING'",String.class,user.identityId()));
         assertEquals("REVIEWED_FSSAI_LOCKED",assertThrows(ApiException.class,()->save(ProofKind.PAN,"12345678901234")).getCode());
         assertFalse(applications.listApplications(admin,ChefApplicationStatus.PENDING).stream().anyMatch(a->id.equals(a.id())));
+    }
+    /** Whether the signed approval list that Catalog's selling check is built from includes this Chef. */
+    boolean sellingApproved() {
+        try {
+            String key="SYNTHETIC_APPROVAL_DATABASE_SIGNING_KEY_20261005";
+            byte[] raw=("{\"requestId\":\""+UUID.randomUUID()+"\"}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            String time=Long.toString(java.time.Instant.now().getEpochSecond());
+            var request=new org.springframework.mock.web.MockHttpServletRequest();
+            request.setContent(raw);request.addHeader(in.craves.userchef.web.ChefFinanceApprovalProtocol.TIME,time);
+            request.addHeader(in.craves.userchef.web.ChefFinanceApprovalProtocol.SIGNATURE,in.craves.userchef.web.ChefFinanceApprovalProtocol.sign(key,"POST",time,raw));
+            var mapper=new ObjectMapper().findAndRegisterModules();
+            var response=new in.craves.userchef.web.ChefFinanceApprovalController(jdbc,mapper,key).read(request);
+            assertEquals(200,response.getStatusCode().value());
+            for(var approval:mapper.readTree(response.getBody()).path("approvals"))
+                if(user.identityId().toString().equals(approval.path("chefId").asText())) return true;
+            return false;
+        } catch(java.io.IOException e) { throw new IllegalStateException(e); }
     }
     @Test void aadhaarCannotSubmitWithoutItsBackButBankStatementIsSingleFile() {
         save(ProofKind.AADHAAR,"12345678901234");photos();upload(KycDocumentType.FSSAI_LICENSE);upload(KycDocumentType.SELECTED_PROOF_FRONT);

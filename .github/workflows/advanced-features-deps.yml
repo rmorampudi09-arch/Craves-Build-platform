@@ -5,7 +5,9 @@ name: Advanced features dependency cache
 on:
   push:
     branches: ['main', 'bundle/**']
-    paths: ['services/advanced-features-service/pom.xml', 'services/order-service/pom.xml', 'services/integration-service/pom.xml', '.github/workflows/advanced-features-deps.yml']
+    paths: ['services/advanced-features-service/pom.xml', 'services/order-service/pom.xml', 'services/integration-service/pom.xml',
+            'services/notification-service/pom.xml', 'services/auth-service/pom.xml', 'services/user-chef-service/pom.xml',
+            'services/catalog-service/pom.xml', '.github/workflows/advanced-features-deps.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -27,8 +29,8 @@ jobs:
       - name: Resolve dependencies and plugins with a stub build
         run: |
           set -euo pipefail
-          # order-service and integration-service too: M24/M25 are built in the sandbox against them
-          for svc in advanced-features-service order-service integration-service; do
+          # the other core services too: handbook gaps are built and tested in the sandbox against them
+          for svc in advanced-features-service order-service integration-service notification-service auth-service user-chef-service catalog-service; do
           stub=$(mktemp -d)
           cp services/$svc/pom.xml "$stub/pom.xml"
           mkdir -p "$stub/src/main/java/stub" "$stub/src/test/java/stub"

@@ -1,6 +1,7 @@
 package in.craves.integration.erasure;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,16 +11,17 @@ import java.util.Set;
 /**
  * Replaces the customer's drop-off (contact name and phone, address lines, landmark, note, postcode, coordinates) in the
  * shapes Craves and its delivery providers keep: Craves' own {@code dropoff} stop, a Borzo order's {@code points} (point 0
- * is the kitchen and stays, the courier is the rider's), a Pidge booking's {@code trips[].receiver_detail} (what
- * PidgeApiClient sends; {@code sender_detail} and {@code poc_detail} are the kitchen and stay) and its quote-style
- * {@code drop} list, and Shiprocket's flat {@code billing_*} fields. The kitchen's pickup, the rider, amounts, ids, statuses
+ * is the kitchen and stays, the courier is the rider's) with their proof of delivery (recipient, place and signature photo
+ * links), a Pidge booking's {@code trips[].receiver_detail} (what PidgeApiClient sends; {@code sender_detail} and
+ * {@code poc_detail} are the kitchen and stay), its quote-style {@code drop} list and a status's {@code fulfillment.drop.proof},
+ * and Shiprocket's flat {@code billing_*} fields. The kitchen's pickup, the rider, amounts, ids, statuses
  * and the coarse area, city and state are never touched.
  * Placeholders keep a text value text and a number a number, so a second pass changes nothing.
  */
 final class DropoffScrubber {
     private static final Set<String> STOP_TEXT = Set.of("address", "addressLine1", "addressLine2", "landmark", "note");
     private static final Set<String> BORZO_TEXT = Set.of("address", "building_number", "entrance_number", "intercom_code", "floor_number",
-        "apartment_number", "note", "invisible_mile_navigation_instructions");
+        "apartment_number", "note", "invisible_mile_navigation_instructions", "place_photo_url", "sign_photo_url");
     private static final Set<String> PIDGE_ADDRESS_TEXT = Set.of("address_line_1", "address_line_2", "landmark", "instructions_to_reach");
     private static final Map<String, String> SHIPROCKET = Map.of(
         "billing_customer_name", AccountErasureService.ERASED_NAME, "shipping_customer_name", AccountErasureService.ERASED_NAME,
@@ -54,6 +56,8 @@ final class DropoffScrubber {
                     for (JsonNode drop : value) {
                         changed |= drop.isObject() && pidgeDrop((ObjectNode) drop);
                     }
+                } else if ("fulfillment".equals(name) && value.path("drop").path("proof") instanceof ArrayNode proof) {
+                    changed |= pidgeProof(proof);
                 } else if ("trips".equals(name) && value.isArray()) {
                     for (JsonNode trip : value) {
                         if (trip.get("receiver_detail") instanceof ObjectNode receiver) {
@@ -91,6 +95,33 @@ final class DropoffScrubber {
         changed |= zero(point, "latitude") | zero(point, "longitude");
         if (point.get("contact_person") instanceof ObjectNode contact) {
             changed |= text(contact, "name", AccountErasureService.ERASED_NAME) | text(contact, "phone", AccountErasureService.ERASED_PHONE);
+        }
+        // Proof of delivery: who took the parcel (the photo links are in BORZO_TEXT).
+        if (point.get("checkin") instanceof ObjectNode checkin) {
+            changed |= text(checkin, "recipient_full_name", AccountErasureService.ERASED_NAME)
+                | text(checkin, "recipient_position", AccountErasureService.ERASED_TEXT);
+        }
+        return changed;
+    }
+
+    /** Pidge's {@code fulfillment.drop.proof}: its shape is not documented beyond a list, so every text in it, at any depth, is replaced. */
+    private static boolean pidgeProof(JsonNode node) {
+        boolean changed = false;
+        if (node instanceof ArrayNode array) {
+            for (int i = 0; i < array.size(); i++) {
+                if (array.get(i).isTextual() && !array.get(i).asText().equals(AccountErasureService.ERASED_TEXT)) {
+                    array.set(i, AccountErasureService.ERASED_TEXT);
+                    changed = true;
+                } else {
+                    changed |= pidgeProof(array.get(i));
+                }
+            }
+        } else if (node instanceof ObjectNode object) {
+            List<String> names = new ArrayList<>();
+            object.fieldNames().forEachRemaining(names::add);
+            for (String name : names) {
+                changed |= object.get(name).isTextual() ? text(object, name, AccountErasureService.ERASED_TEXT) : pidgeProof(object.get(name));
+            }
         }
         return changed;
     }

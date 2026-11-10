@@ -30,6 +30,29 @@ Use the existing authorized Azure DevOps service connection for the remaining Au
 | document-engineering | Private PDF snapshots, rendering, download and email | 4 |
 | service-labs | Nine applied laboratories across all core service tracks | 9 |
 
+## Extension of 10 November 2026: ten courses for newer services
+
+Asked for by the owner (Academy switched on in subscription 34eefd95 the same day). Ten applied courses, 46 lessons, cover what was built after the 13 September snapshot:
+
+| Course ID | Coverage | Lessons |
+|---|---|---:|
+| advanced-platform | Advanced-features service: module isolation, safe retries, identity, contracts and release | 4 |
+| advanced-ordering | Group, bulk and corporate orders, order changes, batches and kitchen load, live order activity | 6 |
+| advanced-discovery | Taxonomy and food facts, menu options, taste memory and Saved tab, personal ranking, semantic and AI search | 5 |
+| advanced-growth | Promotions, partner offers, experiments, chef insights, demand forecast | 5 |
+| advanced-trust-privacy | Reports and disputes, policy engines, export and erase, account deletion | 4 |
+| rider-fleet | Rider promises, dispatch chain, trip pay and ledger, payouts, fleet engine and travel-time model | 5 |
+| chef-referral | Signed source facts, reward maths, monthly cap and reversals, operating the programme | 4 |
+| voice-support | Call path, natural turns, tools and tickets, operating the voice line | 4 |
+| delivery-intelligence | Provider scoring, Borzo-to-Pidge handoff, the dashboard, delivery exception cases | 4 |
+| azure-operations | Production map, secrets and network, canary releases, live runtime lock, alerts and recovery | 5 |
+
+- **Own snapshot per course.** Those services did not exist at the base teaching revision, so each new course carries `sourceRevision` = `9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605` (main on 10 Nov). The other 15 courses keep `9cf4aea069fa6a077fdef111bf2df4eeada696fc`; moving them would have broken 6 moved paths and drifted 27 changed files away from their lesson text. `AcademyCatalog.sourceRevision(courseId)` picks the course's own pin, `AcademySources` caches by revision and path, and `verify-curriculum.py --git` checks every source at its own course's revision.
+- **Python sources.** The voice gateway is Python, so `.py` files under `services/` and `apps/` are now reviewable sources (same secret scan and byte limit).
+- **Progress kept.** No existing lesson or assessment changed, so the content version stays `academy-2026-09-13-v3`: existing progress and XP stay visible, and the new lessons have new ids. Totals: 25 courses, 121 lessons, 242 graded questions, 71 ungraded checkpoints, first completion 7,840 XP, public catalog about 465 KB.
+- **Known limit.** The classroom sidebar still names the catalog's base revision for every course; the source viewer header shows each file's real pinned revision. shortcut: sidebar shows the base revision, switch it to `course.sourceRevision ?? catalog.sourceRevision` at the next web change.
+- **Publishing today.** A merge to `main` releases Auth through `release-auth` (canary, automatic rollback). The release changes only the image and `CRAVES_BUILD_SHA`, so `CRAVES_ACADEMY_ENABLED=true` stays on. The Azure DevOps steps further down describe the retired estate.
+
 Original operational lessons are preserved. Applied lessons include concrete source paths, baseline commands, failure cases, local exercises and peer-review evidence. Each lesson retains two graded questions to match the deployed UI. Extra reasoning checks are guided steps, not extra graded questions. No web deployment is required solely to display these resources.
 
 Study the service orientation, then Platform and Java Engineering, then the relevant service laboratory. Use Mobile, Data and Documents for specialist depth. Prerequisites recommend study order; they do not grant permissions.

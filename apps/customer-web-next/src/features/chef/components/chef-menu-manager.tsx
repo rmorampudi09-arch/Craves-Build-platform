@@ -360,7 +360,7 @@ function requiresKitchen(response: Response, body: unknown): boolean {
   );
 }
 
-/** The web server refuses to put a dish live until the chef has added an FSSAI number. */
+/** The web server refuses to put a dish live until Craves has verified the chef's FSSAI number. */
 function fssaiRequired(response: Response, body: unknown) {
   return response.status === 409 && !!body && typeof body === "object" && "code" in body && body.code === "FSSAI_REQUIRED";
 }
@@ -473,8 +473,8 @@ export function ChefMenuManager() {
   const [query, setQuery] = useState("");
   /** The draft whose Publish asks first. */
   const [publishing, setPublishing] = useState<ChefMenuItem | null>(null);
-  /** Set while the FSSAI popup is open: what to do again once the number is saved. */
-  const [fssaiAsk, setFssaiAsk] = useState<{ retry: () => void } | null>(null);
+  /** The FSSAI popup: opened when a dish is refused because the number is missing or not verified yet. */
+  const [fssaiAsk, setFssaiAsk] = useState(false);
   /** For the Meal plans tab's count; unknown (no count) until read or when it can't be. */
   const [planCount, setPlanCount] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -702,7 +702,7 @@ export function ChefMenuManager() {
       if (!response.ok) {
         if (fssaiRequired(response, body)) {
           confirmedRejection = true;
-          setFssaiAsk({ retry: () => void save() });
+          setFssaiAsk(true);
           return;
         }
         // Catalog checks selling eligibility before any menu write. Other 5xx
@@ -837,7 +837,7 @@ export function ChefMenuManager() {
       const body: unknown = await response.json().catch(() => null);
       const saved = response.ok ? parseChefMenuItem(body) : null;
       if (fssaiRequired(response, body)) {
-        setFssaiAsk({ retry: () => void publish(item) });
+        setFssaiAsk(true);
         return;
       }
       if (!saved) {
@@ -1768,15 +1768,7 @@ export function ChefMenuManager() {
     </motion.form>
     )}
     {feedback}
-    <ChefFssaiPopup
-      open={fssaiAsk !== null}
-      onClose={() => setFssaiAsk(null)}
-      onSaved={() => {
-        const retry = fssaiAsk?.retry;
-        setFssaiAsk(null);
-        retry?.();
-      }}
-    />
+    <ChefFssaiPopup open={fssaiAsk} onClose={() => setFssaiAsk(false)} />
     </>
   );
 }

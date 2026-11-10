@@ -103,6 +103,10 @@ export type OnboardingState = {
   progress?: {status: string; reason: string | null; nextAction: string; fssaiVerified: boolean; termsVersion: string; sections?: string[]};
   callbackRequest?: CallbackRequest | null;
 };
+/** Craves has verified the FSSAI number that is saved now; only then can a dish go live. */
+export function fssaiVerified(state: Pick<OnboardingState, "details" | "progress">): boolean {
+  return /^[0-9]{14}$/.test(state.details?.fssaiNumber ?? "") && state.progress?.fssaiVerified === true;
+}
 export type LearningContent = {
   id: string;
   language: string;

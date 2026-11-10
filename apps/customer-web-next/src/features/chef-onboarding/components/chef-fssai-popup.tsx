@@ -11,6 +11,7 @@ import { chefOnboardingApi, draftable } from "@/features/chef-onboarding/compone
 import { fssaiGuideText } from "@/features/chef-onboarding/lib/chef-onboarding-flow";
 import {
   EMPTY_ONBOARDING,
+  fssaiVerified,
   parseOnboardingState,
   type CallbackRequest,
   type OnboardingState,
@@ -20,8 +21,10 @@ import "@/features/chef-onboarding/styles/chef-onboarding.css";
 const TEXT = messages({
   en: {
     title: "Add your FSSAI number",
-    description: "Your dishes can go live to customers once you add your FSSAI number. The government requires it for every food business.",
-    save: "Save and go live", saving: "Saving…", loading: "Loading…", tryAgain: "Try again",
+    description: "Your dishes can go live to customers once Craves has verified your FSSAI number. The government requires it for every food business.",
+    save: "Save number", saving: "Saving…", done: "Done",
+    checking: "We are verifying your FSSAI number. You can make your dishes live once it is verified. If the number is wrong, correct it here.",
+    verified: "Craves has verified your FSSAI number. You can make your dishes live now.", loading: "Loading…", tryAgain: "Try again",
     loadFailed: "We couldn’t load your FSSAI details.",
     invalid: "Enter your 14-digit FSSAI registration number.",
     saveFailed: "We couldn’t save your FSSAI number. Try again.",
@@ -29,8 +32,10 @@ const TEXT = messages({
   },
   te: {
     title: "మీ FSSAI నంబర్ జోడించండి",
-    description: "మీ FSSAI నంబర్ ఇచ్చాక మీ వంటకాలు కస్టమర్లకు కనిపిస్తాయి. ప్రతి ఆహార వ్యాపారానికి ఇది ప్రభుత్వ నిబంధన.",
-    save: "సేవ్ చేసి మెనూలో పెట్టండి", saving: "సేవ్ అవుతోంది…", loading: "లోడ్ అవుతోంది…", tryAgain: "మళ్లీ ప్రయత్నించండి",
+    description: "Craves మీ FSSAI నంబర్ ధృవీకరించాక మీ వంటకాలు కస్టమర్లకు కనిపిస్తాయి. ప్రతి ఆహార వ్యాపారానికి ఇది ప్రభుత్వ నిబంధన.",
+    save: "నంబర్ సేవ్ చేయండి", saving: "సేవ్ అవుతోంది…", done: "సరే",
+    checking: "మీ FSSAI నంబర్ ధృవీకరిస్తున్నాం. ధృవీకరణ అయ్యాక మీ వంటకాలు మెనూలో పెట్టవచ్చు. నంబర్ తప్పుగా ఉంటే ఇక్కడ సరిచేయండి.",
+    verified: "Craves మీ FSSAI నంబర్ ధృవీకరించింది. ఇప్పుడు మీ వంటకాలు మెనూలో పెట్టవచ్చు.", loading: "లోడ్ అవుతోంది…", tryAgain: "మళ్లీ ప్రయత్నించండి",
     loadFailed: "మీ FSSAI వివరాలు తెరవలేకపోయాం.",
     invalid: "మీ 14 అంకెల FSSAI రిజిస్ట్రేషన్ నంబర్ ఇవ్వండి.",
     saveFailed: "మీ FSSAI నంబర్ సేవ్ చేయలేకపోయాం. మళ్లీ ప్రయత్నించండి.",
@@ -38,8 +43,10 @@ const TEXT = messages({
   },
   kn: {
     title: "ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಸೇರಿಸಿ",
-    description: "ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಸೇರಿಸಿದ ನಂತರ ನಿಮ್ಮ ತಿನಿಸುಗಳು ಗ್ರಾಹಕರಿಗೆ ಕಾಣುತ್ತವೆ. ಪ್ರತಿ ಆಹಾರ ವ್ಯಾಪಾರಕ್ಕೂ ಇದು ಸರ್ಕಾರದ ನಿಯಮ.",
-    save: "ಉಳಿಸಿ ಮೆನುಗೆ ಸೇರಿಸಿ", saving: "ಉಳಿಸಲಾಗುತ್ತಿದೆ…", loading: "ಲೋಡ್ ಆಗುತ್ತಿದೆ…", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
+    description: "Craves ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಪರಿಶೀಲಿಸಿದ ನಂತರ ನಿಮ್ಮ ತಿನಿಸುಗಳು ಗ್ರಾಹಕರಿಗೆ ಕಾಣುತ್ತವೆ. ಪ್ರತಿ ಆಹಾರ ವ್ಯಾಪಾರಕ್ಕೂ ಇದು ಸರ್ಕಾರದ ನಿಯಮ.",
+    save: "ಸಂಖ್ಯೆ ಉಳಿಸಿ", saving: "ಉಳಿಸಲಾಗುತ್ತಿದೆ…", done: "ಸರಿ",
+    checking: "ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಪರಿಶೀಲಿಸುತ್ತಿದ್ದೇವೆ. ಪರಿಶೀಲನೆ ಆದ ನಂತರ ನಿಮ್ಮ ತಿನಿಸುಗಳನ್ನು ಮೆನುಗೆ ಸೇರಿಸಬಹುದು. ಸಂಖ್ಯೆ ತಪ್ಪಿದ್ದರೆ ಇಲ್ಲಿ ಸರಿಪಡಿಸಿ.",
+    verified: "Craves ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಪರಿಶೀಲಿಸಿದೆ. ಈಗ ನಿಮ್ಮ ತಿನಿಸುಗಳನ್ನು ಮೆನುಗೆ ಸೇರಿಸಬಹುದು.", loading: "ಲೋಡ್ ಆಗುತ್ತಿದೆ…", tryAgain: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
     loadFailed: "ನಿಮ್ಮ FSSAI ವಿವರಗಳನ್ನು ತೆರೆಯಲಾಗಲಿಲ್ಲ.",
     invalid: "ನಿಮ್ಮ 14 ಅಂಕಿಯ FSSAI ನೋಂದಣಿ ಸಂಖ್ಯೆ ನಮೂದಿಸಿ.",
     saveFailed: "ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಉಳಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
@@ -48,10 +55,10 @@ const TEXT = messages({
 });
 
 /**
- * The signup FSSAI screen, asked when an approved chef first puts a dish live.
- * onSaved runs once the number is saved, so the caller can carry on with what it was doing.
+ * The signup FSSAI screen, asked when an approved chef first puts a dish live. The chef saves the
+ * number here; the dish can go live only after Craves has verified it, so nothing is published from here.
  */
-export function ChefFssaiPopup({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
+export function ChefFssaiPopup({ open, onClose }: { open: boolean; onClose: () => void }) {
   const text = useText(TEXT);
   const { language } = useLanguage();
   const [state, setState] = useState<OnboardingState | null>(null);
@@ -102,11 +109,14 @@ export function ChefFssaiPopup({ open, onClose, onSaved }: { open: boolean; onCl
     setError("");
     try {
       // The application is already submitted, so the service changes only the FSSAI number.
-      await chefOnboardingApi("/api/chef/onboarding", "PATCH", {
-        expectedVersion: state.version,
-        details: draftable({ ...(state.details ?? EMPTY_ONBOARDING), fssaiNumber: number }),
-      });
-      onSaved();
+      const next = parseOnboardingState(
+        await chefOnboardingApi("/api/chef/onboarding", "PATCH", {
+          expectedVersion: state.version,
+          details: draftable({ ...(state.details ?? EMPTY_ONBOARDING), fssaiNumber: number }),
+        }),
+      );
+      if (!next) throw new Error(text.saveFailed);
+      setState(next);
     } catch (failure) {
       setError(chefErrorText(failure, text.saveFailed));
     } finally {
@@ -162,6 +172,9 @@ export function ChefFssaiPopup({ open, onClose, onSaved }: { open: boolean; onCl
     requestCallback,
   };
   const heading = guide ? fssaiGuideText(language) : text;
+  const saved = state?.details?.fssaiNumber ?? "";
+  // Saved and unchanged: nothing to save, the chef waits for Craves (or is already verified).
+  const waiting = /^[0-9]{14}$/.test(saved) && saved === number;
 
   return (
     <Sheet
@@ -175,14 +188,23 @@ export function ChefFssaiPopup({ open, onClose, onSaved }: { open: boolean; onCl
       description={heading.description}
       footer={
         flow && !guide ? (
-          <button type="button" className="craves-primary-action w-full sm:w-auto" aria-busy={busy || undefined} disabled={busy} onClick={() => void save()}>
-            {busy ? text.saving : text.save}
+          <button
+            type="button"
+            className="craves-primary-action w-full sm:w-auto"
+            aria-busy={busy || undefined}
+            disabled={busy}
+            onClick={() => (waiting ? onClose() : void save())}
+          >
+            {waiting ? text.done : busy ? text.saving : text.save}
           </button>
         ) : null
       }
     >
       <div className="cob mt-4">
         <div className="cob-stack">
+          {flow && waiting && !guide ? (
+            <Note role="status">{state && fssaiVerified(state) ? text.verified : text.checking}</Note>
+          ) : null}
           {flow ? (
             <ChefFssaiDetails flow={flow} />
           ) : error ? null : (

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticatedApiFetch, SessionRequiredError } from "../../../shared/lib/server-api";
-import { parseOnboardingState, type OnboardingState } from "./chef-onboarding-v2-contract";
+import { fssaiVerified, parseOnboardingState, type OnboardingState } from "./chef-onboarding-v2-contract";
 
 /**
  * FSSAI is not asked at signup. A chef who joined through the current application must add the
- * number before a dish goes live. Chefs with no submitted application here joined under the older
- * process, which collected the licence itself, so they are not asked again.
+ * number, and Craves must verify it, before a dish goes live. Chefs with no submitted application
+ * here joined under the older process, which collected the licence itself, so they are not asked again.
  */
-export function fssaiNeededToGoLive(state: Pick<OnboardingState, "enabled" | "submitted" | "details">): boolean {
-  return state.enabled && state.submitted && !/^[0-9]{14}$/.test(state.details?.fssaiNumber ?? "");
+export function fssaiNeededToGoLive(state: Pick<OnboardingState, "enabled" | "submitted" | "details" | "progress">): boolean {
+  return state.enabled && state.submitted && !fssaiVerified(state);
 }
 
 const headers = { "Cache-Control": "no-store" };
@@ -27,7 +27,7 @@ export async function requireFssaiToGoLive(request: NextRequest): Promise<NextRe
     if (!state) return unavailable;
     return fssaiNeededToGoLive(state)
       ? NextResponse.json(
-          { code: "FSSAI_REQUIRED", message: "Add your FSSAI number before your dishes go live." },
+          { code: "FSSAI_REQUIRED", message: "Your dishes can go live once Craves has verified your FSSAI number." },
           { status: 409, headers },
         )
       : null;

@@ -24,9 +24,8 @@ const approved = () => ({
   supportPhone: "+910000000000",
   supportEmail: "support@example.invalid",
 });
-let state: ReturnType<typeof approved> & { callbackRequest?: unknown };
+let state: ReturnType<typeof approved> & { callbackRequest?: unknown; progress?: unknown };
 let content: unknown[];
-const onSaved = vi.fn();
 const onClose = vi.fn();
 const calls = (method: string, path = "/api/chef/onboarding") =>
   vi.mocked(fetch).mock.calls.filter(([url, init]) => String(url) === path && (init?.method ?? "GET") === method);
@@ -36,7 +35,6 @@ afterAll(() => { MotionGlobalConfig.skipAnimations = false; });
 beforeEach(() => {
   state = approved();
   content = [];
-  onSaved.mockReset();
   onClose.mockReset();
   vi.stubGlobal(
     "fetch",
@@ -54,40 +52,60 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
-const open = () => render(createElement(ChefFssaiPopup, { open: true, onClose, onSaved }));
+const open = () => render(createElement(ChefFssaiPopup, { open: true, onClose }));
+const progress = (fssaiVerified: boolean) => ({ status: "APPROVED", reason: null, nextAction: "VIEW_STATUS", fssaiVerified, termsVersion: "v1" });
 
-it("asks only for the number, says why, and saves it before carrying on", async () => {
+it("asks only for the number, says why, saves it, and then tells the chef to wait for Craves", async () => {
   open();
   const input = (await screen.findByLabelText("FSSAI registration number")) as HTMLInputElement;
   expect(screen.getByRole("heading", { name: "Add your FSSAI number" })).toBeTruthy();
+  expect(screen.getByText(/once Craves has verified your FSSAI number/)).toBeTruthy();
   expect(screen.getByText(/government requires it for every food business/)).toBeTruthy();
   expect(screen.queryByLabelText(/certificate|licence document|selfie/i)).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Save and go live" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save number" }));
   expect((await screen.findByRole("alert")).textContent).toContain("Enter your 14-digit FSSAI registration number.");
   expect(calls("PATCH")).toHaveLength(0);
   fireEvent.change(input, { target: { value: "1234-5678-9012-34xx" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save and go live" }));
-  await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: "Save number" }));
+  expect(await screen.findByText(/We are verifying your FSSAI number/)).toBeTruthy();
   expect(JSON.parse(String(calls("PATCH")[0]![1]!.body))).toMatchObject({
     expectedVersion: 4,
     details: { fssaiNumber: "12345678901234", kitchenName: "Saved kitchen", proofKind: "PAN" },
   });
+  // Nothing more to save: the button closes the popup. Correcting the number brings Save back.
+  fireEvent.click(screen.getByRole("button", { name: "Done" }));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  fireEvent.change(input, { target: { value: "12345678901235" } });
+  expect(screen.getByRole("button", { name: "Save number" })).toBeTruthy();
+  expect(screen.queryByText(/We are verifying/)).toBeNull();
 });
 
-it("keeps the typed number when the save fails and carries on only after a retry works", async () => {
+it("shows a saved number as waiting for Craves, or as verified", async () => {
+  state.details.fssaiNumber = "12345678901234";
+  state.progress = progress(false);
+  const first = open();
+  expect(await screen.findByText(/We are verifying your FSSAI number/)).toBeTruthy();
+  expect(calls("PATCH")).toHaveLength(0);
+  first.unmount();
+  state.progress = progress(true);
+  open();
+  expect(await screen.findByText(/Craves has verified your FSSAI number/)).toBeTruthy();
+});
+
+it("keeps the typed number when the save fails and confirms only after a retry works", async () => {
   open();
   fireEvent.change(await screen.findByLabelText("FSSAI registration number"), { target: { value: "12345678901234" } });
   const normal = vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation(async (url, init) =>
     init?.method === "PATCH" ? Response.json({ message: "Save is temporarily unavailable." }, { status: 503 }) : normal(url, init),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Save and go live" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save number" }));
   expect((await screen.findByRole("alert")).textContent).toContain("Save is temporarily unavailable.");
-  expect(onSaved).not.toHaveBeenCalled();
+  expect(screen.queryByText(/We are verifying/)).toBeNull();
   expect((screen.getByLabelText("FSSAI registration number") as HTMLInputElement).value).toBe("12345678901234");
   vi.mocked(fetch).mockImplementation(normal);
-  fireEvent.click(screen.getByRole("button", { name: "Save and go live" }));
-  await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: "Save number" }));
+  expect(await screen.findByText(/We are verifying your FSSAI number/)).toBeTruthy();
 });
 
 it("guides a chef without FSSAI: steps, videos in their language, and an earlier callback request", async () => {
@@ -105,12 +123,12 @@ it("guides a chef without FSSAI: steps, videos in their language, and an earlier
   expect(screen.getByText("Request received")).toBeTruthy();
   expect(screen.getByText(/SUP-2041/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Request a call from Craves" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Save and go live" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Save number" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: /^Video language/ }));
   fireEvent.click(await screen.findByRole("button", { name: /తెలుగు/ }));
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("language=te"))).toBe(true));
   fireEvent.click(screen.getByRole("button", { name: "I have an FSSAI number" }));
-  expect(await screen.findByRole("button", { name: "Save and go live" })).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "Save number" })).toBeTruthy();
 });
 
 it("confirms a callback only after a real case response and reuses the request key on retry", async () => {
@@ -136,20 +154,24 @@ it("confirms a callback only after a real case response and reuses the request k
 // The web server's check before a dish is saved as live.
 const request = () =>
   new NextRequest("https://craves.test/api/chef/menu", { method: "POST", headers: { cookie: "craves_access_token=token" } });
-it("needs FSSAI only from chefs who joined through the current application", () => {
+it("needs a Craves-verified FSSAI number, only from chefs who joined through the current application", () => {
   const base = approved();
+  const withNumber = { ...base, details: { ...base.details, fssaiNumber: "12345678901234" } };
   expect(fssaiNeededToGoLive(base)).toBe(true);
-  expect(fssaiNeededToGoLive({ ...base, details: { ...base.details, fssaiNumber: "12345678901234" } })).toBe(false);
-  expect(fssaiNeededToGoLive({ ...base, details: { ...base.details, fssaiNumber: "123" } })).toBe(true);
+  expect(fssaiNeededToGoLive(withNumber)).toBe(true); // saved, not verified yet
+  expect(fssaiNeededToGoLive({ ...withNumber, progress: progress(false) })).toBe(true);
+  expect(fssaiNeededToGoLive({ ...withNumber, progress: progress(true) })).toBe(false);
+  expect(fssaiNeededToGoLive({ ...base, progress: progress(true) })).toBe(true); // no number
   // Joined under the older process, which collected the licence itself.
   expect(fssaiNeededToGoLive({ ...base, submitted: false, details: null })).toBe(false);
   expect(fssaiNeededToGoLive({ ...base, enabled: false })).toBe(false);
 });
-it("refuses to put a dish live without FSSAI, and when FSSAI cannot be checked", async () => {
+it("refuses to put a dish live until FSSAI is verified, and when FSSAI cannot be checked", async () => {
   vi.stubEnv("CRAVES_API_BASE_URL", "https://api.craves.test");
   expect((await requireFssaiToGoLive(request()))?.status).toBe(409);
-  expect(await (await requireFssaiToGoLive(request()))?.json()).toMatchObject({ code: "FSSAI_REQUIRED" });
   state.details.fssaiNumber = "12345678901234";
+  expect(await (await requireFssaiToGoLive(request()))?.json()).toMatchObject({ code: "FSSAI_REQUIRED" });
+  state.progress = progress(true);
   expect(await requireFssaiToGoLive(request())).toBeNull();
   vi.mocked(fetch).mockImplementation(async () => Response.json({ code: "DOWN" }, { status: 500 }));
   expect((await requireFssaiToGoLive(request()))?.status).toBe(503);

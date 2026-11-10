@@ -31,6 +31,8 @@ export class FakeBackend {
   progressStatus = "DRAFT";
   kitchen: Json | null = null;
   menu: Json[] = [];
+  /** Set by the admin "Record verified FSSAI number" action. */
+  fssaiVerified = false;
   calls: { method: string; path: string; body: unknown }[] = [];
   unmatched: string[] = [];
   private faults: Fault[] = [];
@@ -103,7 +105,7 @@ export class FakeBackend {
       enabled: true, legacy: false, version: this.version, resumeStep: this.resumeStep(), submitted: this.submitted,
       phoneNumber: this.identity.phoneNumber, details: this.details, application: { ...this.application, documents: this.documents },
       documents: this.documents, requiredDocuments: required, supportPhone: "8000000000", supportEmail: "support@example.invalid",
-      progress: { status: this.progressStatus, reason: null, nextAction: this.submitted ? "VIEW_STATUS" : "EDIT_APPLICATION", fssaiVerified: false, termsVersion: "craves-chef-terms-20261008-v1", sections: [] },
+      progress: { status: this.progressStatus, reason: null, nextAction: this.submitted ? "VIEW_STATUS" : "EDIT_APPLICATION", fssaiVerified: this.fssaiVerified, termsVersion: "craves-chef-terms-20261008-v1", sections: [] },
       bankEnrollmentRequired: this.bankEnrollmentRequired, callbackRequest: null,
     };
   }
@@ -217,9 +219,9 @@ export class FakeBackend {
     if (key === "GET /api/chef/menu") return ok(this.menu);
     const dish = method === "PUT" ? this.menu.find((item) => path === `/api/chef/menu/${item.id}`) : undefined;
     if (dish) {
-      // The web server refuses to put a dish live until the chef has added an FSSAI number.
-      if (body?.status === "ACTIVE" && !/^[0-9]{14}$/.test(String(this.details?.fssaiNumber ?? "")))
-        return ok({ code: "FSSAI_REQUIRED", message: "Add your FSSAI number before your dishes go live." }, 409);
+      // The web server refuses to put a dish live until Craves has verified the chef's FSSAI number.
+      if (body?.status === "ACTIVE" && !(this.fssaiVerified && /^[0-9]{14}$/.test(String(this.details?.fssaiNumber ?? ""))))
+        return ok({ code: "FSSAI_REQUIRED", message: "Your dishes can go live once Craves has verified your FSSAI number." }, 409);
       return ok(Object.assign(dish, body));
     }
     if (key === "GET /api/chef/orders" || key === "GET /api/chef/earnings") return ok([]);

@@ -5,6 +5,7 @@ import { isSameOrigin } from "@/shared/lib/request-security";
 import { NextRequest, NextResponse } from "next/server";
 import { parseChefMenuItem, parseChefMenuItemInput } from "@/features/chef/lib/chef-menu-contract";
 import { chefMenuFailure } from "@/features/chef/lib/chef-menu-errors";
+import { requireFssaiToGoLive } from "@/features/chef-onboarding/lib/fssai-go-live";
 import { upstreamFailure } from "@/shared/lib/feature-availability";
 import { authenticatedApiFetch, isUuid, SessionRequiredError } from "@/shared/lib/server-api";
 
@@ -22,6 +23,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ men
   if (!UUID.test(menuItemId)) return NextResponse.json({ code: "INVALID_MENU_ITEM_ID" }, { status: 400 });
   const input = parseChefMenuItemInput(await request.json().catch(() => null));
   if (!input) return NextResponse.json({ code: "INVALID_MENU_ITEM" }, { status: 400 });
+  // A dish that customers can see needs the chef's FSSAI number first.
+  const blocked = input.status === "ACTIVE" ? await requireFssaiToGoLive(request) : null;
+  if (blocked) return blocked;
   const token = request.cookies.get("craves_access_token")?.value;
   if (!token) return NextResponse.json({ code: "AUTHENTICATION_REQUIRED" }, { status: 401 });
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000);

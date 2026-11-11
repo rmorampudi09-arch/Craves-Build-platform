@@ -18,6 +18,7 @@ import in.craves.integration.fleet.FleetConfiguration;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.pay.FleetPay.Ending;
 import in.craves.integration.fleet.rider.FleetShiftService;
+import in.craves.integration.fleet.trip.FleetIntelligence;
 import in.craves.integration.fleet.trip.FleetTripPay;
 import in.craves.integration.fleet.trip.FleetTripService;
 import java.sql.Connection;
@@ -32,6 +33,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -113,6 +115,14 @@ public class FleetDispatchJobs {
         this.handoffs = handoffs;
         this.outbox = outbox;
         this.json = json;
+    }
+
+    /** Delivery Intelligence lists the riders an order was offered to on its courier's assignment (a bean whenever the fleet is). */
+    private FleetIntelligence intelligence;
+
+    @Autowired(required = false)
+    public void setIntelligence(FleetIntelligence intelligence) {
+        this.intelligence = intelligence;
     }
 
     @Scheduled(scheduler = FleetConfiguration.FLEET_SCHEDULER, fixedDelayString = "${craves.fleet.dispatch-tick-ms:5000}")
@@ -345,18 +355,29 @@ public class FleetDispatchJobs {
             && BorzoPidgeHandoffWorker.isAccepted(status(stage.jobStatus()));
         if ("OPS_QUEUE".equals(stage.provider())) {
             // A courier the delivery command booked after all still clears the queue, so ops does not book a second one.
-            return assigned && Boolean.TRUE.equals(transaction.execute(status -> close(stage, "ASSIGNED")));
+            return assigned && closeAssigned(stage);
         }
         if ("craves_fleet".equals(stage.jobProvider())) {
             return book(stage);
         }
         if (assigned) {
-            return Boolean.TRUE.equals(transaction.execute(status -> close(stage, "ASSIGNED")));
+            return closeAssigned(stage);
         }
         if (stage.jobStatus() != null && COURIER_GAVE_UP.contains(stage.jobStatus())) {
             return toOpsQueue(stage, "COURIER_" + stage.jobStatus());
         }
         return stage.due() && advanceAfterDeadline(stage);
+    }
+
+    /** A courier has the order: its stage closes, and the riders it was offered to first join the courier's assignment. */
+    private boolean closeAssigned(CourierStage stage) {
+        return Boolean.TRUE.equals(transaction.execute(status -> {
+            boolean closed = close(stage, "ASSIGNED");
+            if (closed && intelligence != null) {
+                intelligence.record(stage.chefSubOrderId());
+            }
+            return closed;
+        }));
     }
 
     /**
@@ -398,6 +419,10 @@ public class FleetDispatchJobs {
         CommandRecord command = commands.findByChefSubOrderId(stage.chefSubOrderId()).orElse(null);
         if (command == null) {
             return toOpsQueue(stage, "NO_DELIVERY_COMMAND");
+        }
+        // The rider's Delivery Intelligence assignment makes way for the ranking of couriers; switchJob lists the riders on it.
+        if (intelligence != null) {
+            intelligence.forget(stage.chefSubOrderId());
         }
         RoutingResult routed;
         try {
@@ -484,6 +509,9 @@ public class FleetDispatchJobs {
         jdbc.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, detail) VALUES (?, ?, 'HANDED_TO_COURIER', 'SYSTEM', "
             + "jsonb_build_object('provider', CAST(? AS text), 'providerDeliveryId', CAST(? AS text)))", UUID.randomUUID(), stage.tripId(),
             routed.providerId(), delivery.providerDeliveryId());
+        if (intelligence != null) {
+            intelligence.record(stage.chefSubOrderId());
+        }
         return true;
     }
 

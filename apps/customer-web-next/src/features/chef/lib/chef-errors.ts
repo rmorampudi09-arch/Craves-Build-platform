@@ -17,7 +17,7 @@ export const CHEF_ERROR_MESSAGES: Record<string, string> = {
   KITCHEN_PROFILE_REQUIRED: "Set up your kitchen before adding or managing dishes.",
   KITCHEN_NOT_FOUND: "Your kitchen isn't set up yet. Open Kitchen to create it.",
   KITCHEN_PROFILE_NOT_FOUND: "Your kitchen isn't set up yet. Open Kitchen to create it.",
-  CHEF_SELLING_NOT_READY: "Your chef account must be approved before publishing your kitchen or dishes.",
+  CHEF_SELLING_NOT_READY: "Your kitchen and dishes can go live once Craves has approved your account and verified your FSSAI number.",
   CATALOG_ELIGIBILITY_UNAVAILABLE: "Publishing could not be checked right now. Nothing was published; try again in a few minutes.",
   // Dishes
   PACKAGE_WEIGHT_REQUIRED: "Enter the packed weight of one portion in grams.",
@@ -108,9 +108,9 @@ const TRANSLATED: Record<string, { te: string; kn: string }> = {
     te: "మీ వంటగది ఇంకా సిద్ధం కాలేదు. దాన్ని సిద్ధం చేయడానికి వంటగది పేజీ తెరవండి.",
     kn: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಇನ್ನೂ ಸಿದ್ಧವಾಗಿಲ್ಲ. ಅದನ್ನು ಸಿದ್ಧಪಡಿಸಲು ಅಡುಗೆಮನೆ ಪುಟ ತೆರೆಯಿರಿ.",
   },
-  "Your chef account must be approved before publishing your kitchen or dishes.": {
-    te: "మీ వంటగది లేదా వంటకాలు కస్టమర్లకు చూపించే ముందు మీ చెఫ్ ఖాతా ఆమోదించబడాలి.",
-    kn: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಅಥವಾ ಖಾದ್ಯಗಳನ್ನು ಗ್ರಾಹಕರಿಗೆ ತೋರಿಸುವ ಮೊದಲು ನಿಮ್ಮ ಚೆಫ್ ಖಾತೆ ಅನುಮೋದನೆ ಆಗಬೇಕು.",
+  "Your kitchen and dishes can go live once Craves has approved your account and verified your FSSAI number.": {
+    te: "Craves మీ ఖాతాను ఆమోదించి, మీ FSSAI నంబర్ ధృవీకరించాక మీ వంటగది, వంటకాలు కస్టమర్లకు కనిపిస్తాయి.",
+    kn: "Craves ನಿಮ್ಮ ಖಾತೆಯನ್ನು ಅನುಮೋದಿಸಿ, ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಪರಿಶೀಲಿಸಿದ ನಂತರ ನಿಮ್ಮ ಅಡುಗೆಮನೆ ಮತ್ತು ತಿನಿಸುಗಳು ಗ್ರಾಹಕರಿಗೆ ಕಾಣುತ್ತವೆ.",
   },
   "Publishing could not be checked right now. Nothing was published; try again in a few minutes.": {
     te: "కస్టమర్లకు చూపించవచ్చో ఇప్పుడు చూడలేకపోయాం. ఏదీ చూపించలేదు; కొన్ని నిమిషాల తర్వాత మళ్లీ ప్రయత్నించండి.",

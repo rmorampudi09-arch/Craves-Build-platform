@@ -4,12 +4,12 @@ import type { ChefApplication } from "./chef-application-contract.ts";
 import type { OnboardingDetails, OnboardingState } from "./chef-onboarding-v2-contract.ts";
 import { proofNeedsBack } from "./chef-onboarding-v2-contract.ts";
 
-export type ChefFormSection = "personal" | "kitchen" | "fssai" | "documents" | "bank";
+export type ChefFormSection = "personal" | "kitchen" | "documents" | "bank";
 export type ChefFormScreen = ChefFormSection | "resume" | "review" | "submitted" | "status";
+/** Signup sections. FSSAI is not one: the chef adds it later, before a dish goes live (ChefFssaiPopup). */
 export const CHEF_SECTIONS: readonly ChefFormSection[] = [
   "personal",
   "kitchen",
-  "fssai",
   "documents",
   "bank",
 ];
@@ -17,7 +17,6 @@ const SECTION_TITLES = messages({
   en: {
     personal: "Basic details",
     kitchen: "Your kitchen",
-    fssai: "FSSAI details",
     documents: "Identity verification",
     bank: "Bank details",
     review: "Review your application",
@@ -28,7 +27,6 @@ const SECTION_TITLES = messages({
   te: {
     personal: "మీ వివరాలు",
     kitchen: "మీ వంటగది",
-    fssai: "FSSAI వివరాలు",
     documents: "గుర్తింపు నిర్ధారణ",
     bank: "బ్యాంక్ వివరాలు",
     review: "మీ దరఖాస్తు ఒకసారి చూడండి",
@@ -39,7 +37,6 @@ const SECTION_TITLES = messages({
   kn: {
     personal: "ನಿಮ್ಮ ವಿವರಗಳು",
     kitchen: "ನಿಮ್ಮ ಅಡುಗೆಮನೆ",
-    fssai: "FSSAI ವಿವರಗಳು",
     documents: "ಗುರುತಿನ ಪರಿಶೀಲನೆ",
     bank: "ಬ್ಯಾಂಕ್ ವಿವರಗಳು",
     review: "ನಿಮ್ಮ ಅರ್ಜಿಯನ್ನು ಒಮ್ಮೆ ನೋಡಿ",
@@ -52,7 +49,6 @@ const SECTION_DESCRIPTIONS = messages({
   en: {
     personal: "Tell us a little about yourself.",
     kitchen: "Tell us where you prepare your food.",
-    fssai: "Add your FSSAI registration number or get help applying.",
     documents: "Upload a valid identity document.",
     bank: "Add the account where you will receive your earnings.",
     review: "Please check your details before submitting.",
@@ -64,7 +60,6 @@ const SECTION_DESCRIPTIONS = messages({
   te: {
     personal: "మీ గురించి కొంచెం చెప్పండి.",
     kitchen: "మీరు వంట ఎక్కడ చేస్తారో చెప్పండి.",
-    fssai: "మీ FSSAI నంబర్ ఇవ్వండి, లేదా దరఖాస్తు చేయడానికి సహాయం పొందండి.",
     documents: "సరైన గుర్తింపు పత్రం అప్‌లోడ్ చేయండి.",
     bank: "మీ సంపాదన వచ్చే బ్యాంక్ ఖాతాను జోడించండి.",
     review: "పంపే ముందు మీ వివరాలు ఒకసారి చూడండి.",
@@ -75,7 +70,6 @@ const SECTION_DESCRIPTIONS = messages({
   kn: {
     personal: "ನಿಮ್ಮ ಬಗ್ಗೆ ಸ್ವಲ್ಪ ತಿಳಿಸಿ.",
     kitchen: "ನೀವು ಅಡುಗೆ ಎಲ್ಲಿ ಮಾಡುತ್ತೀರಿ ಎಂದು ತಿಳಿಸಿ.",
-    fssai: "ನಿಮ್ಮ FSSAI ಸಂಖ್ಯೆ ಸೇರಿಸಿ, ಅಥವಾ ಅರ್ಜಿ ಹಾಕಲು ಸಹಾಯ ಪಡೆಯಿರಿ.",
     documents: "ಸರಿಯಾದ ಗುರುತಿನ ದಾಖಲೆ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ.",
     bank: "ನಿಮ್ಮ ಗಳಿಕೆ ಬರುವ ಬ್ಯಾಂಕ್ ಖಾತೆಯನ್ನು ಸೇರಿಸಿ.",
     review: "ಕಳುಹಿಸುವ ಮೊದಲು ನಿಮ್ಮ ವಿವರಗಳನ್ನು ಒಮ್ಮೆ ನೋಡಿ.",
@@ -88,21 +82,18 @@ const SECTION_LABELS = messages({
   en: {
     personal: "Basic details",
     kitchen: "Kitchen details",
-    fssai: "FSSAI",
     documents: "Identity proof",
     bank: "Bank details",
   },
   te: {
     personal: "మీ వివరాలు",
     kitchen: "వంటగది వివరాలు",
-    fssai: "FSSAI",
     documents: "గుర్తింపు పత్రం",
     bank: "బ్యాంక్ వివరాలు",
   },
   kn: {
     personal: "ನಿಮ್ಮ ವಿವರಗಳು",
     kitchen: "ಅಡುಗೆಮನೆ ವಿವರಗಳು",
-    fssai: "FSSAI",
     documents: "ಗುರುತಿನ ದಾಖಲೆ",
     bank: "ಬ್ಯಾಂಕ್ ವಿವರಗಳು",
   },
@@ -171,7 +162,6 @@ export function completedSections(
       evidenceComplete(state, "KITCHEN_PHOTO_1") &&
       evidenceComplete(state, "KITCHEN_PHOTO_2"),
     ),
-    fssai: Boolean(d?.fssaiNumber && /^[0-9]{14}$/.test(d.fssaiNumber)),
     documents: Boolean(
       d?.proofKind &&
       evidenceComplete(state, "SELECTED_PROOF_FRONT") &&
@@ -184,7 +174,6 @@ export type ChefSectionProgress = "complete" | "in-progress" | "not-started" | "
 const SECTION_DOCUMENTS: Record<ChefFormSection, readonly string[]> = {
   personal: [],
   kitchen: ["KITCHEN_PHOTO_1", "KITCHEN_PHOTO_2"],
-  fssai: ["FSSAI_LICENSE"],
   documents: ["SELECTED_PROOF_FRONT", "SELECTED_PROOF_BACK"],
   bank: [],
 };
@@ -228,7 +217,6 @@ export function sectionProgress(
   const started: Record<ChefFormSection, boolean> = {
     personal: Boolean(d && (d.firstName || d.lastName || d.dateOfBirth)),
     kitchen: Boolean(d && (d.kitchenName || d.addressLine1 || d.latitude != null)) || uploaded("kitchen"),
-    fssai: Boolean(d?.fssaiNumber),
     documents: Boolean(d?.proofKind) || uploaded("documents"),
     bank: Boolean(bank?.id),
   };
@@ -455,12 +443,6 @@ export function validateChefSection(
       return { field: "email", message: "Verify your email address before saving these details." };
   }
   if (section === "kitchen") return validateChefSectionAll(section, details, state, emailVerified)[0] ?? null;
-  if (section === "fssai" && !/^[0-9]{14}$/.test(details.fssaiNumber))
-    return {
-      field: "fssaiNumber",
-      message:
-        "Enter your 14-digit FSSAI registration number. You can save an incomplete application and return later.",
-    };
   if (section === "documents") {
     if (!details.proofKind)
       return { field: "proofKind", message: "Choose your identity document." };

@@ -53,6 +53,11 @@ craves:
       # Rider offer pushes, sent synchronously by POST /internal/v1/push/realtime (PLAN F11).
       realtime-push-enabled: ${CRAVES_REALTIME_PUSH_ENABLED:false}
       email-enabled: ${CRAVES_NOTIFICATION_EMAIL_ENABLED:false}
+      # Handbook 082: transactional SMS through MSG91, only for events listed in CRAVES_NOTIFICATION_SMS_TEMPLATES.
+      sms-enabled: ${CRAVES_NOTIFICATION_SMS_DELIVERY_ENABLED:false}
+      msg91-auth-key: ${CRAVES_NOTIFICATION_MSG91_AUTH_KEY:}
+      # Auth's E2E test numbers (same value as on the auth app): never texted.
+      sms-skip-numbers-json: ${CRAVES_OTP_TEST_WHITELIST_JSON:}
       batch-size: ${CRAVES_NOTIFICATION_DELIVERY_BATCH_SIZE:50}
       max-attempts: ${CRAVES_NOTIFICATION_DELIVERY_MAX_ATTEMPTS:8}
       stale-lock-minutes: ${CRAVES_NOTIFICATION_DELIVERY_STALE_LOCK_MINUTES:5}
@@ -69,6 +74,10 @@ craves:
     # Ops leads emailed by POST /internal/v1/ops-alerts (rider SOS, dispatch queue); comma-separated, empty = off.
     ops-alert:
       emails: ${CRAVES_OPS_ALERT_EMAILS:}
+    # Handbook 082: EVENT_TYPE=<MSG91 template id of the DLT template>[:payloadKey,payloadKey];... (nothing listed = no SMS).
+    sms:
+      enabled: ${CRAVES_NOTIFICATION_SMS_ENABLED:false}
+      templates: ${CRAVES_NOTIFICATION_SMS_TEMPLATES:}
     important-email:
       enabled: ${CRAVES_NOTIFICATION_IMPORTANT_EMAIL_ENABLED:false}
       event-types: ${CRAVES_NOTIFICATION_IMPORTANT_EMAIL_EVENT_TYPES:ORDER_CREATED,PAYMENT_SUCCEEDED,CHEF_ACCEPTED_ORDER,CHEF_REJECTED,CHEF_ACCEPTANCE_TIMEOUT,REFUND_PENDING,REFUNDED,REFUND_FAILED,DELIVERY_COURIER_ASSIGNED,DELIVERY_PICKED_UP,DELIVERY_IN_TRANSIT,DELIVERY_DELIVERED,DELIVERY_DELAYED,DELIVERY_CANCELLED,DELIVERY_FAILED,DELIVERY_RETURNING,DELIVERY_RETURNED,CHEF_APPLICATION_SUBMITTED,CHEF_APPLICATION_APPROVED,CHEF_APPLICATION_REJECTED}

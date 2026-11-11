@@ -28,7 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/v1/notifications")
 public class NotificationDeliveryController {
     private static final Set<String> PLATFORMS = Set.of("ANDROID", "IOS");
-    private static final Set<String> PREFERENCE_CHANNELS = Set.of("IN_APP", "PUSH", "EMAIL");
+    private static final Set<String> PREFERENCE_CHANNELS = Set.of("IN_APP", "PUSH", "EMAIL", "SMS");
 
     private final NotificationDeliveryRepository repository;
 

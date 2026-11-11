@@ -200,6 +200,29 @@ public class NotificationDeliveryRepository {
         );
     }
 
+    /** Handbook 082: the event, the payload (JSON text) an SMS fills its DLT template from, and when it was asked for. */
+    public SmsContent smsContent(UUID requestId) {
+        return jdbcTemplate.queryForObject(
+            "SELECT event_type, payload::text AS payload, created_at FROM notification_schema.notification_request WHERE id = ?",
+            (rs, rowNum) -> new SmsContent(rs.getString("event_type"), rs.getString("payload"),
+                rs.getObject("created_at", OffsetDateTime.class)),
+            requestId
+        );
+    }
+
+    public record SmsContent(String eventType, String payloadJson, OffsetDateTime createdAt) {
+        @Override public String toString() { return "SmsContent[" + eventType + "]"; }
+    }
+
+    /** A message that will never be sent (handbook 082): SKIPPED with its reason, like a disabled preference. */
+    public void skip(DeliveryWorkItem item, String reason) {
+        jdbcTemplate.update(
+            "UPDATE notification_schema.notification_request SET status = 'SKIPPED', last_error = ?, next_attempt_at = NULL, " +
+                "lock_token = NULL, locked_at = NULL, updated_at = now() WHERE id = ? AND lock_token = ?",
+            safe(reason, 1000), item.requestId(), item.lockToken()
+        );
+    }
+
     @Transactional
     public void markSent(DeliveryWorkItem item, DeliveryResult result) {
         int updated = jdbcTemplate.update(

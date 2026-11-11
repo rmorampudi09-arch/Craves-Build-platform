@@ -48,7 +48,6 @@ public class PromotionCheckout {
     private final ObjectMapper json;
     private final TransactionTemplate tx;
     private int unpaidMinutes = 30;
-    private long nextCancelledSweep = System.nanoTime();
 
     @Autowired
     public PromotionCheckout(RestClient.Builder builder, JdbcTemplate db, ObjectMapper json, PlatformTransactionManager manager,
@@ -196,8 +195,7 @@ public class PromotionCheckout {
         if (work == null) return false;
         boolean confirm = work.stage().equals("CONFIRMING");
         ObjectNode body = json.createObjectNode().put("personId", work.customer().toString());
-        // M08's orderId holds the checkout id: one promotion per checkout. A release names it too, which M08 needs for a confirmed one.
-        body.put("orderId", work.checkout().toString());
+        if (confirm) body.put("orderId", work.checkout().toString()); // M08's orderId holds the checkout id: one promotion per checkout
         try {
             if (internalApi == null || secret.isBlank()) throw new IllegalStateException("not configured");
             JsonNode answer = internalApi.post().uri("/internal/v1/promotions/redemptions/{id}/" + (confirm ? "confirm" : "release"), work.redemption())
@@ -231,10 +229,6 @@ public class PromotionCheckout {
             // A checkout cancelled before payment gives its reservation back.
             db.update("UPDATE order_schema.promotion_checkout_benefit b SET state = 'RELEASING', attempts = 0, next_attempt_at = now(), updated_at = now() "
                 + "FROM order_schema.checkout c WHERE c.id = b.checkout_id AND b.state = 'RESERVED' AND c.status = 'CANCELLED'");
-            if (System.nanoTime() - nextCancelledSweep >= 0) {
-                nextCancelledSweep = System.nanoTime() + Duration.ofMinutes(1).toNanos();
-                releaseCancelledBeforeFulfilment();
-            }
             var rows = db.queryForList("SELECT * FROM order_schema.promotion_checkout_benefit WHERE state IN ('CONFIRMING','RELEASING') AND next_attempt_at <= now() "
                 + "AND (lease_until IS NULL OR lease_until <= now()) ORDER BY next_attempt_at, checkout_id LIMIT 1 FOR UPDATE SKIP LOCKED");
             if (rows.isEmpty()) return null;
@@ -245,24 +239,6 @@ public class PromotionCheckout {
             return new Work(checkout, lease, row.get("state").toString(), (UUID) row.get("redemption_id"), (UUID) row.get("customer_id"),
                 ((Number) row.get("attempts")).intValue() + 1);
         });
-    }
-
-    /**
-     * Slice 3c: a paid checkout whose chef orders were all cancelled, rejected or refunded before any chef accepted (ready_at is
-     * set on acceptance, and an accepted order goes straight to READY_FOR_PICKUP) gives its confirmed redemption back to M08, so the
-     * promotion's budget and the person's limit come back. Refunds are not touched (Finance returns only the customer's own cash,
-     * slice 3b). One accepted chef order keeps the promotion used. Only checkouts confirmed in the last 30 days are looked at.
-     * shortcut: scans those CONFIRMED rows once a minute per replica; add a partial index or a cancellation hook when that grows large.
-     */
-    private void releaseCancelledBeforeFulfilment() {
-        db.update("UPDATE order_schema.promotion_checkout_benefit b SET state = 'RELEASING', attempts = 0, next_attempt_at = now(), updated_at = now() "
-            + "FROM order_schema.checkout c WHERE c.id = b.checkout_id AND b.state = 'CONFIRMED' AND c.status = 'PAID' AND b.updated_at > now() - interval '30 days' "
-            + "AND EXISTS (SELECT 1 FROM order_schema.customer_order o WHERE o.checkout_id = b.checkout_id) "
-            + "AND NOT EXISTS (SELECT 1 FROM order_schema.customer_order o WHERE o.checkout_id = b.checkout_id AND ("
-            + "o.status NOT IN ('CANCELLED','CHEF_REJECTED','REFUND_PENDING','REFUNDED','REFUND_FAILED') "
-            + "OR o.ready_at IS NOT NULL OR o.chef_handed_over_at IS NOT NULL "
-            + "OR EXISTS (SELECT 1 FROM order_schema.order_status_history h WHERE h.order_id = o.id AND h.new_status IN "
-            + "('READY_FOR_PICKUP','PICKED_UP','OUT_FOR_DELIVERY','ARRIVED_AT_DROP','DELIVERED','DELIVERY_FAILED'))))");
     }
 
     private void finish(Work work, String state, String code) {

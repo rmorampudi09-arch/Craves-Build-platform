@@ -99,7 +99,7 @@ export function HomeComingSoon({
           {comingSoonTitle(area)}
         </h1>
         <p className="mx-auto mt-3 max-w-sm text-pretty text-base leading-7 text-[#6B6B6B] lg:mx-0 lg:mt-4 lg:max-w-md lg:text-lg">
-          Home chefs don&rsquo;t cook near this address yet. Get a notification when the first kitchen opens here.
+          No home kitchens cook near this address yet. Get a notification when the first kitchen opens here.
         </p>
 
         <div className="mt-6 flex items-center gap-3 rounded-2xl bg-[#F6F7F8] px-4 py-3 text-left">

@@ -112,11 +112,11 @@ const Footer = () => {
       <div className="container footer__top">
         <div className="footer__brand">
           <img className="footer__logo" src="/images/craves-logo.png" alt="Craves" />
-          <p>Good food. Real impact. Homemade meals from real people.</p>
+          <p>Good food. Homemade meals from real people.</p>
           <img
             className="footer__sticker footer__sticker--brand"
             src="/images/made-with-love-sticker.png"
-            alt="Made with love"
+            alt="Wholesome & Tasty"
             width="1218"
             height="1291"
             loading="lazy"

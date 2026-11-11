@@ -264,7 +264,7 @@ describe("Chef onboarding navigation and persistence", () => {
     await screen.findByRole("heading", { name: "Review your application" });
     expect(fetcher.mock.calls.some(([url]) => String(url).includes("/chef-onboarding/bank"))).toBe(false);
   });
-  it.each(["personal", "kitchen", "fssai", "documents", "bank"] as ChefFormSection[])(
+  it.each(["personal", "kitchen", "documents", "bank"] as ChefFormSection[])(
     "returns %s edits directly to Review after a confirmed save",
     async (section) => {
       open();
@@ -283,16 +283,11 @@ describe("Chef onboarding navigation and persistence", () => {
         fireEvent.change(screen.getByLabelText("Kitchen name"), {
           target: { value: "Updated Kitchen" },
         });
-      if (section === "fssai")
-        fireEvent.change(screen.getByLabelText("FSSAI registration number"), {
-          target: { value: "23456789012345" },
-        });
       fireEvent.click(primary("Save and return to review"));
       await screen.findByRole("heading", { name: "Review your application" });
       // The saved bank enrollment keeps its own holder name, so only Basic details shows the edit.
       if (section === "personal") expect(screen.getAllByText("Updated Chef")).toHaveLength(1);
       if (section === "kitchen") expect(screen.getByText("Updated Kitchen")).toBeTruthy();
-      if (section === "fssai") expect(screen.getByText("2345 6789 0123 45")).toBeTruthy();
       if (section !== "bank")
         expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
     },
@@ -318,14 +313,14 @@ describe("Chef onboarding navigation and persistence", () => {
     expect(screen.queryByRole("heading", { name: "Review your application" })).toBeNull();
   });
   it("restores a saved kitchen and resumes the first incomplete section", async () => {
-    saved.details!.fssaiNumber = "";
+    saved.documents = saved.documents.filter((item) => item.documentType !== "SELECTED_PROOF_FRONT");
     const view = open();
     fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
-    await screen.findByRole("heading", { name: "FSSAI details" });
+    await screen.findByRole("heading", { name: "Identity verification" });
     view.unmount();
     open();
     fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
-    await screen.findByRole("heading", { name: "FSSAI details" });
+    await screen.findByRole("heading", { name: "Identity verification" });
     fireEvent.click(primary("Back"));
     expect((screen.getByLabelText("Kitchen name") as HTMLInputElement).value).toBe(
       "Fixture Kitchen",
@@ -358,33 +353,6 @@ describe("Chef onboarding navigation and persistence", () => {
     fireEvent.click(primary("Save and return to review"));
     await screen.findByRole("heading", { name: "Review your application" });
     expect(saved.details).toMatchObject({ latitude: 17.4, longitude: 78.4 });
-  });
-  it("confirms callbacks only after a real case response and reuses uncertain request keys", async () => {
-    open();
-    await review();
-    fireEvent.click(primary("Edit FSSAI"));
-    fireEvent.click(primary("Don’t have FSSAI?"));
-    let attempts = 0;
-    fetcher.mockImplementation((url, init) => {
-      if (String(url).endsWith("/help")) {
-        attempts++;
-        return attempts === 1
-          ? Promise.resolve(Response.json({}, { status: 503 }))
-          : Promise.resolve(Response.json({ id, caseNumber: "FIXTURE-123" }));
-      }
-      return normal(url, init);
-    });
-    fireEvent.click(primary("Request a call from Craves"));
-    await screen.findByText(/We could not complete this request/);
-    expect(screen.queryByText("Request received")).toBeNull();
-    fireEvent.click(primary("Request a call from Craves"));
-    await screen.findByText("Request received");
-    expect(screen.getByText(/call you on your registered mobile number/)).toBeTruthy();
-    const requests = fetcher.mock.calls.filter(([url]) => String(url).endsWith("/help"));
-    expect(JSON.parse(String(requests[0][1]?.body)).requestKey).toBe(
-      JSON.parse(String(requests[1][1]?.body)).requestKey,
-    );
-    expect(requests).toHaveLength(2);
   });
   it("shows a backend eligibility rejection without fabricating submission", async () => {
     open();
@@ -575,8 +543,11 @@ describe("Authoritative status and bank verification", () => {
     const deferred = { ...complete(), bankEnrollmentRequired: false };
     expect(firstIncompleteSection(deferred, null)).toBe("review");
     expect(afterSectionSave("documents", false, deferred)).toBe("review");
+    // FSSAI is not part of signup: the chef adds it before a dish goes live.
     deferred.details!.fssaiNumber = "";
-    expect(firstIncompleteSection(deferred, null)).toBe("fssai");
+    expect(firstIncompleteSection(deferred, null)).toBe("review");
+    deferred.details!.proofKind = null;
+    expect(firstIncompleteSection(deferred, null)).toBe("documents");
   });
   it("normalizes omitted coordinates and rejects malformed onboarding state", () => {
     const raw = complete();

@@ -20,7 +20,8 @@ export async function authenticatedApiFetch(
 ): Promise<Response> {
   const token = request.cookies.get("craves_access_token")?.value;
   if (!token) throw new SessionRequiredError("Customer session is required");
-  if (!path.startsWith("/") || path.includes("..") || /[\r\n]/.test(path)) {
+  // "%2e%2e" and "\" normalise to ".." and "/" inside the URL parser, so refuse them in the same breath.
+  if (!path.startsWith("/") || path.includes("..") || /[\r\n\\]|%2e/i.test(path)) {
     throw new Error("Invalid API path");
   }
 

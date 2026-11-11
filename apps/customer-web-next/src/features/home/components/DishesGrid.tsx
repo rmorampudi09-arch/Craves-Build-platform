@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, RotateCcw } from "lucide-react";
 
-import { DishCard } from "@/features/home/components/DishCard";
+import { DISH_PHOTO, DishCard } from "@/features/home/components/DishCard";
 import skeletonStyles from "@/shared/components/loading/CustomerPageSkeleton.module.css";
 import type { DishCategory } from "@/features/home/lib/dishCategories";
 import { DishFilterBar } from "@/features/home/components/DishFilterBar";
@@ -11,11 +11,15 @@ import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/Empt
 import { AnimateCount } from "@/shared/ui/AnimateCount";
 import { listItem } from "@/shared/lib/motion";
 import type { Dish } from "@/features/dish/api/dishes";
+import { setVegMode } from "@/shared/hooks/use-veg-mode";
 
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
 const INITIAL_DISH_COUNT = 12;
 const DISH_BATCH_SIZE = 8;
+
+/** Two columns on phones, three from sm, four from xl: cards stay about 170-320 px wide. */
+const DISH_GRID = "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:gap-5 xl:grid-cols-4";
 
 interface DishesGridProps {
   dishes: Dish[];
@@ -33,6 +37,8 @@ interface DishesGridProps {
   hasMoreRemote?: boolean;
   loadingMoreRemote?: boolean;
   onLoadMore?: () => void;
+  /** Pure veg mode: an empty list means no pure veg kitchen, and offers veg dishes from every kitchen. */
+  pureVeg?: boolean;
 }
 
 function DishSkeleton() {
@@ -41,7 +47,7 @@ function DishSkeleton() {
       className="overflow-hidden rounded-[1.25rem] border border-[#E5E7EB] bg-white sm:rounded-[1.45rem] lg:rounded-[1.55rem]"
       aria-hidden="true"
     >
-      <div className={`${skeletonStyles.block} aspect-[16/9] sm:aspect-[16/10]`} />
+      <div className={`${skeletonStyles.block} ${DISH_PHOTO}`} />
       <div className="space-y-2.5 p-3 sm:space-y-3 sm:p-3.5 lg:p-4">
         <div className={`${skeletonStyles.block} h-5 w-3/4 rounded-full`} />
         <div className={`${skeletonStyles.block} ${skeletonStyles.soft} h-3.5 w-1/2 rounded-full`} />
@@ -66,6 +72,7 @@ export function DishesGrid({
   hasMoreRemote = false,
   loadingMoreRemote = false,
   onLoadMore,
+  pureVeg = false,
 }: DishesGridProps) {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const normalizedSearch = searchTerm.trim();
@@ -143,10 +150,10 @@ export function DishesGrid({
     : foodPreference !== "all"
       ? `Kitchens near you aren't cooking ${FOOD_LABELS[foodPreference].toLowerCase()} dishes${normalizedSearch ? ` that match “${normalizedSearch}”` : ""} right now.`
       : normalizedSearch
-        ? `No live dishes match “${normalizedSearch}”. Try another search.`
+        ? `No dishes match “${normalizedSearch}” right now. Try another search.`
         : selectedCategory === "All"
-          ? message || "No active dishes are available for this delivery location yet."
-          : `No active ${selectedCategory.toLowerCase()} dishes are available for this delivery location yet.`;
+          ? message || "No dishes are available for this delivery location yet."
+          : `No ${selectedCategory.toLowerCase()} dishes are available for this delivery location yet.`;
 
   return (
     <section
@@ -207,7 +214,7 @@ export function DishesGrid({
           <p className="sr-only" role="status">
             Loading nearby dishes
           </p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
+          <div className={DISH_GRID}>
             {Array.from({ length: 8 }, (_, index) => (
               <DishSkeleton key={index} />
             ))}
@@ -222,13 +229,17 @@ export function DishesGrid({
           compact
           heading="h3"
           illustration="search"
-          title={narrowing ? "No dishes match" : foodPreference !== "all" ? `No ${FOOD_LABELS[foodPreference].toLowerCase()} dishes here` : "Nothing cooking for this view"}
-          message={emptyMessage}
+          title={narrowing ? "No dishes match" : pureVeg ? "No pure veg kitchens near you yet" : foodPreference !== "all" ? `No ${FOOD_LABELS[foodPreference].toLowerCase()} dishes here` : "Nothing cooking for this view"}
+          message={!narrowing && pureVeg ? "Kitchens near you also cook non-veg. You can still see their veg dishes." : emptyMessage}
         >
           {narrowing ? (
             <button type="button" onClick={onRemoveFilters} className={emptyStateSecondaryAction}>
               <RotateCcw className="h-4 w-4" aria-hidden="true" />
               Clear filters
+            </button>
+          ) : pureVeg ? (
+            <button type="button" onClick={() => setVegMode("veg-dishes")} className={emptyStateSecondaryAction}>
+              Show veg dishes from all kitchens
             </button>
           ) : foodPreference !== "all" ? (
             <button type="button" onClick={() => onViewChange({ ...view, foodPreference: "all" })} className={emptyStateSecondaryAction}>
@@ -263,7 +274,7 @@ export function DishesGrid({
               first six cards fade and rise in on the compositor. */}
           <div
             key={dishViewKey}
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4"
+            className={DISH_GRID}
           >
             {visibleDishes.map((dish, index) =>
               index < 6 ? (
@@ -280,11 +291,11 @@ export function DishesGrid({
             // card per column, so the row is exactly as wide as the grid at every size.
             <div
               ref={loadMoreRef}
-              className="mt-4 grid grid-cols-1 gap-4 sm:mt-5 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4"
+              className={`mt-3 sm:mt-4 ${DISH_GRID}`}
               role="status"
               aria-label="Loading more nearby dishes"
             >
-              {["", "max-sm:hidden", "max-lg:hidden", "max-xl:hidden"].map((hide, index) => (
+              {["", "", "max-sm:hidden", "max-xl:hidden"].map((hide, index) => (
                 <div key={index} className={hide}>
                   <DishSkeleton />
                 </div>

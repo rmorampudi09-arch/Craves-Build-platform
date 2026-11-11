@@ -13,7 +13,6 @@ const url = (name: string) => `https://img.craves.test/${name}.webp`;
 const header = (photos: string[], solid = false) => render(createElement(KitchenHeader, {
   kitchenId: KITCHEN, name: "Ammi's Dastarkhwan", chefPhotoUrl: null, photos, solid, onBack: () => {},
 }));
-const shown = () => screen.getAllByRole("img").map((img) => img.getAttribute("src"));
 
 beforeEach(() => { vi.stubGlobal("fetch", vi.fn(async () => Response.json({ items: [], nextCursor: null }))); });
 afterEach(() => {
@@ -24,35 +23,33 @@ afterEach(() => {
 });
 
 describe("KitchenHeader", () => {
-  it("shows the next photo every 4 seconds, held by focus in the photos until Pause and Play are pressed", () => {
+  it("never moves on its own: no timers and no pause or play button", () => {
     vi.useFakeTimers();
     header([url("a"), url("b")]);
-    expect(shown()).toEqual([url("a")]);
-    act(() => { vi.advanceTimersByTime(4_000); });
-    expect(shown()).toEqual([url("b")]);
-    const toggle = screen.getByRole("button", { name: "Pause kitchen photos" });
-    toggle.focus();
-    act(() => { vi.advanceTimersByTime(4_000); });
-    expect(shown()).toEqual([url("b")]);
-    fireEvent.click(toggle);
     expect(vi.getTimerCount()).toBe(0);
-    fireEvent.click(screen.getByRole("button", { name: "Play kitchen photos" }));
-    // Play moves the photos on again although focus is still on the button.
-    act(() => { vi.advanceTimersByTime(4_000); });
-    expect(shown()).toEqual([url("a")]);
+    act(() => { vi.advanceTimersByTime(20_000); });
+    expect(screen.queryByRole("button", { name: /pause|play/i })).toBeNull();
+    expect(screen.getByRole("img", { name: "Ammi's Dastarkhwan kitchen photo 1 of 2" })).toBeTruthy();
   });
 
-  it("holds the photo while the tab is hidden", () => {
-    vi.useFakeTimers();
-    vi.spyOn(document, "hidden", "get").mockReturnValue(true);
-    header([url("a"), url("b")]);
-    act(() => { vi.advanceTimersByTime(8_000); });
-    expect(shown()).toEqual([url("a")]);
+  it("slides to a photo from its dot or the arrows, and a swipe moves the current dot", () => {
+    const scrollTo = vi.fn();
+    HTMLElement.prototype.scrollTo = scrollTo as unknown as HTMLElement["scrollTo"];
+    const { container } = header([url("a"), url("b"), url("c")]);
+    const strip = container.querySelector<HTMLElement>("section > div")!;
+    Object.defineProperty(strip, "clientWidth", { configurable: true, value: 400 });
+    fireEvent.click(screen.getByRole("button", { name: "Show photo 3 of 3" }));
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 800, behavior: "smooth" });
+    strip.scrollLeft = 400;
+    fireEvent.scroll(strip);
+    expect(screen.getByRole("button", { name: "Show photo 2 of 3" }).getAttribute("aria-current")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 800, behavior: "smooth" });
   });
 
   it("drops a photo that fails to load, and keeps a tidy band with Back and the heart when none is left", () => {
     const { container } = header([url("a")]);
-    expect(screen.queryByRole("button", { name: /kitchen photos/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /photo/ })).toBeNull();
     fireEvent.error(container.querySelector("img")!);
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();

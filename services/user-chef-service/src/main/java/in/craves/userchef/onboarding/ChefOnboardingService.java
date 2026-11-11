@@ -95,7 +95,7 @@ public class ChefOnboardingService {
         if(request.expectedVersion()!=version)
             throw ApiException.conflict("ONBOARDING_VERSION_CHANGED","Your application changed in another tab. Reload it.");
         if(existing!=null && existing.submitted() && !"MORE_INFORMATION_REQUIRED".equals(existing.reviewStatus()))
-            throw ApiException.conflict("ONBOARDING_ALREADY_SUBMITTED","Check your application status before changing submitted details.");
+            return addFssaiAfterSubmit(user,existing,application,trim(request.details().fssaiNumber()));
         if(application.status()==ChefApplicationStatus.REJECTED && existing!=null && !"MORE_INFORMATION_REQUIRED".equals(existing.reviewStatus()))
             throw ApiException.conflict("APPLICATION_REAPPLY_NOT_ALLOWED","Contact support to reopen this application for correction.");
         Details input=request.details();
@@ -159,6 +159,19 @@ public class ChefOnboardingService {
         return mine(user);
     }
 
+    /** A submitted application is locked, except for the FSSAI number: the Chef adds it later, before a dish goes live. */
+    private State addFssaiAfterSubmit(CurrentUser user,Draft existing,in.craves.userchef.web.ApiDtos.ChefApplicationResponse application,String fssai) {
+        if(fssai==null || fssai.equals(existing.details().fssaiNumber()) || application.status()==ChefApplicationStatus.REJECTED)
+            throw ApiException.conflict("ONBOARDING_ALREADY_SUBMITTED","Check your application status before changing submitted details.");
+        if(existing.reviewedFssai()!=null && existing.reviewedFssai().equals(existing.details().fssaiNumber()) ||
+            applications.listMyApplicationEvidence(user).stream().anyMatch(d -> d.documentType()==KycDocumentType.FSSAI_LICENSE && "APPROVED".equals(d.status())))
+            throw ApiException.conflict("REVIEWED_FSSAI_LOCKED","Contact support before changing an approved FSSAI number.");
+        jdbc.update("UPDATE chef_onboarding_draft SET details=jsonb_set(details,'{fssaiNumber}',to_jsonb(?::text)),version=version+1,updated_at=now() WHERE identity_id=?",
+            fssai,user.identityId());
+        audit(user.identityId(),user.identityId(),"FSSAI_ADDED",null);
+        return mine(user);
+    }
+
     @Transactional
     public State submit(CurrentUser user, ChefOnboardingController.SubmitRequest request, String authorization) {
         requireEnabled(); requireApplicant(user); lock(user);
@@ -187,7 +200,7 @@ public class ChefOnboardingService {
             !sameCoordinate(details.latitude(),application.latitude()) || !sameCoordinate(details.longitude(),application.longitude())))
             throw ApiException.conflict("ONBOARDING_DETAILS_NOT_CONFIRMED","Save your completed application before submitting.");
         if(!"review".equals(ChefOnboardingPolicy.resume(draft.details(),state.documents(),false)))
-            throw ApiException.conflict("ONBOARDING_INCOMPLETE","Complete the kitchen photos, FSSAI number and selected proof before submitting.");
+            throw ApiException.conflict("ONBOARDING_INCOMPLETE","Complete the kitchen photos and selected proof before submitting.");
         if(!state.submitted()) {
             UUID enrollment=bankEnrollmentRequired
                 ? bank.requireEnrollment(authorization,draft.details().firstName()+" "+draft.details().lastName()) : null;
@@ -262,28 +275,36 @@ public class ChefOnboardingService {
         return new HelpPage(page,more?last.createdAt()+"|"+last.id():null);
     }
     private record DraftRow(UUID identityId,Details details,String reviewStatus,UUID applicationId,Instant startedAt,
-        Instant lastActivityAt,String firstName,String lastName,String email,String phone,boolean emailVerified) {}
+        Instant lastActivityAt,String firstName,String lastName,String email,String phone,boolean emailVerified,boolean submitted) {}
 
     /**
      * Everyone who started the Chef application and has not submitted it (including sent back for changes), and everyone who
      * signed in to it with their phone OTP but saved nothing yet, latest activity first.
      */
-    public List<DraftApplicant> drafts(CurrentUser admin) { // no transaction: Auth lookups below must not hold a connection
+    public List<DraftApplicant> drafts(CurrentUser admin) {
         requireAdmin(admin);
+        return applicants(false);
+    }
+
+    /**
+     * The admin drafts list, plus (when asked) applicants who submitted and are not approved yet. No access check: the
+     * admin list checks the caller; the Waitlist sign-up emails run as the service itself.
+     */
+    public List<DraftApplicant> applicants(boolean includeSubmitted) { // no transaction: Auth lookups below must not hold a connection
         // shortcut: newest 1000 only; add paging when unsubmitted applicants pass that.
         var rows=jdbc.query("""
             WITH started AS (
                 SELECT d.identity_id,d.details,d.review_status,d.application_id,d.created_at AS started_at,d.updated_at AS active_at,
-                    a.phone_number AS application_phone
+                    a.phone_number AS application_phone,d.submitted
                 FROM chef_onboarding_draft d LEFT JOIN chef_application a ON a.id=d.application_id
-                WHERE NOT d.submitted AND (a.id IS NULL OR a.status<>'APPROVED')
+                WHERE (? OR NOT d.submitted) AND (a.id IS NULL OR a.status<>'APPROVED')
                 UNION ALL
-                SELECT v.identity_id,NULL,'NOT_STARTED',NULL,v.first_seen_at,v.last_seen_at,NULL
+                SELECT v.identity_id,NULL,'NOT_STARTED',NULL,v.first_seen_at,v.last_seen_at,NULL,false
                 FROM chef_onboarding_visit v
                 WHERE NOT EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.identity_id=v.identity_id)
                     AND NOT EXISTS(SELECT 1 FROM chef_application a WHERE a.identity_id=v.identity_id)
             )
-            SELECT s.identity_id,s.details,s.review_status,s.application_id,s.started_at,s.active_at,
+            SELECT s.identity_id,s.details,s.review_status,s.application_id,s.started_at,s.active_at,s.submitted,
                 COALESCE(NULLIF(s.details->>'firstName',''),p.first_name) AS first_name,
                 COALESCE(NULLIF(s.details->>'lastName',''),p.last_name) AS last_name,
                 COALESCE(NULLIF(s.details->>'email',''),p.email) AS email,
@@ -298,12 +319,14 @@ public class ChefOnboardingService {
             """,(rs,row)->new DraftRow(rs.getObject("identity_id",UUID.class),
                 rs.getString("details")==null ? null : decode(rs.getString("details")),rs.getString("review_status"),
                 rs.getObject("application_id",UUID.class),rs.getTimestamp("started_at").toInstant(),rs.getTimestamp("active_at").toInstant(),
-                rs.getString("first_name"),rs.getString("last_name"),rs.getString("email"),rs.getString("phone"),rs.getBoolean("email_verified")));
+                rs.getString("first_name"),rs.getString("last_name"),rs.getString("email"),rs.getString("phone"),rs.getBoolean("email_verified"),
+                rs.getBoolean("submitted")),includeSubmitted);
         int[] lookups={0};
         return rows.stream().map(r->{
             List<in.craves.userchef.web.ApiDtos.KycDocumentResponse> docs=r.applicationId()==null ? List.of()
-                : applications.listApplicationEvidenceForAdmin(admin,r.applicationId());
-            String step=r.details()==null ? "signed-in" : ChefOnboardingPolicy.resume(r.details(),docs,false);
+                : applications.listApplicationEvidence(r.applicationId());
+            String step=r.details()==null ? "signed-in" : ChefOnboardingPolicy.resume(r.details(),docs,
+                r.submitted() && !"MORE_INFORMATION_REQUIRED".equals(r.reviewStatus()));
             String phone=r.phone(), firstName=r.firstName(), lastName=r.lastName();
             // Older forms never stored the sign-in phone: Auth has it. shortcut: 200 lookups per load, batch if lists grow.
             if ((phone==null || firstName==null && lastName==null) && lookups[0]++<200) {
@@ -313,8 +336,10 @@ public class ChefOnboardingService {
                     if (firstName==null && lastName==null && contact.displayName()!=null && !contact.displayName().isBlank()) firstName=contact.displayName();
                 }
             }
+            Details d=r.details();
             return new DraftApplicant(r.identityId(),firstName,lastName,r.email(),r.emailVerified(),phone,step,
-                r.reviewStatus(),r.applicationId(),r.startedAt(),r.lastActivityAt());
+                r.reviewStatus(),r.applicationId(),r.startedAt(),r.lastActivityAt(),
+                d==null ? null : d.kitchenName(),d==null ? null : d.city(),d==null ? null : d.postalCode());
         }).toList();
     }
 
@@ -442,6 +467,11 @@ public class ChefOnboardingService {
             if(!Objects.equals(request.fssaiNumber(),draft.details().fssaiNumber()) || request.fssaiNumber()==null || !request.fssaiNumber().matches("[0-9]{14}"))
                 throw ApiException.conflict("FSSAI_NUMBER_CHANGED","Review the current saved FSSAI number.");
             jdbc.update("UPDATE chef_onboarding_draft SET fssai_reviewed_number=?,fssai_reviewed_by=?,fssai_reviewed_at=now(),fssai_review_evidence=?,version=version+1,updated_at=now() WHERE identity_id=?",request.fssaiNumber(),admin.identityId(),reason,application.identityId());
+            // Same outbox as the approval notice (ReviewEventBuffer): the Chef learns that dishes can go live now.
+            jdbc.update("INSERT INTO notification_outbox(event_key,event_type,aggregate_type,aggregate_id,user_identity_id,user_role,channel,template_code,title,body,target_type,target_id,payload) " +
+                "VALUES (?,'CHEF_FSSAI_VERIFIED','CHEF_APPLICATION',?,?,'CHEF','IN_APP','CHEF_FSSAI_VERIFIED_IN_APP','FSSAI number verified'," +
+                "'Craves has verified your FSSAI number. You can now make your dishes live.','CHEF_APPLICATION',?,jsonb_build_object('applicationId',?::text)) ON CONFLICT (event_key) DO NOTHING",
+                "chef-fssai-verified-"+applicationId+"-"+request.fssaiNumber(),applicationId,application.identityId(),applicationId,applicationId.toString());
         } else {
             jdbc.update("UPDATE chef_onboarding_draft SET review_status=?,correction_reason=?,correction_sections=?,submitted=CASE WHEN ?='REQUEST_INFORMATION' THEN false ELSE submitted END,version=version+1,updated_at=now() WHERE identity_id=?",
                 "START_REVIEW".equals(action)?"UNDER_REVIEW":"MORE_INFORMATION_REQUIRED",reason,sections,action,application.identityId());

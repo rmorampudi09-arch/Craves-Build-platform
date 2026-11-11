@@ -30,6 +30,19 @@ public class DocumentHttp {
             call.cancel(true); throw DocumentModels.upstream("SOURCE_UNAVAILABLE_OR_TOO_LARGE");
         }
     }
+    /** A JSON POST under the same limits as {@link #get}: no redirects, 15 s per request, 20 s in all, capped answer. */
+    public HttpResponse<byte[]> postJson(URI uri,java.util.Map<String,String> headers,String json,int maxBytes) {
+        var builder=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(15)).header("Accept","application/json")
+            .header("Content-Type","application/json");
+        headers.forEach(builder::header);
+        var call=client.sendAsync(builder.POST(HttpRequest.BodyPublishers.ofString(json)).build(),info->new LimitedBody(maxBytes));
+        try { return call.get(20,TimeUnit.SECONDS); }
+        catch (InterruptedException ex) {
+            call.cancel(true); Thread.currentThread().interrupt(); throw DocumentModels.upstream("SOURCE_INTERRUPTED");
+        } catch (Exception ex) {
+            call.cancel(true); throw DocumentModels.upstream("SOURCE_UNAVAILABLE_OR_TOO_LARGE");
+        }
+    }
     static final class LimitedBody implements HttpResponse.BodySubscriber<byte[]> {
         private final int limit;
         private final ByteArrayOutputStream output=new ByteArrayOutputStream();

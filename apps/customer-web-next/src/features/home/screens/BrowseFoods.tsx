@@ -24,6 +24,7 @@ import { CustomerFloatingCart } from "@/features/cart/components/CustomerFloatin
 import { HomeCategoryRail } from "@/features/home/components/HomeCategoryRail";
 import { HomeComingSoon } from "@/features/home/components/HomeComingSoon";
 import { KitchensGrid } from "@/features/home/components/KitchensGrid";
+import { getVegMode, pureVegKitchenIds, setVegMode, useVegKitchens, useVegMode, vegModeDishes } from "@/shared/hooks/use-veg-mode";
 import { WelcomeBanner } from "@/features/home/components/WelcomeBanner";
 import { holdScrollChrome } from "@/shared/components/navigation/AutoHideCustomerHeader";
 import { returnedToOverlayEntry } from "@/shared/ui/overlays/overlay";
@@ -121,7 +122,7 @@ export const routeMeta = {
       { title: "Discover Homemade Food – Craves" },
       {
         name: "description",
-        content: "Discover nearby Craves home kitchens and live homemade dishes.",
+        content: "Discover nearby Craves home kitchens and today’s homemade dishes.",
       },
       { name: "robots", content: "noindex" },
     ],
@@ -198,7 +199,19 @@ function BrowseFoodsPage() {
   const [address, setAddress] = useState<CravesAddress | null>(initialCache.address);
   const [homeCategory, setHomeCategory] = useState<MenuCategory | null>(null);
   const [dishSort, setDishSort] = useState<HomeDishSort>("recommended");
-  const [foodPreference, setFoodPreference] = useState<HomeFoodPreference>("all");
+  // Veg mode is the device's (the header switch, on every page); Egg and Non-veg are Home's own.
+  const vegMode = useVegMode();
+  const [otherFoodPreference, setOtherFoodPreference] = useState<HomeFoodPreference>("all");
+  const foodPreference: HomeFoodPreference = vegMode !== "off" ? "veg" : otherFoodPreference === "veg" ? "all" : otherFoodPreference;
+  // Choosing Veg in the filter sheet turns veg mode on (veg dishes from every kitchen); any other food type turns it off.
+  const setFoodPreference = useCallback((next: HomeFoodPreference) => {
+    if (next === "veg") {
+      if (getVegMode() === "off") setVegMode("veg-dishes");
+      return;
+    }
+    if (getVegMode() !== "off") setVegMode("off");
+    setOtherFoodPreference(next);
+  }, []);
   const [dishFilters, setDishFilters] = useState<HomeDishFilters>(DEFAULT_DISH_FILTERS);
   // The rail, Veg switch and filter chips answer a tap in the next frame; the dish list
   // re-renders from these right after, so a slow phone never delays the pressed state.
@@ -242,6 +255,8 @@ function BrowseFoodsPage() {
   const [cartItemCount, setCartItemCount] = useState(() => (hydrating ? 0 : cartCount()));
   const [cartItems, setCartItems] = useState<CartItem[]>(() => (hydrating ? [] : getCart()));
   const [kitchens, setKitchens] = useState<NearbyKitchen[]>(initialCache.kitchens);
+  // Every kitchen within reach, for "See all 24 kitchens"; unknown until the first load.
+  const [kitchenTotal, setKitchenTotal] = useState<number>();
   const [defaultAddressResolved, setDefaultAddressResolved] = useState(() =>
     Boolean(initialCache.address),
   );
@@ -293,7 +308,8 @@ function BrowseFoodsPage() {
     if (resetFilters) {
       setHomeCategory(null);
       setDishSort("recommended");
-      setFoodPreference("all");
+      // A new address keeps the device's veg mode.
+      setOtherFoodPreference("all");
       setSearchTerm("");
       setSearchOpen(false);
     }
@@ -340,6 +356,7 @@ function BrowseFoodsPage() {
 
     if (kitchenResult.status === "fulfilled") {
       setKitchens(loadedKitchens);
+      setKitchenTotal(Math.max(kitchenResult.value.totalElements, loadedKitchens.length));
       setKitchenDiscoveryVerified(true);
     } else {
       setKitchenDiscoveryVerified(false);
@@ -369,7 +386,7 @@ function BrowseFoodsPage() {
     if (loadedKitchens.length === 0 && loadedDishes.length === 0) {
       setCatalogMessage("No active home kitchens or dishes are available within 10 km of your default address.");
     } else if (kitchenResult.status === "rejected" || dishResult.status === "rejected") {
-      setCatalogMessage("Some nearby results are temporarily unavailable. Showing the live results we could load.");
+      setCatalogMessage("Some nearby results are temporarily unavailable. Showing the results we could load.");
     } else {
       setCatalogMessage("Fresh homemade food available near your default delivery address.");
     }
@@ -398,7 +415,7 @@ function BrowseFoodsPage() {
 
     setHomeCategory(restored.homeCategory);
     setDishSort(restored.dishSort);
-    setFoodPreference(restored.foodPreference);
+    setOtherFoodPreference(restored.foodPreference === "veg" ? "all" : restored.foodPreference);
     setDishFilters(restored.dishFilters);
     // Back from a dish or kitchen opened in search lands on search's history entry and shows the
     // same results; any other way back to Home (tab, logo) starts with search closed.
@@ -469,11 +486,8 @@ function BrowseFoodsPage() {
     }
   }, [listCategory, listSort, listFoodPreference, listDishFilters]);
 
-  const changeFoodPreference = useCallback((next: HomeFoodPreference) => {
-    setFoodPreference(next);
-    // Veg lives in the header: only move the page when the list it changes is above.
-    revealDishes(true);
-  }, [revealDishes]);
+  // Veg lives in the header: only move the page when the list it changes is above.
+  const onVegModeChange = useCallback(() => revealDishes(true), [revealDishes]);
 
   const handleDetailNavigationCapture = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target;
@@ -717,17 +731,28 @@ function BrowseFoodsPage() {
 
   // The food type pill narrows the kitchens too (app 1.34.7): a kitchen with no matching dish
   // drops out, and the cards' photos and starting price come from matching dishes only.
+  // Pure veg mode: only kitchens known to cook nothing else, and only their dishes.
+  // The catalog's own answer once it arrives; until then, what the loaded dishes prove.
+  const vegKitchens = useVegKitchens(vegMode, address?.lat, address?.lng, DEFAULT_DISCOVERY_RADIUS_METERS);
+  const pureKitchens = useMemo(
+    () => vegKitchens?.pure ?? pureVegKitchenIds(kitchens, nearbyDishes),
+    [kitchens, nearbyDishes, vegKitchens],
+  );
+  const vegModeNearby = useMemo(
+    () => (vegMode === "pure" ? vegModeDishes("pure", nearbyDishes, pureKitchens) : nearbyDishes),
+    [nearbyDishes, pureKitchens, vegMode],
+  );
   const dietDishes = useMemo(
     () =>
       listFoodPreference === "all"
-        ? nearbyDishes
-        : nearbyDishes.filter((dish) => matchesFoodPreference(dish, listFoodPreference)),
-    [listFoodPreference, nearbyDishes],
+        ? vegModeNearby
+        : vegModeNearby.filter((dish) => matchesFoodPreference(dish, listFoodPreference)),
+    [listFoodPreference, vegModeNearby],
   );
 
   const filteredDishes = useMemo(() => {
     return sortDishes(
-      nearbyDishes.filter(
+      vegModeNearby.filter(
         (dish) =>
           inMenuCategory(dish, listCategory) &&
           matchesFoodPreference(dish, listFoodPreference) &&
@@ -735,19 +760,19 @@ function BrowseFoodsPage() {
       ),
       listSort,
     );
-  }, [listCategory, listDishFilters, listFoodPreference, listSort, nearbyDishes]);
+  }, [listCategory, listDishFilters, listFoodPreference, listSort, vegModeNearby]);
 
   // The filter sheet's "Show N dishes": the same rules on the current category, for a draft view.
   const countDishes = useCallback(
     (view: DishView) => {
-      return nearbyDishes.filter(
+      return vegModeNearby.filter(
         (dish) =>
           inMenuCategory(dish, homeCategory) &&
           matchesFoodPreference(dish, view.foodPreference) &&
           matchesDishFilters(dish, view.filters),
       ).length;
     },
-    [homeCategory, nearbyDishes],
+    [homeCategory, vegModeNearby],
   );
   const dishView = useMemo<DishView>(
     () => ({ sort: dishSort, filters: dishFilters, foodPreference }),
@@ -758,7 +783,7 @@ function BrowseFoodsPage() {
     setDishFilters(next.filters);
     setFoodPreference(next.foodPreference);
     revealDishes();
-  }, [revealDishes]);
+  }, [revealDishes, setFoodPreference]);
 
   const locationLabel = address ? deliveryPlaceLabel(address) : "Choose delivery location";
   const rawLocationType = address?.label?.trim();
@@ -787,9 +812,9 @@ function BrowseFoodsPage() {
   const searchDishes = useMemo(
     () =>
       foodPreference === "all"
-        ? nearbyDishes
-        : nearbyDishes.filter((dish) => matchesFoodPreference(dish, foodPreference)),
-    [foodPreference, nearbyDishes],
+        ? vegModeNearby
+        : vegModeNearby.filter((dish) => matchesFoodPreference(dish, foodPreference)),
+    [foodPreference, vegModeNearby],
   );
 
   const openAddressManager = useCallback(() => {
@@ -860,8 +885,8 @@ function BrowseFoodsPage() {
         onSearchTermChange={typeInSearch}
         onSearchActivate={openSearchOnTap}
         onSearchIntent={preloadHomeSearchOverlay}
-        foodPreference={foodPreference}
-        onFoodPreferenceChange={changeFoodPreference}
+        vegToggle
+        onVegModeChange={onVegModeChange}
       />
 
       {comingSoonAddress ? (
@@ -931,6 +956,8 @@ function BrowseFoodsPage() {
           onManageAddress={openAddressManager}
           dishes={dietDishes}
           limit={8}
+          // In pure veg mode the count would include kitchens that aren't pure veg.
+          totalNearby={vegMode === "pure" ? undefined : kitchenTotal}
         />
 
         <HomeCategoryRail
@@ -945,6 +972,7 @@ function BrowseFoodsPage() {
 
         <DishesGrid
           dishes={filteredDishes}
+          pureVeg={vegMode === "pure"}
           selectedCategory={listCategory ? menuCategoryLabel(listCategory) : ALL_DISHES_CATEGORY}
           searchTerm=""
           state={discoveryState}
@@ -985,6 +1013,7 @@ function BrowseFoodsPage() {
             kitchens={kitchens}
             searchTerm={searchTerm}
             foodPreference={foodPreference}
+            onlyKitchenIds={vegMode === "pure" ? pureKitchens : vegMode === "veg-dishes" ? vegKitchens?.veg ?? null : null}
             latitude={address?.lat ?? null}
             longitude={address?.lng ?? null}
             onSearchTermChange={setSearchTerm}

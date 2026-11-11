@@ -19,9 +19,17 @@ public class AuthRecipientEmailResolver {
     public AuthRecipientEmailResolver(NotificationDeliveryProperties properties, DocumentHttp http, ObjectMapper mapper) {
         this.properties=properties;this.http=http;this.mapper=mapper;
     }
+    /** Target type of an email to a Craves team mailbox about a person (the recipient), never to that person. */
+    public static final String TEAM_ALERT="TEAM_ALERT";
     public String resolve(DeliveryWorkItem item) {
         // An ordinary notification's supplied deliveryAddress never overrides verified Auth identity.
         if(item.recipientIdentityId()==null) throw new IllegalArgumentException("Notification recipient identity is required for email lookup");
+        // A team alert goes only to a configured team mailbox; it never falls back to the recipient's own email.
+        if(TEAM_ALERT.equals(item.targetType())) {
+            if(!properties.isTeamEmailAddress(item.deliveryAddress()))
+                throw new IllegalStateException("Team alert address is not on CRAVES_NOTIFICATION_TEAM_EMAIL_ADDRESSES");
+            return item.deliveryAddress().trim().toLowerCase(java.util.Locale.ROOT);
+        }
         if(!StringUtils.hasText(properties.getAuthInternalBaseUrl()) || !StringUtils.hasText(properties.getAuthInternalServiceSecret()))
             throw new IllegalStateException("Auth email lookup endpoint and secret are not configured");
         try {

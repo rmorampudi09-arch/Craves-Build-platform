@@ -39,7 +39,28 @@ class AuthRecipientEmailResolverTest {
         var error=assertThrows(IllegalStateException.class,()->resolver(http).resolve(item(identity,"override@example.test")));
         assertFalse(error.toString().contains("private-upstream-detail"));assertNull(error.getCause());
     }
+    @Test void teamAlertGoesOnlyToItsListedTeamAddressWithoutAuth() {
+        var http=mock(DocumentHttp.class);var properties=properties();properties.setTeamEmailAddresses(" Waitlist@craves.in , ops@craves.in ");
+        assertEquals("waitlist@craves.in",new AuthRecipientEmailResolver(properties,http,mapper()).resolve(item(identity," waitlist@craves.in","TEAM_ALERT")));
+        verifyNoInteractions(http);
+    }
+    @Test void teamAlertToAnUnlistedAddressFailsClosedAndNeverReachesTheApplicant() {
+        var http=mock(DocumentHttp.class);reply(http,response(identity,"ACTIVE",true,"applicant@example.test"),200);
+        var listed=properties();listed.setTeamEmailAddresses("ops@craves.in");
+        for(var properties:new NotificationDeliveryProperties[]{properties(),listed}) {
+            var resolver=new AuthRecipientEmailResolver(properties,http,mapper());
+            assertThrows(IllegalStateException.class,()->resolver.resolve(item(identity,"waitlist@craves.in","TEAM_ALERT")));
+            assertThrows(IllegalStateException.class,()->resolver.resolve(item(identity,null,"TEAM_ALERT")));
+        }
+        verifyNoInteractions(http);
+    }
+    @Test void aListedTeamAddressNeverRedirectsAnOrdinaryNotification() {
+        var http=mock(DocumentHttp.class);reply(http,response(identity,"ACTIVE",true,"verified@example.test"),200);
+        var properties=properties();properties.setTeamEmailAddresses("waitlist@craves.in");
+        assertEquals("verified@example.test",new AuthRecipientEmailResolver(properties,http,mapper()).resolve(item(identity,"waitlist@craves.in","ORDER")));
+    }
     private AuthRecipientEmailResolver resolver(DocumentHttp http){return new AuthRecipientEmailResolver(properties(),http,mapper());}
+    private NotificationDeliveryModels.DeliveryWorkItem item(UUID owner,String address,String targetType){return new NotificationDeliveryModels.DeliveryWorkItem(UUID.randomUUID(),owner,"EMAIL",address,"Title","Body",targetType,null,Map.of(),1,0,UUID.randomUUID());}
     private ObjectMapper mapper(){return new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);}
     private NotificationDeliveryProperties properties(){var p=new NotificationDeliveryProperties();p.setAuthInternalBaseUrl("https://auth.example.test");p.setAuthInternalServiceSecret("unit-test-only-secret");return p;}
     @SuppressWarnings("unchecked") private void reply(DocumentHttp http,String body,int status){HttpResponse<byte[]> response=mock(HttpResponse.class);when(response.statusCode()).thenReturn(status);when(response.body()).thenReturn(body.getBytes(StandardCharsets.UTF_8));when(http.get(any(),any(),any(),anyInt())).thenReturn(response);}

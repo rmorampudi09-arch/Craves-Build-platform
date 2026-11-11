@@ -16,10 +16,10 @@ describe("profile chef card", () => {
   it("tells a draft apart from a customer who never started", () => {
     expect(chefLink(customer, application({ id: "11111111-1111-4111-8111-111111111111" })).title)
       .toBe("Continue your chef application");
-    expect(chefLink(customer, application({})).title).toBe("Become a home chef");
+    expect(chefLink(customer, application({})).title).toBe("Cook from your home kitchen");
     expect(chefLink(customer, null)).toEqual({
       to: "/chef/sign-in?returnTo=/chef/application",
-      title: "Become a home chef",
+      title: "Cook from your home kitchen",
       subtitle: "Apply to cook and sell through Craves",
     });
     expect(chefLink(customer, application({ status: "PENDING" })).to).toBe("/chef/sign-in?returnTo=/chef/application");

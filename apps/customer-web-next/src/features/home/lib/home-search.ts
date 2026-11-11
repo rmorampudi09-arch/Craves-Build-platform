@@ -3,7 +3,7 @@ import { formatDistance, type NearbyKitchen, type NearbyMenuItem } from "@/featu
 import { menuCategoryLabel } from "@/features/home/lib/dishCategories";
 
 /** What a search row needs from a dish: Home's loaded dishes and the catalog's search matches both fit. */
-export type SearchDish = Pick<Dish, "id" | "name" | "chef" | "category" | "img" | "price" | "currency" | "desc" | "distanceMeters" | "foodType" | "veg">;
+export type SearchDish = Pick<Dish, "id" | "name" | "chef" | "category" | "img" | "price" | "currency" | "desc" | "distanceMeters" | "foodType" | "veg" | "kitchenId">;
 
 const lower = (value: string) => value.toLocaleLowerCase("en-IN");
 
@@ -25,6 +25,7 @@ export function matchesKitchenSearch(kitchen: NearbyKitchen, words: string): boo
 export function toSearchDish(item: NearbyMenuItem): SearchDish {
   return {
     id: item.id,
+    kitchenId: item.kitchenId,
     name: item.itemName,
     chef: item.kitchenDisplayName || item.kitchenName,
     category: item.category,

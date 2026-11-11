@@ -1,5 +1,5 @@
 import type {RiderProfile} from '../api/contract';
-import {applicationOf, requiredDocuments, resumeStep, vehicleModel} from './application';
+import {applicationOf, knownKind, requiredDocuments, resumeStep, VEHICLE_KINDS, vehicleModel} from './application';
 
 const doc = (type: string, status: RiderProfile['documents'][number]['status'], reason?: string) => ({type, label: type, status, reason});
 const petrol = (documents: RiderProfile['documents'], payout: Partial<RiderProfile> = {}): RiderProfile => ({
@@ -11,9 +11,19 @@ const ALL = ['DL', 'RC', 'INSURANCE', 'PUC', 'PAN', 'BANK', 'SELFIE'];
 
 describe('the application stage, as the server and the ops console count it', () => {
   it('asks for what a vehicle needs; a rider ops added without a kind sends the petrol set', () => {
-    expect(requiredDocuments('BICYCLE')).toEqual(['PAN', 'BANK', 'SELFIE']);
     expect(requiredDocuments('ELECTRIC')).not.toContain('PUC');
     expect(requiredDocuments(undefined)).toEqual(ALL);
+  });
+
+  it('reads a bicycle sign-up from before 1.3.4 as no choice made, and follows the server’s list for it', () => {
+    expect(VEHICLE_KINDS).toEqual(['PETROL', 'ELECTRIC']);
+    expect(knownKind('BICYCLE')).toBeUndefined();
+    expect(knownKind('ELECTRIC')).toBe('ELECTRIC');
+    const bicycle: RiderProfile = {vehicle: {label: 'Bicycle', kind: 'BICYCLE'}, documents: [doc('PAN', 'PENDING'), doc('BANK', 'MISSING'), doc('SELFIE', 'MISSING')]};
+    const application = applicationOf(bicycle);
+    expect(application.documents.map(item => item.type)).toEqual(['PAN', 'BANK', 'SELFIE']);
+    expect(application.stage).toBe('APPLY');
+    expect(vehicleModel('Bicycle')).toBeUndefined();
   });
 
   it('counts the reference selfie once the server lists it, so a server that asks for none yet still works', () => {

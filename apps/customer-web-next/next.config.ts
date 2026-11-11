@@ -9,7 +9,8 @@ const nextConfig: NextConfig = {
   compress: false,
   images: {
     disableStaticImages: true,
-    remotePatterns: [{ protocol: "https", hostname: "**" }],
+    // Local assets only. Every remote picture renders `unoptimized`, and an allow-all remotePatterns made
+    // /_next/image?url=https://… an open, unauthenticated fetch-and-resize proxy for anyone.
   },
   async rewrites() {
     return {

@@ -19,6 +19,28 @@ The "Craves Rider APK" workflow runs on pull requests that touch `apps/mobile/**
 
 Keep the mapping file of every build you hand out: it turns a crash stack trace from that build back into real class names. For a Play upload, upload it in Play Console as the deobfuscation file.
 
+## One-tap install (the newest live build)
+
+After every live manual run on `main`, the job **ship-rider-app** replaces the APK on the pre-release **delivery-app-latest**, so one link always installs the newest live build:
+
+`https://github.com/rmorampudi09-arch/Craves-Build-platform/releases/download/delivery-app-latest/craves-delivery-app.apk`
+
+- **Once per phone:** open `craves.in/rider` (the QR on the rider flyers), which redirects to this link, and add it to the home screen (Chrome ⋮ → Add to home screen). The first install asks to allow "Install unknown apps" for Chrome, and Chrome may say the file type can be harmful; choose Download anyway. The repository is public, so no GitHub sign-in is needed.
+- **Every new build:** tap the icon, then Install. It updates over the last build because the signing key never changes.
+- The release's title and notes name the build (version, versionCode, commit, run); the run summary prints the link. The tag `delivery-app-latest` stays on the commit where it was first made: read the notes, not the tag. Earlier builds and every mapping file stay in the run artifacts for 14 days.
+- Why the names avoid "rider": one repository secret's value is `rider` (the build summary shows the package as `com.cravesapp.***`). GitHub hides a secret's value wherever it appears in logs and summaries, and drops any job output that contains it. So the job finds the APK, bundle and mapping in the downloaded artifacts instead of being told their names, and the tag and file name leave the word out so the printed link stays readable.
+
+The step needs nothing to set up. The job has its own token (`contents: write` for the release, `id-token: write` for Play); the build job, which also runs for pull requests, stays read-only.
+
+### Updates are required
+
+Beside the APK, ship-rider-app writes `craves-delivery-app.json` (`{"versionName":"1.3.4","versionCode":57}`), served at `craves.in/rider/version`. A live app from 1.3.4 on reads it with `/me` (at most every 10 minutes) and takes the higher of it and the server's `minAppVersion` as the minimum.
+
+- **Raising versionName forces the update:** every older app shows "Please update the app before your next shift" with an **Update now** button that opens `craves.in/rider`. Never during a shift or a trip (`domain/gate.ts`).
+- **A rebuild with the same versionName forces nothing.** Raise the version only when riders must move to it.
+- The file is written only after the APK upload succeeds, so no app asks for a version the link can't give yet.
+- If the file can't be read (offline, GitHub or craves.in down), the server's `minAppVersion` alone applies. `CRAVES_FLEET_MIN_APP_VERSION` on integration-service stays the hard control, and the only one that reaches apps older than 1.3.4.
+
 ## Mock or live
 
 | Build | API mode |
@@ -40,6 +62,9 @@ Any other value fails the build. To switch pull request builds to live, set the 
 | `RIDER_KEYSTORE_PASSWORD` | secret | with the keystore | The keystore password, also used as the key password. |
 | `RIDER_KEY_ALIAS` | secret | with the keystore | The key alias (`rider` when unset). |
 | `CRAVES_RIDER_API_MODE` | variable | pull request builds | `mock` or `live`. |
+| `RIDER_PLAY_WIF_PROVIDER` | variable | the Play upload (optional) | The Workload Identity provider, `projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>`. Not a secret. |
+| `RIDER_PLAY_SERVICE_ACCOUNT` | variable | the Play upload (optional) | The service account Play trusts, `<name>@<project>.iam.gserviceaccount.com`. No key file is ever made. |
+| `RIDER_PLAY_RELEASE_STATUS` | variable | the Play upload (optional) | `draft` (default: waits for Start rollout after the phone check) or `completed` (rolls out to the internal testers at once). |
 
 **Never change the rider signing key.** The app binds each rider to one phone by `ANDROID_ID` (`X-Craves-Installation-Id`), and Android gives each signing key a different `ANDROID_ID`. A build signed with another key can't install over the old one, and after a reinstall every rider's phone counts as new and needs ops approval again. That is why live builds refuse to run without the keystore secret. Keep a copy of the keystore and its password in the company password manager, not only in GitHub. The decoded key is written to the runner's temp folder, never to the Actions cache.
 
@@ -81,10 +106,20 @@ Riders on the live pilot install from Play's internal testing track.
 **Each pilot release:**
 
 1. Play needs an Android App Bundle (`.aab`), not an APK. Run the workflow by hand on `main` with `api_mode` `live` (the default): the run's **craves-rider-aab** artifact holds `craves-rider-live-<sha>.aab` and its mapping file. The APK from the same run is the same build, for a phone check before the upload.
-2. Play Console → Testing → Internal testing → Create new release → upload the `.aab` and its mapping file (as the deobfuscation file) → release notes → roll out.
+2. Play Console → Testing → Internal testing → Create new release → upload the `.aab` and its mapping file (as the deobfuscation file) → release notes → roll out. With the Play upload set up (below), the run does this itself: the release waits as a draft, and after the phone check you press **Start rollout**.
 3. The versionCode must be higher than the last upload. The run number always grows, but it restarts at 1 if the workflow is renamed or re-created; then pass a higher number (for example the run number plus 1000).
 4. Add riders to the testers list by Google account email and send them the opt-in link. They install "Craves Rider" from Play.
 5. Before telling riders, run the checks in `PHONE-TESTS.md` and `PERF.md` on the build Play serves.
+
+**The Play upload, set up once (keyless):** the job signs in with Workload Identity Federation, so there is no key file to leak or rotate.
+
+1. Upload the **first** bundle by hand as in step 2: Play's API cannot make an app's first release.
+2. In the Google Cloud project behind the rider Firebase app, enable the **Google Play Android Developer API** and the **IAM Service Account Credentials API**.
+3. Make a service account, for example `rider-play-upload`, with no project roles.
+4. Make a Workload Identity pool and an OIDC provider for `https://token.actions.githubusercontent.com`, mapping `google.subject=assertion.sub`, `attribute.repository=assertion.repository` and `attribute.ref=assertion.ref`, with the condition `assertion.repository == 'rmorampudi09-arch/Craves-Build-platform' && assertion.ref == 'refs/heads/main'`, so only runs on `main` of this repository can sign in.
+5. On the service account, give **Workload Identity User** (`roles/iam.workloadIdentityUser`) to `principalSet://iam.googleapis.com/projects/<number>/locations/global/workloadIdentityPools/<pool>/attribute.repository/rmorampudi09-arch/Craves-Build-platform`.
+6. In Play Console → Users and permissions, invite the service account's email, give it the app Craves Rider only, with **Release to testing tracks**.
+7. Set the variables `RIDER_PLAY_WIF_PROVIDER` and `RIDER_PLAY_SERVICE_ACCOUNT` (Settings → Secrets and variables → Actions → Variables). The next live run sends the bundle and its mapping; until both are set, the step is skipped and the run summary says so.
 
 ## After an R8 build changes the keep rules
 

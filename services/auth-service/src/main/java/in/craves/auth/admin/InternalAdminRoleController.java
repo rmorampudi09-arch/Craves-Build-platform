@@ -1,5 +1,6 @@
 package in.craves.auth.admin;
 
+import in.craves.auth.admin.InternalAdminRoleRepository.ChefRoleRevokeResponse;
 import in.craves.auth.admin.InternalAdminRoleRepository.InternalAdminUserResponse;
 import in.craves.auth.admin.InternalAdminRoleRepository.RoleChangeAuditResponse;
 import in.craves.auth.admin.InternalAdminRoleRepository.RoleReplacementResponse;
@@ -20,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -127,6 +129,27 @@ public class InternalAdminRoleController {
             .body(response);
     }
 
+    /** Handbook 008. Answers 404 until CRAVES_CHEF_ROLE_REVOKE_ENABLED=true. */
+    @PostMapping("/users/{identityId}/chef-role/revoke")
+    public ResponseEntity<ChefRoleRevokeResponse> revokeChefRole(
+        Authentication authentication,
+        @PathVariable UUID identityId,
+        @RequestBody(required = false) ChefRoleRevokeRequest request,
+        @RequestHeader(value = "X-Correlation-ID", required = false) String correlationHeader
+    ) {
+        // No @Valid: the switch answers before the body is judged; normalizeReason checks it after.
+        if (!properties.isChefRoleRevokeEnabled()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        requireEnabled();
+        CurrentUser actor = requirePlatformAdmin(authentication);
+        UUID correlationId = correlationId(correlationHeader);
+        return auditedNoStore(correlationId, repository.revokeChefRole(
+            actor.identityId(), actor.tokenVersion(), identityId,
+            normalizeReason(request == null ? null : request.reason()), correlationId
+        ));
+    }
+
     @GetMapping("/role-changes")
     public ResponseEntity<List<RoleChangeAuditResponse>> roleChanges(
         Authentication authentication,
@@ -229,6 +252,9 @@ public class InternalAdminRoleController {
         @Min(1) long expectedTokenVersion,
         @NotBlank @Size(min = 10, max = 500) String reason
     ) {
+    }
+
+    public record ChefRoleRevokeRequest(String reason) {
     }
 
     public record StaffRoleGrantRequest(

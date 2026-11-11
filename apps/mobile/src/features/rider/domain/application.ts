@@ -12,8 +12,13 @@ type Doc = RiderProfile['documents'][number];
 const REQUIRED: Record<VehicleKind, string[]> = {
   PETROL: ['DL', 'RC', 'INSURANCE', 'PUC', 'PAN', 'BANK', 'SELFIE'],
   ELECTRIC: ['DL', 'RC', 'INSURANCE', 'PAN', 'BANK', 'SELFIE'],
-  BICYCLE: ['PAN', 'BANK', 'SELFIE'],
 };
+
+/** What riders can choose, in the order the sign-up shows them (bicycle removed in 1.3.4). */
+export const VEHICLE_KINDS = Object.keys(REQUIRED) as VehicleKind[];
+
+/** A kind this app offers; anything else (BICYCLE from a sign-up before 1.3.4) is no choice made. */
+export const knownKind = (kind?: string): VehicleKind | undefined => VEHICLE_KINDS.find(known => known === kind);
 
 export const requiredDocuments = (kind?: VehicleKind): string[] => REQUIRED[kind ?? 'PETROL'];
 
@@ -34,8 +39,10 @@ export interface Application {
 
 export function applicationOf(profile: RiderProfile): Application {
   // The selfie counts once the server lists it (it lists every required document), so this app works with a server that
-  // doesn't ask for one yet.
-  const required = requiredDocuments(profile.vehicle.kind).filter(
+  // doesn't ask for one yet. A kind the app no longer offers (a bicycle sign-up before 1.3.4) takes the server's list as is.
+  const {kind} = profile.vehicle;
+  const known = knownKind(kind);
+  const required = (kind && !known ? profile.documents.flatMap(doc => (doc.type ? [doc.type] : [])) : requiredDocuments(known)).filter(
     type => type !== 'SELFIE' || profile.documents.some(doc => doc.type === 'SELFIE'),
   );
   const documents = required.map(
@@ -66,7 +73,8 @@ export function resumeStep(application: Application): ApplyStep {
     : 'payout';
 }
 
-// The server's names for a kind, used as the vehicle label when the rider gave no make and model.
+// The server's names for a kind, used as the vehicle label when the rider gave no make and model. "Bicycle" stays while the
+// server still labels sign-ups from before 1.3.4 with it, so it is never taken for a make and model.
 const KIND_NAMES = ['Petrol two-wheeler', 'Electric two-wheeler', 'Bicycle', 'Two-wheeler'];
 
 /** The make and model the rider typed, or undefined when the label is only the kind's name. */

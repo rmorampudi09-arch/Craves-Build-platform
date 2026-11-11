@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cookName, orderCalendar } from "./order-calendar.ts";
+import { orderCalendar } from "./order-calendar.ts";
+import { cookName } from "../../../shared/lib/order-words.ts";
 
 const base = {
   kitchenName: "Lakshmi's Kitchen",
@@ -17,8 +18,8 @@ test("cooking: placed and accepted are done, cooking is now with its real time, 
   assert.equal(sheet.rows[0].at, base.createdAt);
   assert.equal(sheet.rows[1].at, null, "no invented time for the acceptance");
   assert.equal(sheet.rows[2].at, base.updatedAt);
-  assert.equal(sheet.rows[2].label, "Cooking now");
-  assert.equal(sheet.rows[2].detail, "Lakshmi is cooking");
+  assert.equal(sheet.rows[2].label, "Lakshmi is cooking your order");
+  assert.equal(sheet.rows[2].detail, "Cooked fresh, just for you");
   assert.equal(sheet.rows[3].detail, "Ready in about 30 min");
   assert.equal(sheet.rows[5].detail, "still to come");
 });
@@ -49,8 +50,12 @@ test("delivered: every step done, no now-line; closed or unpaid orders get no sh
   assert.equal(orderCalendar({ ...base, status: "PAYMENT_PENDING" }, null), null);
 });
 
-test("waiting for the chef, and kitchens not named after a cook", () => {
+test("waiting for the cook to confirm, and kitchens not named after a cook", () => {
   const sheet = orderCalendar({ ...base, status: "CHEF_ACCEPTANCE_PENDING" }, null);
-  assert.equal(sheet?.rows[1].label, "Waiting for Lakshmi");
-  assert.equal(cookName("Hyderabadi Dum House"), "The chef");
+  assert.equal(sheet?.rows[1].label, "Waiting for Lakshmi to confirm");
+  assert.equal(sheet?.rows[1].detail, "Lakshmi will confirm your order shortly.");
+  assert.equal(cookName("Hyderabadi Dum House"), null);
+  const unnamed = orderCalendar({ ...base, kitchenName: "Hyderabadi Dum House", status: "PREPARING" }, null);
+  assert.equal(unnamed?.rows[1].label, "The kitchen accepted");
+  assert.equal(unnamed?.rows[2].label, "The kitchen is cooking your order");
 });

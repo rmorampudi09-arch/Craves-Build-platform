@@ -1,0 +1,316 @@
+{
+  "course": {
+    "id": "advanced-platform",
+    "service": "advanced-features-service",
+    "title": "Advanced features: one service, many isolated modules",
+    "level": "Practitioner",
+    "minutes": 112,
+    "description": "Learn how the advanced-features service keeps every feature in its own package, schema, migration history and switch, how requests stay safe to retry, how callers and other services are checked, and how a new module reaches production without touching the rest of Craves.",
+    "prerequisites": [
+      "java-engineering"
+    ],
+    "sources": [
+      "services/advanced-features-service/README.md",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/module/FeatureModule.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/module/ModuleRuntime.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/module/ModuleGateFilter.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/data/Idempotency.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/web/ApiProblem.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/security/AdminSessionGuard.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/clients/GatewayHttp.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/erasure/AccountErasureService.java",
+      ".github/workflows/advanced-features-smoke.yml"
+    ],
+    "sourceRevision": "9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605",
+    "lessons": [
+      {
+        "id": "adv-module-isolation",
+        "title": "Keep one feature from breaking another",
+        "overview": "The advanced-features service hosts more than twenty features, from food lists and group orders to promotions, policies and privacy tools, in one Spring Boot application with its own container app and its own database. That only works because each feature is a module with hard edges: its own Java package, its own Postgres schema named adv_<module>, its own Flyway history, its own API path prefixes, its own switch and its own concurrency budget. FeatureModule describes a module, ModuleRuntime migrates and tracks it, and ModuleGateFilter refuses requests for a module that is off, failed or busy. This lesson traces those three classes.",
+        "steps": [
+          {
+            "label": "Read the FeatureModule record",
+            "detail": "The id is kebab-case and also names the module's gateway API suffix. The schema must match adv_<name>, migrations load from classpath:db/advanced/<name>, the switch is CRAVES_ADV_<ID>_ENABLED and serves() decides which request paths belong to the module. The constructor checks the id and the schema with regular expressions, so a typo stops the service at startup instead of surprising live traffic."
+          },
+          {
+            "label": "Follow startup in ModuleRuntime",
+            "detail": "When the application is ready, every enabled module runs Flyway against its own schema with its own history table. The shared platform schema, which holds idempotency records and audit rows, is migrated as well. A module whose migration throws is marked FAILED and logged with the first line of the error; every other module still becomes READY and starts answering."
+          },
+          {
+            "label": "See how a failed module heals",
+            "detail": "ensureReady retries a FAILED module lazily, on its next request, at most once every 30 seconds and under a lock so two threads never migrate the same schema at once. A switched-off module answers 503 FEATURE_DISABLED; a failed one answers 503 FEATURE_UNAVAILABLE with Retry-After: 30, so apps can back off instead of hammering it."
+          },
+          {
+            "label": "Know what the switch means",
+            "detail": "enabled() reads the module's flag with a default of true: a module is on unless its flag is explicitly false. Being on only means its routes answer. Commercial behaviour inside many modules still waits for real values from staff, which is why, for example, bulk orders answer 503 BULK_ORDERS_NOT_CONFIGURED until the rules are entered."
+          },
+          {
+            "label": "Trace the bulkhead",
+            "detail": "ModuleGateFilter runs after authentication. It finds the module for the URI, calls ensureReady, then takes a permit from that module's semaphore (CRAVES_ADV_MODULE_CONCURRENCY, default 64), waiting at most 250 milliseconds. Without a permit the caller gets 503 FEATURE_BUSY with Retry-After: 2, so one slow module cannot use up every request thread. The X-Craves-Feature response header names the module that answered."
+          },
+          {
+            "label": "Use the public feature list",
+            "detail": "GET /api/v1/advanced/features needs no sign-in and lists every module with enabled and available. The apps hide screens for features that are off instead of guessing from errors, and the live smoke workflow reads the same list after each release to prove that every module is available."
+          }
+        ],
+        "example": "Suppose a new migration for promotions fails because a constraint name collides. Promotions answers 503 FEATURE_UNAVAILABLE and retries every 30 seconds, while group orders, taxonomy and every other module keep serving. Nobody has to roll back the whole service to protect unrelated features; the fix is a new forward migration for promotions only.",
+        "lab": "In a disposable local PostgreSQL database, start the service with one module's flag set to false and confirm that its routes answer 503 FEATURE_DISABLED while another module answers normally. Then add a deliberately broken V2 migration to a scratch copy of one module, start again, and record what /features reports for it. Delete the scratch migration afterwards and never commit it.",
+        "pitfall": "Never share tables between modules or read another module's schema directly: once two modules depend on one table, a failure or migration in one can break the other.",
+        "questions": [
+          {
+            "id": "adv-module-isolation-q1",
+            "prompt": "What happens to the other modules when one module's migration fails at startup?",
+            "options": [
+              "The whole service refuses to start",
+              "Only that module answers 503 while the others keep serving",
+              "Every module switches to read-only",
+              "The failed module's flag is set to false"
+            ],
+            "answer": 1,
+            "explanation": "ModuleRuntime marks only that module FAILED; its routes answer 503 and it retries later, while the rest stay READY."
+          },
+          {
+            "id": "adv-module-isolation-q2",
+            "prompt": "Why does ModuleGateFilter take a permit from a per-module semaphore?",
+            "options": [
+              "To count requests for billing",
+              "To stop one slow module from using every request thread",
+              "To enforce sign-in",
+              "To choose which replica answers"
+            ],
+            "answer": 1,
+            "explanation": "Each module has its own concurrency budget; without a permit in 250 ms the caller gets 503 FEATURE_BUSY."
+          },
+          {
+            "id": "adv-module-isolation-q3",
+            "prompt": "A module's flag is not set at all on the container app. What does ModuleRuntime do?",
+            "options": [
+              "Treats the module as off",
+              "Refuses to start the service",
+              "Treats the module as on, because the flag defaults to true",
+              "Waits for staff to approve it"
+            ],
+            "answer": 2,
+            "explanation": "enabled() reads the flag with a default of true; only an explicit false switches a module off."
+          }
+        ]
+      },
+      {
+        "id": "adv-request-safety",
+        "title": "Make every request safe to retry and easy to trace",
+        "overview": "Phones lose signal, people tap twice and gateways retry. The platform gives every module the same answers to these problems: an Idempotency-Key on create-style calls, version checks on updates that can race, one error envelope with a correlation id, integer paise for money and UTC instants for time. Using the shared helpers instead of inventing new ones keeps error handling identical across modules, so the apps handle a promotion error the same way as a group-order error. This lesson reads Idempotency and ApiProblem and shows how a request can be followed end to end.",
+        "steps": [
+          {
+            "label": "Read Idempotency.run",
+            "detail": "The first request with a key inserts an IN_PROGRESS row holding the scope, the caller, the key and a SHA-256 hash of the request body. When the action finishes the row becomes COMPLETED with the stored response. A retry with the same key and body gets that response back, marked as a replay; the same key with a different body is refused with 422 IDEMPOTENCY_KEY_REUSED; a retry while the first is still running gets 409 IDEMPOTENT_REQUEST_IN_PROGRESS."
+          },
+          {
+            "label": "Note what happens on failure",
+            "detail": "If the action throws, the IN_PROGRESS row is deleted, so the client can safely retry with the same key. Keys must be 8 to 128 safe characters, and records are purged after 48 hours. Replayed answers carry Idempotent-Replayed: true, which lets an app tell a repeated answer from a new one."
+          },
+          {
+            "label": "Use version checks for races",
+            "detail": "Updates that can race accept If-Match with the version the caller last saw and answer 412 VERSION_MISMATCH when the record has moved on. Staff consoles send the expectedVersion they read, so two admins editing one record can never overwrite each other without noticing; the second one reloads and decides again."
+          },
+          {
+            "label": "Raise errors with ApiProblem",
+            "detail": "Modules throw ApiProblem with a fixed machine code, such as FEATURE_DISABLED, POLICY_NOT_SET or ORDER_NOT_ELIGIBLE, and a plain message. The error handler turns it into one envelope with timestamp, code, message, details and correlationId. Apps switch on the code, never on the message text, so wording can improve without breaking clients."
+          },
+          {
+            "label": "Trace with correlation ids",
+            "detail": "CorrelationFilter accepts an X-Correlation-ID from the caller or creates one, writes it into the logs and returns it in every error body. When someone reports a failure, the correlation id shown with the error is the fastest way to find the same request in gateway and service logs."
+          },
+          {
+            "label": "Keep money and time exact",
+            "detail": "Money is integer paise in every API. Where a rule computes a share or a discount it rounds down to whole paise, so Craves never gives away more than the rule allows. API times are UTC instants; India time is used only for business rules such as an India date, a daily window or a calendar month."
+          }
+        ],
+        "example": "A customer taps Reserve on an offer twice on a slow connection. Both requests carry the same Idempotency-Key and the same body: the first reserves budget, the second returns the stored reservation with Idempotent-Replayed: true. The budget is taken once and the app shows one reservation, with no special code in the promotions module.",
+        "lab": "Write a local integration test for one create endpoint: send the same key and body twice, then the same key with a changed body, and assert the replay header and then 422. Add a second test that updates with a stale version and expects 412. Run both against a disposable database through the existing integration test base.",
+        "pitfall": "Never mint a new Idempotency-Key for an automatic retry of the same user action; a new key turns a safe retry into a duplicate.",
+        "questions": [
+          {
+            "id": "adv-request-safety-q1",
+            "prompt": "A client retries a create call with the same Idempotency-Key but a different body. What happens?",
+            "options": [
+              "It receives the stored first response",
+              "It is refused with 422 IDEMPOTENCY_KEY_REUSED",
+              "A second record is created",
+              "It receives 204 No Content"
+            ],
+            "answer": 1,
+            "explanation": "The stored request hash differs, so the key is refused as reused for a different request."
+          },
+          {
+            "id": "adv-request-safety-q2",
+            "prompt": "Why do the advanced APIs carry money as integer paise?",
+            "options": [
+              "Paise display faster",
+              "To keep totals, shares and discounts exact without floating-point errors",
+              "Because the gateway cannot read decimals",
+              "To hide prices from staff"
+            ],
+            "answer": 1,
+            "explanation": "Integer paise keep sums exact; rules then round down explicitly where they must."
+          },
+          {
+            "id": "adv-request-safety-q3",
+            "prompt": "The first request with a key throws an exception. What happens to its idempotency row?",
+            "options": [
+              "It stays IN_PROGRESS for 48 hours",
+              "It is deleted so the same key can be retried",
+              "It is marked COMPLETED with the error",
+              "It blocks the caller until staff clear it"
+            ],
+            "answer": 1,
+            "explanation": "Idempotency.run deletes the IN_PROGRESS row on failure, so a later retry with the same key runs again."
+          }
+        ]
+      },
+      {
+        "id": "adv-identity-boundaries",
+        "title": "Check who is calling, and call others as them",
+        "overview": "The advanced service trusts no one by default. It verifies the same RS256 Craves tokens as the other services, re-checks staff tokens live with Auth, confirms ownership with the service that owns the data, and calls other services through the public gateway with the caller's own token, so it can never see more than the caller could. The only route without a user token is the account-erasure route used by Auth's deletion coordinator, and it is guarded by an internal secret. This lesson follows a request through each of those checks.",
+        "steps": [
+          {
+            "label": "Verify the token",
+            "detail": "The JWT check accepts a token only when its issuer, audience, UUID subject, roles and token version match what Auth issues, exactly as in the other services. Routes are deny-by-default: a path is open without a token only when its module lists it as a public read, such as the feature list or semantic search. Public writes stay empty unless the handbook asks for one."
+          },
+          {
+            "label": "Re-check staff live",
+            "detail": "A token can still carry a staff role that was removed minutes ago. AdminSessionGuard asks Auth about every staff call and accepts it only when Auth answers with the verified admin-session marker. A revoked admin therefore loses access at once, not when the token happens to expire."
+          },
+          {
+            "label": "Confirm ownership at the owner",
+            "detail": "A chef labelling a dish, declaring food facts or quoting a bulk order is checked against Catalog with the chef's own token. Another kitchen's resource answers exactly like a missing one, with 404, so the API never confirms that someone else's record exists."
+          },
+          {
+            "label": "Call through the gateway as the caller",
+            "detail": "The gateway clients call api.craves.in with the caller's bearer token. Order service then returns only that customer's orders and Catalog only what the public may see. The advanced service holds no broader credential that could read everyone's data."
+          },
+          {
+            "label": "Bound every remote call",
+            "detail": "GatewayHttp gives each call a 5-second deadline that covers the whole answer, body included, and the capped body reader stops reading oversized replies. Without the body deadline, a reply that stalled after its headers would hold a thread and a module permit with no limit; this was fixed while building the Download my data module."
+          },
+          {
+            "label": "Guard the one internal route",
+            "detail": "The account-erasure route and its blockers and prepare steps take no user token. Auth's deletion coordinator calls them with the X-Craves-Internal-Secret header, which must equal CRAVES_INTERNAL_SERVICE_SECRET: 401 otherwise, 503 while the secret is unset. AccountErasureService then erases the person in every module, switched-off ones included, because their schemas may still hold data."
+          }
+        ],
+        "example": "A support admin whose role was removed this morning still holds a token that lists SUPPORT_ADMIN. When they open the trust queue, AdminSessionGuard asks Auth, Auth no longer confirms the session, and the call is refused. Nothing in the advanced service had to be redeployed for the removal to take effect.",
+        "lab": "Read the security configuration and list every public path across the modules. For one staff route, write a test whose token has the right roles but whose live check fails, and assert that the call is refused. For one chef route, assert that another kitchen's id answers exactly like an unknown id.",
+        "pitfall": "Never call another service with a service-wide credential to save a request: reading with the caller's own token is what keeps every module inside that caller's permissions.",
+        "questions": [
+          {
+            "id": "adv-identity-boundaries-q1",
+            "prompt": "Why does the advanced service re-check staff tokens with Auth on every staff call?",
+            "options": [
+              "To refresh the token",
+              "So a removed staff role stops working at once instead of at token expiry",
+              "To sign the staff member out",
+              "To make the call faster"
+            ],
+            "answer": 1,
+            "explanation": "AdminSessionGuard accepts a staff call only when Auth confirms the session live."
+          },
+          {
+            "id": "adv-identity-boundaries-q2",
+            "prompt": "How does the advanced service read a customer's orders?",
+            "options": [
+              "Through a direct link to the order database",
+              "Through the gateway with the customer's own token",
+              "With a shared admin token",
+              "From a nightly export"
+            ],
+            "answer": 1,
+            "explanation": "Gateway clients call api.craves.in as the caller, so Order service returns only that person's orders."
+          },
+          {
+            "id": "adv-identity-boundaries-q3",
+            "prompt": "Which route is called without a user token but must carry X-Craves-Internal-Secret?",
+            "options": [
+              "GET /api/v1/advanced/features",
+              "POST /internal/v1/account-erasure",
+              "GET /api/v1/advanced/semantic-search/dishes",
+              "POST /api/v1/advanced/group-orders"
+            ],
+            "answer": 1,
+            "explanation": "Only Auth's deletion coordinator calls the erasure route, proving itself with the internal service secret."
+          }
+        ]
+      },
+      {
+        "id": "adv-contracts-release",
+        "title": "Ship a new module without surprising anyone",
+        "overview": "A new module is a package, a schema, migrations, tests, a generated contract and one line in the live runtime lock. The contract test regenerates the OpenAPI files from the code so they cannot drift; the release pipeline builds the image, rolls it out with a canary and rolls back on a failed check; and the live smoke workflow calls every route through api.craves.in afterwards. Because one gateway API forwards every advanced route, a new module needs no gateway change. This lesson walks the path from a local branch to a verified live module.",
+        "steps": [
+          {
+            "label": "Lay out the module",
+            "detail": "Create the module package with a FeatureModule bean, controllers, a service, a repository and DTOs. Put migrations in db/advanced/<name>/V1__*.sql with every table fully qualified as adv_<module>.<table>. Write unit tests and PostgreSQL integration tests that extend the shared integration test base."
+          },
+          {
+            "label": "Reuse the platform",
+            "detail": "Use CurrentUser, ApiProblem, Idempotency, Audit, Cursor, Sql, Money and the gateway clients instead of writing new versions. A module that stores personal data implements PersonalDataContributor, so the self-service export and erase cover it from its first day in production."
+          },
+          {
+            "label": "Regenerate the contract",
+            "detail": "After an API change, run the build once with ADV_WRITE_CONTRACTS=true. The contract test writes the module's OpenAPI file under contracts/openapi/advanced with x-craves-auth set to public, user or staff on every operation. A normal build then fails on any drift, so the frontend can rely on the files."
+          },
+          {
+            "label": "Register the controller in the lock",
+            "detail": "Add each new controller class to live-runtime-lock.txt. In production the service refuses to start when a build is missing a listed class, so a rebuild from an older branch can never silently remove an API that customers or staff already use."
+          },
+          {
+            "label": "Release through the pipeline",
+            "detail": "A merge to GitHub main is mirrored to Azure DevOps within about 15 minutes. The release pipeline builds an image tagged with the commit, creates a new revision, waits for it to be healthy, sends 10 % of traffic for two minutes, then 100 %, and puts traffic back on the previous revision automatically if a check fails."
+          },
+          {
+            "label": "Verify live",
+            "detail": "The advanced features live smoke workflow waits for the release, then calls every route in the contracts: user and staff routes must answer the service's own 401 envelope without a token, public ones must answer, and the feature list must show each module as available. The workflow only reads; run it again on demand when in doubt."
+          }
+        ],
+        "example": "The Download my data module shipped this way on 3 November: a new package, no tables, a contract, a lock entry and a shared fix in GatewayHttp. The next smoke run showed the new route answering 401 without a token and the feature list showing my-data as available, which is the evidence that it reached production.",
+        "lab": "On a local branch, scaffold an empty module with one public read that returns a constant. Run the build with ADV_WRITE_CONTRACTS=true, inspect the generated contract and the new lock line, then run the normal build and confirm it passes with no drift. Delete the branch afterwards; do not open a pull request for the exercise.",
+        "pitfall": "Never edit a generated contract by hand or skip the lock entry: both checks exist so that the code, the contract and production stay the same thing.",
+        "questions": [
+          {
+            "id": "adv-contracts-release-q1",
+            "prompt": "How are the advanced OpenAPI contracts kept current?",
+            "options": [
+              "Written by hand after each release",
+              "Generated from the code by a contract test, and a normal build fails on drift",
+              "Copied from the gateway",
+              "Exported by the apps"
+            ],
+            "answer": 1,
+            "explanation": "Running with ADV_WRITE_CONTRACTS=true regenerates them; every other build checks that nothing drifted."
+          },
+          {
+            "id": "adv-contracts-release-q2",
+            "prompt": "Why is a new controller added to live-runtime-lock.txt?",
+            "options": [
+              "To speed up startup",
+              "So a production build missing that class refuses to start instead of dropping a live API",
+              "To make the route public",
+              "To give the module its own database"
+            ],
+            "answer": 1,
+            "explanation": "The lock compares the build with what production already runs before Spring and Flyway start."
+          },
+          {
+            "id": "adv-contracts-release-q3",
+            "prompt": "What does the live smoke expect from a staff route called without a token?",
+            "options": [
+              "200 with data",
+              "The service's own 401 error envelope",
+              "A redirect to the sign-in page",
+              "404 Not Found"
+            ],
+            "answer": 1,
+            "explanation": "A 401 in the service's envelope proves the route exists, is routed through the gateway and is protected."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,15 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { memo, useEffect, useRef, useState } from "react";
-import { FaPepperHot } from "react-icons/fa";
-import {
-  ChefHat,
-  Clock3,
-  Heart,
-  MapPin,
-  Minus,
-  Plus,
-  UsersRound,
-} from "lucide-react";
+import { memo, useEffect, useState } from "react";
+import { Clock3 } from "lucide-react";
 
 import { useCartLine } from "@/features/cart/components/CustomerFloatingCart";
 import {
@@ -26,8 +17,9 @@ import {
   subscribeCustomerFavorites,
 } from "@/features/favorites/api/customerFavorites";
 import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
-import { AnimateCount } from "@/shared/ui/AnimateCount";
-import { menuCategoryLabel } from "@/features/home/lib/dishCategories";
+import { formatDishPrice } from "@/shared/lib/kitchen-dish-summary";
+import { CartStepper } from "@/shared/ui/buttons/CartStepper";
+import { SaveHeartButton } from "@/shared/ui/buttons/SaveHeartButton";
 import type { Dish } from "@/features/dish/api/dishes";
 
 function distanceLabel(distanceMeters?: number): string | null {
@@ -37,27 +29,29 @@ function distanceLabel(distanceMeters?: number): string | null {
     : `${(distanceMeters / 1_000).toFixed(1)} km`;
 }
 
-function priceLabel(price: number, currency = "INR"): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(price);
+/** The Indian food mark: a green square with a dot (veg), brown with a triangle (non-veg), amber for egg. */
+function FoodMark({ dish }: { dish: Dish }) {
+  const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
+  const label = foodType === "VEG" ? "Veg" : foodType === "EGG" ? "Egg" : "Non-veg";
+  const color = foodType === "VEG" ? "#2E7D32" : foodType === "EGG" ? "#C27A00" : "#7A3B12";
+  return (
+    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border-[1.5px] bg-white" style={{ borderColor: color }} role="img" aria-label={label}>
+      {foodType === "NON_VEG" ? (
+        <span aria-hidden="true" className="h-0 w-0 border-x-[4px] border-b-[7px] border-x-transparent" style={{ borderBottomColor: color }} />
+      ) : (
+        <span aria-hidden="true" className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+      )}
+    </span>
+  );
 }
 
-function foodIndicator(dish: Dish): {
-  label: string;
-  dotClass: string;
-} {
-  const foodType = dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG");
-  if (foodType === "VEG") {
-    return { label: "Veg", dotClass: "bg-[#2E7D32]" };
-  }
-  if (foodType === "EGG") {
-    return { label: "Egg", dotClass: "bg-[#D99A00]" };
-  }
-  return { label: "Non-veg", dotClass: "bg-[#D92D20]" };
-}
+/**
+ * The photo's shape per width, so it never dwarfs the words below it (owner, 5 Nov 2026): 4:3 in
+ * the phone's two columns (about half the card), 3:2 in three columns, 16:10 from lg (about 60%,
+ * near the golden ratio). Delivery apps crop item photos to the same landscape range (Uber Eats
+ * 5:4, DoorDash and Wolt 16:9).
+ */
+export const DISH_PHOTO = "aspect-[4/3] sm:aspect-[3/2] lg:aspect-[16/10]";
 
 // Memoised: a filter tap re-renders the home page with the same dishes first, and
 // the cards skip that pass, so the pressed chip paints at once.
@@ -85,7 +79,6 @@ export const DishCard = memo(function DishCard({
   const [favoriteError, setFavoriteError] = useState<string | null>(null);
   const distance = distanceLabel(dish.distanceMeters);
   const featured = variant === "featured";
-  const indicator = foodIndicator(dish);
   const quantity = cartLine?.qty ?? 0;
 
   useEffect(() => {
@@ -140,28 +133,9 @@ export const DishCard = memo(function DishCard({
     }
   };
 
-  // Add and the stepper replace each other: keep focus on the control that is there now.
-  const controlRef = useRef<HTMLDivElement>(null);
-  const restoreFocusRef = useRef(false);
-  const inCart = quantity > 0;
-  useEffect(() => {
-    if (!restoreFocusRef.current) return;
-    restoreFocusRef.current = false;
-    controlRef.current
-      ?.querySelector<HTMLButtonElement>(inCart ? "[data-step='up']" : "[data-step='add']")
-      ?.focus();
-  }, [inCart]);
-  // Fade only controls the customer just swapped, never the list's first paint.
-  const [morph, setMorph] = useState(false);
-  const keepFocus = () => {
-    restoreFocusRef.current = Boolean(controlRef.current?.contains(document.activeElement));
-    setMorph(true);
-  };
-
   // The cart shows the change at once and reconciles with Craves in the background.
   const handleAdd = () => {
     if (adding) return;
-    keepFocus();
     setAdding(true);
     setError(null);
     addToCart(
@@ -188,11 +162,8 @@ export const DishCard = memo(function DishCard({
       .finally(() => setAdding(false));
   };
 
-  const handleQuantityChange = (change: -1 | 1) => {
+  const handleQuantityChange = (nextQuantity: number) => {
     if (!cartLine) return;
-    const nextQuantity = cartLine.qty + change;
-    if (nextQuantity > 50) return;
-    if (nextQuantity === 0) keepFocus();
     setError(null);
     setQty(cartLine.id, nextQuantity).catch((quantityError: unknown) => {
       setError(
@@ -203,17 +174,14 @@ export const DishCard = memo(function DishCard({
     });
   };
 
+  // Image first, then only what helps the choice: name, who cooks it and how far, price and Add.
   return (
     <article
-      className={`group flex h-full flex-col overflow-hidden border border-[#E5E7EB] bg-white shadow-[0_10px_30px_rgba(26,26,26,0.06)] transition-[border-color,box-shadow,scale] duration-(--dur-component) ease-out hover:scale-[1.005] hover:border-[#D7DADF] hover:shadow-[0_16px_36px_rgba(26,26,26,0.10)] motion-reduce:transform-none ${
-        featured ? "rounded-[1.7rem] sm:rounded-[1.85rem]" : "rounded-[1.25rem] sm:rounded-[1.45rem] lg:rounded-[1.55rem]"
+      className={`group flex h-full flex-col overflow-hidden bg-white shadow-[0_1px_2px_rgba(26,26,26,0.06),0_6px_18px_rgba(26,26,26,0.06)] ring-1 ring-[#EEE9E4] transition-[box-shadow,translate] duration-(--dur-component) ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(26,26,26,0.10)] ${
+        featured ? "rounded-[1.5rem]" : "rounded-[1.1rem] sm:rounded-[1.25rem]"
       }`}
     >
-      <div
-        className={`relative overflow-hidden bg-[#F1F3F5] ${
-          featured ? "aspect-[16/10]" : "aspect-[16/9] sm:aspect-[16/10]"
-        }`}
-      >
+      <div className={`relative overflow-hidden bg-[#F1F3F5] ${featured ? "aspect-[16/10]" : DISH_PHOTO}`}>
         <Link
           to="/dish/$id"
           params={{ id: dish.id }}
@@ -224,162 +192,60 @@ export const DishCard = memo(function DishCard({
             src={dish.img}
             alt={dish.name}
             fill
-            sizes="(min-width: 1280px) 22vw, (min-width: 1024px) 30vw, (min-width: 640px) 48vw, calc(100vw - 32px)"
+            sizes="(min-width: 1280px) 22vw, (min-width: 640px) 31vw, 48vw"
             loading={priorityImage ? "eager" : "lazy"}
             fetchPriority={priorityImage ? "high" : "auto"}
             fallbackLabel="Dish photo unavailable"
             className="object-cover group-hover:scale-[1.03]"
           />
         </Link>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#1A1A1A]/60 via-[#1A1A1A]/15 to-transparent" />
-
-        <span className="pointer-events-none absolute left-2.5 top-2.5 rounded-full border border-[#E5E7EB] bg-white px-2.5 py-1 text-[0.6rem] font-black uppercase tracking-[0.09em] text-[#1A1A1A] shadow-sm sm:left-3.5 sm:top-3.5 sm:px-3 sm:py-1.5 sm:text-[0.64rem]">
-          {menuCategoryLabel(dish.category)}
+        <span className="pointer-events-none absolute left-2 top-2 sm:left-2.5 sm:top-2.5">
+          <FoodMark dish={dish} />
         </span>
-
-        <button
-          type="button"
-          onClick={() => void handleFavorite()}
+        <SaveHeartButton
+          saved={favorite}
           disabled={!favoritesReady || favoriteBusy}
-          aria-pressed={favorite}
-          aria-label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
-          title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
-          className="absolute right-2.5 top-2.5 z-10 flex h-9 w-9 items-center justify-center rounded-full !border !border-white/80 !bg-[#F1F3F5] !text-[#F62E18] shadow-[0_8px_22px_rgba(26,26,26,0.12)] transition-[background-color,box-shadow,scale] duration-(--dur-micro) ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:scale-[0.9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30 motion-reduce:transform-none disabled:cursor-wait disabled:opacity-60 sm:right-3.5 sm:top-3.5 sm:h-10 sm:w-10"
-        >
-          <Heart
-            className={`h-[1.05rem] w-[1.05rem] transition-colors ${
-              favorite ? "fill-[#F62E18] text-[#F62E18]" : "text-current"
-            } ${favoriteBusy ? "animate-pulse" : ""}`}
-            aria-hidden="true"
-          />
-        </button>
-
-        <span className="pointer-events-none absolute bottom-2.5 left-2.5 inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 text-[0.62rem] font-black text-[#1A1A1A] shadow-sm sm:bottom-3.5 sm:left-3.5 sm:px-2.5 sm:py-1.5 sm:text-[0.65rem]">
-          <span
-            className={`h-2 w-2 rounded-full ${indicator.dotClass}`}
-            aria-hidden="true"
-          />
-          {indicator.label}
-        </span>
-
-        {distance ? (
-          <span className="pointer-events-none absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 rounded-full bg-[#1A1A1A]/90 px-2 py-1 text-[0.62rem] font-bold text-white sm:bottom-3.5 sm:right-3.5 sm:px-2.5 sm:py-1.5 sm:text-[0.65rem]">
-            <MapPin
-              className="h-3 w-3 fill-current"
-              strokeWidth={1.5}
-              aria-hidden="true"
-            />
-            {distance}
+          label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
+          title={favoriteError ?? undefined}
+          onToggle={() => void handleFavorite()}
+          onPhoto
+          size="sm"
+          className="absolute right-1.5 top-1.5 z-10 sm:right-2 sm:top-2"
+        />
+        {dish.time ? (
+          <span className="pointer-events-none absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-[#1A1A1A]/65 px-2 py-0.5 text-[0.6875rem] font-semibold text-white backdrop-blur-sm sm:bottom-2.5 sm:left-2.5 sm:text-xs">
+            <Clock3 className="h-3 w-3" aria-hidden="true" />
+            {dish.time}
           </span>
         ) : null}
       </div>
 
-      <div className={`flex flex-1 flex-col ${featured ? "p-4 sm:p-4.5" : "p-3 sm:p-3.5 lg:p-4"}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <Link
-              to="/dish/$id"
-              params={{ id: dish.id }}
-              className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35"
-            >
-              <h3
-                className={`font-display font-black leading-tight tracking-[-0.03em] text-[#1A1A1A] transition-colors group-hover:text-[#F62E18] ${
-                  featured ? "text-lg sm:text-xl" : "text-[0.95rem] sm:text-base lg:text-[1.02rem]"
-                }`}
-              >
-                {dish.name}
-              </h3>
-            </Link>
-            <p className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full bg-[#F1F3F5] px-2 py-0.5 text-[0.66rem] font-bold text-[#6B6B6B] sm:mt-1.5 sm:px-2.5 sm:py-1 sm:text-[0.68rem]">
-              <ChefHat className="h-3.5 w-3.5 shrink-0 text-[#F62E18]" aria-hidden="true" />
-              <span className="truncate">{dish.chef}</span>
-            </p>
-          </div>
-
-          <div className="shrink-0 text-right">
-            <span className="block text-[0.56rem] font-black uppercase tracking-[0.12em] text-[#6B6B6B]">
-              Price
-            </span>
-            <span className="font-display text-base font-black tracking-[-0.03em] text-[#1A1A1A] sm:text-lg">
-              {priceLabel(dish.price, dish.currency)}
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-2.5 flex items-end justify-between gap-2.5 sm:mt-3 sm:gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-2 text-[0.68rem] font-bold text-[#6B6B6B]">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-[inset_0_0_0_1px_#E5E7EB]">
-              <Clock3 className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
-              {dish.time}
-            </span>
-            {/* Beside the cooking time, as in the app: a chilli and Mild, Medium or Spicy. */}
-            {dish.spiceLevel ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-[inset_0_0_0_1px_#E5E7EB]">
-                <FaPepperHot className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
-                <span className="sr-only">Spice: </span>
-                {dish.spiceLevel}
-              </span>
-            ) : null}
-            {dish.serves ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 shadow-[inset_0_0_0_1px_#E5E7EB]">
-                <UsersRound className="h-3.5 w-3.5 text-[#F62E18]" aria-hidden="true" />
-                {dish.serves}
-              </span>
-            ) : null}
-          </div>
-
-          {/* One footprint for both states (as on Blinkit and Instamart): Add turns into the
-              stepper in place, so the card never changes height. Only the current control is
-              mounted (no motion components in every card); after a tap the new one fades in over
-              the shared pill with a CSS keyframe on the compositor. The count rolls. */}
-          <div
-            ref={controlRef}
-            className="relative h-12 w-[7.5rem] shrink-0 rounded-full bg-[#F1F3F5] text-[#1A1A1A] shadow-[0_5px_14px_rgba(26,26,26,0.06)]"
+      <div className={`flex flex-1 flex-col ${featured ? "p-3.5" : "p-2.5 sm:p-3"}`}>
+        <Link
+          to="/dish/$id"
+          params={{ id: dish.id }}
+          className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35"
+        >
+          <h3
+            className={`line-clamp-2 font-display font-bold leading-snug tracking-[-0.01em] text-[#1A1A1A] ${
+              featured ? "text-lg" : "text-[0.9375rem] sm:text-base"
+            }`}
           >
-            {inCart ? (
-              <div
-                role="group"
-                aria-label={`${dish.name} in cart`}
-                className={`absolute inset-0 flex items-center ${morph ? "animate-[craves-fade-in_150ms_ease-out]" : ""}`}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleQuantityChange(-1)}
-                  className="flex h-12 min-h-12 w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-transparent !text-[#1A1A1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-white active:!bg-[#E5E7EB] active:duration-0"
-                  aria-label={quantity <= 1 ? `Remove ${dish.name} from cart` : `Decrease ${dish.name} quantity`}
-                >
-                  <Minus className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-                <span className="flex-1 text-center text-sm font-black" aria-live="polite" aria-atomic="true">
-                  <span className="sr-only">Quantity </span>
-                  <AnimateCount className="min-w-[1ch]">{quantity}</AnimateCount>
-                </span>
-                <button
-                  type="button"
-                  data-step="up"
-                  onClick={() => handleQuantityChange(1)}
-                  disabled={quantity >= 50}
-                  className="flex h-12 min-h-12 w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-transparent !text-[#1A1A1A] !shadow-none transition-[background-color] duration-(--dur-micro) hover:!bg-white active:!bg-[#E5E7EB] active:duration-0"
-                  aria-label={`Increase ${dish.name} quantity`}
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                data-step="add"
-                onClick={handleAdd}
-                aria-busy={adding}
-                className={`absolute inset-0 inline-flex min-h-12 items-center justify-center gap-1.5 rounded-full !border !border-transparent !bg-transparent text-sm font-black !text-[#1A1A1A] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-white active:scale-[0.96] aria-busy:cursor-wait ${morph ? "animate-[craves-fade-in_150ms_ease-out]" : ""}`}
-                aria-label={`Add ${dish.name} to cart`}
-              >
-                {/* The stepper replaces this at once (optimistic), so no "Adding" label to flash. */}
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Add
-              </button>
-            )}
-          </div>
+            {dish.name}
+          </h3>
+        </Link>
+        <p className="mt-0.5 truncate text-xs text-[#6B6B6B] sm:text-[0.8125rem]">
+          {[dish.chef, distance].filter(Boolean).join(" · ")}
+        </p>
+
+        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+          <span className="font-display text-[0.9375rem] font-black tracking-[-0.02em] text-[#1A1A1A] sm:text-base">
+            {formatDishPrice(dish.price, dish.currency)}
+          </span>
+
+          {/* One footprint for both states: Add turns into the counter in place, so the card never
+              changes height. After a tap the new control fades in; the count rolls. */}
+          <CartStepper name={dish.name} quantity={quantity} onAdd={handleAdd} onChange={handleQuantityChange} compact />
         </div>
 
         {favoriteError ? (

@@ -41,7 +41,8 @@ public final class ChefOnboardingDtos {
     /** Someone who started the Chef application and has not submitted it, or was sent back for changes. */
     public record DraftApplicant(
         UUID identityId, String firstName, String lastName, String email, boolean emailVerified, String phoneNumber,
-        String step, String reviewStatus, UUID applicationId, Instant startedAt, Instant lastActivityAt
+        String step, String reviewStatus, UUID applicationId, Instant startedAt, Instant lastActivityAt,
+        String kitchenName, String city, String postalCode
     ) {}
     public record HelpStatusRequest(String status) {}
     public record ContentRequest(

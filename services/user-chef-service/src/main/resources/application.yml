@@ -69,6 +69,10 @@ craves:
     enabled: ${CRAVES_KITCHEN_LAUNCH_ALERTS_ENABLED:false}
     discovery-base-url: ${CRAVES_DISCOVERY_BASE_URL:}
     fixed-delay-ms: ${CRAVES_KITCHEN_LAUNCH_ALERTS_FIXED_DELAY_MS:900000}
+  chef-signup-alerts:
+    # Support mailbox told about each chef sign-up step (Waitlist@craves.in in production); empty = off.
+    email: ${CRAVES_CHEF_SIGNUP_ALERT_EMAIL:}
+    fixed-delay-ms: ${CRAVES_CHEF_SIGNUP_ALERTS_FIXED_DELAY_MS:300000}
 
 # Handbook 099: every log line carries the request's X-Correlation-ID (MDC key correlationId, set by CorrelationIdConfiguration).
 logging:

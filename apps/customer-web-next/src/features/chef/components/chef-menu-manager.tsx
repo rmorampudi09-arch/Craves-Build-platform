@@ -34,6 +34,7 @@ import {
 import { ChefMenuSkeleton } from "@/features/chef/components/chef-loading";
 import { ChefCategoryPicker } from "@/features/chef/components/chef-category-picker";
 import { ChefMenuViews } from "@/features/chef/components/chef-menu-views";
+import { ChefFssaiPopup } from "@/features/chef-onboarding/components/chef-fssai-popup";
 import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { Dialog, secondaryActionClass, Sheet, useOverlayHistory } from "@/shared/ui/overlays/overlay";
 import { isFeatureUnavailable } from "@/shared/lib/feature-availability";
@@ -359,6 +360,10 @@ function requiresKitchen(response: Response, body: unknown): boolean {
   );
 }
 
+/** The web server refuses to put a dish live until Craves has verified the chef's FSSAI number. */
+function fssaiRequired(response: Response, body: unknown) {
+  return response.status === 409 && !!body && typeof body === "object" && "code" in body && body.code === "FSSAI_REQUIRED";
+}
 function apiError(response: Response, body: unknown, fallback: string) {
   return chefApiError(response, body, fallback);
 }
@@ -468,6 +473,8 @@ export function ChefMenuManager() {
   const [query, setQuery] = useState("");
   /** The draft whose Publish asks first. */
   const [publishing, setPublishing] = useState<ChefMenuItem | null>(null);
+  /** The FSSAI popup: opened when a dish is refused because the number is missing or not verified yet. */
+  const [fssaiAsk, setFssaiAsk] = useState(false);
   /** For the Meal plans tab's count; unknown (no count) until read or when it can't be. */
   const [planCount, setPlanCount] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -693,6 +700,11 @@ export function ChefMenuManager() {
       );
       const body: unknown = await response.json().catch(() => null);
       if (!response.ok) {
+        if (fssaiRequired(response, body)) {
+          confirmedRejection = true;
+          setFssaiAsk(true);
+          return;
+        }
         // Catalog checks selling eligibility before any menu write. Other 5xx
         // responses and interrupted requests still require a reload to avoid duplicates.
         confirmedRejection =
@@ -824,6 +836,10 @@ export function ChefMenuManager() {
       });
       const body: unknown = await response.json().catch(() => null);
       const saved = response.ok ? parseChefMenuItem(body) : null;
+      if (fssaiRequired(response, body)) {
+        setFssaiAsk(true);
+        return;
+      }
       if (!saved) {
         setMessage(response.ok ? failed : chefErrorText(apiError(response, body, failed), failed));
         return;
@@ -1752,6 +1768,7 @@ export function ChefMenuManager() {
     </motion.form>
     )}
     {feedback}
+    <ChefFssaiPopup open={fssaiAsk} onClose={() => setFssaiAsk(false)} />
     </>
   );
 }

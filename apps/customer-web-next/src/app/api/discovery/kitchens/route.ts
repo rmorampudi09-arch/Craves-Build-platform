@@ -4,7 +4,8 @@ import { publicApiFetch } from "@/shared/lib/public-api";
 import { DEFAULT_DISCOVERY_RADIUS_METERS, MAX_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import { SPICE_LEVELS, type SpiceLevel } from "@/shared/lib/spice-level";
 
-const QUERY_KEYS = new Set(["latitude", "longitude", "radiusMeters", "page", "size", "spiceLevel", "query"]);
+const QUERY_KEYS = new Set(["latitude", "longitude", "radiusMeters", "page", "size", "spiceLevel", "query", "foodType"]);
+const FOOD_TYPES = new Set(["VEG", "EGG", "NON_VEG"]);
 const NO_STORE = { "Cache-Control": "no-store" };
 const DECIMAL = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
@@ -36,6 +37,8 @@ export async function GET(request: NextRequest) {
   const spiceLevel = params.get("spiceLevel");
   // Search words, as the app sends them: kitchens whose name, chef, area or dishes match.
   const searchQuery = parseSearchQuery(params.get("query"));
+  // Veg mode: kitchens with a veg dish, each counting only its veg dishes.
+  const foodType = params.get("foodType");
   if (
     invalidQuery
     || !Number.isFinite(latitude) || latitude < -90 || latitude > 90
@@ -44,6 +47,7 @@ export async function GET(request: NextRequest) {
     || !Number.isSafeInteger(page) || page < 0 || page > 1_000
     || !Number.isSafeInteger(size) || size < 1 || size > 50
     || (spiceLevel !== null && !SPICE_LEVELS.includes(spiceLevel as SpiceLevel))
+    || (foodType !== null && !FOOD_TYPES.has(foodType))
     || searchQuery === null
   ) {
     return NextResponse.json(
@@ -54,6 +58,7 @@ export async function GET(request: NextRequest) {
   const query = new URLSearchParams({ latitude: String(latitude), longitude: String(longitude), radiusMeters: String(radiusMeters), page: String(page), size: String(size) });
   if (spiceLevel) query.set("spiceLevel", spiceLevel);
   if (searchQuery) query.set("query", searchQuery);
+  if (foodType) query.set("foodType", foodType);
   try {
     const upstream = await publicApiFetch(`/discovery/kitchens?${query}`); const body = await upstream.json().catch(() => null);
     if (!upstream.ok) return NextResponse.json({ error: "DISCOVERY_UNAVAILABLE", message: "Nearby kitchens are unavailable right now." }, { status: upstream.status, headers: NO_STORE });

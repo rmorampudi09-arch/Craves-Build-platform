@@ -66,6 +66,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * runs for a new order; shadow computes and logs only; live offers it as the policy's rules say (Phase 4,
  * docs/riders/DISPATCH.md): offersAtOnce riders at a time (3 before Phase 4), up to offerRounds rounds while the stage
  * lasts, nearest first or, with a fair band, fair turns. Each offer records why its rider got it (trip_offer.reason).
+ * The owner's rule of 11 Nov 2026 (a policy with no limit on rounds, DispatchPolicy.wholeStage): riders keep the order for
+ * the whole stage. They are asked one after another, again once all in range have been, none about the same order until
+ * one look after their offer's time (so orders waiting for the same riders take turns); with nobody to ask the order
+ * waits for a rider; and only the deadline hands it to Borzo. No cost guard.
  */
 @Component
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
@@ -277,10 +281,12 @@ public class FleetDispatcher implements FleetStage {
         if (deadline != null && Instant.now().isBefore(deadline) && anyOfferOpen) {
             throw riderDeciding(deadline, policy, trip.id());
         }
-        if (deadline != null && Instant.now().isBefore(deadline) && policy != null && "live".equals(policy.mode()) && policy.offerRounds() > 1) {
+        if (deadline != null && Instant.now().isBefore(deadline) && policy != null && "live".equals(policy.mode())
+            && (policy.offerRounds() > 1 || policy.wholeStage())) {
             List<RingingOffer> round = nextRound(trip.id(), policy, courierQuotePaise);
-            if (round == null || !round.isEmpty()) {
-                // Sent now, or another worker sent this round a moment ago: either way riders are deciding.
+            // Sent now, or another worker sent this round a moment ago: either way riders are deciding. The whole stage:
+            // with nobody to ask right now the order still waits for a rider, and only the deadline moves it on.
+            if (round == null || !round.isEmpty() || policy.wholeStage()) {
                 (round == null ? List.<RingingOffer>of() : round).forEach(offer -> Thread.ofVirtual().name("fleet-offer-push")
                     .start(() -> ring(offer)));
                 throw riderDeciding(deadline, policy, trip.id());
@@ -288,6 +294,7 @@ public class FleetDispatcher implements FleetStage {
         }
         String outcome = deadline == null || !Instant.now().isBefore(deadline) ? "NO_ACCEPT" : "ALL_DECLINED_OR_EXPIRED";
         if (Boolean.TRUE.equals(transaction.execute(status -> closeUnlessDeciding(trip.id(), outcome, borzoNext, policy)))) {
+            LOGGER.info("FLEET_STAGE_CLOSED trip={} outcome={} next={}", trip.id(), outcome, borzoNext ? "BORZO" : "PIDGE");
             return Optional.empty();
         }
         TripState now = trip(trip.chefSubOrderId()).orElseThrow();
@@ -404,7 +411,8 @@ public class FleetDispatcher implements FleetStage {
         double dropLng = request.dropoff().longitude().doubleValue();
         int dropM = roads.meters(kitchenLat, kitchenLng, dropLat, dropLng);
         List<Candidate> riders = riders(command.chefSubOrderId(), kitchenLat, kitchenLng, dropLat, dropLng, dropM, policy, Set.of(), 1);
-        OptionalLong courier = riders.isEmpty() ? OptionalLong.empty() : courierQuotePaise.get();
+        // The whole stage has no cost guard, so no courier is asked for a quote.
+        OptionalLong courier = riders.isEmpty() || policy.wholeStage() ? OptionalLong.empty() : courierQuotePaise.get();
         Choice choice = choose(riders, policy, card, dropM, courier, 1, kitchenLat, kitchenLng, dropLat, dropLng);
         return new Plan(chefId, card.version(), dropM, choice.offers(), choice.outcome(), courier.isPresent() ? courier.getAsLong() : null);
     }
@@ -690,7 +698,11 @@ public class FleetDispatcher implements FleetStage {
      * The next round while the fleet stage lasts (Phase 4): the next riders in today's order who haven't been offered this
      * trip. Ranked outside the transaction (the cost guard may ask Borzo for a quote); then the stage row is locked and the
      * round checked, so two workers never send the same one. Empty when nobody is left; null when another worker just sent it
-     * or the riders chosen became busy meanwhile (look again shortly, while the stage lasts).
+     * or the riders chosen became busy meanwhile (look again shortly, while the stage lasts). The whole stage has no limit
+     * on rounds and asks riders again: those asked the fewest times hear first, so riders take turns, and a rider offered
+     * this trip is left out for the offer's time and one look more (ROUND_CHECK_EVERY). In that gap another order waiting
+     * for riders asks them, so orders take turns too: without it, the order whose offer just ran out would ask the same
+     * rider again before any other looked, and with more orders than riders the rest would never be offered to anyone.
      */
     private List<RingingOffer> nextRound(UUID tripId, DispatchPolicy policy, Supplier<OptionalLong> courierQuotePaise) {
         Map<String, Object> trip = jdbc.queryForMap("""
@@ -699,15 +711,20 @@ public class FleetDispatcher implements FleetStage {
                    (SELECT COALESCE(MAX(o.round), 0) FROM fleet_schema.trip_offer o WHERE o.trip_id = t.id) AS rounds
             FROM fleet_schema.trip t WHERE t.id = ?""", tripId);
         int rounds = ((Number) trip.get("rounds")).intValue();
-        if (rounds >= policy.offerRounds()) {
+        if (!policy.wholeStage() && rounds >= policy.offerRounds()) {
             return List.of();
         }
-        Set<UUID> offered = Set.copyOf(jdbc.queryForList("SELECT rider_id FROM fleet_schema.trip_offer WHERE trip_id = ?", UUID.class, tripId));
+        Set<UUID> offered = Set.copyOf(jdbc.queryForList("SELECT rider_id FROM fleet_schema.trip_offer WHERE trip_id = ?"
+            + (policy.wholeStage() ? " AND offered_at > now() - make_interval(secs => "
+                + (policy.offerSeconds() + ROUND_CHECK_EVERY.toSeconds()) + ")" : ""), UUID.class, tripId));
         double lat = ((Number) trip.get("kitchen_lat")).doubleValue();
         double lng = ((Number) trip.get("kitchen_lng")).doubleValue();
         int dropM = trip.get("drop_distance_m") == null ? 0 : ((Number) trip.get("drop_distance_m")).intValue();
         List<Candidate> riders = riders((UUID) trip.get("chef_sub_order_id"), lat, lng, ((Number) trip.get("drop_lat")).doubleValue(),
             ((Number) trip.get("drop_lng")).doubleValue(), dropM, policy, offered, rounds + 1);
+        if (policy.wholeStage()) {
+            riders = fewestAsksFirst(tripId, riders);
+        }
         RateCard card = policies.rateCard((String) trip.get("rate_card_version")).filter(own -> !own.draft())
             .or(() -> policies.rateCardInForce(null)).orElse(null);
         if (riders.isEmpty() || card == null) {
@@ -715,9 +732,11 @@ public class FleetDispatcher implements FleetStage {
         }
         // One courier quote per order (R16 17): round 1's, kept on the trip. Asked here only when round 1 had none (nobody
         // was in range, or the couriers didn't answer), and kept once it comes: the first stored wins, and a worker that
-        // lost the race decides with it, not its own.
-        Object kept = trip.get("courier_quote_paise");
-        OptionalLong courier = kept != null ? OptionalLong.of(((Number) kept).longValue()) : courierQuotePaise.get();
+        // lost the race decides with it, not its own. The whole stage has no cost guard: no quote is asked for or used,
+        // not even one kept from before the policy changed.
+        Object kept = policy.wholeStage() ? null : trip.get("courier_quote_paise");
+        OptionalLong courier = policy.wholeStage() ? OptionalLong.empty()
+            : kept != null ? OptionalLong.of(((Number) kept).longValue()) : courierQuotePaise.get();
         if (kept == null && courier.isPresent()) {
             courier = OptionalLong.of(jdbc.queryForObject("UPDATE fleet_schema.trip SET courier_quote_paise = COALESCE(courier_quote_paise, ?) "
                 + "WHERE id = ? RETURNING courier_quote_paise", Long.class, courier.getAsLong(), tripId));
@@ -762,6 +781,16 @@ public class FleetDispatcher implements FleetStage {
             refreshEngine(newRound);
         }
         return newRound;
+    }
+
+    /** The riders in their order, those offered this trip the fewest times first: riders not yet asked, then each again in turn. */
+    private List<Candidate> fewestAsksFirst(UUID tripId, List<Candidate> riders) {
+        Map<UUID, Integer> asks = new HashMap<>();
+        jdbc.query("SELECT rider_id, count(*) AS asks FROM fleet_schema.trip_offer WHERE trip_id = ? GROUP BY rider_id",
+            row -> {
+                asks.put(row.getObject("rider_id", UUID.class), row.getInt("asks"));
+            }, tripId);
+        return riders.stream().sorted(Comparator.comparingInt(rider -> asks.getOrDefault(rider.riderId(), 0))).toList();
     }
 
     /**
@@ -885,6 +914,11 @@ public class FleetDispatcher implements FleetStage {
         int offered = insertOffers(tripId, policy, plan.offers(), 1);
         List<RingingOffer> offers = offered == 0 ? List.of() : ringing(tripId);
         if (offers.isEmpty()) {
+            if (policy.wholeStage()) {
+                // Nobody to ask yet: the order waits for a rider until the deadline, and each look offers it to the riders free then.
+                LOGGER.info("FLEET_WAITING chefSubOrderId={} trip={} deadline={}", command.chefSubOrderId(), tripId, deadline);
+                return new Opened(tripId, List.of(), deadline, true);
+            }
             if (!plan.offers().isEmpty() && policy.offerRounds() > 1) {
                 // The riders chosen took another order a moment ago: with rounds, the next look offers it to the riders free then.
                 return new Opened(tripId, List.of(), deadline, true);
@@ -996,8 +1030,9 @@ public class FleetDispatcher implements FleetStage {
      * and with unheardSeconds on (rounds only), when the trip's next offer turns unheard, so its next rider hears on time.
      */
     private DeliveryProviderTemporarilyUnavailableException riderDeciding(Instant deadline, DispatchPolicy policy, UUID tripId) {
-        Instant check = Instant.now().plus(policy != null && policy.offerRounds() > 1 ? ROUND_CHECK_EVERY : CHECK_EVERY);
-        if (unheardSeconds > 0 && policy != null && policy.offerRounds() > 1) {
+        boolean rounds = policy != null && (policy.offerRounds() > 1 || policy.wholeStage());
+        Instant check = Instant.now().plus(rounds ? ROUND_CHECK_EVERY : CHECK_EVERY);
+        if (unheardSeconds > 0 && rounds) {
             // Only offers not yet past it: one already unheard was just looked at, and waking for it again would spin.
             Timestamp unheard = jdbc.queryForObject("SELECT MIN(offered_at) + make_interval(secs => ?) FROM fleet_schema.trip_offer "
                 + "WHERE trip_id = ? AND state = 'ACTIVE' AND rang_at IS NULL AND offered_at > now() - make_interval(secs => ?)",

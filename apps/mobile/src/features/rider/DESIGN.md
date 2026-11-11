@@ -427,7 +427,7 @@ Roboto, the Android system face, loaded by the platform with no custom font file
 | `{typography.otpDigit}` | 36 | 700 | One digit per OTP box. |
 | `{typography.title}` | 30 | 700 | Money heroes (today's total, you earned, withdrawable), the shift timer, "Emergency". |
 | `{typography.hero}` | 24 | 700 | Page H1, kitchen and customer names, km tiles, secondary money, the door-wait countdown, the profile name. |
-| `{typography.heading}` | 19 | 700 | Header titles, card titles, section headings, slot time, route, the countdown label, Accept and SOS-call labels. |
+| `{typography.heading}` | 19 | 700 | Header titles, card titles, section headings, route, the countdown label, Accept and SOS-call labels. |
 | `{typography.headingMedium}` | 19 | 500 | The SOS subtitle only. |
 | `{typography.button}` | 16 | 700 | Button labels and red action links. |
 | `{typography.sosLabel}` | 16 | 800 | "SOS" in the header button. |

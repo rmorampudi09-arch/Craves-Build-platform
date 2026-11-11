@@ -112,10 +112,37 @@ describe("BFF actual-stream request limits", () => {
   });
   it("caps simultaneous JSON readers without waiting for the entire body", async () => {
     vi.useFakeTimers();
-    const pending = Array.from({ length: 16 }, () => boundBffRequest(request(new ReadableStream<Uint8Array>({ start() {} }))));
+    const pending = Array.from({ length: 128 }, () => boundBffRequest(request(new ReadableStream<Uint8Array>({ start() {} }))));
     const excess = await boundBffRequest(request("{}"));
     expect((excess as NextResponse).status).toBe(429);
     await vi.advanceTimersByTimeAsync(5001);
     expect((await Promise.all(pending)).every(result => (result as NextResponse).status === 408)).toBe(true);
+  });
+  it("lets one stalling peer block only itself, not the other visitors", async () => {
+    vi.useFakeTimers();
+    const stalled = () => new ReadableStream<Uint8Array>({ start() {} });
+    const attacker = { "X-Azure-SocketIP": "203.0.113.9" };
+    const pending = Array.from({ length: 8 }, () => boundBffRequest(request(stalled(), attacker)));
+    expect((await boundBffRequest(request("{}", attacker)) as NextResponse).status).toBe(429);
+    expect(await boundBffRequest(request("{}", { "X-Azure-SocketIP": "198.51.100.4" }))).toBeInstanceOf(NextRequest);
+    expect(await boundBffRequest(request("{}", { "X-Azure-SocketIP": "2001:db8::7" }))).toBeInstanceOf(NextRequest);
+    // Caller-written address headers do not buy a fresh allowance.
+    expect((await boundBffRequest(request("{}", { ...attacker, "X-Forwarded-For": "198.51.100.5", "X-Azure-ClientIP": "198.51.100.6" })) as NextResponse).status).toBe(429);
+    await vi.advanceTimersByTimeAsync(5001);
+    expect((await Promise.all(pending)).every(result => (result as NextResponse).status === 408)).toBe(true);
+    expect(await boundBffRequest(request("{}", attacker))).toBeInstanceOf(NextRequest);
+  });
+  it("caps one peer's simultaneous uploads at two", async () => {
+    vi.useFakeTimers();
+    const upload = (headers: Record<string, string>) => new NextRequest("https://craves.in/api/chef/kitchen/photos", {
+      method: "POST", body: new ReadableStream<Uint8Array>({ start() {} }),
+      headers: { Origin: "https://craves.in", "Content-Type": "multipart/form-data; boundary=x", ...headers },
+    });
+    const chef = { "X-Azure-SocketIP": "203.0.113.10" };
+    const pending = [boundBffRequest(upload(chef)), boundBffRequest(upload(chef))];
+    expect((await boundBffRequest(upload(chef)) as NextResponse).status).toBe(429);
+    const other = boundBffRequest(upload({ "X-Azure-SocketIP": "203.0.113.11" }));
+    await vi.advanceTimersByTimeAsync(15_001);
+    expect((await Promise.all([...pending, other])).every(result => (result as NextResponse).status === 408)).toBe(true);
   });
 });

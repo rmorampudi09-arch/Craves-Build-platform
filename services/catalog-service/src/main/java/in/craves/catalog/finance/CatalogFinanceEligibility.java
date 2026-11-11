@@ -99,7 +99,7 @@ public class CatalogFinanceEligibility {
     }
     public void requireChef(UUID chef) {
         if (!current().chefs().contains(chef)) throw ApiException.conflict("CHEF_SELLING_NOT_READY",
-            "Complete the required finance review before accepting new orders");
+            "Your kitchen and dishes can go live once Craves has approved your account and verified your FSSAI number.");
     }
     static final class BoundedBody implements HttpResponse.BodySubscriber<byte[]> {
         private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();

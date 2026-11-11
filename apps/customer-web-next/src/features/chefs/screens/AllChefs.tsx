@@ -11,8 +11,7 @@ import { DEFAULT_KITCHEN_VIEW, sortKitchens, type KitchenView } from "@/features
 import { BrowseHeader } from "@/features/home/components/BrowseHeader";
 import { CustomerSignOutDialog } from "@/features/home/components/CustomerSignOutDialog";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
-import { KitchensGrid } from "@/features/home/components/KitchensGrid";
-import { KitchenDiscoverCard } from "@/features/chefs/components/KitchenDiscoverCard";
+import { KitchenCard, KitchensGrid } from "@/features/home/components/KitchensGrid";
 import { DEFAULT_DISCOVERY_RADIUS_METERS } from "@/features/home/lib/catalog-discovery-policy";
 import type { NearbyKitchen } from "@/features/home/lib/discovery-contract";
 import { rememberReturnRoute } from "@/shared/lib/return-navigation";
@@ -24,6 +23,7 @@ import {
   subscribeCart,
 } from "@/features/cart/api/cravesCart";
 import { discoverDishes, type Dish } from "@/features/dish/api/dishes";
+import { pureVegKitchenIds, setVegMode, useVegKitchens, useVegMode, vegModeDishes } from "@/shared/hooks/use-veg-mode";
 import { discoverKitchens, loadKitchenPage } from "@/features/chefs/api/kitchens";
 import {
   clearSession,
@@ -199,11 +199,24 @@ export function AllChefsPage() {
     };
   }, [navigate, refresh]);
 
+  // Veg mode (the header switch, remembered on this device): pure veg kitchens only, or every
+  // kitchen with a veg dish, with the cards' photos and prices from veg dishes alone.
+  // The catalog says which kitchens cook veg and which cook only veg; until it answers, the loaded dishes decide.
+  const vegMode = useVegMode();
+  const catalogVeg = useVegKitchens(vegMode, address?.lat, address?.lng, DEFAULT_DISCOVERY_RADIUS_METERS);
+  const pureKitchens = useMemo(() => catalogVeg?.pure ?? pureVegKitchenIds(kitchens, dishes), [catalogVeg, dishes, kitchens]);
+  const vegDishes = useMemo(() => vegModeDishes(vegMode, dishes, pureKitchens), [dishes, pureKitchens, vegMode]);
+  const vegKitchens = useMemo(() => {
+    if (vegMode === "off") return kitchens;
+    const shown = vegMode === "pure" ? pureKitchens : catalogVeg?.veg ?? new Set(vegDishes.map((dish) => dish.kitchenId));
+    return kitchens.filter((kitchen) => shown.has(kitchen.id));
+  }, [catalogVeg, kitchens, pureKitchens, vegDishes, vegMode]);
+
   const filteredKitchens = useMemo(() => {
     const query = searchTerm.trim().toLocaleLowerCase("en-IN");
-    if (!query) return kitchens;
+    if (!query) return vegKitchens;
 
-    return kitchens.filter((kitchen) =>
+    return vegKitchens.filter((kitchen) =>
       [
         kitchen.kitchenName,
         kitchen.displayName,
@@ -217,7 +230,7 @@ export function AllChefsPage() {
         .toLocaleLowerCase("en-IN")
         .includes(query),
     );
-  }, [kitchens, searchTerm]);
+  }, [searchTerm, vegKitchens]);
 
   const changeView = (next: KitchenView) => {
     setView(next);
@@ -242,7 +255,7 @@ export function AllChefsPage() {
   };
 
   if (!user) {
-    return <CustomerPageSkeleton variant="chefs" label="Loading nearby home chefs" />;
+    return <CustomerPageSkeleton variant="chefs" label="Loading nearby kitchens" />;
   }
 
   // One state for the page instead of a list, as in the app; null while the list shows.
@@ -265,7 +278,7 @@ export function AllChefsPage() {
       <EmptyState
         role="alert"
         illustration="loadError"
-        title="Home chefs could not be loaded"
+        title="Kitchens could not be loaded"
         message="Check your connection and try again."
       >
         <button type="button" onClick={() => void refresh(address, view.spice)} className="craves-primary-action">
@@ -279,10 +292,28 @@ export function AllChefsPage() {
       <EmptyState
         illustration="comingSoonArea"
         title={comingSoonTitle(address)}
-        message="Home chefs don't cook near this address yet. Try another address."
+        message="No home kitchens cook near this address yet. Try another address."
       >
         <button type="button" onClick={openAddressManager} className="craves-primary-action">
           Change delivery address
+        </button>
+      </EmptyState>
+    );
+  } else if (state === "ready" && vegMode !== "off" && vegKitchens.length === 0 && kitchens.length > 0) {
+    pageState = (
+      <EmptyState
+        illustration="search"
+        title={vegMode === "pure" ? "No pure veg kitchens near you yet" : "No veg dishes near you right now"}
+        message={
+          vegMode === "pure"
+            ? more
+              ? "None of the kitchens shown so far cook only veg. Show more kitchens, or see veg dishes from every kitchen."
+              : "Kitchens near you also cook non-veg. You can still see their veg dishes."
+            : "Kitchens near you aren't cooking veg dishes right now."
+        }
+      >
+        <button type="button" onClick={() => setVegMode(vegMode === "pure" ? "veg-dishes" : "off")} className="craves-primary-action">
+          {vegMode === "pure" ? "Show veg dishes from all kitchens" : "Turn off veg mode"}
         </button>
       </EmptyState>
     );
@@ -294,10 +325,10 @@ export function AllChefsPage() {
         title="No matching kitchens"
         message={
           spiceOnly && view.spice !== "any"
-            ? `No home chefs near you are cooking ${SPICE_LEVEL_LABELS[view.spice].toLowerCase()} dishes right now.`
+            ? `No kitchens near you are cooking ${SPICE_LEVEL_LABELS[view.spice].toLowerCase()} dishes right now.`
             : more
-              ? "None of the kitchens shown so far match. Try another chef, kitchen name or area, or show more kitchens."
-              : "Try another chef, kitchen name or area."
+              ? "None of the kitchens shown so far match. Try another kitchen, cook or area, or show more kitchens."
+              : "Try another kitchen, cook or area."
         }
       >
         {spiceOnly ? (
@@ -329,14 +360,16 @@ export function AllChefsPage() {
         onSearchTermChange={setSearchTerm}
         onSearchActivate={() => undefined}
         returnPath="/chefs"
-        searchPlaceholder="Search chefs, kitchens or area"
+        searchPlaceholder="Search kitchens, cooks or area"
+        vegToggle
       />
 
       <main>
         <div className="mx-auto max-w-[88rem] px-4 pt-4 md:px-7 md:pt-5 lg:px-10">
           <h1 className="font-display text-3xl font-extrabold leading-tight tracking-[-0.03em] text-[#261A15] md:text-4xl">
-            Discover home chefs
+            Kitchens
           </h1>
+          <p className="mt-1 text-[0.9375rem] font-semibold text-[#706864]">Home kitchens near you</p>
           {/* Spice reloads from the address, so the filters wait for it. */}
           {showFilters ? (
             <div className="pt-3 md:pt-4">
@@ -355,9 +388,10 @@ export function AllChefsPage() {
             }
             onRetry={() => void refresh(address, view.spice)}
             onManageAddress={openAddressManager}
-            dishes={dishes}
-            renderKitchen={(kitchen, summary, open) => <KitchenDiscoverCard kitchen={kitchen} summary={summary} onOpen={open} />}
-            totalNearby={more?.total}
+            dishes={vegDishes}
+            renderKitchen={(kitchen, summary, open) => <KitchenCard kitchen={kitchen} summary={summary} onOpen={open} wide />}
+            // In veg mode the count is the kitchens shown, not every kitchen nearby.
+            totalNearby={vegMode === "off" ? more?.total : undefined}
           />
         )}
         {state === "ready" && more ? (
@@ -377,8 +411,8 @@ export function AllChefsPage() {
             >
               {more.loading ? <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" /> : null}
               {more.total > kitchens.length
-                ? `Show ${more.total - kitchens.length} more home chefs`
-                : "Show more home chefs"}
+                ? `Show ${more.total - kitchens.length} more kitchens`
+                : "Show more kitchens"}
             </button>
           </div>
         ) : null}

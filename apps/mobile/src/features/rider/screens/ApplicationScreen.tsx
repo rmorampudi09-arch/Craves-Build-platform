@@ -19,7 +19,7 @@ import {StatusBadge} from '../components/StatusBadge';
 import {StepBar} from '../components/StepBar';
 import {Timeline} from '../components/Timeline';
 import {Card, RiderScreen, Title} from '../components/ui';
-import {APPLY_STEPS, applicationOf, requiredDocuments, resumeStep, vehicleModel, type Application, type ApplyStep} from '../domain/application';
+import {APPLY_STEPS, applicationOf, knownKind, requiredDocuments, resumeStep, vehicleModel, type Application, type ApplyStep} from '../domain/application';
 import {formatClock} from '../domain/format';
 import {riderMessage} from '../domain/problem';
 import {useRiderShell, type RiderNav} from '../navigation';
@@ -221,7 +221,7 @@ function VehicleStep({
   const ap = strings.account.apply;
   const queryClient = useQueryClient();
   const vehicle = profile?.vehicle;
-  const [draft, setDraft] = useState<VehicleDraft>({kind: vehicle?.kind ?? 'PETROL', plate: '', model: vehicleModel(vehicle?.label) ?? ''});
+  const [draft, setDraft] = useState<VehicleDraft>({kind: knownKind(vehicle?.kind) ?? 'PETROL', plate: '', model: vehicleModel(vehicle?.label) ?? ''});
   const [plateError, setPlateError] = useState<string>();
   const [error, setError] = useState<string | null>(null);
   // Someone correcting their application keeps the plate on file by leaving it empty.

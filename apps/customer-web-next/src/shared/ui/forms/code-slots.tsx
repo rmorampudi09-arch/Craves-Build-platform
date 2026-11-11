@@ -9,6 +9,10 @@ export interface CodeSlotsProps
   length?: number;
   /** Controlled value (digits only). Leave out to let the slots keep their own. */
   value?: string;
+  /** The slots' own starting digits when `value` is left out. */
+  defaultValue?: string;
+  /** The field's name for screen readers when no <label> names it. */
+  ariaLabel?: string;
   onChange?: (value: string) => void;
   /** Called once each time the last slot is filled (typed, pasted or autofilled from the SMS). */
   onComplete?: (code: string) => void;
@@ -37,8 +41,10 @@ export interface CodeSlotsProps
 }
 
 /**
- * One-time-code slots. A single real input sits over the slots, so SMS autofill, paste,
- * Backspace and screen readers all work; the slots only draw what it holds.
+ * One-time-code slots (the React Bits Code Slots motion in Craves colours, owner 5 Nov 2026): used
+ * for every code typed on the website (phone sign-in and email codes), never the admin portal.
+ * A single real input sits over the slots, so SMS autofill, paste, Backspace and screen readers
+ * all work; the slots only draw what it holds.
  * Craves defaults: ink digits on neutral slots, Flame Red for the slot being typed,
  * green for accepted and deep red for a wrong code (borders only, never a red tint).
  */
@@ -46,6 +52,8 @@ export const CodeSlots = forwardRef<HTMLInputElement, CodeSlotsProps>(function C
   {
     length = 6,
     value,
+    defaultValue = "",
+    ariaLabel,
     onChange,
     onComplete,
     status = "idle",
@@ -75,7 +83,7 @@ export const CodeSlots = forwardRef<HTMLInputElement, CodeSlotsProps>(function C
   },
   ref,
 ) {
-  const [own, setOwn] = useState("");
+  const [own, setOwn] = useState(() => defaultValue.replace(/\D/g, "").slice(0, length));
   const [focused, setFocused] = useState(false);
   const field = useRef<HTMLInputElement>(null);
   // Set when a complete code made the field let go of focus (mouse or trackpad).
@@ -136,6 +144,7 @@ export const CodeSlots = forwardRef<HTMLInputElement, CodeSlotsProps>(function C
         data-form-type="other"
         disabled={disabled}
         value={code}
+        aria-label={ariaLabel ?? input["aria-label"]}
         aria-invalid={status === "error" || undefined}
         className="code-slots-input"
         onChange={(event) => {
@@ -189,6 +198,14 @@ export const CodeSlots = forwardRef<HTMLInputElement, CodeSlotsProps>(function C
                 </span>
               ) : caret && active ? (
                 <span className="code-slot-caret" />
+              ) : null}
+              {/* Accepted: once the green wave reaches the end, a tick pops onto the last slot. */}
+              {status === "success" && outcome === "accept" && index === length - 1 ? (
+                <span className="code-slot-check">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.25" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12.5l4.5 4.5L19 7.5" />
+                  </svg>
+                </span>
               ) : null}
             </div>
           );

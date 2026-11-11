@@ -63,4 +63,22 @@ class SupportChatLimiterTest {
         assertDoesNotThrow(() -> limiter.admit(UUID.randomUUID()));
         assertEquals(2, limiter.tracked());
     }
+
+    @Test
+    void aFloodOfNewKeysInOneDayStopsGrowingTheMap() {
+        now.set(SupportChatLimiter.DAY_MILLIS * 100);
+        for (int i = 0; i < SupportChatLimiter.MAX_TRACKED; i++) {
+            limiter.admit(UUID.randomUUID(), 1000, 1000);
+        }
+        assertEquals(SupportChatLimiter.MAX_TRACKED, limiter.tracked());
+        // The keys above are all from today, so nothing can be evicted: the extra ones share one bucket.
+        for (int i = 0; i < 50; i++) {
+            limiter.admit(UUID.randomUUID(), 1000, 1000);
+        }
+        assertEquals(SupportChatLimiter.MAX_TRACKED + 1, limiter.tracked());
+        // Yesterday's entries still make room for a new day's visitors.
+        now.addAndGet(SupportChatLimiter.DAY_MILLIS);
+        limiter.admit(UUID.randomUUID(), 1000, 1000);
+        assertEquals(1, limiter.tracked());
+    }
 }

@@ -4,6 +4,7 @@
 // There is no arrival time to invent, so nothing is promised.
 import type { CustomerOrder } from "./order-contract.ts";
 import type { DeliveryStatusResponse } from "./delivery-status.ts";
+import { orderWords } from "../../../shared/lib/order-words.ts";
 
 export type CalendarStep = "placed" | "accepted" | "cooking" | "packed" | "onTheWay" | "delivered";
 
@@ -22,17 +23,12 @@ export type OrderCalendar = { rows: CalendarRow[]; nowAfter: number | null };
 const STEPS: CalendarStep[] = ["placed", "accepted", "cooking", "packed", "onTheWay", "delivered"];
 const AFTER_PICKUP = new Set(["PICKED_UP", "IN_TRANSIT", "AT_DROPOFF", "DELIVERED"]);
 
-/** "Lakshmi" from "Lakshmi's Kitchen"; otherwise "The chef". */
-export function cookName(kitchenName: string): string {
-  return /^(.+?)['’]s\b/.exec(kitchenName)?.[1] ?? "The chef";
-}
-
 /** The day sheet for an order still on its way to the customer; null for one that's closed or not paid yet. */
 export function orderCalendar(
   order: Pick<CustomerOrder, "status" | "createdAt" | "updatedAt" | "prepTimeMinutes" | "kitchenName">,
   delivery: Pick<DeliveryStatusResponse, "status" | "history"> | null,
 ): OrderCalendar | null {
-  const cook = cookName(order.kitchenName);
+  const words = orderWords(order.kitchenName);
   const firstSeen = (statuses: string[]) => delivery?.history.find((entry) => statuses.includes(entry.newStatus))?.observedAt ?? null;
   const pickedUpAt = firstSeen(["PICKED_UP", "IN_TRANSIT"]);
   const deliveredAt = firstSeen(["DELIVERED"]);
@@ -76,11 +72,11 @@ export function orderCalendar(
         return { step, state, at, label: "Order placed", detail: "Paid and sent to the kitchen" };
       case "accepted":
         return waiting
-          ? { step, state, at, label: `Waiting for ${cook === "The chef" ? "the chef" : cook}`, detail: "The chef will confirm your order shortly." }
-          : { step, state, at, label: `${cook} accepted`, detail: state === "now" ? "Your order is confirmed and cooked fresh." : "Confirmed" };
+          ? { step, state, at, label: words.waiting, detail: words.waitingDetail }
+          : { step, state, at, label: words.accepted, detail: state === "now" ? "Your order is confirmed and cooked fresh." : "Confirmed" };
       case "cooking":
         return state === "now"
-          ? { step, state, at, label: "Cooking now", detail: `${cook === "The chef" ? "The chef" : cook} is cooking` }
+          ? { step, state, at, label: words.cooking, detail: "Cooked fresh, just for you" }
           : { step, state, at, label: "Cooking", detail: state === "done" ? "Cooked fresh" : "still to come" };
       case "packed":
         return {

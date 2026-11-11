@@ -131,4 +131,42 @@ class PromotionCheckoutDatabaseTest extends FinancialCheckoutDatabaseTest {
   assertThrows(Exception.class,()->jdbc.update("UPDATE order_schema.promotion_checkout_benefit SET state='RESERVED'"));
   assertThrows(Exception.class,()->jdbc.update("DELETE FROM order_schema.promotion_checkout_benefit"));
  }
+ CheckoutResponse paidAndConfirmed()throws Exception{
+  expectReserve("CRAVES",1);var value=checkoutWithPromotion();server.reset();
+  jdbc.update("UPDATE order_schema.checkout SET status='PAID' WHERE id=?",value.id());
+  jdbc.update("UPDATE order_schema.promotion_checkout_benefit SET state='CONFIRMED'");return value;
+ }
+ @Test void paidCheckoutCancelledBeforeFulfilmentReleasesTheConfirmedRedemptionForThatCheckout()throws Exception{
+  var value=paidAndConfirmed();
+  jdbc.update("UPDATE order_schema.customer_order SET status='REFUNDED' WHERE checkout_id=?",value.id());
+  server.expect(requestTo("http://adv/internal/v1/promotions/redemptions/"+redemption+"/release")).andExpect(header("X-Craves-Internal-Secret","s3cret"))
+   .andExpect(jsonPath("$.personId").value(customer.toString())).andExpect(jsonPath("$.orderId").value(value.id().toString()))
+   .andRespond(withSuccess("{\"id\":\""+redemption+"\",\"status\":\"RELEASED\"}",MediaType.APPLICATION_JSON));
+  assertTrue(promotions.runOne());server.verify();assertEquals("RELEASED",state());
+  // Released, so it no longer counts against the person's limit of 1.
+  orders.addCartItem(actor,new in.craves.order.web.ApiDtos.AddCartItemRequest(menu,1));var other=UUID.randomUUID();
+  server.reset();server.expect(requestTo("http://adv/api/v1/advanced/promotions/redemptions")).andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body(redemptionJson(36900).replace(redemption.toString(),other.toString())));
+  server.expect(requestTo("http://adv/internal/v1/promotions/redemptions/"+other+"/checkout-terms?personId="+customer)).andRespond(withSuccess("{\"id\":\""+other+"\",\"promotionId\":\""+promotion+"\",\"discountPaise\":5000,\"fundedBy\":\"CRAVES\",\"perPersonLimit\":1}",MediaType.APPLICATION_JSON));
+  checkoutWithPromotion();server.verify();assertEquals(2,count("promotion_checkout_benefit"));
+ }
+ @Test void aConfirmationOlderThanThirtyDaysIsNotLookedAt()throws Exception{
+  var value=paidAndConfirmed();
+  jdbc.update("UPDATE order_schema.promotion_checkout_benefit SET updated_at=now()-interval '31 days'");
+  jdbc.update("UPDATE order_schema.customer_order SET status='CHEF_REJECTED' WHERE checkout_id=?",value.id());
+  assertFalse(promotions.runOne());assertEquals("CONFIRMED",state());
+ }
+ @Test void aChefOrderThatReachedPickupKeepsThePromotionUsed()throws Exception{
+  var value=paidAndConfirmed();
+  UUID order=jdbc.queryForObject("SELECT id FROM order_schema.customer_order WHERE checkout_id=? LIMIT 1",UUID.class,value.id());
+  jdbc.update("INSERT INTO order_schema.order_status_history(id,order_id,old_status,new_status) VALUES (gen_random_uuid(),?,'CHEF_ACCEPTED','READY_FOR_PICKUP')",order);
+  jdbc.update("UPDATE order_schema.customer_order SET status='REFUNDED' WHERE checkout_id=?",value.id());
+  assertFalse(promotions.runOne());assertEquals("CONFIRMED",state());
+ }
+ @Test void aChefOrderStillCookingOrAcceptedThenCancelledKeepsThePromotionUsed()throws Exception{
+  var value=paidAndConfirmed();
+  assertFalse(promotions.runOne());assertEquals("CONFIRMED",state());
+  var fresh=promotions.getClass().getDeclaredField("nextCancelledSweep");fresh.setAccessible(true);
+  jdbc.update("UPDATE order_schema.customer_order SET status='CANCELLED', ready_at=now() WHERE checkout_id=?",value.id());fresh.setLong(promotions,System.nanoTime());
+  assertFalse(promotions.runOne());assertEquals("CONFIRMED",state());
+ }
 }

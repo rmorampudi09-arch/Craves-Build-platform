@@ -181,11 +181,15 @@ class FleetSetupDatabaseTest {
         assertThat(rules(first)).as("today's rules: the three nearest at once, one round").isEqualTo(DispatchRules.TODAY);
         refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 4, 1, 0, null)), 400, "VALIDATION_FAILED");
         refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 1, 6, 0, null)), 400, "VALIDATION_FAILED");
+        refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 1, -1, 0, null)), 400, "VALIDATION_FAILED");
         refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 1, 3, 5001, null)), 400, "VALIDATION_FAILED");
         refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 1, 4, 0, null)), 400, "VALIDATION_FAILED");
         DispatchPolicyVersion fair = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             offering("shadow", 1, 3, 1500, null)));
         assertThat(rules(fair)).as("3 rounds of 30 s fit a 90 s stage").isEqualTo(new DispatchRules(1, 3, 1500));
+        DispatchPolicyVersion whole = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            offering("shadow", 1, 0, 1500, null)));
+        assertThat(rules(whole)).as("0 rounds: no limit, riders are asked again until the stage ends").isEqualTo(new DispatchRules(1, 0, 1500));
         DispatchPolicyVersion kept = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             offering("shadow", null, null, null, null)));
         assertThat(rules(kept)).as("not sent: the built-in rules").isEqualTo(DispatchRules.BUILT_IN);
@@ -320,6 +324,19 @@ class FleetSetupDatabaseTest {
             new DispatchPolicyInput("off", null, null, null, null, null, null, null, null)));
         assertThat(tx(setup::setup).dispatchPolicy().version()).isEqualTo(stop.version());
         assertThat(ruleLines(stop.version())).containsExactly(false, false);
+    }
+
+    /** A policy with no limit on rounds (0) in force: the emergency stop saves, and keeps the rule, as it keeps any riders are shown. */
+    @Test
+    void theEmergencyStopSavesWhileAPolicyWithNoLimitOnRoundsIsInForce() {
+        tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 1, 0, 1500, null)));
+        RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
+        DispatchPolicyVersion stop = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+            new DispatchPolicyInput("off", null, null, null, null, null, null, null, null)));
+        assertThat(rules(stop)).isEqualTo(new DispatchRules(1, 0, 1500));
+        assertThat(tx(setup::setup).dispatchPolicy().version()).isEqualTo(stop.version());
+        assertThat(tx(setup::setup).dispatchPolicy().mode()).isEqualTo("off");
     }
 
     /** The same day the emergency stop was refused too; it saves at once and withdraws the scheduled 2026-11-v2. */

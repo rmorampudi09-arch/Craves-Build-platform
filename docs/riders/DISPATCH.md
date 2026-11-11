@@ -82,7 +82,7 @@ After that, a person retrains it about monthly (`ml/fleet-eta/README.md`).
 |---|---|---|---|
 | Riders who see an order at once | 1 to 3 | 3 | When more than one rider sees it, the first to accept gets it. |
 | Time a rider has to accept | 30 to 60 s | 40 s | How long each rider has to decide. |
-| Rounds of offers | 1 to 5 | 1 | If everyone asked passes or lets the time run out, the next riders not yet asked hear of it, while the stage lasts. Nobody is asked twice about one order. |
+| Rounds of offers | 0 to 5 | 1 | If everyone asked passes or lets the time run out, the next riders not yet asked hear of it, while the stage lasts. Nobody is asked twice about one order. 0 means no limit: "No limit on rounds" below. |
 | Time Craves riders get before Borzo | 45 to 120 s | 60 s | Rounds × time to accept must fit inside it. After it, the order goes to Borzo, then Pidge, then the ops queue, as before. |
 | Fair band, km | 0 to 5 | 0 | 0 means nearest first. Above 0 means fair turns among riders within that distance of the nearest. |
 
@@ -91,6 +91,17 @@ A new round starts soon after the last one is decided. While a policy runs round
 - **A round is never withdrawn by mistake.** The stage closes only under a lock on its row, the same lock a round is sent under. So a round another worker has just sent never disappears from a rider's phone while it rings.
 - **If the rider chosen first becomes busy** a moment before their offer goes out, the stage stays open, and the next check offers the order to the riders free then.
 - **The cost guard** works per rider, as before: a rider is skipped if their pay plus the overhead would cost more than the next courier plus the premium.
+
+### No limit on rounds
+
+With rounds set to 0, the order stays with Craves riders for the whole time they get before Borzo (`DispatchPolicy.wholeStage`, `FleetDispatcher.nextRound`):
+
+- **Riders are asked in turn, and then again.** Once every rider in range has been asked, the same riders are asked again. Among the riders who may be asked, those asked the fewest times about this order hear first, so they take turns. A decline and an offer that ran out count the same, and neither changes anything for another order (§1).
+- **A phone rings for one order at most once per time to accept.** A rider who declined is asked again only when that time has passed since their last offer went out.
+- **With nobody to ask, the order waits for a rider.** One who comes online, or becomes free, hears of it at the next check (every 5 s).
+- **Only the end of that time sends the order on** to Borzo, then Pidge, then the ops queue. An offer still goes out only with its full time left, so in the last seconds nobody is asked.
+- **No cost guard.** No courier is asked for a quote, and every rider in range may hear of the order.
+- **Unchanged:** declining is free (§1); the emergency stop sends an order waiting for riders on to Borzo at once; and an order riders can't take at all still goes to Borzo at once (no coordinates, an unknown chef, no rate card in force, severe rain).
 
 ### Rain mode
 

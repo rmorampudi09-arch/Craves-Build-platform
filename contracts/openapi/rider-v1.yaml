@@ -410,7 +410,7 @@ components:
       required: [offersAtOnce, offerRounds, offerSeconds, radiusM, fairBandM]
       properties:
         offersAtOnce: {type: integer, minimum: 1, maximum: 3, description: 'Riders who see an order at the same time; the first to accept gets it'}
-        offerRounds: {type: integer, minimum: 0, maximum: 5, description: 'Rounds while the fleet stage lasts: when everyone asked passes or the time runs out, the next riders not yet asked hear. 0: no limit; riders are asked again, none twice within offerSeconds, until the order''s time with Craves riders is up'}
+        offerRounds: {type: integer, minimum: 0, maximum: 5, description: 'Rounds while the fleet stage lasts: when everyone asked passes or the time runs out, the next riders not yet asked hear. 0: no limit; riders are asked again, none about the same order within offerSeconds plus 5 s, until the order''s time with Craves riders is up'}
         offerSeconds: {type: integer, description: 'Time a rider has to accept'}
         radiusM: {type: integer, description: 'Only riders this close to the kitchen (straight line) hear of an order'}
         fairBandM: {type: integer, minimum: 0, maximum: 5000, description: '0: the nearest free rider hears first. Above 0: among the free riders within this many metres of the nearest, the one who has earned the least per online hour today hears first (ties: free the longest)'}

@@ -84,7 +84,7 @@ export type OnboardingDetails = {
   /** Other government ID only: false when the document has no back side. */
   proofHasBack: boolean | null;
 };
-export const CORRECTION_SECTIONS = ["personal", "kitchen", "fssai", "documents", "bank"] as const;
+export const CORRECTION_SECTIONS = ["personal", "kitchen", "documents", "bank"] as const;
 export type CallbackRequest = { caseNumber: string; status: "OPEN" | "CONTACTED" | "RESOLVED"; requestedAt: string };
 export type OnboardingState = {
   enabled: boolean;
@@ -103,6 +103,10 @@ export type OnboardingState = {
   progress?: {status: string; reason: string | null; nextAction: string; fssaiVerified: boolean; termsVersion: string; sections?: string[]};
   callbackRequest?: CallbackRequest | null;
 };
+/** Craves has verified the FSSAI number that is saved now; only then can a dish go live. */
+export function fssaiVerified(state: Pick<OnboardingState, "details" | "progress">): boolean {
+  return /^[0-9]{14}$/.test(state.details?.fssaiNumber ?? "") && state.progress?.fssaiVerified === true;
+}
 export type LearningContent = {
   id: string;
   language: string;

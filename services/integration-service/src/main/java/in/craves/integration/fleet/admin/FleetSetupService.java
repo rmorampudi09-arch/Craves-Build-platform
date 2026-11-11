@@ -247,8 +247,8 @@ public class FleetSetupService {
         if (atOnce < 1 || atOnce > 3) {
             throw FleetApiException.invalid("Offer each order to 1, 2 or 3 riders at a time.");
         }
-        if (rounds < 1 || rounds > 5) {
-            throw FleetApiException.invalid("Run 1 to 5 rounds of offers.");
+        if (rounds < 0 || rounds > 5) {
+            throw FleetApiException.invalid("Run 1 to 5 rounds of offers, or 0 for no limit.");
         }
         if (band < 0 || band > 5000) {
             throw FleetApiException.invalid("Set the fair band from 0 (nearest first) to 5 km.");

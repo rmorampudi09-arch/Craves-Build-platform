@@ -54,9 +54,12 @@ class ChefOnboardingPolicyTest {
             minor.longitude(),minor.proofKind(),null,null,"te",null);
         assertEquals("APPLICANT_UNDER_18",assertThrows(ApiException.class,()->ChefOnboardingPolicy.validateDraft(young)).getCode());
     }
-    @Test void chefWithoutFssaiAlwaysResumesFssaiRegardlessOfHelpOrContentAccess() {
+    @Test void fssaiIsNotAskedAtSignup() {
         var docs=List.of(doc(KycDocumentType.KITCHEN_PHOTO_1,"APPROVED"),doc(KycDocumentType.KITCHEN_PHOTO_2,"UPLOADED"));
-        assertEquals("fssai",ChefOnboardingPolicy.resume(details(null,null),docs,false));
+        assertEquals("documents",ChefOnboardingPolicy.resume(details(null,null),docs,false));
+        var all=ChefOnboardingPolicy.required(ProofKind.PAN,null).stream().map(type->doc(type,"UPLOADED")).toList();
+        assertEquals("review",ChefOnboardingPolicy.resume(details(ProofKind.PAN,null),all,false));
+        assertFalse(ChefOnboardingPolicy.SECTIONS.contains("fssai"));
         assertEquals("documents",ChefOnboardingPolicy.resume(details(ProofKind.PAN,"12345678901234"),docs,true));
     }
     @Test void rejectedLicenceAndPhotoReturnToTheirSpecificCorrectionStep() {

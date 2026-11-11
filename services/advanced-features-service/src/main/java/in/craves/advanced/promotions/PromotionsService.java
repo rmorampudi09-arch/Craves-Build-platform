@@ -140,6 +140,58 @@ public class PromotionsService implements PersonalDataContributor {
         }
     }
 
+    /**
+     * M24a: order-service confirms after Finance saw the net amount paid. The person may have paid after the reservation lapsed;
+     * the discount was already taken off what they paid, so it is honoured while the budget and redemption cap still have room for it.
+     */
+    @Transactional
+    public PromotionRedemption confirmPaid(UUID person, UUID redemptionId, UUID orderId) {
+        notErased(person);
+        PromotionRedemption found = own(person, redemptionId, false);
+        Promotion promotion = repository.promotion(found.promotionId(), true).orElseThrow(); // same lock order as reserve()
+        PromotionRedemption redemption = own(person, redemptionId, true);
+        if (redemption.status() == RedemptionStatus.CONFIRMED) {
+            if (orderId.equals(redemption.orderId())) return redemption;
+            throw ApiProblem.conflict("REDEMPTION_CONFIRMED", "This offer is already used for another order");
+        }
+        // The customer may have released it themselves after paying the net amount: honour it like a lapsed one. Staff voids stay refused.
+        boolean releasedByCustomer = redemption.status() == RedemptionStatus.RELEASED && redemption.orderId() == null;
+        if (redemption.status() != RedemptionStatus.RESERVED && !releasedByCustomer) {
+            throw ApiProblem.conflict("REDEMPTION_RELEASED", "This reservation was released");
+        }
+        Instant now = clock.instant();
+        if (releasedByCustomer || !redemption.expiresAt().isAfter(counted(now))) {
+            Committed used = repository.committed(List.of(promotion.id()), counted(now)).getOrDefault(promotion.id(), Committed.NONE);
+            Committed with = new Committed(used.reserved(), used.confirmed() + 1, used.paise() + redemption.discountPaise());
+            if (!hasRoomFor(promotion.terms(), with)) throw ApiProblem.conflict("REDEMPTION_EXPIRED", "This reservation lapsed and the offer has no room left");
+        }
+        try {
+            repository.setRedemption(redemptionId, RedemptionStatus.CONFIRMED, orderId, now);
+        } catch (DuplicateKeyException stacked) {
+            throw ApiProblem.conflict("ORDER_HAS_PROMOTION", "This order already uses another offer");
+        }
+        return repository.redemption(redemptionId, false).orElseThrow();
+    }
+
+    /**
+     * M24a: order-service gives the discount back when payment fails or lapses, or the order is cancelled before fulfilment.
+     * A confirmed redemption is released only for the order it was confirmed with. Repeating it is harmless.
+     */
+    @Transactional
+    public PromotionRedemption releaseForOrder(UUID person, UUID redemptionId, UUID orderId) {
+        notErased(person);
+        PromotionRedemption found = own(person, redemptionId, false);
+        repository.promotion(found.promotionId(), true); // same lock order as reserve()
+        PromotionRedemption redemption = own(person, redemptionId, true);
+        if (redemption.status() == RedemptionStatus.CONFIRMED && (orderId == null || !orderId.equals(redemption.orderId()))) {
+            throw ApiProblem.conflict("REDEMPTION_CONFIRMED", "This offer is used for another order");
+        }
+        if (redemption.status() == RedemptionStatus.RESERVED || redemption.status() == RedemptionStatus.CONFIRMED) {
+            repository.setRedemption(redemptionId, RedemptionStatus.RELEASED, redemption.orderId(), clock.instant()); // keeps the order it served
+        }
+        return repository.redemption(redemptionId, false).orElseThrow();
+    }
+
     @Transactional(readOnly = true)
     public List<AdminPromotion> adminPromotions() {
         List<Promotion> all = repository.promotions();
@@ -296,6 +348,11 @@ public class PromotionsService implements PersonalDataContributor {
                 .map(UUID::toString).toList();
         if (!unknown.isEmpty()) throw new ApiProblem(400, "UNKNOWN_KITCHEN", "Catalog does not know these kitchens", unknown);
         return terms;
+    }
+
+    /** The placeholder that erased redemptions carry is nobody: internal callers cannot act on erased people's rows. */
+    private static void notErased(UUID person) {
+        if (ERASED.equals(person)) throw ApiProblem.notFound("REDEMPTION_NOT_FOUND", "No such redemption");
     }
 
     private PromotionRedemption own(UUID person, UUID redemptionId, boolean forUpdate) {

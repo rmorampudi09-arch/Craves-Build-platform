@@ -46,6 +46,8 @@ public class SecurityConfig {
                     }
                     // No token on these: AccountErasureController checks the shared secret itself.
                     auth.requestMatchers(HttpMethod.POST, "/internal/v1/account-erasure/**").permitAll();
+                    // M24a: PromotionsInternalController checks the shared secret itself.
+                    auth.requestMatchers(HttpMethod.POST, "/internal/v1/promotions/redemptions/*/confirm", "/internal/v1/promotions/redemptions/*/release").permitAll();
                     auth.requestMatchers("/api/v1/**").authenticated();
                     auth.anyRequest().denyAll();
                 })

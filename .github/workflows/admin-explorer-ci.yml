@@ -91,7 +91,8 @@ jobs:
           retention-days: 14
   web:
     name: Explorer web and browser acceptance
-    runs-on: ubuntu-latest
+    # Playwright 1.55 cannot install Chromium on ubuntu-latest since it moved to 26.04 (10 Nov 2026).
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       CRAVES_API_BASE_URL: https://example.invalid/api/v1

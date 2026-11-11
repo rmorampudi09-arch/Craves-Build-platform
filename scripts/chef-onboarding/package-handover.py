@@ -10,6 +10,9 @@ import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BASE = "a79d0d83de730715597956d82da9970b78323152"
+# Last commit of the onboarding V2 change (tip of feat/chef-onboarding-v2-20261008, merged).
+# The file list is BASE..FEATURE; BASE..HEAD grew with every later merge (16k+ pages by November).
+FEATURE = "ddf8afbf35c604dc768d449c756e8c8ac4fa2e16"
 def git(*args):
     return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
 
@@ -30,7 +33,7 @@ def source_chunks(text):
 
 def build(output):
     output.mkdir(parents=True, exist_ok=True)
-    files = [p for p in git("diff", "--name-only", BASE, "HEAD").splitlines() if (ROOT/p).is_file()]
+    files = [p for p in git("diff", "--name-only", BASE, FEATURE).splitlines() if (ROOT/p).is_file()]
     sha = git("rev-parse", "HEAD")
     sections = json.loads((ROOT/"docs/modules/chef-onboarding-v2/handover-sections.json").read_text(encoding="utf-8"))
     pages = []
@@ -51,6 +54,8 @@ def build(output):
             pages.append(("Complete source file", "<p class='path'>"+html.escape(name)+"</p><p class='part'>File part "+str(number)+" of "+str(len(chunks))+"</p><pre>"+html.escape(chunk)+"</pre>"))
     if len(pages)<50:
         raise ValueError("Handover must contain at least 50 substantive pages")
+    if len(pages)>1000:  # ~330 expected; a runaway file list made 16k pages that hung Chromium in CI
+        raise ValueError("Handover has "+str(len(pages))+" pages; the file list is no longer the onboarding change")
     css = """
 @page{size:A4;margin:0}
 *{box-sizing:border-box}

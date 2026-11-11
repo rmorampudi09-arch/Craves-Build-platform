@@ -362,8 +362,8 @@ const DeliveredWithCare = () => {
           </h2>
 
           <p className="specials__text">
-            Home chefs, homemade meals and dependable doorstep delivery
-            - thoughtfully brought together in one simple experience.
+            Home chefs, homemade meals and dependable doorstep delivery,
+            all in one place.
           </p>
 
         </div>

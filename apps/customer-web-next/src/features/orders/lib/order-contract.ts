@@ -22,7 +22,7 @@ export function parseCustomerOrderPage(value: unknown): CustomerOrderPage | null
   return { orders, nextCursor, hasMore: raw.hasMore };
 }
 // The app's words (customerOrdersPresentation.ts), so an order reads the same on the phone and the web.
-const STATUS_LABELS: Record<string, string> = { PAYMENT_PENDING: "Payment pending", PAID: "Awaiting chef", CHEF_ACCEPTANCE_PENDING: "Awaiting chef", CHEF_ACCEPTED: "Chef accepted", PREPARING: "Preparing", READY_FOR_PICKUP: "Ready for pickup", OUT_FOR_DELIVERY: "Item picked up", DELIVERED: "Delivered", CHEF_REJECTED: "Chef declined", CANCELLED: "Cancelled", REFUND_PENDING: "Refund pending", REFUNDED: "Refunded", REFUND_FAILED: "Refund needs attention" };
+const STATUS_LABELS: Record<string, string> = { PAYMENT_PENDING: "Payment pending", PAID: "Awaiting kitchen", CHEF_ACCEPTANCE_PENDING: "Awaiting kitchen", CHEF_ACCEPTED: "Accepted", PREPARING: "Preparing", READY_FOR_PICKUP: "Ready for pickup", OUT_FOR_DELIVERY: "Item picked up", DELIVERED: "Delivered", CHEF_REJECTED: "Kitchen declined", CANCELLED: "Cancelled", REFUND_PENDING: "Refund pending", REFUNDED: "Refunded", REFUND_FAILED: "Refund needs attention" };
 /** Customer-facing words for an order status; never the raw enum. */
 export function formatOrderStatus(status: string): string { return STATUS_LABELS[status] ?? "Order update"; }
 /** Every checkout creates its order unpaid and nothing on the server expires it, so after this long an unpaid order was abandoned and never reached the kitchen. */

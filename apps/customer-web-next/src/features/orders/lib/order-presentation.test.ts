@@ -31,11 +31,11 @@ test("tabs follow the app: delivered is completed, declines and refunds are canc
 test("every status has its own pill words and colour", () => {
   const pills = STATUSES.map((status) => orderStatusPill(order(status), NOW));
   for (const pill of pills) assert.doesNotMatch(pill.label, /_|Order update/);
-  assert.deepEqual(orderStatusPill(order("PAID"), NOW), { label: "Awaiting chef", tone: "warning" });
+  assert.deepEqual(orderStatusPill(order("PAID"), NOW), { label: "Awaiting kitchen", tone: "warning" });
   assert.deepEqual(orderStatusPill(order("PREPARING"), NOW), { label: "Preparing", tone: "accent" });
   assert.deepEqual(orderStatusPill(order("OUT_FOR_DELIVERY"), NOW), { label: "Item picked up", tone: "accent" });
   assert.deepEqual(orderStatusPill(order("READY_FOR_PICKUP"), NOW), { label: "Ready for pickup", tone: "success" });
-  assert.deepEqual(orderStatusPill(order("CHEF_REJECTED"), NOW), { label: "Chef declined", tone: "accent" });
+  assert.deepEqual(orderStatusPill(order("CHEF_REJECTED"), NOW), { label: "Kitchen declined", tone: "accent" });
   assert.deepEqual(orderStatusPill(order("REFUNDED"), NOW), { label: "Refunded", tone: "muted" });
   assert.deepEqual(orderStatusPill(order("REFUND_FAILED"), NOW), { label: "Refund needs attention", tone: "accent" });
   assert.deepEqual(orderStatusPill(order("PAYMENT_PENDING", 45), NOW), { label: "Payment not completed", tone: "muted" });

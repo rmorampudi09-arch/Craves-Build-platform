@@ -2,8 +2,7 @@ import React, {memo, useEffect, useState} from 'react';
 import {Alert, StyleSheet, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
-import {Icon} from '../../../shared/components';
-import {colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
+import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
 import type {HomeSummary} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
@@ -83,30 +82,9 @@ function TodayCard({home}: {home: HomeSummary}) {
   );
 }
 
-/**
- * Offline (05-HomeOffline.png): today so far, then the booked slot and its guaranteed hourly pay from the server.
- * nextSlot is the running slot or the next one; slotEndsAt is sent only while one runs.
- */
+/** Offline (05-HomeOffline.png): today so far. Booked slots were removed in 1.3.4. */
 function OfflineCards({home}: {home: HomeSummary}) {
-  const h = useStrings().strings.home;
-  const slot = home.nextSlot;
-  return (
-    <>
-      <TodayCard home={home} />
-      {slot ? (
-        <Card style={styles.slot}>
-          <View style={styles.tight}>
-            <Text style={styles.small}>{home.slotEndsAt ? h.slotNow : h.nextSlot}</Text>
-            <Text style={styles.heading}>{h.slotTime(formatClock(slot.startsAt), formatClock(slot.endsAt))}</Text>
-            <Text style={styles.body}>{slot.zoneName}</Text>
-          </View>
-          {home.guaranteedPerHourPaise ? (
-            <Banner tone="success" inset text={h.guaranteed(formatRupees(home.guaranteedPerHourPaise))} />
-          ) : null}
-        </Card>
-      ) : null}
-    </>
-  );
+  return <TodayCard home={home} />;
 }
 
 /**
@@ -130,7 +108,7 @@ function BreakCard({home, choices, onChange}: {home: HomeSummary; choices: boole
 
   if (home.offersPausedUntil && Date.parse(home.offersPausedUntil) > Date.now()) {
     return (
-      <Card style={styles.slot}>
+      <Card style={styles.card}>
         <View style={styles.tight}>
           <Text style={styles.strong} testID="rider-on-break">
             {h.onBreak(formatClock(home.offersPausedUntil))}
@@ -148,7 +126,7 @@ function BreakCard({home, choices, onChange}: {home: HomeSummary; choices: boole
     return <BottomAction label={h.takeBreak} variant="outline" size="compact" onPress={() => setChoosing(true)} testID="rider-break-start" />;
   }
   return (
-    <Card style={styles.slot}>
+    <Card style={styles.card}>
       <Text style={styles.strong}>{h.breakHowLong}</Text>
       <View style={styles.choices}>
         {[10, 20, 30].map(minutes => (
@@ -163,7 +141,6 @@ function BreakCard({home, choices, onChange}: {home: HomeSummary; choices: boole
           />
         ))}
       </View>
-      <Text style={styles.small}>{h.breakNote}</Text>
       <BottomAction label={strings.common.cancel} variant="ghost" size="compact" onPress={() => setChoosing(false)} />
     </Card>
   );
@@ -188,7 +165,7 @@ function HeadingHomeCard({home, choices, onChange}: {home: HomeSummary; choices:
 
   if (home.headingHomeUntil && Date.parse(home.headingHomeUntil) > Date.now()) {
     return (
-      <Card style={styles.slot}>
+      <Card style={styles.card}>
         <View style={styles.tight}>
           <Text style={styles.strong} testID="rider-heading-home">
             {h.headingHome(formatClock(home.headingHomeUntil))}
@@ -235,38 +212,15 @@ function OnlineCards({
     <>
       <BreakCard home={home} choices={startable} onChange={onChange} />
       <HeadingHomeCard home={home} choices={startable} onChange={onChange} />
-      <Card style={styles.slot}>
+      <Card style={styles.card}>
         <View style={styles.tight}>
           <View style={styles.spread}>
             <Text style={styles.small}>{h.onShift}</Text>
-            {home.slotEndsAt ? <Text style={styles.small}>{h.slotEnds(formatClock(home.slotEndsAt))}</Text> : null}
           </View>
           {home.shiftStartedAt ? <ShiftTimer startedAt={home.shiftStartedAt} /> : null}
-          {home.zoneName ? <Text style={styles.body}>{home.zoneName}</Text> : null}
         </View>
-        {/* The guarantee is the running slot's or the next one's: promise waiting pay only while a slot runs. */}
-        {home.guaranteedPerHourPaise && home.slotEndsAt ? (
-          <Banner tone="success" inset text={h.waitingPaid(formatRupees(home.guaranteedPerHourPaise))} testID="rider-waiting-paid" />
-        ) : home.guaranteedPerHourPaise && home.nextSlot ? (
-          <Banner
-            tone="info"
-            icon="clock-outline"
-            inset
-            text={h.slotStarts(formatClock(home.nextSlot.startsAt), formatRupees(home.guaranteedPerHourPaise))}
-            testID="rider-slot-starts"
-          />
-        ) : null}
       </Card>
       <TodayCard home={home} />
-      {home.restPoint ? (
-        <Card style={styles.iconCard}>
-          <Icon name="map-marker-outline" size={iconSize.lg} color={colors.textPrimary} surface={false} />
-          <View style={styles.flex}>
-            <Text style={styles.strong}>{h.restPoint(home.restPoint.name, home.restPoint.area)}</Text>
-            <Text style={styles.secondary}>{h.restPointBody}</Text>
-          </View>
-        </Card>
-      ) : null}
       <Text style={[styles.small, styles.center]}>{h.ringsScreenOff}</Text>
     </>
   );
@@ -370,7 +324,7 @@ export function HomeScreen() {
       ) : null}
       {phone.checked && !phone.ready ? (
         // What's left before the first order, so a newly approved rider knows the next step (and anyone whose phone lost a permission).
-        <Card style={styles.slot}>
+        <Card style={styles.card}>
           <Text accessibilityRole="header" style={styles.heading} testID="rider-first-day">
             {h.firstDayTitle}
           </Text>
@@ -422,10 +376,9 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   flex: {flex: 1},
   tight: {gap: spacing.xxs},
-  slot: {gap: spacing.md},
+  card: {gap: spacing.md},
   spread: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm},
   choices: {flexDirection: 'row', gap: spacing.xs},
-  iconCard: {flexDirection: 'row', alignItems: 'flex-start', gap: 10},
   center: {textAlign: 'center'},
   small: {fontSize: typography.small, color: colors.textSecondary},
   body: {fontSize: typography.body, color: colors.textPrimary},

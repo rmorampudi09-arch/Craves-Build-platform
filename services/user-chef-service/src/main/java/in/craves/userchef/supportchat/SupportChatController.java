@@ -3,6 +3,7 @@ package in.craves.userchef.supportchat;
 import in.craves.userchef.exception.ApiException;
 import in.craves.userchef.exception.AppErrorHandler;
 import in.craves.userchef.security.CurrentUser;
+import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -32,10 +33,12 @@ public class SupportChatController {
 
     private final SupportAssistant assistant;
     private final SupportChatLimiter limiter;
+    private final GuestVisitorForwarders forwarders;
 
-    public SupportChatController(SupportAssistant assistant, SupportChatLimiter limiter) {
+    public SupportChatController(SupportAssistant assistant, SupportChatLimiter limiter, GuestVisitorForwarders forwarders) {
         this.assistant = assistant;
         this.limiter = limiter;
+        this.forwarders = forwarders;
     }
 
     @PostMapping
@@ -56,20 +59,22 @@ public class SupportChatController {
 
     /**
      * Website visitors who are not signed in: general and sign-in help, plus a callback request. No account data.
-     * The web BFF sends a hash of the visitor's IP as {@code X-Craves-Visitor}; callers without it share one bucket,
-     * and all visitors together have a daily cap, so the Claude bill stays bounded whoever calls.
+     * The web BFF sends a hash of the visitor's IP as {@code X-Craves-Visitor}; callers without it, and callers the
+     * {@link GuestVisitorForwarders} do not vouch for, share one bucket, and all visitors together have a daily cap,
+     * so the Claude bill stays bounded whoever calls.
      */
     @PostMapping("/guest")
     public SupportChatResponse guestChat(
         @RequestHeader(value = "X-Craves-Visitor", required = false) String visitor,
-        @RequestBody SupportChatRequest request
+        @RequestBody SupportChatRequest request,
+        HttpServletRequest http
     ) {
         validate(request);
         String channel = channel(request.channel());
         if (!assistant.available()) {
             throw SupportAssistant.unavailable();
         }
-        limiter.admit(visitorKey(visitor), SupportChatLimiter.PER_MINUTE, GUEST_PER_DAY);
+        limiter.admit(visitorKey(forwarders.trusts(http) ? visitor : null), SupportChatLimiter.PER_MINUTE, GUEST_PER_DAY);
         limiter.admit(ALL_GUESTS, GUESTS_PER_MINUTE, GUESTS_PER_DAY);
         return assistant.guestReply(channel, request.messages());
     }

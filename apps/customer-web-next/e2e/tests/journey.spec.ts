@@ -45,12 +45,6 @@ async function kitchen(page: Page) {
   await save(page).click();
 }
 
-async function fssai(page: Page) {
-  await expect(page.getByRole("heading", { level: 1, name: "FSSAI details" })).toBeVisible();
-  await page.getByRole("textbox", { name: "FSSAI registration number", exact: true }).fill("12345678901234");
-  await save(page).click();
-}
-
 async function identity(page: Page) {
   await expect(page.getByRole("heading", { level: 1, name: "Identity verification" })).toBeVisible();
   await page.getByText("PAN card", { exact: true }).click();
@@ -74,7 +68,6 @@ test("new chef applies, is approved, and lands in the chef app", async ({ page, 
   await expect(page).toHaveURL(/\/chef\/application/);
   await basicDetails(page);
   await kitchen(page);
-  await fssai(page);
   await identity(page);
   await reviewAndSubmit(page, backend);
 
@@ -97,7 +90,9 @@ test("new chef applies, is approved, and lands in the chef app", async ({ page, 
   expect(backend.callsTo("POST", "/api/auth/otp/send")).toHaveLength(1);
 
   // What the chef submitted is what the server stored.
-  expect(backend.details).toMatchObject({ firstName: "E2E", lastName: "Chef", dateOfBirth: "1990-06-15", kitchenName: "E2E Test Kitchen", postalCode: "500072", fssaiNumber: "12345678901234", proofKind: "PAN" });
+  expect(backend.details).toMatchObject({ firstName: "E2E", lastName: "Chef", dateOfBirth: "1990-06-15", kitchenName: "E2E Test Kitchen", postalCode: "500072", proofKind: "PAN" });
+  // FSSAI is added later, before the first dish goes live.
+  expect(backend.details?.fssaiNumber ?? "").toBe("");
 });
 
 test("a wrong OTP is rejected and the slots clear for another try", async ({ page, backend }) => {

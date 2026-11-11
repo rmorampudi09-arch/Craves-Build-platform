@@ -37,7 +37,7 @@ export function KitchenFilterBar({
           <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
           Filters
           {view.spice !== "any" ? (
-            <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#1A1A1A] px-1.5 text-[0.6875rem] font-black text-white">
+            <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#C92716] px-1.5 text-[0.6875rem] font-black text-white">
               1<span className="sr-only"> on</span>
             </span>
           ) : null}

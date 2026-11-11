@@ -1,7 +1,10 @@
 import { apiClient, refreshAccessToken } from '../../../core/http/apiClient';
 import { AppApiError } from '../../../core/http/apiError';
+import { publicApiClient } from '../../../core/http/transport';
+import { compareVersions } from '../domain/format';
+import { RIDER_APP_LATEST_URL } from '../riderConfig';
 import type { QueuedTap, RiderApi } from './riderApi';
-import type { DeliverBody, StepTap } from './contract';
+import type { DeliverBody, RiderMe, StepTap } from './contract';
 
 const BASE = '/api/v1/rider';
 const keyed = (key: string) => ({ headers: { 'Idempotency-Key': key } });
@@ -64,6 +67,39 @@ async function get<T>(path: string): Promise<T> {
   return (await apiClient.get<T>(`${BASE}${path}`)).data;
 }
 
+const NEWEST_KEPT_MS = 10 * 60_000;
+let newest: { at: number; version: string } | undefined;
+
+/**
+ * The newest published app version, which ship-rider-app writes beside the APK (craves.in/rider/version). Every release
+ * raises the bar: an older app is asked to update before its next shift, never during one (gate.ts). Unreachable
+ * within 5 s or not a version: undefined, and the server's minAppVersion stands. No sign-in is sent.
+ */
+// shortcut: remembered for 10 minutes, so an open app sees a release within 10 minutes plus its next /me; push the version if that is too slow.
+async function newestPublishedVersion(): Promise<string | undefined> {
+  if (newest && Date.now() - newest.at < NEWEST_KEPT_MS) {
+    return newest.version;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5_000);
+  try {
+    const { data } = await publicApiClient.get<{ versionName?: unknown }>(
+      RIDER_APP_LATEST_URL,
+      { signal: controller.signal },
+    );
+    const version = data?.versionName;
+    if (typeof version === 'string' && /^\d+(\.\d+){0,3}$/.test(version)) {
+      newest = { at: Date.now(), version };
+      return version;
+    }
+  } catch {
+    // Offline, slow or moved: the server's minimum still applies.
+  } finally {
+    clearTimeout(timer);
+  }
+  return undefined;
+}
+
 // A token issued before the rider was activated lacks the RIDER role, so the server answers 403 (Spring's, without a
 // code, or FORBIDDEN) until it expires, up to 15 minutes. One refresh picks the role up; calls refused in the same minute
 // share it. Repeating the call is safe: a 403 is decided before the server does anything.
@@ -95,7 +131,10 @@ async function withRole<T>(call: () => Promise<T>): Promise<T> {
 }
 
 const calls: RiderApi = {
-  getMe: () => get('/me'),
+  async getMe() {
+    const [me, version] = await Promise.all([get<RiderMe>('/me'), newestPublishedVersion()]);
+    return version && compareVersions(version, me.minAppVersion) > 0 ? { ...me, minAppVersion: version } : me;
+  },
   getProfile: () => get('/profile'),
   async signUp(input) {
     return (await apiClient.post(`${BASE}/apply`, input)).data;
@@ -235,16 +274,6 @@ const calls: RiderApi = {
   },
   async reportIssue(issue) {
     await apiClient.post(`${BASE}/support/issues`, issue);
-  },
-  getSlots: () => get('/slots'),
-  async bookSlot(capacityId) {
-    return (await apiClient.post(`${BASE}/slots/${capacityId}/book`)).data;
-  },
-  async standbySlot(capacityId) {
-    return (await apiClient.post(`${BASE}/slots/${capacityId}/standby`)).data;
-  },
-  async cancelSlotBooking(bookingId) {
-    return (await apiClient.delete(`${BASE}/slots/bookings/${bookingId}`)).data;
   },
   async sendSos(input) {
     await apiClient.post(`${BASE}/sos`, input);

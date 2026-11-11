@@ -19,13 +19,10 @@ export function BottomAction({
   size,
   leftIcon,
   accessibilityHint,
-  accessibilityLabel,
   style,
   testID,
 }: {
   label: string;
-  /** What TalkBack reads when the label alone would repeat down a list ("Book" on every slot card). */
-  accessibilityLabel?: string;
   onPress: () => Promise<unknown> | void;
   disabled?: boolean;
   variant?: 'primary' | 'outline' | 'ghost' | 'neutral';
@@ -49,7 +46,7 @@ export function BottomAction({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{disabled: blocked, busy}}
       disabled={blocked}

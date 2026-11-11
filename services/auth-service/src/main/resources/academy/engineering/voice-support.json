@@ -1,0 +1,315 @@
+{
+  "course": {
+    "id": "voice-support",
+    "service": "voice-support-gateway",
+    "title": "The AI voice care line: calls, turns, tools and tickets",
+    "level": "Practitioner",
+    "minutes": 112,
+    "description": "Learn how a customer's call to the Craves care number reaches an AI agent that speaks English, Telugu, Hindi and Kannada, how the gateway bridges audio and manages turns, how the agent looks up the caller's orders and opens tickets without ever transferring the call, and how the line is tested, changed and switched off safely.",
+    "prerequisites": [
+      "people"
+    ],
+    "sources": [
+      "services/voice-support-gateway/README.md",
+      "services/voice-support-gateway/voice_gateway/app.py",
+      "services/voice-support-gateway/voice_gateway/prompt.py",
+      "services/voice-support-gateway/voice_gateway/backend.py",
+      "services/voice-support-gateway/voice_gateway/config.py",
+      "services/voice-support-gateway/voice_gateway/instructions.md",
+      "services/user-chef-service/src/main/java/in/craves/userchef/supportchat/VoiceSupportService.java",
+      "services/user-chef-service/src/main/java/in/craves/userchef/supportchat/InternalVoiceSupportController.java",
+      "services/order-service/src/main/java/in/craves/order/web/InternalSupportOrderController.java"
+    ],
+    "sourceRevision": "9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605",
+    "lessons": [
+      {
+        "id": "voice-call-path",
+        "title": "Follow a call from the phone to the agent",
+        "overview": "The public care number is a Jio SIM that forwards every call to an Exotel virtual number, because a SIM cannot be wired to software and Azure does not sell Indian numbers. Exotel's Voicebot applet streams the call's audio over a WebSocket to the voice-support gateway, a small Python service on Container Apps, which runs one Azure AI Foundry Voice Live session per call. This lesson follows that path and the checks at each hop.",
+        "steps": [
+          {
+            "label": "Forward the public number",
+            "detail": "The Jio number stays the number printed everywhere and is set to always forward to the Exotel number, so nothing published has to change. Forwarded calls normally carry the original caller's number, which the order lookup needs; the gateway logs started caller=known when it worked."
+          },
+          {
+            "label": "Stream raw audio both ways",
+            "detail": "Exotel's AgentStream sends raw 16-bit PCM, mono, at 16 kHz, and the gateway sends the agent's voice back the same way, with no resampling. The applet URL ends with sample-rate=16000; the gateway refuses 8 kHz on purpose and logs why, because the lower quality hurts recognition of Indian languages."
+          },
+          {
+            "label": "Authenticate the stream",
+            "detail": "Exotel connects with a password in the WebSocket URL, which must match EXOTEL_STREAM_PASSWORD, and optionally an Exotel account SID check. The gateway refuses calls without the password or from another Exotel account, so nobody else can point a call stream at Craves."
+          },
+          {
+            "label": "Open one Voice Live session per call",
+            "detail": "For each call the gateway looks up the caller, then opens a Voice Live session with the api key from Key Vault and the configured model, gpt-4.1-mini by default since 29 October for lower delay. Speech recognition uses azure-speech with en-IN, hi-IN, te-IN and kn-IN, and each language has its own Azure voice."
+          },
+          {
+            "label": "Keep calls private",
+            "detail": "Craves does not record or store call audio, and Exotel recording stays off. The gateway logs call ids, timings, token counts and tool names only, never what anyone said, so logs can be shared for debugging without exposing a customer."
+          },
+          {
+            "label": "Bound the load",
+            "detail": "The gateway takes at most 5 calls at once (MAX_CONCURRENT_CALLS) and 10 minutes per call (MAX_CALL_SECONDS); 30 seconds before the end it asks the agent to wrap up politely. A call over the limit is refused at connection time rather than degrading everyone's audio."
+          }
+        ],
+        "example": "A customer in Warangal calls the care number. Jio forwards the call to Exotel, Exotel streams 16 kHz audio to the gateway with the right password, the gateway finds a registered customer for that number and opens a Voice Live session, and the agent greets her by name in Telugu within about two seconds.",
+        "lab": "Run the gateway's local tests with pytest; they need no Azure or Exotel account. Then read the connection handler and list every reason a stream is refused, including a wrong password, a wrong account and a sample rate other than 16000, and the log line each one writes.",
+        "pitfall": "Never switch the applet to 8 kHz to fix a connection problem: the gateway refuses it on purpose, and the fix is the sample-rate setting on the applet URL.",
+        "questions": [
+          {
+            "id": "voice-call-path-q1",
+            "prompt": "Why does Jio forward calls to Exotel instead of connecting the SIM to the gateway?",
+            "options": [
+              "Jio is cheaper that way",
+              "A SIM cannot be wired to software and Azure does not sell Indian numbers",
+              "Exotel records calls",
+              "The gateway only accepts SMS"
+            ],
+            "answer": 1,
+            "explanation": "Exotel provides the virtual number and the audio stream; the Jio number stays public."
+          },
+          {
+            "id": "voice-call-path-q2",
+            "prompt": "What audio format does the gateway accept from Exotel?",
+            "options": [
+              "8 kHz mu-law",
+              "16 kHz 16-bit mono PCM",
+              "MP3",
+              "48 kHz stereo"
+            ],
+            "answer": 1,
+            "explanation": "The gateway uses 16 kHz PCM both ways and refuses 8 kHz on purpose."
+          },
+          {
+            "id": "voice-call-path-q3",
+            "prompt": "What does the gateway log about a call?",
+            "options": [
+              "The full transcript",
+              "Call ids, timings, token counts and tool names, never what was said",
+              "The audio",
+              "The caller's address"
+            ],
+            "answer": 1,
+            "explanation": "Logs carry no content, so they can be shared for debugging."
+          }
+        ]
+      },
+      {
+        "id": "voice-conversation-turns",
+        "title": "Make turns feel natural on a phone line",
+        "overview": "A phone line is noisy: hiss, echo, people talking over the agent. The gateway's session settings and its own turn handling decide whether a call feels natural. Early test calls had replies of about 15 seconds; per-turn timing logs showed the cause was the setup, not the service, and after the fixes replies came 0.5 to 1.7 seconds after the caller stopped. This lesson reads the session update and the turn logic in app.py.",
+        "steps": [
+          {
+            "label": "Clean the input",
+            "detail": "The session turns on Azure deep noise suppression and server echo cancellation. Phones play the agent back into the caller's microphone; without echo cancellation that echo counts as the caller talking and cuts the agent off mid-sentence."
+          },
+          {
+            "label": "Tune turn detection",
+            "detail": "Server voice-activity detection uses a threshold of 0.6, which ignores line hiss that 0.5 took for speech, 500 ms of silence to end the caller's turn and 300 ms as the shortest sound that counts as speech, because clicks were cutting answers off. interrupt_response lets a caller interrupt the agent."
+          },
+          {
+            "label": "Handle barge-in cleanly",
+            "detail": "When the caller talks over the agent, the gateway sends Exotel a clear message so buffered audio stops at once, and drops the remaining audio of the interrupted response. The caller hears the agent stop, not a few more seconds of an answer they already interrupted."
+          },
+          {
+            "label": "Recover from noise cut-offs",
+            "detail": "If an answer was cut off by a new turn that turns out to be only noise, with an empty transcript, the gateway remembers the answer was owed and asks for it again. Without this, Voice Live never answers a noise turn and the caller can sit in silence for many seconds."
+          },
+          {
+            "label": "Say one moment before slow work",
+            "detail": "Before an order lookup or a ticket, the agent says a short line such as one moment, checking, so the caller knows it is working. The order lookup itself takes tens of milliseconds; the line covers the model's thinking time too."
+          },
+          {
+            "label": "Measure every turn",
+            "detail": "Each turn logs vad_lag_ms, transcript_ms, response_ms, first_audio_ms, the number of responses and the tools used, with no content. These numbers are how the 15-second delay was traced and fixed, and how any new delay should be investigated before changing models."
+          }
+        ],
+        "example": "A caller says she wants to know where her order is while a pressure cooker whistles in the background. The whistle starts a turn with an empty transcript and cuts off the agent's answer; the gateway sees the answer is owed, asks again, and the caller hears her order status without repeating herself.",
+        "lab": "Read a set of per-turn timing lines from a test call in the logs and work out where the time went for the slowest turn: detection lag, transcription, response or first audio. Then write down which single setting you would change first and why, without changing production.",
+        "pitfall": "Never switch models to fix a slow line before reading the per-turn timings: the first 15-second delay came from the setup, not the model.",
+        "questions": [
+          {
+            "id": "voice-conversation-turns-q1",
+            "prompt": "Why is server echo cancellation turned on?",
+            "options": [
+              "To record the call",
+              "Because the agent's own voice played back into the phone would count as the caller talking",
+              "To change the voice",
+              "To translate"
+            ],
+            "answer": 1,
+            "explanation": "Without it the echo interrupts the agent mid-sentence."
+          },
+          {
+            "id": "voice-conversation-turns-q2",
+            "prompt": "What does the gateway do when the caller talks over the agent?",
+            "options": [
+              "Keeps playing the answer",
+              "Sends Exotel a clear message and drops the rest of the interrupted answer",
+              "Hangs up",
+              "Mutes the caller"
+            ],
+            "answer": 1,
+            "explanation": "Barge-in stops buffered audio at once."
+          },
+          {
+            "id": "voice-conversation-turns-q3",
+            "prompt": "An answer was cut off by a turn that was only noise. What happens?",
+            "options": [
+              "Silence until the caller speaks",
+              "The gateway asks for the owed answer again",
+              "The call ends",
+              "The agent repeats the greeting"
+            ],
+            "answer": 1,
+            "explanation": "The owed-answer logic recovers from noise cut-offs."
+          }
+        ]
+      },
+      {
+        "id": "voice-tools-records",
+        "title": "Look up orders and open tickets safely",
+        "overview": "The agent can do four things through tools: switch language, refresh the caller's orders, open a support ticket and end the call. It never transfers to a person; anything it cannot settle becomes a ticket with a callback promise. Behind the tools, user-chef service identifies the caller and Order service returns their latest orders through the same allowlist the chat assistant uses. This lesson reads the tool runner, backend.py and VoiceSupportService.",
+        "steps": [
+          {
+            "label": "Switch language with a tool",
+            "detail": "set_language accepts en, hi, te or kn and updates the session's voice, so the caller hears a native voice for the language they speak. The instructions ask for everyday, code-mixed speech, such as English food words inside Telugu, rather than bookish language."
+          },
+          {
+            "label": "Identify the caller by number",
+            "detail": "The gateway calls user-chef service's internal voice context route with the caller's number. It looks for an approved chef first, then a customer, then a chef applicant, and returns the latest 5 orders through the support order client, which shows status and dishes but never ids, addresses, phone numbers or chef notes."
+          },
+          {
+            "label": "Refresh orders during the call",
+            "detail": "refresh_orders repeats the lookup mid-call, for example after the caller says the order was just placed. If the records cannot be reached, the tool answers that plainly and the agent says so instead of guessing."
+          },
+          {
+            "label": "Open one ticket per call",
+            "detail": "open_support_ticket creates a support case for a known user or a guest case for an unknown number, marked as opened by the voice assistant. One ticket per call, and limits of 2 a minute and 3 a day per number and 10 a minute and 200 a day overall stop loops and abuse. The agent reads only the last six characters of the reference, and only if asked."
+          },
+          {
+            "label": "End the call gracefully",
+            "detail": "end_call tells the agent to say a short goodbye; the gateway closes the line after Exotel confirms the goodbye's audio has played, using a mark message, so the caller never hears the line drop mid-word."
+          },
+          {
+            "label": "Protect the internal routes",
+            "detail": "The internal routes need the shared internal service secret header, and they only allow the callers they were built for. The gateway and user-chef service must use the same secret; a mismatch shows up as caller unknown and a failed lookup in the logs, which is exactly what happened in an early test call."
+          }
+        ],
+        "example": "A chef calls to ask why an order was not paid out. The agent recognises her as an approved chef, reads her latest orders, and since payouts are not something it can settle on the phone, opens a ticket and tells her the team will call back on this number. The ticket appears in the admin support inbox marked as opened by the voice assistant.",
+        "lab": "In user-chef service's tests, call the voice context route with numbers for a chef, a customer, an applicant and an unknown caller and check the role in each answer. Then open tickets in a loop for one number and assert that the third ticket of the day is the last one accepted.",
+        "pitfall": "Never add a tool that reads more than the support order allowlist returns: the agent must only know what the caller could see in their own app.",
+        "questions": [
+          {
+            "id": "voice-tools-records-q1",
+            "prompt": "How does the gateway know who is calling?",
+            "options": [
+              "The caller says their name",
+              "user-chef service looks up the calling number: approved chef, then customer, then applicant",
+              "Exotel sends the account id",
+              "It asks for an OTP"
+            ],
+            "answer": 1,
+            "explanation": "The number is matched in a fixed order through the internal voice context route."
+          },
+          {
+            "id": "voice-tools-records-q2",
+            "prompt": "How many tickets can one call open?",
+            "options": [
+              "Unlimited",
+              "One",
+              "Three",
+              "Ten"
+            ],
+            "answer": 1,
+            "explanation": "open_support_ticket refuses a second ticket on the same call."
+          },
+          {
+            "id": "voice-tools-records-q3",
+            "prompt": "What does the agent do when it cannot settle a problem?",
+            "options": [
+              "Transfers to a person",
+              "Opens a ticket and promises a callback",
+              "Ends the call",
+              "Asks the caller to email"
+            ],
+            "answer": 1,
+            "explanation": "The line never transfers; it always opens a ticket instead."
+          }
+        ]
+      },
+      {
+        "id": "voice-operating",
+        "title": "Change, test and switch off the line safely",
+        "overview": "Operating the voice line means three kinds of change: what the agent knows, how it speaks, and the gateway code. Each has a different home, and none of them needs anyone to touch a live call. Testing needs real phones in all four languages, and switching the line off has two independent kill switches. This lesson reads the README, prompt.py, instructions.md and config.py.",
+        "steps": [
+          {
+            "label": "Change what the agent knows",
+            "detail": "Public facts come from the support assistant guide in user-chef service, which the gateway image copies at build time, so chat and phone share one knowledge source. Edit only public content there, and the change reaches the phone line with the next gateway release."
+          },
+          {
+            "label": "Change how it speaks",
+            "detail": "Phone manners and language rules live in instructions.md, and prompt.py builds the per-call instructions from the caller context, including the greeting by name and words for application status. Keep the rules short and test each language after a change."
+          },
+          {
+            "label": "Tune with settings, not code",
+            "detail": "config.py reads the model, API version, turn detection, speech model and languages, voices per language, speaking rate and limits from the environment, with defaults such as gpt-4.1-mini, 5 concurrent calls and 600 seconds per call. A wrong value is caught at startup by missing(), which lists what is not configured."
+          },
+          {
+            "label": "Ship code through the release pipeline",
+            "detail": "New gateway code merges to main and goes out through the voice release pipeline with a canary and an automatic rollback if the new revision is not healthy. The health route answers ok when the service is up, which is not the same as a successful call: always follow with a test call."
+          },
+          {
+            "label": "Test with real calls",
+            "detail": "After a change, call from a registered customer number, a chef number and an unknown number, in English, Telugu, Hindi and Kannada. Check the greeting by name, an order status, a ticket in the admin support inbox and a clean hang-up, and look for started caller=known in the gateway log."
+          },
+          {
+            "label": "Know both kill switches",
+            "detail": "To stop the line, turn the gateway's ingress off so Exotel cannot connect and the flow hangs up, or turn Jio forwarding off, which needs no Azure change at all and sends calls back to the phone. The privacy policy should say that calls are answered by an AI agent and processed by Microsoft Azure and Exotel."
+          }
+        ],
+        "example": "The team adds a new public fact about delivery hours to the support guide. After the next gateway release, a tester calls in Kannada and asks about late-night delivery; the agent answers with the new hours, and the same answer appears in the chat assistant, because both read the same guide.",
+        "lab": "Draft a change to instructions.md that asks the agent to confirm the order number's last four characters before opening a ticket. Write the four test calls you would make, one per language, with the expected words, and list which logs you would read; do not deploy the draft.",
+        "pitfall": "Never put private or internal facts into the shared guide: whatever is in it can be said aloud to any caller.",
+        "questions": [
+          {
+            "id": "voice-operating-q1",
+            "prompt": "Where should a new public fact for the agent be added?",
+            "options": [
+              "In the gateway's Python code",
+              "In the support assistant guide that the gateway copies at build time",
+              "In the Exotel flow",
+              "In the Jio settings"
+            ],
+            "answer": 1,
+            "explanation": "Chat and phone share one guide, copied into the gateway image."
+          },
+          {
+            "id": "voice-operating-q2",
+            "prompt": "The gateway's health route answers ok after a release. Is the line proven to work?",
+            "options": [
+              "Yes",
+              "No, a real test call is still needed",
+              "Only for Telugu",
+              "Only after a week"
+            ],
+            "answer": 1,
+            "explanation": "Health shows the service is up, not that a call succeeds end to end."
+          },
+          {
+            "id": "voice-operating-q3",
+            "prompt": "Which kill switch needs no Azure change?",
+            "options": [
+              "Turning the gateway ingress off",
+              "Turning Jio call forwarding off",
+              "Deleting the Foundry resource",
+              "Changing the model"
+            ],
+            "answer": 1,
+            "explanation": "Switching forwarding off sends calls back to the phone without touching Azure."
+          }
+        ]
+      }
+    ]
+  }
+}

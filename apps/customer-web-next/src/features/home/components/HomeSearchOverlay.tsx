@@ -33,6 +33,8 @@ interface HomeSearchOverlayProps {
   kitchens: NearbyKitchen[];
   searchTerm: string;
   foodPreference: HomeFoodPreference;
+  /** Veg mode: only these kitchens (pure veg, or cooking veg) and their dishes, also among what the catalog search finds. */
+  onlyKitchenIds?: ReadonlySet<string> | null;
   /** The delivery spot: the catalog search looks 10 km around it. */
   latitude: number | null;
   longitude: number | null;
@@ -58,6 +60,7 @@ export function HomeSearchOverlay({
   kitchens,
   searchTerm,
   foodPreference,
+  onlyKitchenIds = null,
   latitude,
   longitude,
   onSearchTermChange,
@@ -109,16 +112,20 @@ export function HomeSearchOverlay({
 
   const dishResults = useMemo(() => {
     if (!words) return [];
-    const more = (found?.dishes ?? []).filter((dish) => matchesFoodPreference(dish, foodPreference));
+    const more = (found?.dishes ?? []).filter(
+      (dish) => matchesFoodPreference(dish, foodPreference) && (!onlyKitchenIds || (dish.kitchenId !== undefined && onlyKitchenIds.has(dish.kitchenId))),
+    );
     return mergeById(dishes, more).filter((dish) => matchesDishSearch(dish, words)).slice(0, MAX_RESULTS);
-  }, [dishes, foodPreference, found, words]);
+  }, [dishes, foodPreference, found, onlyKitchenIds, words]);
 
   const kitchenResults = useMemo(
     () =>
       words
-        ? mergeById(kitchens, found?.kitchens ?? []).filter((kitchen) => matchesKitchenSearch(kitchen, words)).slice(0, MAX_RESULTS)
+        ? mergeById(kitchens, found?.kitchens ?? [])
+            .filter((kitchen) => matchesKitchenSearch(kitchen, words) && (!onlyKitchenIds || onlyKitchenIds.has(kitchen.id)))
+            .slice(0, MAX_RESULTS)
         : [],
-    [found, kitchens, words],
+    [found, kitchens, onlyKitchenIds, words],
   );
 
   const hasResults = dishResults.length > 0 || kitchenResults.length > 0;

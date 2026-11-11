@@ -46,6 +46,10 @@ test("customer and chef OTP flows hide visible captcha and enforce one border", 
   // A wrong code turns the borders red; it never fills the slots with a red tint.
   assert.doesNotMatch(codeSlotStyles, /is-error[^}]*background: var\(--cs-danger\)/);
   assert.match(source("../landing-modal/AuthModal.tsx"), /<CodeSlots/);
+  // Email codes use the same slots (owner, 5 Nov 2026): no plain one-time-code box is left outside the admin portal.
+  const email = source("../components/EmailVerificationPanel.tsx");
+  assert.equal(email.match(/<CodeSlots/g)?.length, 3);
+  assert.doesNotMatch(email, /autoComplete="one-time-code"/);
 
   assert.match(modal, /Resend verification code/);
   assert.doesNotMatch(modal, /Resend OTP/);

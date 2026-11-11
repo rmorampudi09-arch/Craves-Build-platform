@@ -67,8 +67,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * docs/riders/DISPATCH.md): offersAtOnce riders at a time (3 before Phase 4), up to offerRounds rounds while the stage
  * lasts, nearest first or, with a fair band, fair turns. Each offer records why its rider got it (trip_offer.reason).
  * The owner's rule of 11 Nov 2026 (a policy with no limit on rounds, DispatchPolicy.wholeStage): riders keep the order for
- * the whole stage. They are asked one after another, again once all in range have been, none twice within one offer's
- * time; with nobody to ask the order waits for a rider; and only the deadline hands it to Borzo. No cost guard.
+ * the whole stage. They are asked one after another, again once all in range have been, none about the same order until
+ * one look after their offer's time (so orders waiting for the same riders take turns); with nobody to ask the order
+ * waits for a rider; and only the deadline hands it to Borzo. No cost guard.
  */
 @Component
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
@@ -698,8 +699,10 @@ public class FleetDispatcher implements FleetStage {
      * trip. Ranked outside the transaction (the cost guard may ask Borzo for a quote); then the stage row is locked and the
      * round checked, so two workers never send the same one. Empty when nobody is left; null when another worker just sent it
      * or the riders chosen became busy meanwhile (look again shortly, while the stage lasts). The whole stage has no limit
-     * on rounds and asks riders again: only those offered this trip within one offer's time are left out, so a phone rings
-     * for an order at most that often, and those asked the fewest times hear first, so riders take turns.
+     * on rounds and asks riders again: those asked the fewest times hear first, so riders take turns, and a rider offered
+     * this trip is left out for the offer's time and one look more (ROUND_CHECK_EVERY). In that gap another order waiting
+     * for riders asks them, so orders take turns too: without it, the order whose offer just ran out would ask the same
+     * rider again before any other looked, and with more orders than riders the rest would never be offered to anyone.
      */
     private List<RingingOffer> nextRound(UUID tripId, DispatchPolicy policy, Supplier<OptionalLong> courierQuotePaise) {
         Map<String, Object> trip = jdbc.queryForMap("""
@@ -712,7 +715,8 @@ public class FleetDispatcher implements FleetStage {
             return List.of();
         }
         Set<UUID> offered = Set.copyOf(jdbc.queryForList("SELECT rider_id FROM fleet_schema.trip_offer WHERE trip_id = ?"
-            + (policy.wholeStage() ? " AND offered_at > now() - make_interval(secs => " + policy.offerSeconds() + ")" : ""), UUID.class, tripId));
+            + (policy.wholeStage() ? " AND offered_at > now() - make_interval(secs => "
+                + (policy.offerSeconds() + ROUND_CHECK_EVERY.toSeconds()) + ")" : ""), UUID.class, tripId));
         double lat = ((Number) trip.get("kitchen_lat")).doubleValue();
         double lng = ((Number) trip.get("kitchen_lng")).doubleValue();
         int dropM = trip.get("drop_distance_m") == null ? 0 : ((Number) trip.get("drop_distance_m")).intValue();

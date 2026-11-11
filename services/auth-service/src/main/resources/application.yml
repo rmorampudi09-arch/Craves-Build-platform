@@ -60,6 +60,7 @@ craves:
   internal-admin-rbac:
     api-enabled: ${CRAVES_INTERNAL_ADMIN_RBAC_API_ENABLED:false}
     maximum-list-size: ${CRAVES_INTERNAL_ADMIN_RBAC_MAXIMUM_LIST_SIZE:100}
+    chef-role-revoke-enabled: ${CRAVES_CHEF_ROLE_REVOKE_ENABLED:false}
   admin-account-intervention:
     api-enabled: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_API_ENABLED:false}
     firebase-worker-enabled: ${CRAVES_ADMIN_ACCOUNT_INTERVENTION_FIREBASE_WORKER_ENABLED:false}

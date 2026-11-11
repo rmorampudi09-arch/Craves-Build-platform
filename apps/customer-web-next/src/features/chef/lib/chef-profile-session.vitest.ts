@@ -410,7 +410,7 @@ describe("Chef menu save and recovery", () => {
     fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     expect((await screen.findByRole("alert")).textContent).toContain(code);
-    expect(screen.getByRole("alert").textContent?.toLowerCase()).toContain("publishing");
+    expect(screen.getByRole("alert").textContent?.toLowerCase()).toMatch(/publishing|go live/);
     expect((screen.getByRole("button", { name: "Save dish" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByRole("button", { name: "Reload menu to check the save" })).toBeNull();
     expect((screen.getByLabelText(/Dish name/) as HTMLInputElement).value).toBe("Fixture dish");

@@ -150,6 +150,33 @@ class DropoffScrubberTest {
     }
 
     @Test
+    void borzoAndPidgeProofOfDeliveryLosesTheRecipientAndThePhotoLinks() throws Exception {
+        JsonNode tree = parse("""
+            {"order":{"order_id":1250032,"points":[
+              {"address":"Kitchen road 1","place_photo_url":"https://borzo.example/kitchen.jpg","checkin":{"recipient_full_name":"Chef"}},
+              {"address":"12 Real Street","courier_visit_datetime":"2026-11-05T13:10:00+05:30","checkin_code":"4417",
+               "place_photo_url":"https://borzo.example/real-door.jpg","sign_photo_url":"https://borzo.example/real-sign.jpg",
+               "checkin":{"recipient_full_name":"Real Person","recipient_position":"Neighbour"}}]},
+             "fulfillment":{"status":"DELIVERED","drop":{"proof":["https://pidge.example/real-door.jpg",{"url":"https://pidge.example/real.jpg","count":2},
+               {"image":{"url":"https://pidge.example/real-deep.jpg"}},["https://pidge.example/real-nested.jpg"]]}}}""");
+
+        assertTrue(DropoffScrubber.scrub(tree));
+
+        String after = tree.toString();
+        for (String personal : new String[] {"Real Person", "Neighbour", "real-door", "real-sign", "real.jpg", "real-deep", "real-nested"}) {
+            assertFalse(after.contains(personal), personal + " in " + after);
+        }
+        assertEquals(AccountErasureService.ERASED_NAME, tree.at("/order/points/1/checkin/recipient_full_name").asText());
+        assertEquals("2026-11-05T13:10:00+05:30", tree.at("/order/points/1/courier_visit_datetime").asText(), "the visit time stays");
+        assertEquals("4417", tree.at("/order/points/1/checkin_code").asText(), "the code is not about the person");
+        assertEquals("https://borzo.example/kitchen.jpg", tree.at("/order/points/0/place_photo_url").asText(), "the kitchen point stays");
+        assertEquals("Chef", tree.at("/order/points/0/checkin/recipient_full_name").asText());
+        assertEquals(2, tree.at("/fulfillment/drop/proof/1/count").asInt());
+        assertEquals("DELIVERED", tree.at("/fulfillment/status").asText());
+        assertFalse(DropoffScrubber.scrub(tree), "a second pass changes nothing");
+    }
+
+    @Test
     void textWithoutADropoffIsLeftAlone() throws Exception {
         JsonNode tree = parse("{\"order\":{\"points\":[{\"address\":\"only the pickup\"}]},\"dropoff\":null,\"drop\":[]}");
         assertFalse(DropoffScrubber.scrub(tree));

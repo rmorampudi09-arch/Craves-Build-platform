@@ -40,11 +40,11 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AccountErasureService {
-    static final String ERASED_NAME = "[deleted]";
+    public static final String ERASED_NAME = "[deleted]";
     /** Never a partly visible number: digits that can not belong to anyone. */
     static final String ERASED_PHONE = "0000000000";
     static final String ERASED_EMAIL = "deleted@craves.invalid";
-    static final String ERASED_TEXT = "[deleted]";
+    public static final String ERASED_TEXT = "[deleted]";
     /** A UPI id is often the phone number, so it is replaced like one. */
     static final String ERASED_UPI_ID = "deleted@upi";
     /** The delivery-address checks elsewhere want a postal code of six digits, so the same here. */

@@ -65,12 +65,6 @@ const state = {
 // The language picker opens a sheet; skipped animations let it leave the page at once.
 beforeAll(() => { MotionGlobalConfig.skipAnimations = true; });
 afterAll(() => { MotionGlobalConfig.skipAnimations = false; });
-async function chooseLanguage(name: RegExp) {
-  fireEvent.click(screen.getByRole("button", { name: /^Video language/ }));
-  fireEvent.click(await screen.findByRole("button", { name }));
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Video language" })).toBeNull());
-}
-
 beforeEach(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
     configurable: true,
@@ -110,7 +104,7 @@ function mount() {
 }
 async function resume() {
   fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
-  return screen.findByRole("heading", { name: "FSSAI details" });
+  return screen.findByRole("heading", { name: "Identity verification" });
 }
 it("names every video language in English under its own script", async () => {
   render(createElement(LanguagePicker, { labelId: "language-label", value: "en", onChange: () => undefined }));
@@ -123,25 +117,12 @@ it("names every video language in English under its own script", async () => {
   }
 });
 
-it("restores the first incomplete FSSAI section on the next mount", async () => {
+it("restores the first incomplete section on the next mount", async () => {
   const first = mount();
   await resume();
   first.unmount();
   mount();
   await resume();
-  expect(screen.queryByRole("button", { name: "Submit application" })).toBeNull();
-});
-it("shows the selected-language empty state without claiming translated content", async () => {
-  mount();
-  await resume();
-  fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
-  await screen.findByText(/The video guide is coming soon/);
-  await chooseLanguage(/తెలుగు/);
-  await waitFor(() =>
-    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("language=te"))).toBe(
-      true,
-    ),
-  );
   expect(screen.queryByRole("button", { name: "Submit application" })).toBeNull();
 });
 it("keeps an approved Chef's kitchen available without forcing new application submission", async () => {
@@ -161,76 +142,34 @@ it("keeps an approved Chef's kitchen available without forcing new application s
   );
   expect(screen.queryByRole("button", { name: "Submit application" })).toBeNull();
 });
-it("explains an absent FSSAI number and continues without one only after the backend save", async () => {
-  mount();
-  await resume();
-  fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
-  expect((await screen.findByRole("alert")).textContent).toContain(
-    "Enter your 14-digit FSSAI registration number",
-  );
-  expect(
-    vi.mocked(fetch).mock.calls.every(([, options]) => !options || options.method !== "PUT"),
-  ).toBe(true);
-  fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
-  await screen.findByRole("heading", { name: "How to apply for FSSAI" });
-  fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
-  await screen.findByRole("heading", { name: "Identity verification" });
-  expect(vi.mocked(fetch).mock.calls.some(([, options]) => options?.method === "PUT")).toBe(true);
-});
-it("uses the number-only FSSAI form without offering a certificate or selfie upload", async () => {
-  mount();
-  await resume();
-  expect(screen.getByLabelText("FSSAI registration number")).toBeTruthy();
-  expect(screen.queryByLabelText(/certificate|licence document|selfie/i)).toBeNull();
-});
-it("preserves an unsaved language choice after a failed save and confirms only a successful retry", async () => {
-  let failSave = true;
-  const saveBodies: unknown[] = [];
+it("tells a new applicant that FSSAI is needed later, without asking for it", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (url: string, options?: RequestInit) => {
-      if (options?.method === "PUT") {
-        const body = JSON.parse(String(options.body));
-        saveBodies.push(body);
-        if (failSave) return Response.json({ message: "Save is temporarily unavailable." }, { status: 503 });
-        return Response.json({ ...state, version: 2, details: body.details });
-      }
-      return Response.json(url.includes("/content") ? [] : state);
-    }),
+    vi.fn(async () => Response.json({ ...state, details: null, application: { id, status: "NOT_SUBMITTED", documents: [] } })),
   );
   mount();
-  await resume();
-  fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
-  await chooseLanguage(/తెలుగు/);
-  fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
-  expect((await screen.findByRole("alert")).textContent).toContain("Save is temporarily unavailable.");
-  expect(screen.queryByRole("heading", { name: "Identity verification" })).toBeNull();
-  expect(screen.getByRole("button", { name: /^Video language/ }).textContent).toContain("తెలుగు");
-  failSave = false;
-  fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
-  await screen.findByRole("heading", { name: "Identity verification" });
-  expect(saveBodies).toHaveLength(2);
-  expect(saveBodies).toEqual([
-    expect.objectContaining({ expectedVersion: 1, details: expect.objectContaining({ language: "te" }) }),
-    expect.objectContaining({ expectedVersion: 1, details: expect.objectContaining({ language: "te" }) }),
-  ]);
+  await screen.findByRole("heading", { name: "Basic details" });
+  expect(screen.getByText(/add your FSSAI number later, before your dishes go live/)).toBeTruthy();
+  expect(screen.queryByLabelText("FSSAI registration number")).toBeNull();
 });
 it("keeps what was typed when the chef has to sign in again, and brings it back afterwards", async () => {
+  const kitchenName = async () => {
+    await resume();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    return (await screen.findByLabelText("Kitchen name")) as HTMLInputElement;
+  };
   const first = mount();
-  await resume();
-  fireEvent.change(screen.getByLabelText("FSSAI registration number"), { target: { value: "12345678901234" } });
+  fireEvent.change(await kitchenName(), { target: { value: "Typed kitchen" } });
   // "Sign in again" announces itself before leaving for the OTP page.
   window.dispatchEvent(new Event("craves:before-sign-in"));
   first.unmount();
   mount();
   await screen.findByText(/You’re signed in again/);
-  await resume();
-  expect((screen.getByLabelText("FSSAI registration number") as HTMLInputElement).value.replace(/\D/g, "")).toBe("12345678901234");
+  expect((await kitchenName()).value).toBe("Typed kitchen");
   // Kept once: a later visit opens the saved application as it is.
   cleanup();
   mount();
-  await resume();
-  expect((screen.getByLabelText("FSSAI registration number") as HTMLInputElement).value).toBe("");
+  expect((await kitchenName()).value).toBe("Saved kitchen");
 });
 
 it("asks a chef new to this device for a language before anything else, and one tap carries on", async () => {
@@ -343,8 +282,7 @@ it("names every screen, section and status in Telugu and Kannada", () => {
       expect(chefSectionTitle(screen, language), screen).not.toBe(chefSectionTitle(screen));
       expect(chefSectionDescription(screen, language), screen).not.toBe(chefSectionDescription(screen));
     }
-    // "FSSAI" is a name and stays as it is.
-    for (const section of CHEF_SECTIONS.filter((section) => section !== "fssai"))
+    for (const section of CHEF_SECTIONS)
       expect(chefSectionLabel(section, language), section).not.toBe(chefSectionLabel(section));
     for (const phase of phases) {
       expect(applicationPhaseCopy(phase, language).label, phase).not.toBe(applicationPhaseCopy(phase).label);

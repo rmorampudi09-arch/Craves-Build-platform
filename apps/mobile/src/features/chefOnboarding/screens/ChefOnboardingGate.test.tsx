@@ -74,29 +74,59 @@ function button(label: string) {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(chefOnboardingApi.content).mockResolvedValue([]);
+  jest.mocked(chefOnboardingApi.email).mockResolvedValue({ email: null, emailVerified: false, emailRevision: 1, serverTime: '2026-11-10T00:00:00Z', pending: null });
 });
 afterEach(() => {
   if (tree) {
     act(() => tree.unmount());
   }
 });
-test('remount resumes FSSAI and does not expose a final submission action', async () => {
-  await mount();
-  expect(button('I have FSSAI')).toBeTruthy();
-  expect(button('Submit for admin review')).toBeUndefined();
+const texts = () =>
+  tree.root.findAllByType(Text).map(node => String(node.props.children));
+const approved: OnboardingState = {
+  ...state,
+  resumeStep: 'waiting',
+  submitted: true,
+  application: { id: null, status: 'APPROVED' },
+};
+test('signup says FSSAI is needed later and never asks for it', async () => {
+  await mount({ ...state, resumeStep: 'personal' });
+  expect(texts().some(text => text.includes('add your FSSAI number later'))).toBe(true);
+  expect(button('I have FSSAI')).toBeUndefined();
   act(() => tree.unmount());
-  await mount();
-  expect(button('I have FSSAI')).toBeTruthy();
+  await mount({ ...state, resumeStep: 'review' });
+  expect(texts().some(text => text.includes('add your FSSAI number later'))).toBe(true);
+  expect(button('Submit for admin review')).toBeTruthy();
 });
-test('saving incomplete FSSAI remains at the same step', async () => {
-  await mount();
-  jest.mocked(chefOnboardingApi.save).mockResolvedValue(state);
+test('approved Chef works in the app, adds the FSSAI number there, and is told Craves is verifying it', async () => {
+  await mount(approved);
+  expect(texts()).toContain('Existing workspace');
+  expect(texts().some(text => text.includes('Add your FSSAI number.'))).toBe(true);
+  act(() => button('Add FSSAI number').props.onPress());
+  // Number only: no document upload, and a short number is refused before any save.
+  expect(button('Upload FSSAI document')).toBeUndefined();
   await act(async () => {
-    await button('Save progress for later').props.onPress();
+    await button('Save FSSAI number').props.onPress();
   });
-  expect(chefOnboardingApi.save).toHaveBeenCalledWith(1, state.details);
-  expect(button('I have FSSAI')).toBeTruthy();
+  expect(texts()).toContain('Enter the 14-digit FSSAI number to continue.');
+  expect(chefOnboardingApi.save).not.toHaveBeenCalled();
+  act(() => tree.unmount());
+  const saved = { ...approved, version: 2, details: { ...approved.details!, fssaiNumber: '12345678901234' } };
+  await mount(saved);
+  expect(texts().some(text => text.includes('Craves is verifying your FSSAI number.'))).toBe(true);
+  jest.mocked(chefOnboardingApi.save).mockResolvedValue({ ...saved, version: 3 });
+  act(() => button('Correct FSSAI number').props.onPress());
+  await act(async () => {
+    await button('Save FSSAI number').props.onPress();
+  });
+  expect(chefOnboardingApi.save).toHaveBeenCalledWith(2, saved.details);
+  expect(texts()).toContain('Existing workspace');
   expect(chefOnboardingApi.submit).not.toHaveBeenCalled();
+});
+test('verified Chef goes straight to the workspace without the FSSAI note', async () => {
+  await mount({ ...approved, legacy: true, resumeStep: 'legacy', progress: { fssaiVerified: true } });
+  expect(texts()).toContain('Existing workspace');
+  expect(button('Add FSSAI number')).toBeUndefined();
 });
 test('bank statement is one proof slot and Aadhaar requires its back', async () => {
   const bank = {
@@ -121,7 +151,7 @@ test('approved Chef keeps workspace access while completing added evidence', asy
       .some(node => node.props.children === 'Existing workspace'),
   ).toBe(true);
   act(() => button('Continue updated onboarding').props.onPress());
-  expect(button('I have FSSAI')).toBeTruthy();
+  expect(button('View existing Chef workspace')).toBeTruthy();
 });
 test('disabled rollout preserves the original mobile flow', async () => {
   await mount({ ...state, enabled: false });
@@ -130,17 +160,4 @@ test('disabled rollout preserves the original mobile flow', async () => {
       .findAllByType(Text)
       .some(node => node.props.children === 'Existing workspace'),
   ).toBe(true);
-});
-
-test.each([
-  ['', 'Enter the 14-digit FSSAI number to continue.'],
-  ['12345678901234', 'Upload the FSSAI document or save progress for later.'],
-])('incomplete FSSAI %s explains what is missing', async (fssaiNumber, message) => {
-  await mount({...state, details: {...state.details!, fssaiNumber}});
-  await act(async () => {
-    await button('Save and continue').props.onPress();
-  });
-  expect(tree.root.findAllByType(Text).some(node => node.props.children === message)).toBe(true);
-  expect(chefOnboardingApi.save).not.toHaveBeenCalled();
-  expect(chefOnboardingApi.submit).not.toHaveBeenCalled();
 });

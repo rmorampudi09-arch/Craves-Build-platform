@@ -123,6 +123,12 @@ describe("built-in dispatch", () => {
     expect(rulesText(onBuiltIn)).toBe("1 at once, 3 rounds, fair band 1.5 km");
     expect(rulesText({ offersAtOnce: 1, offerRounds: 3, fairBandM: 1500, rankByTravelTime: true })).toBe("1 at once, 3 rounds, fair band 4.5 min by travel time");
     expect(rulesText({ ...reference, rankByTravelTime: true })).toBe("3 at once, 1 round, soonest first by travel time");
+    // No limit on rounds (0): riders are asked again until the time before Borzo is up, and there is no cost guard.
+    const wholeTime = { ...builtIn, offerSeconds: 20, fleetStageSeconds: 300, offerRounds: 0 };
+    expect(builtInText(wholeTime)).toBe("1 rider at a time · 20 s to accept · asked again until the time is up · fair band 1.5 km · within 5 km · 300 s before Borzo · Pidge 600 s · pickup detour 130% · no cost guard");
+    expect(rulesText(wholeTime)).toBe("1 at once, asked again until the time is up, fair band 1.5 km");
+    expect(fleetSetupSchema.parse({ ...setup, dispatchPolicy: { ...policy, ...wholeTime }, builtInDispatch: wholeTime }).builtInDispatch.offerRounds).toBe(0);
+    expect(dispatchPolicySchema.safeParse({ ...policy, offerRounds: 6 }).success).toBe(false);
   });
 
   it("needs notice only where the built-in detour or offer rules differ from what riders are shown", () => {

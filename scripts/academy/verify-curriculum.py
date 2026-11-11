@@ -14,12 +14,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ACADEMY = ROOT / 'services/auth-service/src/main/resources/academy'
-EXPECTED = ('academy-2026-09-13-v3', 15, 75, 150)
+EXPECTED = ('academy-2026-09-13-v3', 25, 121, 242)
 SOURCE_PATTERN = re.compile(
-    r'(?:(?:services|apps)/[A-Za-z0-9_./-]+\.(?:java|ts|tsx|md)|'
+    r'(?:(?:services|apps)/[A-Za-z0-9_./-]+\.(?:java|ts|tsx|md|py)|'
     r'\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml|scripts/academy/[A-Za-z0-9_.-]+\.py)'
 )
-NEW_COURSES = {'java-engineering', 'mobile-engineering', 'data-engineering', 'document-engineering', 'service-labs'}
+NEW_COURSES = {'java-engineering', 'mobile-engineering', 'data-engineering', 'document-engineering', 'service-labs',
+               # Added 10 Nov 2026, each pinned to its own sourceRevision (newer services did not exist at the base snapshot).
+               'advanced-platform', 'advanced-ordering', 'advanced-discovery', 'advanced-growth', 'advanced-trust-privacy',
+               'rider-fleet', 'chef-referral', 'voice-support', 'delivery-intelligence', 'azure-operations'}
 CHECKPOINT = 'Reasoning checkpoint (ungraded)'
 
 
@@ -117,9 +120,11 @@ def validate(data, verify_git=False):
         require(1 <= len(course['sources']) <= 10, f'Existing source-route index bound exceeded: {cid}')
         require(len(course['sources']) == len(set(course['sources'])), f'Duplicate source: {cid}')
         require(bool(course['lessons']), f'Empty course: {cid}')
+        revision = course.get('sourceRevision', data['sourceRevision'])
+        require(isinstance(revision, str) and re.fullmatch(r'[a-f0-9]{40}', revision), f'Unpinned course source revision: {cid}')
         for source in course['sources']:
             require(SOURCE_PATTERN.fullmatch(source) and '..' not in source, f'Unreviewable source path: {source}')
-            sources.add(source)
+            sources.add((revision, source))
         for lesson in course['lessons']:
             lid = lesson['id']
             require(re.fullmatch(r'[a-z0-9-]{1,100}', lid) and lid not in lessons, f'Invalid/duplicate lesson: {lid}')
@@ -161,14 +166,14 @@ def validate(data, verify_git=False):
     for cid in courses:
         visit(cid)
     require((data['version'], len(courses), len(lessons), len(questions)) == EXPECTED, 'Curriculum version/count contract changed')
-    require(checkpoints == 25 and NEW_COURSES <= courses.keys(), 'Missing applied reasoning material')
+    require(checkpoints == 71 and NEW_COURSES <= courses.keys(), 'Missing applied reasoning material')
     source_bytes = {}
     if verify_git:
-        for source in sorted(sources):
-            payload = subprocess.check_output(['git', 'show', f'{data["sourceRevision"]}:{source}'], cwd=ROOT)
+        for revision, source in sorted(sources):
+            payload = subprocess.check_output(['git', 'show', f'{revision}:{source}'], cwd=ROOT)
             require(0 < len(payload) <= 262144, f'Existing source viewer byte bound exceeded: {source}')
             payload.decode('utf-8')
-            source_bytes[source] = len(payload)
+            source_bytes[f'{revision}:{source}'] = len(payload)
     public = copy.deepcopy(data)
     for course in public['courses']:
         for lesson in course['lessons']:

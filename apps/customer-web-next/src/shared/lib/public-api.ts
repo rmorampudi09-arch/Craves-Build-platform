@@ -6,7 +6,7 @@ export async function publicApiFetch(
   init: RequestInit = {},
   timeoutMs = 10_000,
 ): Promise<Response> {
-  if (!path.startsWith("/") || path.includes("..") || /[\r\n]/.test(path)) {
+  if (!path.startsWith("/") || path.includes("..") || /[\r\n\\]|%2e/i.test(path)) {
     throw new Error("Invalid public API path");
   }
   const controller = new AbortController();

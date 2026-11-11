@@ -74,13 +74,13 @@ const WhyCraves = () => {
           </h1>
           <p className="why__statement">
             <span className="why__line">
-              We connect you with home chefs who cook with care, familiarity
+              We connect you with home chefs who cook fresh, familiar food.
             </span>{' '}
             <span className="why__line">
-               and freshness. Every meal brings you closer to home and
+               Every meal you order supports a real kitchen
             </span>{' '}
             <span className="why__line">
-               supports a real kitchen in your community.
+               in your community.
             </span>
           </p>
         </div>

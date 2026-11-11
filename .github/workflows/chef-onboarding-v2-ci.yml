@@ -7,6 +7,7 @@ on:
       - 'apps/mobile/**'
       - 'scripts/apim/configure-chef-onboarding-v2-apim.sh'
       - 'scripts/release/**'
+      - 'scripts/chef-onboarding/**'
       - 'azure-pipelines-chef-onboarding-v2-*.yml'
       - '.github/workflows/chef-onboarding-v2-ci.yml'
   push:
@@ -109,7 +110,9 @@ jobs:
       - name: Lint the full mobile app with zero warnings
         run: npm run lint -- --max-warnings=0
   package:
-    runs-on: ubuntu-latest
+    # Playwright 1.55 cannot install Chromium on ubuntu-latest since it moved to 26.04 (10 Nov 2026).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     needs: [backend,web,mobile]
     steps:
       - uses: actions/checkout@v4

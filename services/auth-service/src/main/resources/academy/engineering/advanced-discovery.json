@@ -1,0 +1,389 @@
+{
+  "course": {
+    "id": "advanced-discovery",
+    "service": "advanced-features-service",
+    "title": "Discovery and taste: labels, options, memory, ranking and search",
+    "level": "Practitioner",
+    "minutes": 140,
+    "description": "Learn how Craves describes food with a shared cuisine and diet vocabulary and declared food facts, how dish options and meal hours are quoted, how a person's saved food and remembered choices come back to them, and how personal ranking, semantic search and AI search help people find dishes without ever overruling Catalog.",
+    "prerequisites": [
+      "advanced-platform",
+      "catalog"
+    ],
+    "sources": [
+      "services/advanced-features-service/src/main/java/in/craves/advanced/taxonomy/TaxonomyService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/foodfacts/FoodFactsService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/menuoptions/MenuOptionsRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/tastememory/TasteMemoryService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/foodlists/FoodListService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/savedfeed/SavedFeedRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/personalized/PersonalizedRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/semanticsearch/SemanticSearchRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/aisearch/AiSearchRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/aisearch/HttpAiSearchProvider.java"
+    ],
+    "sourceRevision": "9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605",
+    "lessons": [
+      {
+        "id": "adv-taxonomy-facts",
+        "title": "Describe food with shared labels and declared facts",
+        "overview": "Customers search by region, cuisine and eating practice, and some need to know exactly what is in a dish. Two modules carry that meaning. The taxonomy module holds the vocabulary of cuisines and diets as data, and chefs label their own dishes with it. The food-facts module holds ingredients, allergens, may-contain warnings and nutrition, declared by the chef and optionally verified by staff. This lesson shows how both stay trustworthy without anyone inventing health claims.",
+        "steps": [
+          {
+            "label": "Treat the vocabulary as data",
+            "detail": "A baseline is seeded: 7 top-level groups (five Indian regions, Indo-Chinese and Continental), 23 regional cuisines up to three levels deep, such as South Indian, then Karnataka, then Udupi, and 6 diets including Jain, no onion no garlic, Satvik, Vegan, fasting and Halal. Admins add, rename, move and retire terms; terms are never deleted and codes never change, so dish labels stay valid."
+          },
+          {
+            "label": "Keep each claim in its own place",
+            "detail": "Diets here are eating practices only. Allergen claims such as gluten-free belong to food facts, veg, non-veg and egg to Catalog's food type, and spice to Catalog's spice level. Health claims such as diabetic-friendly are not offered at all without an owner decision."
+          },
+          {
+            "label": "Label dishes as the owning chef",
+            "detail": "Chefs label their own dishes, confirmed with Catalog using the chef's token: one to three cuisines, the first being the main one, and up to six diets, published at once as declared by the chef. Staff can correct labels with a reason, audited with before and after; repeated false claims become a trust case."
+          },
+          {
+            "label": "Browse and resolve safely",
+            "detail": "Browsing a region matches every cuisine below it, diets are all-of, and dishes without labels never match. resolve maps free text, such as cuisine words kitchens typed into Catalog, to terms by code, name or alias in any script; an alias belongs to at most one live term, so the answer is never ambiguous."
+          },
+          {
+            "label": "Publish food facts with a clear source",
+            "detail": "Chefs declare ingredients, allergens from the FSSAI 2020 list plus common extras, may-contain warnings, nutrition per serving and the source: chef-declared, lab-tested or label-derived. Submitting publishes at once as CHEF_DECLARED, because the newest recipe is the safest truth for allergens; staff verification relabels it VERIFIED."
+          },
+          {
+            "label": "Never treat unknown as safe",
+            "detail": "Plausibility checks, such as energy against macronutrients, are warnings, never blocks. A free-from search returns only dishes whose facts were declared, so a dish with no facts is never shown as allergen-free, and every public answer carries a plain disclaimer."
+          }
+        ],
+        "example": "A chef labels her dish as South Indian, Karnataka, Udupi with the diet no onion no garlic, and declares that it may contain cashew. A customer browsing South Indian finds it, but a customer searching nut-free does not, because the declared facts include a nut warning. Neither answer needed a guess.",
+        "lab": "In a local database, add a retired cuisine term and show that a dish already labelled with it still matches its region but the term no longer appears in public lists. Then declare facts for two dishes, leave a third without facts, and confirm that a free-from search returns only the declared dish without the allergen.",
+        "pitfall": "Never fill a missing allergen field with a safe default: an unknown answer must stay unknown to the customer.",
+        "questions": [
+          {
+            "id": "adv-taxonomy-facts-q1",
+            "prompt": "Where does a gluten-free claim belong?",
+            "options": [
+              "In the diet vocabulary",
+              "In the dish's declared food facts",
+              "In the dish title",
+              "In Catalog's spice level"
+            ],
+            "answer": 1,
+            "explanation": "Allergen claims live in food facts; diets are eating practices only."
+          },
+          {
+            "id": "adv-taxonomy-facts-q2",
+            "prompt": "A dish has no declared facts. Does a free-from search return it?",
+            "options": [
+              "Yes, as safe",
+              "No, unknown is never treated as safe",
+              "Only on weekends",
+              "Only for verified chefs"
+            ],
+            "answer": 1,
+            "explanation": "Free-from search only returns dishes whose facts were declared."
+          },
+          {
+            "id": "adv-taxonomy-facts-q3",
+            "prompt": "Why are taxonomy terms retired instead of deleted?",
+            "options": [
+              "To save storage",
+              "So existing dish labels stay valid while the term leaves public answers",
+              "Because Flyway forbids deletes",
+              "To keep chefs from labelling"
+            ],
+            "answer": 1,
+            "explanation": "Codes never change and terms are never deleted, so labels already on dishes keep working."
+          }
+        ]
+      },
+      {
+        "id": "adv-menu-options",
+        "title": "Quote dish options and meal hours correctly",
+        "overview": "Many dishes come with choices: rice or roti, half or full, extra raita. The menu-options module stores option groups and choices per dish and the kitchen's meal hours, and answers a quote for a set of picks. It stores nothing when quoting and leaves the base price to Catalog. Using these options at checkout is a later order-service slice behind a switch, so this lesson also explains what the quote can and cannot promise.",
+        "steps": [
+          {
+            "label": "Model groups and choices",
+            "detail": "Each dish can have up to 10 option groups, for example Rice with exactly one choice or Add-ons with up to two, and each group up to 20 choices. Choice prices are set by the chef in paise and are never negative, so Half or Full is modelled as a base price plus a Full add-on. A choice can be switched off for the day."
+          },
+          {
+            "label": "Keep ids stable",
+            "detail": "Group and choice ids stay the same across edits when the chef app sends them back, so carts and remembered choices can hold them safely. Taste memory keeps these choice ids as hints for next time."
+          },
+          {
+            "label": "Quote without storing",
+            "detail": "POST /quote checks Catalog availability, every pick against each group's minimum and maximum, the availability of each pick and the meal hours, then returns the unit and total price in paise. It stores nothing, and the base price always comes live from Catalog."
+          },
+          {
+            "label": "Set meal hours per kitchen",
+            "detail": "Each chef sets windows for Breakfast, Lunch, Snacks, Dinner and Late night in India time, with days of the week; a window may run past midnight. A dish labelled with meals is quotable only inside those windows; a dish without meal labels follows the kitchen's normal opening hours in Catalog."
+          },
+          {
+            "label": "Know the quote is advisory on time",
+            "detail": "The quote's time comes from the client, so its meal-hours answer is advisory. When checkout uses options, it must check meal hours against the order's real time on the server. That checkout hook waits for its own release behind a switch that starts off."
+          },
+          {
+            "label": "Guard the edits",
+            "detail": "A meal cannot be labelled before its hours exist, and hours cannot be removed while dishes use them. The chef's kitchen is taken from the chef's own Catalog menu, so a new chef adds a dish before setting meal hours."
+          }
+        ],
+        "example": "A dish costs 120 rupees in Catalog with a Rice group (exactly one of jeera rice or plain rice) and an Add-ons group (up to two, raita at 20 rupees). A quote for jeera rice plus raita returns 140 rupees a unit. The same quote at 4 pm for a dish labelled Lunch only answers that it is outside meal hours.",
+        "lab": "Create a dish with two option groups and meal hours in a local database. Write quote tests for a valid pick, a pick above a group's maximum, a switched-off choice and a time outside the window, and check that the quote leaves no rows behind.",
+        "pitfall": "Never take a dish's base price from the options module or the client: Catalog owns it, and checkout must re-check everything on the server.",
+        "questions": [
+          {
+            "id": "adv-menu-options-q1",
+            "prompt": "How is a Half or Full choice modelled?",
+            "options": [
+              "With a negative price for Half",
+              "As a base price plus a Full add-on",
+              "As two dishes",
+              "With a discount"
+            ],
+            "answer": 1,
+            "explanation": "Choice prices are never negative, so Full is an add-on on top of the base price."
+          },
+          {
+            "id": "adv-menu-options-q2",
+            "prompt": "Why is the quote's meal-hours answer only advisory?",
+            "options": [
+              "Because chefs change hours often",
+              "Because the time it uses comes from the client",
+              "Because Catalog ignores hours",
+              "Because quotes are cached"
+            ],
+            "answer": 1,
+            "explanation": "Checkout must check meal hours against the order's real server time."
+          },
+          {
+            "id": "adv-menu-options-q3",
+            "prompt": "What does POST /quote store?",
+            "options": [
+              "The cart",
+              "Nothing",
+              "The customer's choices",
+              "A price lock for 10 minutes"
+            ],
+            "answer": 1,
+            "explanation": "The quote is a pure check that stores nothing."
+          }
+        ]
+      },
+      {
+        "id": "adv-memory-lists-feed",
+        "title": "Give people their own food back: memory, lists and the Saved tab",
+        "overview": "Three modules give a person their own food back. Taste memory keeps what someone asked Craves to remember, food lists let them collect and share dishes, and the saved feed composes the Saved tab from favourites, availability and their own order history. None of them infers anything behind the person's back, and the saved feed stores almost nothing. This lesson shows where each one's data comes from and who may see it.",
+        "steps": [
+          {
+            "label": "Remember only what was asked",
+            "detail": "Taste memory keeps a profile (spice mild, medium or spicy, oil less or regular, and a short note such as less salt) and, per dish, the option choices picked last time with their own spice, oil and note. Only what the person asked to remember is stored; nothing is inferred from orders, so it does not need the personalization consent."
+          },
+          {
+            "label": "Treat remembered choices as hints",
+            "detail": "Remembered choice ids are hints: the apps preselect only choices the dish still offers, and the options quote stays the check at order time. Up to 500 dishes per person are kept, newest first, and no one else, staff included, has a route to read them."
+          },
+          {
+            "label": "Share lists without exposing people",
+            "detail": "Food lists are private by default. Sharing creates one link per list; its token is shown once and stored only as SHA-256, rotating revokes the old link, and an expiry of 1 to 365 days is optional. A shared view shows the list and its dishes with live availability, never the owner, their other lists, addresses or orders."
+          },
+          {
+            "label": "Compose the Saved tab",
+            "detail": "GET /saved-feed returns saved dishes (available first), saved kitchens with Catalog's cooking state, and up to 10 regulars: kitchens the person ordered from but did not save. It reads favourites from User-chef service, purchasability and kitchen state from Catalog and history from Order service, each with the person's own token."
+          },
+          {
+            "label": "Recover unavailable favourites honestly",
+            "detail": "A saved dish Catalog no longer shows comes back with available false, its last known name, its kitchen, the kitchen's state and up to 3 dishes that kitchen offers now. Nothing is substituted or added to a cart automatically; the person decides."
+          },
+          {
+            "label": "Show familiarity only to the person",
+            "detail": "Per dish, the feed counts how many of the person's delivered orders contained it and when last; per kitchen, Order service's delivered count. It is shown only to the caller, never as public popularity. familiarityComplete false means the person has more than 50 delivered orders, so per-dish counts are lower bounds."
+          }
+        ],
+        "example": "A customer saved a chef's mango pachadi, which is off the menu this week. The Saved tab shows it as unavailable with the kitchen's next opening and three dishes that kitchen cooks today. The customer orders one of them; nothing was swapped into their cart without asking.",
+        "lab": "With fake gateways, build a Saved tab for a person with two saved dishes, one unavailable, and three delivered orders from an unsaved kitchen. Assert the order of the lists, the recovery fields of the unavailable dish and that the unsaved kitchen appears among the regulars.",
+        "pitfall": "Never turn a person's own history into public popularity or into silent substitutions; it is theirs to see and act on.",
+        "questions": [
+          {
+            "id": "adv-memory-lists-feed-q1",
+            "prompt": "Does taste memory need the personalization consent?",
+            "options": [
+              "Yes, always",
+              "No, because it stores only what the person asked to remember and infers nothing",
+              "Only for chefs",
+              "Only after 10 orders"
+            ],
+            "answer": 1,
+            "explanation": "Inference from orders would be personalization; taste memory is explicit and needs no consent switch."
+          },
+          {
+            "id": "adv-memory-lists-feed-q2",
+            "prompt": "What does a shared food list never show?",
+            "options": [
+              "The dishes",
+              "Live availability",
+              "The owner and their other lists, addresses or orders",
+              "The list name"
+            ],
+            "answer": 2,
+            "explanation": "A shared view shows the list and dishes only, never who owns it or anything else about them."
+          },
+          {
+            "id": "adv-memory-lists-feed-q3",
+            "prompt": "A saved dish is no longer on Catalog. What does the Saved tab do?",
+            "options": [
+              "Replaces it in the cart automatically",
+              "Shows it as unavailable with its kitchen and up to 3 dishes offered now",
+              "Deletes it from favourites",
+              "Hides it silently"
+            ],
+            "answer": 1,
+            "explanation": "Recovery informs and suggests; the person decides."
+          }
+        ]
+      },
+      {
+        "id": "adv-personal-ranking",
+        "title": "Reorder dishes for one person, only with consent",
+        "overview": "Personalized ranking takes the dishes an app is about to show and reorders them for the signed-in person, with a reason for each, such as because you ordered this. It never adds, hides or filters dishes, it only works with the person's personalization consent, and it fails back to the original order whenever anything is slow or missing. This lesson reads PersonalizedRules to see the points, the deadlines and the consent gate.",
+        "steps": [
+          {
+            "label": "Send the dishes, get the same dishes back",
+            "detail": "POST /personalized/rank takes 1 to 100 items with a menu item id and kitchen id, for example from discovery or Cooking Today, and returns the same dishes reordered with a score and reasons: SAVED_DISH, ORDERED_DISH, SAVED_KITCHEN or ORDERED_KITCHEN. Availability, serviceability and price stay with Catalog and checkout."
+          },
+          {
+            "label": "Check consent first",
+            "detail": "The ranking runs only with the person's personalization consent, which defaults to off. Without it the items come back in the order sent with personalized false, and no other service is even asked, so a person who said no causes no reads of their history at all."
+          },
+          {
+            "label": "Use only the person's own signals",
+            "detail": "Signals are the person's saves from User-chef service and their most recent 50 delivered orders from Order service, read with their token. Nothing is stored and nothing about other people is used, so one person's habits never shape another person's list."
+          },
+          {
+            "label": "Know the points",
+            "detail": "A saved dish scores 4; an ordered dish scores 2 plus 1 per delivered order containing it, up to 3; a saved kitchen scores 2 and an ordered-from kitchen 1. Ties keep the app's own order and duplicates keep their first place. These are product choices, easy to tune, not commercial values."
+          },
+          {
+            "label": "Fail back to the original order",
+            "detail": "The three reads run in parallel under a 1.5-second deadline with at most 8 at once per replica. When a source fails, is slow or refuses the token, the items come back unchanged with personalized false, so ranking can never break the screen it decorates."
+          },
+          {
+            "label": "Leave bigger models to the owner",
+            "detail": "Not built yet, and each an owner decision: models trained on everyone's behaviour, time-of-day or weather signals, taste-memory signals and ranking whole kitchens. The endpoint shape would stay the same if any of them is added."
+          }
+        ],
+        "example": "A person who turned on personalization opens Cooking Today. Among 30 dishes, one they saved and one they ordered twice move to the top with reasons; the rest keep the order discovery sent. When Order service is slow one evening, the same screen simply shows discovery's order with personalized false.",
+        "lab": "With fake gateways, rank 10 items for a person without consent and assert that no gateway was called. Turn consent on, add one saved dish and two delivered orders, and check scores and reasons. Make one gateway exceed the deadline and assert the original order comes back.",
+        "pitfall": "Never let a ranking call filter or hide dishes: deciding what may be shown belongs to Catalog and checkout, not to a personal score.",
+        "questions": [
+          {
+            "id": "adv-personal-ranking-q1",
+            "prompt": "What happens when a person has not given personalization consent?",
+            "options": [
+              "Ranking uses everyone's data instead",
+              "Items come back in the order sent and no other service is asked",
+              "The request fails with 403",
+              "Only saved dishes are returned"
+            ],
+            "answer": 1,
+            "explanation": "Without consent the module returns the original order and reads nothing."
+          },
+          {
+            "id": "adv-personal-ranking-q2",
+            "prompt": "Can personalized ranking remove a dish from the list?",
+            "options": [
+              "Yes, if the score is low",
+              "No, it only reorders the dishes it was given",
+              "Yes, if the kitchen is far",
+              "Only for chefs"
+            ],
+            "answer": 1,
+            "explanation": "It never adds, hides or filters; it only reorders with reasons."
+          },
+          {
+            "id": "adv-personal-ranking-q3",
+            "prompt": "A source is slower than the 1.5-second deadline. What does the caller get?",
+            "options": [
+              "An error",
+              "The items in their original order with personalized false",
+              "A partial ranking",
+              "A retry later"
+            ],
+            "answer": 1,
+            "explanation": "Ranking fails back to the app's own order, so it can never break the screen."
+          }
+        ]
+      },
+      {
+        "id": "adv-search",
+        "title": "Understand everyday phrases: semantic and AI search",
+        "overview": "Semantic search turns everyday phrases such as comfort food or no onion garlic into Catalog searches and filters, using concepts that staff write. AI search lets a person chat, asks an AI provider to turn the chat into a semantic search plan, and then runs that plan exactly like semantic search. Both leave Catalog as the authority on what is shown, where and at what price. This lesson reads SemanticSearchRules, AiSearchRules and the provider client to see how meaning is added safely.",
+        "steps": [
+          {
+            "label": "Write concepts as staff content",
+            "detail": "A concept maps a phrase of up to 4 words, such as pesarattu or no onion garlic, to up to 4 Catalog search terms and filters for food type, spice level or category. Nothing is seeded, concepts are switched off rather than deleted, and every change is audited. Phrases and queries are normalised the same way, so matching is exact."
+          },
+          {
+            "label": "Plan the query",
+            "detail": "Planning matches the longest phrase first at each word; words no concept knows stay as the person's own search, which always runs first and counts double. Filters apply only when every matched concept agrees, so veg chicken sets no food type at all."
+          },
+          {
+            "label": "Bound the fan-out",
+            "detail": "At most 3 Catalog searches of 20 dishes run per request, within about 3 seconds, merged by score and then by Catalog's own order, at most 50 dishes. Coordinates are checked and rounded to 6 decimals before Catalog is asked; a value with thousands of decimal places, found in review, would otherwise cost seconds of CPU."
+          },
+          {
+            "label": "Configure the AI provider deliberately",
+            "detail": "AI search works with any OpenAI-compatible chat completions API. Until CRAVES_ADV_AI_SEARCH_URL, _MODEL and _KEY are set, every call answers 503 AI_SEARCH_NOT_CONFIGURED and the app falls back to semantic search. Choosing the provider, its cost, data terms and data residency stays the owner's decision."
+          },
+          {
+            "label": "Never trust the model's answer as is",
+            "detail": "Only the first JSON object is read; the reply is cut to 300 characters, search words to 120, and food type and spice level must be one of Catalog's values. A failing, slow or busy provider never fails the request: the person's newest message is searched as typed with aiUsed false."
+          },
+          {
+            "label": "Keep chats private and bounded",
+            "detail": "No chat text, reply or person id is stored or logged. The prompt tells the model not to invent dishes, prices or offers and to give no medical or allergy advice. A person gets 20 turns per 10 minutes per replica, and the apps should show a one-line notice that the message goes to an AI service."
+          }
+        ],
+        "example": "Someone types that they want something spicy and light for dinner. The AI provider turns the chat into a plan with the words light dinner and spice level spicy, and a staff concept for light dinner adds two Catalog search terms. Catalog returns nearby dishes; the person sees the model's short reply and Catalog's dishes, and nothing else the model wrote is used.",
+        "lab": "Add two concepts locally and test plans for a known phrase, an unknown word and two concepts with conflicting food types. For AI search, point the provider setting at a local stub that returns invalid JSON and check that the newest message is searched as typed with aiUsed false.",
+        "pitfall": "Never let a model decide availability, prices or allergens: it may only suggest search words that Catalog then answers.",
+        "questions": [
+          {
+            "id": "adv-search-q1",
+            "prompt": "Who writes the meaning behind semantic search phrases?",
+            "options": [
+              "The AI model",
+              "Staff, as audited concepts",
+              "Customers' searches",
+              "Catalog automatically"
+            ],
+            "answer": 1,
+            "explanation": "Concepts are staff-curated content; nothing is seeded."
+          },
+          {
+            "id": "adv-search-q2",
+            "prompt": "What happens when the AI provider times out?",
+            "options": [
+              "The request fails",
+              "The person's newest message is searched as typed with aiUsed false",
+              "The search is cancelled",
+              "The last reply is reused"
+            ],
+            "answer": 1,
+            "explanation": "A provider failure never fails the request; it falls back to a plain search."
+          },
+          {
+            "id": "adv-search-q3",
+            "prompt": "Two matched concepts disagree on food type. Which food type filter is applied?",
+            "options": [
+              "The first concept's",
+              "None, because filters apply only when every matched concept agrees",
+              "The model's guess",
+              "Veg by default"
+            ],
+            "answer": 1,
+            "explanation": "Filters apply only on agreement, so conflicting concepts set no food type."
+          }
+        ]
+      }
+    ]
+  }
+}

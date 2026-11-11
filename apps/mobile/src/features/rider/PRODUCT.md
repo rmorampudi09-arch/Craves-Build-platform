@@ -43,7 +43,7 @@ These follow Telangana's gig-worker Act (Act 21 of 2026) and set Craves apart fr
 ## Operating Context
 - **Joining:** phone OTP sign-in; manual document checks by ops (no DigiLocker); a background check; then in-person training, a ride-along, and a free bag and T-shirt.
 - **Phone setup:** a one-time checklist (location, notifications, battery, autostart, lock in recent apps, a test ring), with per-manufacturer steps.
-- **Shift:** go online with a selfie (ops checks identity; customers never see it), then wait at a kitchen rest point. Waiting in a booked slot is paid at a guaranteed hourly minimum.
+- **Shift:** go online with a selfie (ops checks identity; customers never see it), then wait for offers. Booked slots and their hourly guarantee: removed in 1.3.4.
 - **Trip:** offer (40 s) → to kitchen → at kitchen (order code, sealed bag, free-wait timer then waiting pay) → to customer → OTP handover, or the customer-not-answering flow (two calls, a wait timer, photo drop-off; pay may be held for ops review).
 - **Navigation** happens in the Google Maps app (two-wheeler mode). The rider app shows addresses and landmarks, not a map.
 - **Money:** pay is credited at handover and withdrawable after 24 hours. A weekly payout goes out every Monday by 3 pm to UPI or bank, plus one free withdrawal a day, each with a bank reference (UTR).
@@ -56,7 +56,7 @@ These follow Telangana's gig-worker Act (Act 21 of 2026) and set Craves apart fr
   - Roboto (the system font).
 - **Backend:** a fleet package in integration-service. All money comes from the server in paise. The app never computes pay.
 - **Distribution:** Firebase App Distribution for the pilot, then the Play Store.
-- **Not in the pilot:** in-app map, masked calling, slot booking, instant cash-out, two orders per trip, dark mode (not designed).
+- **Not in the pilot:** in-app map, masked calling, instant cash-out, two orders per trip, dark mode (not designed).
 - **Placeholders still open:** [OPS PHONE], [COVER AMOUNT], the state grievance portal link. The rate card is a draft ("Draft pricing, not final").
 - **Order code:** the real code is the 8-character short order number (e.g. "#0BDE0101"); "CR-4107" in the designs is a placeholder.
 

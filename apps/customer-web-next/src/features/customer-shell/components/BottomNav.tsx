@@ -72,7 +72,7 @@ const NAV_ITEMS = [
   {
     key: "chefs" as const,
     href: "/chefs",
-    label: "Chefs",
+    label: "Kitchens",
     icon: ChefHat,
   },
   {

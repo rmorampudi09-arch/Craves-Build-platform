@@ -265,10 +265,7 @@ describe('Account status and the application', () => {
   };
   // Everything in, ops's turn (the bank proof was accepted early).
   const sent = (kind: VehicleKind = 'PETROL', extra: Partial<RiderProfile> = {}): RiderProfile => ({
-    vehicle:
-      kind === 'BICYCLE'
-        ? {label: 'Bicycle', kind}
-        : {label: kind === 'PETROL' ? 'Honda Activa 6G' : 'Electric two-wheeler', kind, regNumberMasked: 'TS08xx4821'},
+    vehicle: {label: kind === 'PETROL' ? 'Honda Activa 6G' : 'Electric two-wheeler', kind, regNumberMasked: 'TS08xx4821'},
     documents: requiredDocuments(kind).map(type => doc(type, type === 'BANK' ? 'VERIFIED' : 'PENDING')),
     payoutAccountSubmitted: 'ra****@okaxis',
     ...extra,
@@ -353,20 +350,20 @@ describe('Account status and the application', () => {
       expect(press('rider-apply-next').props.disabled).toBe(true);
     });
 
-    it('needs no plate or model for a bicycle and shows a phone already in use', async () => {
+    it('offers no bicycle (removed in 1.3.4) and shows a phone already in use', async () => {
       await render(<AccountStatusScreen />, [[riderKeys.me, notRider]]);
       await act(async () => input('rider-join-name').props.onChangeText('Sita Devi'));
       await act(async () => press('rider-join-adult').props.onPress());
       await act(async () => press('rider-apply-next').props.onPress());
-      await act(async () => press('rider-join-BICYCLE').props.onPress());
-      expect(none('rider-join-plate')).toBe(true);
-      expect(none('rider-join-model')).toBe(true);
-      expect(allText()).toContain('Next, you send photos of: PAN card, Bank proof, Selfie.');
+      expect(none('rider-join-BICYCLE')).toBe(true);
+      await act(async () => press('rider-join-ELECTRIC').props.onPress());
+      await act(async () => input('rider-join-plate').props.onChangeText('TS09EA1234'));
+      expect(allText()).toContain('Next, you send photos of: Driving licence, Vehicle RC, Vehicle insurance, PAN card, Bank proof, Selfie.');
       (riderApi.signUp as jest.Mock).mockRejectedValueOnce(
         new AppApiError('PHONE_IN_USE', 'This number is already a Craves rider on another account. Call rider support.', 409),
       );
       await act(async () => press('rider-apply-next').props.onPress());
-      expect(riderApi.signUp).toHaveBeenCalledWith({name: 'Sita Devi', language: 'en', vehicleKind: 'BICYCLE', adult: true});
+      expect(riderApi.signUp).toHaveBeenCalledWith({name: 'Sita Devi', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: 'TS09EA1234', adult: true});
       expect(allText()).toContain('This number is already a Craves rider on another account.');
       expect(allText()).toContain('Step 2 of 4');
     });
@@ -638,7 +635,12 @@ describe('Account status and the application', () => {
       const signedUp: RiderMe = {...pending, name: 'K Gopi'};
 
       it('changes them, warning that a new name means sending the payout account again', async () => {
-        const bicycle = sent('BICYCLE', {payoutAccountSubmitted: '90****@axl'});
+        // A bicycle sign-up from before 1.3.4: the server still sends the kind, the app reads it as no choice made.
+        const bicycle: RiderProfile = {
+          vehicle: {label: 'Bicycle', kind: 'BICYCLE'},
+          documents: ['PAN', 'BANK', 'SELFIE'].map(type => doc(type, type === 'BANK' ? 'VERIFIED' : 'PENDING')),
+          payoutAccountSubmitted: '90****@axl',
+        };
         const client = await render(<AccountStatusScreen />, [[riderKeys.me, signedUp], [riderKeys.profile, bicycle]]);
         expect(allText()).toContain('Your details | Name | K Gopi | App language | English | Vehicle | Bicycle');
         expect(allText()).not.toContain('Number plate |');
@@ -650,7 +652,8 @@ describe('Account status and the application', () => {
         await act(async () => input('rider-join-name').props.onChangeText('Kancharla Gopi Nishanth'));
         expect(allText()).toContain('Your payout account is in your old name. After you save, send it again in the new name.');
 
-        // A bicycle had no plate, so a scooter needs one.
+        // A bicycle had no plate, so a scooter needs one; neither form offers the bicycle again.
+        expect(none('rider-join-BICYCLE')).toBe(true);
         await act(async () => press('rider-join-ELECTRIC').props.onPress());
         await act(async () => press('rider-join-submit').props.onPress());
         expect(allText()).toContain('Enter the number plate as on your RC, like TS09EA1234.');
@@ -808,11 +811,14 @@ describe('Account status and the application', () => {
       expect(text).not.toContain('Apply to ride');
     });
 
-    it('asks for an update when the app is too old', async () => {
+    it('asks for an update when the app is too old, with the download one tap away', async () => {
       await render(<AccountStatusScreen />, [[riderKeys.me, {...me, minAppVersion: '9.0.0'}]]);
       expect(allText()).toContain('Please update the app before your next shift | You have version');
-      expect(allText()).toContain('What is new | A map preview on every offer');
+      expect(allText()).toContain('Version 9.0.0 or newer is needed to go online');
       expect(allText()).not.toContain('Disagree?');
+      jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+      await act(async () => press('rider-update-now').props.onPress());
+      expect(Linking.openURL).toHaveBeenCalledWith('https://craves.in/rider');
     });
   });
 });
@@ -1067,17 +1073,12 @@ describe('Home', () => {
     online: false,
     todayEarningsPaise: 34700,
     todayTrips: 5,
-    nextSlot: {startsAt: at(19), endsAt: at(22), zoneName: 'Madhapur and Kondapur'},
-    guaranteedPerHourPaise: 8000,
-    restPoint: {name: "Lakshmi's Kitchen", area: 'Madhapur'},
     banner: {tone: 'warning', text: 'Heavy rain expected after 8 pm.'},
   };
   const onlineHome: HomeSummary = {
     ...offlineHome,
     online: true,
     shiftStartedAt: new Date(Date.now() - 42 * 60_000).toISOString(),
-    slotEndsAt: at(22),
-    zoneName: 'Madhapur and Kondapur',
   };
   const seed = (home: HomeSummary, rider: RiderMe = me): Array<[readonly unknown[], unknown]> => [
     [riderKeys.home, home],
@@ -1085,14 +1086,12 @@ describe('Home', () => {
     [riderKeys.activeTrip, null],
   ];
 
-  it('offline: the server banner, today, and the next slot with its guaranteed pay from the server', async () => {
+  it('offline: the server banner and today', async () => {
     await render(<HomeScreen />, seed(offlineHome));
     const text = allText();
     expect(text).toContain('Hi, Ravi');
     expect(text).toContain('Heavy rain expected after 8 pm.');
     expect(text).toContain('Today | ₹347 | Trips | 5');
-    expect(text).toContain('Your next slot | 7:00 pm to 10:00 pm | Madhapur and Kondapur');
-    expect(text).toContain("At least ₹80 an hour while you're online in this slot, even when orders are slow.");
     await act(async () => press('rider-go-online').props.onPress());
     expect(mockNavigation.navigate).toHaveBeenCalledWith('GoOnline');
   });
@@ -1107,10 +1106,19 @@ describe('Home', () => {
     expect(allText()).toContain('Per online hour | ₹92.53 | Fleet middle today | ₹85 | Trips | 5');
   });
 
-  it('never makes up a guaranteed rate the server did not send', async () => {
-    await render(<HomeScreen />, seed({...offlineHome, guaranteedPerHourPaise: undefined}));
-    expect(allText()).toContain('Your next slot');
-    expect(allText()).not.toContain('an hour');
+  // Booked slots were removed in 1.3.4; until the server's own change it may still send a slot, which Home ignores.
+  it('shows no slot, guarantee or rest point even when the server still sends them', async () => {
+    const fromServer = {
+      nextSlot: {startsAt: at(19), endsAt: at(22), zoneName: 'Madhapur and Kondapur'},
+      slotEndsAt: at(22),
+      zoneName: 'Madhapur and Kondapur',
+      guaranteedPerHourPaise: 8000,
+      restPoint: {name: "Lakshmi's Kitchen", area: 'Madhapur'},
+    };
+    for (const home of [offlineHome, onlineHome]) {
+      await render(<HomeScreen />, seed({...home, ...fromServer} as HomeSummary));
+      expect(allText()).not.toMatch(/slot|an hour|Madhapur|Rest point/i);
+    }
   });
 
   it('opens phone setup by itself right after the first pay terms, once', async () => {
@@ -1122,14 +1130,12 @@ describe('Home', () => {
     expect(mockNavigation.navigate).toHaveBeenCalledTimes(1);
   });
 
-  it('online: the shift with paid waiting, today, the rest point, and Go offline', async () => {
+  it('online: the shift, today, and Go offline', async () => {
     await render(<HomeScreen />, seed(onlineHome));
     const text = allText();
     expect(text).toContain('Online · waiting for orders');
-    expect(text).toContain('On shift | Slot ends 10:00 pm');
+    expect(text).toContain('On shift');
     expect(tree.root.findByProps({testID: 'rider-shift-timer'}).props.children).toMatch(/^0:4[23]:\d\d$/);
-    expect(text).toContain('Waiting is paid: at least ₹80 an hour in this slot.');
-    expect(text).toContain("Rest point: Lakshmi's Kitchen, Madhapur");
     expect(text).toContain('Offers ring even with the screen off.');
     // Going offline asks once, so a pocket tap never ends the shift; Stay online keeps it.
     (riderApi.endShift as jest.Mock).mockResolvedValueOnce(undefined);
@@ -1162,17 +1168,6 @@ describe('Home', () => {
     expect(press('rider-head-home')).toBeDefined();
   });
 
-  // The server sends slotEndsAt and zoneName only while a slot runs; nextSlot is then the running one.
-  it('never promises paid waiting before the slot starts, and calls a running slot "now"', async () => {
-    const count = (testID: string) => tree.root.findAll(node => node.props.testID === testID).length;
-    await render(<HomeScreen />, seed({...onlineHome, slotEndsAt: undefined, zoneName: undefined}));
-    expect(count('rider-waiting-paid')).toBe(0);
-    expect(allText()).toContain('Your slot starts at 7:00 pm. From then, waiting is paid: at least ₹80 an hour.');
-    await render(<HomeScreen />, seed({...offlineHome, slotEndsAt: at(22), zoneName: 'Madhapur and Kondapur'}));
-    expect(allText()).toContain('Your slot now | 7:00 pm to 10:00 pm');
-    expect(allText()).not.toContain('Your next slot');
-  });
-
   it('takes a break of the chosen minutes, only when rider choices are on', async () => {
     await render(<HomeScreen />, seed(onlineHome));
     expect(press('rider-break-start')).toBeUndefined();
@@ -1181,7 +1176,6 @@ describe('Home', () => {
     await render(<HomeScreen />, seed(onlineHome, choosing));
     await act(async () => press('rider-break-start').props.onPress());
     expect(allText()).toContain('How long? You stay online, and no offers come. | 10 min | 20 min | 30 min');
-    expect(allText()).toContain("Break time doesn't count toward a slot's guaranteed minimum.");
     await act(async () => press('rider-break-20').props.onPress());
     expect(riderApi.pauseShift).toHaveBeenCalledWith(20);
     expect(press('rider-break-20')).toBeUndefined();

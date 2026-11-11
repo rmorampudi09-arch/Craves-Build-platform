@@ -141,6 +141,52 @@ public class InternalAdminRoleRepository {
         );
     }
 
+    /**
+     * Handbook 008: takes the Chef role away. As with the rider revoke, refresh sessions stay (customer sign-in survives)
+     * and the token version moves on, so services that check revocation drop access tokens still carrying CHEF.
+     * The kitchen is not touched here: staff suspend it in Catalog first.
+     */
+    @Transactional
+    public ChefRoleRevokeResponse revokeChefRole(
+        UUID actorIdentityId,
+        long actorTokenVersion,
+        UUID targetIdentityId,
+        String reason,
+        UUID correlationId
+    ) {
+        jdbcTemplate.execute("SELECT pg_advisory_xact_lock(" + ROLE_CHANGE_LOCK + ")");
+        requireCurrentPlatformActor(actorIdentityId, actorTokenVersion);
+        IdentityRow target = lockIdentity(targetIdentityId);
+        List<String> roles = jdbcTemplate.queryForList(
+            "SELECT role_code FROM auth_identity_role WHERE identity_id = ?", String.class, targetIdentityId
+        );
+        if (roles.contains("CHEF") && !roles.contains("CUSTOMER") && !roles.contains("RIDER")) {
+            // Its customer side was deleted: with no role left, the next sign-in would make it a customer again.
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT, "Chef is this account's only side; suspend the account instead"
+            );
+        }
+        boolean changed = jdbcTemplate.update(
+            "DELETE FROM auth_identity_role WHERE identity_id = ? AND role_code = 'CHEF'",
+            targetIdentityId
+        ) > 0;
+        long newTokenVersion = changed
+            ? incrementTokenVersion(targetIdentityId, target.tokenVersion())
+            : target.tokenVersion();
+        jdbcTemplate.update(
+            """
+            INSERT INTO auth_audit (
+                id, identity_id, action, actor_identity_id, details, correlation_id, created_at
+            ) VALUES (?, ?, 'CHEF_ROLE_REVOKED', ?, ?, ?, now())
+            """,
+            UUID.randomUUID(), targetIdentityId, actorIdentityId,
+            "changed=" + changed + ";reason=" + reason, correlationId.toString()
+        );
+        return new ChefRoleRevokeResponse(
+            targetIdentityId, target.tokenVersion(), newTokenVersion, changed, correlationId, OffsetDateTime.now()
+        );
+    }
+
     public List<RoleChangeAuditResponse> audit(UUID targetIdentityId, int limit) {
         String targetPredicate = targetIdentityId == null ? "" : " WHERE target_identity_id = ? ";
         Object[] arguments = targetIdentityId == null ? new Object[]{limit} : new Object[]{targetIdentityId, limit};
@@ -414,6 +460,16 @@ public class InternalAdminRoleRepository {
         UUID targetIdentityId,
         List<String> previousRoles,
         List<String> newRoles,
+        long previousTokenVersion,
+        long newTokenVersion,
+        boolean changed,
+        UUID correlationId,
+        OffsetDateTime changedAt
+    ) {
+    }
+
+    public record ChefRoleRevokeResponse(
+        UUID targetIdentityId,
         long previousTokenVersion,
         long newTokenVersion,
         boolean changed,

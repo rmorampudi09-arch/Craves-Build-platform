@@ -82,13 +82,13 @@ describe("Onboarding steps in the URL", () => {
   it("walks back through the steps with browser Back", async () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
-    await screen.findByRole("heading", { name: "FSSAI details" });
-    expect(url.get()).toBe("step=fssai");
+    await screen.findByRole("heading", { name: "Identity verification" });
+    expect(url.get()).toBe("step=documents");
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     await screen.findByRole("heading", { name: "Your kitchen" });
     expect(url.get()).toBe("step=kitchen");
     act(() => url.back());
-    await screen.findByRole("heading", { name: "FSSAI details" });
+    await screen.findByRole("heading", { name: "Identity verification" });
     act(() => url.back());
     await screen.findByRole("heading", { name: "Welcome back, Test" });
   });
@@ -100,8 +100,8 @@ describe("Onboarding steps in the URL", () => {
     first.unmount();
     url.reset("step=delivery");
     mount();
-    await screen.findByRole("heading", { name: "FSSAI details" });
-    expect(navigation.replace).toHaveBeenCalledWith("/chef/application?step=fssai", { scroll: false });
+    await screen.findByRole("heading", { name: "Identity verification" });
+    expect(navigation.replace).toHaveBeenCalledWith("/chef/application?step=documents", { scroll: false });
   });
 
   it("never reopens a submitted application's form from the URL", async () => {

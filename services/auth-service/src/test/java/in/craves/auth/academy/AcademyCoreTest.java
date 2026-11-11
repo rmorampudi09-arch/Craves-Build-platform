@@ -32,7 +32,7 @@ class AcademyCoreTest {
     @Test void catalogContainsEngineeringCurriculumAndNoPublicAnswerKeys() throws Exception {
         var mapper=new ObjectMapper();var catalog=new AcademyCatalog(mapper);var view=catalog.publicCatalog();
         assertEquals("academy-2026-09-13-v3",catalog.version());
-        assertEquals(15,view.path("courses").size());
+        assertEquals(25,view.path("courses").size());
         assertEquals("9cf4aea069fa6a077fdef111bf2df4eeada696fc",catalog.sourceRevision());
         int sections=0,questions=0,checkpoints=0;
         for(var course:view.path("courses"))for(var lesson:course.path("lessons")){
@@ -41,7 +41,7 @@ class AcademyCoreTest {
             for(var q:lesson.path("questions")){questions++;assertFalse(q.has("answer"));assertFalse(q.has("explanation"));}
             for(var step:lesson.path("steps"))if(step.path("label").asText().equals("Reasoning checkpoint (ungraded)"))checkpoints++;
         }
-        assertEquals(75,sections);assertEquals(150,questions);assertEquals(25,checkpoints);
+        assertEquals(121,sections);assertEquals(242,questions);assertEquals(71,checkpoints);
         assertTrue(mapper.writeValueAsBytes(view).length<=900000,"Keep headroom below the existing one-MiB BFF bound");
         assertEquals(view,catalog.publicCatalog(),"Repeated reads must not append duplicate checkpoints");
         assertTrue(catalog.courses().get(0).path("lessons").get(0).path("questions").get(0).has("answer"));
@@ -51,9 +51,14 @@ class AcademyCoreTest {
     }
     @Test void appliedTracksPreserveEveryExtraQuestionAsAnExplicitUngradedCheckpoint() throws Exception {
         var mapper=new ObjectMapper();var catalog=new AcademyCatalog(mapper);
-        for(String id:List.of("java-engineering","mobile-engineering","data-engineering","document-engineering","service-labs")){
+        var lessonCounts=new LinkedHashMap<String,Integer>();
+        for(String id:List.of("java-engineering","mobile-engineering","data-engineering","document-engineering"))lessonCounts.put(id,4);
+        lessonCounts.put("service-labs",9);
+        lessonCounts.putAll(Map.of("advanced-platform",4,"advanced-ordering",6,"advanced-discovery",5,"advanced-growth",5,
+            "advanced-trust-privacy",4,"rider-fleet",5,"chef-referral",4,"voice-support",4,"delivery-intelligence",4,"azure-operations",5));
+        for(String id:lessonCounts.keySet()){
             var course=catalog.course(id);
-            assertEquals(id.equals("service-labs")?9:4,course.path("lessons").size());
+            assertEquals(lessonCounts.get(id),course.path("lessons").size());
             assertTrue(course.path("sources").size()<=10);
             for(int i=0;i<course.path("sources").size();i++)assertTrue(AcademySources.isReviewedPath(catalog.sourcePath(id,i)));
             try(var input=new ClassPathResource("academy/engineering/"+id+".json").getInputStream()){
@@ -81,10 +86,26 @@ class AcademyCoreTest {
         assertTrue(AcademySources.isReviewedPath("apps/customer-web-next/src/lib/server-api.ts"));
         assertTrue(AcademySources.isReviewedPath(".github/workflows/craves-academy-ci.yml"));
         assertTrue(AcademySources.isReviewedPath("scripts/academy/verify-curriculum.py"));
+        assertTrue(AcademySources.isReviewedPath("services/voice-support-gateway/voice_gateway/app.py"));
+        assertFalse(AcademySources.isReviewedPath("services/voice-support-gateway/voice_gateway/../../../secret.py"));
+        assertFalse(AcademySources.isReviewedPath("infra/voice/deploy.py"));
         assertFalse(AcademySources.isReviewedPath("../../etc/passwd"));
         assertFalse(AcademySources.isReviewedPath(".github/workflows/../secret.yml"));
         assertFalse(AcademySources.isReviewedPath("config/production/secret.json"));
         assertFalse(AcademySources.isReviewedPath("services/auth-service/.env"));
+    }
+    @Test void laterCoursesPinTheirOwnSourceRevisionAndOlderCoursesKeepTheBase() throws Exception {
+        var catalog=new AcademyCatalog(new ObjectMapper());
+        String base="9cf4aea069fa6a077fdef111bf2df4eeada696fc";
+        assertEquals(base,catalog.sourceRevision("auth"));
+        assertEquals(base,catalog.sourceRevision("service-labs"));
+        for(String id:List.of("advanced-platform","rider-fleet","voice-support","azure-operations")){
+            String pinned=catalog.sourceRevision(id);
+            assertTrue(pinned.matches("[a-f0-9]{40}"));
+            assertNotEquals(base,pinned,"Newer services did not exist at the base snapshot");
+            for(int i=0;i<catalog.course(id).path("sources").size();i++)assertTrue(AcademySources.isReviewedPath(catalog.sourcePath(id,i)));
+        }
+        assertThrows(ResponseStatusException.class,()->catalog.sourceRevision("unknown"));
     }
     @Test void everyExplicitInternalAdminCanLearnButCustomersCannot() {
         for(String role:InternalAdminRoles.codes())assertNotNull(AcademyController.requireAdmin(actor(List.of(role))));

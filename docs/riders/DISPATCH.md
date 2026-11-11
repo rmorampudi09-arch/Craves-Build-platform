@@ -22,7 +22,7 @@ Changing any of these changes riders' terms. That needs the lawyer, and 14 days'
 
 ## 2. How an order is offered
 
-The rules are built in (decided 1 Nov 2026, so riders get orders the way Swiggy and Zomato hand them out, with no settings to choose): one rider at a time, 30 s to accept, up to 3 rounds, fair turns within 1.5 km, within 5 km, then Borzo after at most 120 s (`FleetPolicyStore.BUILT_IN_VALUES`, `DispatchRules.BUILT_IN`). The console's Dispatch page only switches the mode (off, shadow, live) and records each version, because riders' terms change only with notice (§7). Rain mode changes some of them while it is on ("Rain mode" below).
+The rules are built in (since 1 Nov 2026 there are no settings to choose; the values are the owner's rule of 11 Nov 2026): every order goes to Craves riders first, one rider at a time, 20 s to accept, the same riders again once all nearby have been asked, fair turns within 1.5 km, within 5 km, and Borzo only after 5 minutes with riders (`FleetPolicyStore.BUILT_IN_VALUES`, `DispatchRules.BUILT_IN`; "No limit on rounds" below). The console's Dispatch page only switches the mode (off, shadow, live) and records each version, because riders' terms change only with notice (§7). Rain mode changes some of them while it is on ("Rain mode" below).
 
 ### Who can hear of an order
 
@@ -81,9 +81,9 @@ After that, a person retrains it about monthly (`ml/fleet-eta/README.md`).
 | Setting (console label) | Allowed | Default | What it does |
 |---|---|---|---|
 | Riders who see an order at once | 1 to 3 | 3 | When more than one rider sees it, the first to accept gets it. |
-| Time a rider has to accept | 30 to 60 s | 40 s | How long each rider has to decide. |
+| Time a rider has to accept | 20 to 60 s | 40 s | How long each rider has to decide. |
 | Rounds of offers | 0 to 5 | 1 | If everyone asked passes or lets the time run out, the next riders not yet asked hear of it, while the stage lasts. Nobody is asked twice about one order. 0 means no limit: "No limit on rounds" below. |
-| Time Craves riders get before Borzo | 45 to 120 s | 60 s | Rounds × time to accept must fit inside it. After it, the order goes to Borzo, then Pidge, then the ops queue, as before. |
+| Time Craves riders get before Borzo | 45 to 300 s | 60 s | Rounds × time to accept must fit inside it. After it, the order goes to Borzo, then Pidge, then the ops queue, as before. |
 | Fair band, km | 0 to 5 | 0 | 0 means nearest first. Above 0 means fair turns among riders within that distance of the nearest. |
 
 A new round starts soon after the last one is decided. While a policy runs rounds, the delivery command checks every 5 s (every 10 s otherwise).
@@ -108,7 +108,7 @@ With rounds set to 0, the order stays with Craves riders for the whole time they
 Built switched off (research R16, item 19; due before the June 2027 monsoon). In heavy rain, rides take longer, riders need longer to see and answer an offer, and couriers slow down too. Zomato and Swiggy charge customers a rain fee that funds rider pay.
 
 **While it is on** (`FleetRain`):
-- **Time to accept** is at least 45 s, and an order runs **at most 2 rounds**. Two rounds of 45 s still fit the 120 s before Borzo (`FleetRain.inRain`, applied in `FleetPolicyStore.currentDispatchPolicy`).
+- **Time to accept** is at least 45 s, and a policy with rounds runs **at most 2**. With no limit on rounds (the built-in rule) riders are still asked again until their 300 s are up (`FleetRain.inRain`, applied in `FleetPolicyStore.currentDispatchPolicy`).
 - **The search starts 5 minutes earlier**: 15 minutes before the food is due instead of 10 (`DeliveryCommandScheduler`), for Borzo and Pidge too.
 - **Each offer adds the rain top-up** of the rate card in force, as a line of its own ("₹20 rain top-up"), inside the locked total. The trip pays it with full pay (delivered, customer unreachable, failed after pickup), never on a cancellation before pickup. A card without one (0, the default) adds no line.
 - **Severe**: all of that, and new orders skip riders and go straight to Borzo or Pidge. Orders riders are deciding on, or carrying, carry on.
@@ -257,15 +257,17 @@ This is the figure fair turns compare. It is also what the Telangana union and F
 
 ## 7. Choosing the rules
 
-### Built in (decided 1 Nov 2026)
+### Built in (the owner's rule of 11 Nov 2026)
 
 | Setting | Value | Why |
 |---|---|---|
 | Riders who see an order at once | 1 | **No race:** each rider decides alone, at their own pace. Three riders racing to tap is speed pressure, and the nearest usually wins [18]. DoorDash, Wolt, Gojek and Uber's normal requests go to one rider at a time [19][21][22][34]. |
-| Time a rider has to accept | 30 s | Wolt gives 30–60 s and DoorDash 50 s [20][21]. 30 s is the lowest the declared range allows. |
-| Rounds of offers | 3 | Three riders still hear of each order, one after another. |
-| Time Craves riders get before Borzo | 120 s | **3 rounds of 30 s, with a few seconds between them.** A round starts only when its full 30 s still fit, so 90 s would allow only 2 rounds. Home-cooked food takes far longer than a minute, so Borzo starting a minute later rarely delays the customer. |
+| Time a rider has to accept | 20 s | **The owner's rule.** With one rider at a time, a short window moves the order on to the next rider sooner. Wolt gives 30–60 s and DoorDash 50 s [20][21]; V187 widened the declared range to 20–60 s. |
+| Rounds of offers | No limit (0) | **The owner's rule.** The order stays with Craves riders, the same or other riders again, until their time is up (§2, "No limit on rounds"). |
+| Time Craves riders get before Borzo | 300 s | **The owner's rule: Craves riders get every order for 5 minutes,** and only then Borzo, then Pidge, then the ops queue. With no rider online the order still waits the 5 minutes, so Borzo's search then starts 5 minutes after dispatch (3 minutes later than under the 120 s it replaces). No cost guard: riders hear of every order, whatever a courier would charge. |
 | Fair band | 1.5 km | **About 5 minutes' extra ride at most,** paid beyond the free kilometre. The research publishes no band size, so start here and tune with data. |
+
+**In force since 11 Nov 2026, without the 14 days' notice.** Until then the values were those decided on 1 Nov 2026: 30 s to accept, up to 3 rounds, 120 s before Borzo, with the cost guard. The owner decided to start the new rule at once. V187 published the policy in force again with it, in the mode it had (the notice trigger was off for that one migration only), and the built-in values are the same, so the console's mode switch is not a change of rules. Every later change needs its notice again (§11, question 5).
 
 **Setting them with no notice.** Until the first rate card is published, riders have no terms, so any rules may start at once. `GO-LIVE.md` §6 step 1 sets them in shadow first, then publishes the rate card. After that, every change to the rules, wider or narrower, needs a start 14 days away, and riders see the new rules under Terms in the meantime.
 
@@ -365,6 +367,7 @@ For the lawyer:
 2. **Radius and time to accept.** Should changes to either need 14 days' notice? Today, only the detour and the offer rules do.
 3. **Translations.** The Telugu and Hindi wording for fair turns and breaks. The strings exist and wait for native review (P2-08).
 4. **The State's data feed (s.21),** once its format is published.
+5. **The rule of 11 Nov 2026 started without notice.** How orders are offered changed that day (20 s, riders asked again for 5 minutes, no cost guard) at the owner's decision, with riders shown the new rules under Terms from the same moment. Does s.13(2) ask for anything further, such as a message to the riders?
 
 ## Sources
 

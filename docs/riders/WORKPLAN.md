@@ -812,7 +812,7 @@ Live before 13 May 2027.
 
 **S3. Offer rules.**
 1. Run the replay twice on the pilot area's recorded orders (`REPLAY.md`, "Comparing offer rules").
-2. Before the first rate card is published, set the rules in shadow (`GO-LIVE.md` §6, step 1.1). Recommended: one rider at a time, 30 s, 3 rounds, 120 s before Borzo, fair band 1.5 km.
+2. Before the first rate card is published, set the rules in shadow (`GO-LIVE.md` §6, step 1.1). The built-in rules (`DISPATCH.md` §7): one rider at a time, 20 s, asked again for 300 s before Borzo, fair band 1.5 km.
 3. After the first rate card, every change to the rules needs a start 14 days away.
 
 **S4. Rider choices.** Once the lawyer has read the wording, set `CRAVES_FLEET_RIDER_CHOICES_ENABLED=true` and run `PHONE-TESTS.md` §6.

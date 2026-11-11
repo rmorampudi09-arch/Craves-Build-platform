@@ -152,7 +152,7 @@ test("Welcome back progress distinguishes not started, in progress, complete and
   const progress = sectionProgress(base, null);
   assert.equal(progress.personal, "complete");
   assert.equal(progress.kitchen, "in-progress");
-  assert.equal(progress.fssai, "not-started");
+  assert.equal("fssai" in progress, false); // not a signup section: asked when a dish goes live
   assert.equal(progress.documents, "attention");
   assert.equal(progress.bank, "complete");
 });

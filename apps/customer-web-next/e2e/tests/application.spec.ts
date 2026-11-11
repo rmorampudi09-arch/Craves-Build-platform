@@ -19,7 +19,7 @@ async function pickDob(page: Page, year: number, month: string, day: number) {
 }
 
 /** Signed-in applicant who has finished every section up to (not including) `step`. */
-async function draftUpTo(page: Page, backend: FakeBackend, step: "personal" | "kitchen" | "fssai" | "documents") {
+async function draftUpTo(page: Page, backend: FakeBackend, step: "personal" | "kitchen" | "documents") {
   await rememberChefDevice(page);
   backend.completeDraft();
   const d = backend.details as Record<string, unknown>;
@@ -28,7 +28,7 @@ async function draftUpTo(page: Page, backend: FakeBackend, step: "personal" | "k
     Object.assign(d, { kitchenName: "", addressLine1: "", addressLine2: "", city: "", state: "", postalCode: "", latitude: null, longitude: null });
     backend.documents = backend.documents.filter((x) => !String(x.documentType).startsWith("KITCHEN"));
   }
-  if (step !== "documents") d.fssaiNumber = "";
+  d.fssaiNumber = ""; // not asked at signup
   d.proofKind = null;
   backend.documents = backend.documents.filter((x) => !String(x.documentType).startsWith("SELECTED_PROOF"));
 }
@@ -154,31 +154,17 @@ test.describe("Your kitchen", () => {
 });
 
 test.describe("FSSAI", () => {
-  test.beforeEach(async ({ page, backend }) => {
-    await draftUpTo(page, backend, "fssai");
+  test("is not asked at signup: the old step opens the next section, and Review says it is needed before going live", async ({ page, backend }) => {
+    await draftUpTo(page, backend, "documents");
     await page.goto("/chef/application?step=fssai");
-    await expect(page.getByRole("heading", { level: 1, name: "FSSAI details" })).toBeVisible();
-  });
-
-  test("13 digits are not a registration number", async ({ page, backend }) => {
-    await box(page, "FSSAI registration number").fill("1234567890123");
-    await save(page).click();
-    await expect(page.getByText(/14-digit FSSAI/).first()).toBeVisible();
-    expect(backend.callsTo("PUT", "/api/chef/onboarding")).toHaveLength(0);
-  });
-
-  test("a chef without FSSAI can continue from the help view and is told to add it before submitting", async ({ page }) => {
-    await page.getByRole("button", { name: "Don’t have FSSAI?" }).click();
-    await expect(page.getByRole("heading", { level: 1, name: "How to apply for FSSAI" })).toBeVisible();
-    await expect(page.getByText("Add your FSSAI number before you submit your application.")).toBeVisible();
-    await save(page).click();
     await expect(page.getByRole("heading", { level: 1, name: "Identity verification" })).toBeVisible();
-  });
-
-  test("BUG: a spaced FSSAI number from the certificate loses digits", async ({ page }) => {
-    test.fail(true, "maxLength=14 applies before spaces are removed (P2)");
-    await box(page, "FSSAI registration number").fill("1234 5678 9012 34");
-    await expect(box(page, "FSSAI registration number")).toHaveValue("12345678901234");
+    await rememberChefDevice(page);
+    backend.completeDraft();
+    (backend.details as Record<string, unknown>).fssaiNumber = "";
+    await page.goto("/chef/application?step=review");
+    await expect(page.getByRole("heading", { level: 1, name: "Review your application" })).toBeVisible();
+    await expect(page.getByText(/add your FSSAI number later, before your dishes go live/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Edit FSSAI" })).toHaveCount(0);
   });
 });
 
@@ -211,7 +197,7 @@ test("Review lists every section and submit needs the terms", async ({ page, bac
   backend.completeDraft();
   await page.goto("/chef/application?step=review");
   await expect(page.getByRole("heading", { level: 1, name: "Review your application" })).toBeVisible();
-  for (const text of ["E2E Test Kitchen", "500072", "1234 5678 9012 34"]) await expect(page.getByText(text).first()).toBeVisible();
+  for (const text of ["E2E Test Kitchen", "500072", "add your FSSAI number later"]) await expect(page.getByText(text).first()).toBeVisible();
   await page.getByRole("button", { name: "Submit application" }).click();
   await expect(page.getByText("Accept the terms before submitting your application.")).toBeVisible();
   expect(backend.callsTo("POST", "/api/chef/onboarding/submit")).toHaveLength(0);

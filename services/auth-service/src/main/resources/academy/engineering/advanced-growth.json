@@ -1,0 +1,387 @@
+{
+  "course": {
+    "id": "advanced-growth",
+    "service": "advanced-features-service",
+    "title": "Growth without guesswork: offers, experiments and chef numbers",
+    "level": "Practitioner",
+    "minutes": 140,
+    "description": "Learn how promotions and partner offers run only on values staff enter, how experiments assign variants without storing anything and count events only with consent, and how chefs get sales summaries and plain demand forecasts computed live from their own orders.",
+    "prerequisites": [
+      "advanced-platform"
+    ],
+    "sources": [
+      "services/advanced-features-service/src/main/java/in/craves/advanced/promotions/PromotionRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/promotions/PromotionsService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/partneroffers/PartnerOfferService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/partneroffers/PartnerOfferRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/experiments/ExperimentRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/experiments/ExperimentService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/chefinsights/ChefInsightsRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/demandforecast/DemandForecastRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/clients/ChefOrderHistory.java"
+    ],
+    "sourceRevision": "9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605",
+    "lessons": [
+      {
+        "id": "adv-promotions",
+        "title": "Run promotions that can never overspend",
+        "overview": "Promotions and coupons are money, so the module is strict. Staff enter every commercial value; nothing is seeded or defaulted. A promotion has a required total budget, so none can run without a ceiling, and once it has been live its terms are frozen so no customer is promised one thing and given another. Checkout reserves, confirms or releases a discount under a row lock. This lesson reads PromotionRules and PromotionsService.",
+        "steps": [
+          {
+            "label": "Enter the terms",
+            "detail": "Staff set percent off from 1 to 100 with an optional cap, or a flat amount in paise; a minimum order; kitchens, where none means every kitchen; who funds it, Craves or the kitchen, and a kitchen-funded promotion must name its kitchens; a per-person limit; a required total budget; an optional redemption cap; and start and end. Platform and payments admins edit, support and audit admins read, and every change is audited."
+          },
+          {
+            "label": "Freeze what customers rely on",
+            "detail": "A promotion starts as DRAFT and moves ACTIVE, PAUSED and finally ENDED, which is final. Once it has been active, its code, discount, cap, minimum order, kitchens, funding, per-person limit and start are frozen. Name, listing, end time, budget and redemption cap can still change, but never below what is already reserved or used."
+          },
+          {
+            "label": "Apply codes and automatic offers",
+            "detail": "A promotion with a code of 4 to 20 letters and digits applies only when typed, case-insensitive and never reused; without a code it applies by itself, and the quote picks the largest discount among those that fit, ties going to the one ending soonest. A draft's code answers like an unknown code, so codes cannot be discovered before launch."
+          },
+          {
+            "label": "Price the cart conservatively",
+            "detail": "The cart is priced with live Catalog prices, base price times quantity, and only dishes from the promotion's kitchens count. Option add-ons are not counted, so the discount and the minimum-order check can only err low. Discounts round down to whole paise and never exceed that part of the cart."
+          },
+          {
+            "label": "Reserve under a lock",
+            "detail": "Checkout reserves with an Idempotency-Key; budget, redemption cap and per-person limit are checked and taken under the promotion's row lock, so a budget is never overspent: a discount that does not fit what is left is refused with PROMO_EXHAUSTED, never paid partly. A reservation lasts 10 minutes and keeps counting 30 seconds after expiry; then it is confirmed with the order id or released. Promotions never stack: one per order."
+          },
+          {
+            "label": "Leave open decisions open",
+            "detail": "Not decided here, on purpose: stacking with the referral invitee discount, first-order-only offers, dish-level offers and chef self-service promotions. Using promotions inside checkout is a later order-service slice behind its own switch, and the tax treatment of discounts must be confirmed by a chartered accountant before it is switched on."
+          }
+        ],
+        "example": "Staff create a 20 % weekend promotion capped at 60 rupees with a budget of 5,000 rupees. On Saturday evening 40 rupees of budget are left. The next customer's cart qualifies for 60 rupees, so the reservation is refused with PROMO_EXHAUSTED instead of being paid partly; a smaller cart whose discount fits the remaining 40 rupees can still use it, and the promotion never spends more than 5,000 rupees.",
+        "lab": "In a local database, create a promotion with a small budget and reserve from two test identities at the same moment using two threads. Assert that the total reserved never exceeds the budget, that a reservation past its time stops counting after the grace window, and that editing the discount of an activated promotion is refused.",
+        "pitfall": "Never add a default discount, budget or minimum in code, and never let two promotions stack on one order without an owner decision.",
+        "questions": [
+          {
+            "id": "adv-promotions-q1",
+            "prompt": "Why must every promotion have a total budget?",
+            "options": [
+              "To track marketing",
+              "So no promotion can run without a ceiling on what it can spend",
+              "To decide the discount",
+              "Because codes need one"
+            ],
+            "answer": 1,
+            "explanation": "The budget is required and taken under a lock, so spending can never pass it."
+          },
+          {
+            "id": "adv-promotions-q2",
+            "prompt": "A promotion has been active. Which field can staff still change?",
+            "options": [
+              "The discount percentage",
+              "The kitchens",
+              "The end time",
+              "The code"
+            ],
+            "answer": 2,
+            "explanation": "Terms customers relied on are frozen; the end time, name, listing, budget and caps can still change within limits."
+          },
+          {
+            "id": "adv-promotions-q3",
+            "prompt": "Why are option add-ons left out when pricing a cart for a promotion?",
+            "options": [
+              "They are free",
+              "So the discount and minimum-order check can only err low, never high",
+              "Catalog does not know them",
+              "Chefs asked for it"
+            ],
+            "answer": 1,
+            "explanation": "Counting only base price times quantity keeps the promotion conservative."
+          }
+        ]
+      },
+      {
+        "id": "adv-partner-offers",
+        "title": "Show partner offers after a paid order",
+        "overview": "Post-order partner offers let Craves show a partner's offer, such as a discount elsewhere, after a customer's paid order. Staff enter each offer exactly as agreed with the partner, the list never reveals a code, and a claim limit is never passed. Craves sets no partner terms or money here. This lesson reads PartnerOfferRules and PartnerOfferService to see who can claim what, and when.",
+        "steps": [
+          {
+            "label": "Enter the offer as agreed",
+            "detail": "Platform and operations admins enter the partner name, title, description, terms, a plain https link with a host and no user info, an optional code of 3 to 40 letters, digits or dashes, start and end (at most 366 days apart, a typo bound) and an optional total claim limit. Text may not contain control characters other than line breaks."
+          },
+          {
+            "label": "Freeze offers once drafted",
+            "detail": "An offer starts as DRAFT and moves ACTIVE, PAUSED and finally ENDED. Only a draft can change, so a customer is never shown one thing and given another; to change a live offer, end it and create a new one. A draft is invisible to customers, and claiming it answers like an unknown offer."
+          },
+          {
+            "label": "Unlock offers with a real paid order",
+            "detail": "A customer's own order, read from Order service with their token, unlocks the live offers once it is paid and not undone: PAID through DELIVERED. Pending, rejected, cancelled and refunded orders unlock nothing, and claiming answers 409 ORDER_NOT_ELIGIBLE. The order must name the caller as its customer, even if a staff token could read it."
+          },
+          {
+            "label": "Protect the shared database pool",
+            "detail": "Order service is asked before a database connection is taken, because the pool is small and shared by every module. A slow Order service therefore cannot hold connections that other modules need."
+          },
+          {
+            "label": "Reveal codes only on claim",
+            "detail": "The list never shows the code; claiming reveals the code and link. Each person claims an offer once, and claiming again returns the first claim. The claim limit is taken under the offer's row lock, so it is never passed and the last caller gets 409 OFFER_SOLD_OUT."
+          },
+          {
+            "label": "Keep claims private",
+            "detail": "Staff see each offer's claim count, never who claimed. Claims are personal data: the export includes them, and erasing deletes them while the offer's count keeps them, so a limit is never reopened by an erase."
+          }
+        ],
+        "example": "A partner gives Craves 500 cinema discount codes. Staff enter one offer with a claim limit of 500. Customers with a paid order see the offer without the code, claim it to reveal the code, and the 501st claim is refused with OFFER_SOLD_OUT, even when several people claim in the same second.",
+        "lab": "Write tests for an order in each status from PAYMENT_PENDING to REFUNDED and assert which ones unlock the offer. Then claim one offer with a limit of 2 from three identities in parallel and check that exactly two succeed and that a repeated claim by the same person returns the first claim.",
+        "pitfall": "Never show a partner code in a list or a notification: the code is revealed only to a person who claims it.",
+        "questions": [
+          {
+            "id": "adv-partner-offers-q1",
+            "prompt": "Which order unlocks partner offers?",
+            "options": [
+              "One with payment pending",
+              "A paid order from PAID through DELIVERED",
+              "A refunded order",
+              "Any order a staff member can read"
+            ],
+            "answer": 1,
+            "explanation": "Only paid, not undone orders that name the caller as customer unlock offers."
+          },
+          {
+            "id": "adv-partner-offers-q2",
+            "prompt": "How do staff change the terms of a live offer?",
+            "options": [
+              "Edit it in place",
+              "End it and create a new one",
+              "Pause it and edit it",
+              "Ask the partner to edit it"
+            ],
+            "answer": 1,
+            "explanation": "Only drafts can change, so customers are never shown one thing and given another."
+          },
+          {
+            "id": "adv-partner-offers-q3",
+            "prompt": "Why is Order service asked before a database connection is taken?",
+            "options": [
+              "To speed up claims",
+              "So a slow Order service cannot hold connections other modules need",
+              "Because the order decides the code",
+              "To log the customer"
+            ],
+            "answer": 1,
+            "explanation": "The connection pool is small and shared, so remote calls happen before taking a connection."
+          }
+        ]
+      },
+      {
+        "id": "adv-experiments",
+        "title": "Run experiments people can trust",
+        "overview": "Experiments compare variants of a screen or a flow. The module assigns variants deterministically without storing anything, records events only when the person turned on product analytics, and shows staff aggregates in which no small group can be singled out. This lesson reads ExperimentRules and ExperimentService to see how assignment, consent, counting and limits work together.",
+        "steps": [
+          {
+            "label": "Assign variants without storing them",
+            "detail": "A variant comes from a per-experiment random salt and the person's id through SHA-256, so a person always sees the same variant on every replica and nothing is stored to assign them. Weights are relative integers across 2 to 5 variants."
+          },
+          {
+            "label": "Never move people mid-test",
+            "detail": "Only drafts can change. An experiment goes DRAFT, RUNNING, STOPPED and is never restarted; a new test needs a new key. Platform and operations admins edit, audit admins read, and every change is audited."
+          },
+          {
+            "label": "Answer variants without consent",
+            "detail": "GET /experiments/mine works for every signed-in person because it stores nothing. A stopped, draft or unknown key answers variant null, and the app shows its default. Anonymous visitors are not assigned, because there is no device id scheme yet."
+          },
+          {
+            "label": "Record events only with consent",
+            "detail": "Events are kept only when the person turned on productAnalytics, which defaults to off; otherwise a batch answers 202 with recorded 0 and is dropped unread. The variant is worked out on the server, never taken from the app. Events carry a client eventId so retries count once, must be from the last 7 days and have at most 10 flat properties."
+          },
+          {
+            "label": "Hide small groups from staff",
+            "detail": "Staff see aggregates only: per-variant people, people with an event and events, plus daily counts for up to 92 days. Any people count below 5 is returned as null and the matching event count is hidden with it, so neither a small group nor one person's many events can be singled out."
+          },
+          {
+            "label": "Limit abuse and keep erasure clean",
+            "detail": "A person can send at most 1,000 events per rolling 24 hours, then 429 ANALYTICS_LIMIT. A person's event batches and the erase of their data take the same per-person lock, so no batch can land after an erase. How long events are kept is still an owner decision; a purge job is easy to add once a period is chosen."
+          }
+        ],
+        "example": "A test compares two checkout button texts with weights 1 and 1. A person who opted in sees variant B on the phone and on the website, because both ask the server, which computes the same hash. Their exposure and checkout events count under B once each, even though the app retried a batch after a timeout.",
+        "lab": "Create an experiment locally with weights 3 and 1, compute variants for 10,000 synthetic ids and check the split is close to 3 to 1. Send events for one person without consent and assert recorded 0. Then read the results for a variant with four people and confirm the counts come back as null.",
+        "pitfall": "Never take the variant from the app or restart a stopped experiment: either one lets people switch variants and spoils the comparison.",
+        "questions": [
+          {
+            "id": "adv-experiments-q1",
+            "prompt": "How is a person's variant chosen?",
+            "options": [
+              "Randomly on each visit",
+              "From a per-experiment salt and the person's id through SHA-256, with nothing stored",
+              "By the app",
+              "By staff for each person"
+            ],
+            "answer": 1,
+            "explanation": "Deterministic hashing gives the same variant everywhere without any stored assignment."
+          },
+          {
+            "id": "adv-experiments-q2",
+            "prompt": "A person has not turned on product analytics. What happens to their events?",
+            "options": [
+              "They are stored anonymously",
+              "The batch answers 202 with recorded 0 and is dropped unread",
+              "They are stored but hidden",
+              "The request fails with 403"
+            ],
+            "answer": 1,
+            "explanation": "Events are kept only with the productAnalytics consent."
+          },
+          {
+            "id": "adv-experiments-q3",
+            "prompt": "Why are people counts below 5 returned as null?",
+            "options": [
+              "To save space",
+              "So no small group or single person can be singled out in staff results",
+              "Because small groups are not tested",
+              "To hide failed variants"
+            ],
+            "answer": 1,
+            "explanation": "Small counts and their event counts are hidden to protect individuals."
+          }
+        ]
+      },
+      {
+        "id": "adv-chef-insights",
+        "title": "Give chefs honest numbers about their own kitchen",
+        "overview": "Chef business analytics answers a simple question: how did my kitchen do in this period? Nothing is stored; each summary is computed from the chef's own orders in Order service, read with the chef's token. The numbers describe what the kitchen sold, not what it will be paid. This lesson reads ChefInsightsRules and the shared order-history reader to see what is counted and where the technical bounds are.",
+        "steps": [
+          {
+            "label": "Ask for a bounded period",
+            "detail": "GET /chef-insights/summary takes India dates from and to, both included, at most 92 days and not in the future, for chefs only. Because it reads with the chef's token, a chef only ever sees their own kitchen, and no customer id is returned."
+          },
+          {
+            "label": "Count only real sales",
+            "detail": "Paid orders placed on those dates count; payment pending and cancelled-before-payment orders are not sales. They are split into delivered, rejected, refunded (refund pending, refunded and refund failed) and in progress, so a chef can see what actually reached customers."
+          },
+          {
+            "label": "Report food sold, not payout",
+            "detail": "Food sold is the delivered orders' lines at their own prices, before platform fee, tax, delivery and discounts: what the kitchen sold, not what it is paid. Payouts and commission belong to the chef ledger, and mixing them here would mislead chefs about their earnings."
+          },
+          {
+            "label": "Show customers without naming them",
+            "detail": "The summary gives unique and repeat customers, repeat meaning two or more orders in the period, as counts only. It adds per-day orders, deliveries and food sold, the top 10 dishes by delivered portions and orders by India hour of the day."
+          },
+          {
+            "label": "Respect the shared reader's bounds",
+            "detail": "The order-history reader is shared with demand forecasting and runs at most 4 summaries at a time per replica (then 503 ORDER_HISTORY_BUSY), reads at most 30 pages of 100 orders and spends about 10 seconds a request. Beyond that the answer says complete false, so the chef knows the numbers are partial."
+          },
+          {
+            "label": "Know the known limits",
+            "detail": "Order service lists newest first, so for a busy kitchen a period far in the past can come back empty and incomplete; an Order service before bound would fix that. Comparisons with other kitchens are not built, because they would expose other chefs' sales."
+          }
+        ],
+        "example": "A chef opens October's summary. It shows 64 paid orders: 58 delivered, 2 rejected, 3 refunded and 1 still in progress, food sold of 41,250 rupees from delivered orders, 37 unique customers of whom 12 ordered twice or more, and lunch hours as the busiest. None of it names a customer or promises a payout figure.",
+        "lab": "With a fake order gateway, return two pages of orders in mixed statuses for one chef and check every count in the summary by hand. Make the gateway return more than 30 pages and assert complete false. Finally confirm that another chef's token sees only that chef's orders.",
+        "pitfall": "Never present food sold as a chef's earnings: payout figures come only from the chef ledger.",
+        "questions": [
+          {
+            "id": "adv-chef-insights-q1",
+            "prompt": "Where do chef insights numbers come from?",
+            "options": [
+              "A nightly copy in the module",
+              "The chef's own orders in Order service, read live with the chef's token",
+              "The finance ledger",
+              "Customer reviews"
+            ],
+            "answer": 1,
+            "explanation": "Nothing is stored; each summary is computed from Order service at request time."
+          },
+          {
+            "id": "adv-chef-insights-q2",
+            "prompt": "What does food sold mean in the summary?",
+            "options": [
+              "The chef's payout",
+              "Delivered order lines at their own prices, before fees, tax, delivery and discounts",
+              "All orders including cancelled ones",
+              "The platform's commission"
+            ],
+            "answer": 1,
+            "explanation": "It is what the kitchen sold, not what it is paid."
+          },
+          {
+            "id": "adv-chef-insights-q3",
+            "prompt": "What does complete false tell the chef?",
+            "options": [
+              "The kitchen is closed",
+              "The reader hit its page or time bound, so the numbers are partial",
+              "The chef has no orders",
+              "The period is in the future"
+            ],
+            "answer": 1,
+            "explanation": "Beyond 30 pages or about 10 seconds the summary is marked incomplete."
+          }
+        ]
+      },
+      {
+        "id": "adv-demand-forecast",
+        "title": "Forecast demand with an average a chef can check",
+        "overview": "Demand forecasting helps a chef plan how much to cook. On purpose it is not a model: for a chosen day it averages the portions ordered on the same weekday in recent weeks and shows the lowest and highest weeks, so the chef can see exactly where the number came from. Nothing is stored and nothing is guessed about weather, festivals or offers. This lesson reads DemandForecastRules.",
+        "steps": [
+          {
+            "label": "Ask for a day ahead",
+            "detail": "GET /demand-forecast/dishes takes an India date from today to 13 days ahead, for chefs only. For each dish it returns the average portions ordered on the 8 most recent past days with the same weekday, counting weeks with none as 0, plus the fewest and most in any of those weeks and the average number of orders."
+          },
+          {
+            "label": "Count what was wanted",
+            "detail": "Demand counts every paid order, including ones the chef rejected, because they were wanted. Payment pending and cancelled-before-payment orders are left out, since nobody committed to them."
+          },
+          {
+            "label": "Do not average a new kitchen with empty weeks",
+            "detail": "Weeks before the kitchen's first order seen in that window are not counted, reported as basedOnWeeks and weeksCounted. A kitchen that opened three weeks ago is averaged over three weeks, not eight."
+          },
+          {
+            "label": "Mark partial reads",
+            "detail": "The forecast uses the same order-history reader and bounds as chef insights. When the read was cut short, the oldest day read may be partial and is not counted, and the answer carries complete false."
+          },
+          {
+            "label": "Keep the chef in charge",
+            "detail": "The forecast never changes the menu or batch sizes by itself; small batches stay chef-set. It is information for a person to act on, which keeps responsibility for buying ingredients with the chef."
+          },
+          {
+            "label": "Know what was left out",
+            "detail": "Not built, each needing an owner decision: automatic menu or capacity changes from the forecast, city-wide demand for staff, and seasonality beyond 8 weeks. A plain, explainable average is the honest starting point while order history is still short."
+          }
+        ],
+        "example": "A chef plans next Sunday. Over the last 8 Sundays her mutton biryani sold 12, 15, 0, 14, 18, 16, 13 and 20 portions, an average of 13.5 with a lowest week of 0 and a highest of 20. The 0 week, when she was away, is visible, so she decides to cook 16 portions instead of trusting the average blindly.",
+        "lab": "With a fake order history, build eight weeks of Sunday orders for two dishes, including a rejected order and a week with no orders, and check each average, minimum and maximum by hand. Then start the history three weeks ago and assert weeksCounted is 3.",
+        "pitfall": "Never present the forecast as a promise of sales or use it to change capacity automatically; it is an average for a chef to judge.",
+        "questions": [
+          {
+            "id": "adv-demand-forecast-q1",
+            "prompt": "What does the forecast average?",
+            "options": [
+              "All days in the last month",
+              "Portions on the 8 most recent past days with the same weekday",
+              "A machine-learning prediction",
+              "Orders across every kitchen"
+            ],
+            "answer": 1,
+            "explanation": "It is a plain same-weekday average with the lowest and highest weeks shown."
+          },
+          {
+            "id": "adv-demand-forecast-q2",
+            "prompt": "Why are rejected orders counted as demand?",
+            "options": [
+              "To inflate numbers",
+              "Because customers wanted the food even though the chef could not take the order",
+              "Because they were paid out",
+              "By mistake"
+            ],
+            "answer": 1,
+            "explanation": "A paid order shows demand even when the chef rejected it."
+          },
+          {
+            "id": "adv-demand-forecast-q3",
+            "prompt": "A kitchen opened three weeks ago. How many weeks does its forecast use?",
+            "options": [
+              "Eight, with zeros",
+              "Three, because weeks before its first order are not counted",
+              "One",
+              "None until eight weeks pass"
+            ],
+            "answer": 1,
+            "explanation": "basedOnWeeks and weeksCounted show that a new kitchen is not averaged with weeks it did not exist."
+          }
+        ]
+      }
+    ]
+  }
+}

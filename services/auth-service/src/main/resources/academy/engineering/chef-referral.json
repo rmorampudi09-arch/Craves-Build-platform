@@ -1,0 +1,317 @@
+{
+  "course": {
+    "id": "chef-referral",
+    "service": "referral-service",
+    "title": "Chef referral rewards: attribution, rewards, caps and reversals",
+    "level": "Advanced",
+    "minutes": 112,
+    "description": "Learn how the referral service records who referred whom, receives signed facts from Auth, Order and Finance, works out chef rewards in exact paise from the owner-confirmed policy, enforces the monthly cap and refund reversals, and which parts of the programme are live and which stay switched off.",
+    "prerequisites": [
+      "orders",
+      "payments"
+    ],
+    "sources": [
+      "services/referral-service/README.md",
+      "services/referral-service/src/main/java/in/craves/referral/core/ChefReferralPolicy.java",
+      "services/referral-service/src/main/java/in/craves/referral/core/RewardMath.java",
+      "services/referral-service/src/main/java/in/craves/referral/domain/ChefEarningsService.java",
+      "services/referral-service/src/main/java/in/craves/referral/domain/OrderBindingService.java",
+      "services/referral-service/src/main/java/in/craves/referral/domain/OrderLifecycleService.java",
+      "services/referral-service/src/main/java/in/craves/referral/infra/SourceEventRouter.java",
+      "services/referral-service/src/main/java/in/craves/referral/security/SourceSignatures.java",
+      "services/referral-service/src/main/java/in/craves/referral/infra/OutboxService.java",
+      "services/referral-service/src/main/java/in/craves/referral/infra/ChefReferralWorker.java"
+    ],
+    "sourceRevision": "9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605",
+    "lessons": [
+      {
+        "id": "referral-architecture",
+        "title": "Keep referral facts signed, immutable and owned",
+        "overview": "The referral service owns its own schema: the policy, the referral tree, order snapshots, an inbox, rewards, a journal and an outbox. It does not replace Auth, Order, Finance, Razorpay or the chef ledger; those services remain the owners of accounts, orders and money, and they send the referral service signed facts. The database is authoritative, so no browser or app state ever decides eligibility, ancestry or payment. This lesson reads SourceEventRouter and SourceSignatures.",
+        "steps": [
+          {
+            "label": "Know who sends which fact",
+            "detail": "Auth sends account.registered and account.status. Order sends order.bound with the original checkout and chef order ids, buyer and seller, food totals and a snapshot hash, then order.delivered and order.refunded with a cumulative refund. Finance sends order.finance_confirmed with capture and commission budget, and recipient and payout facts."
+          },
+          {
+            "label": "Sign the exact bytes",
+            "detail": "Each source signs with HMAC-SHA256 over the source name, key id, timestamp, POST, the exact path and the SHA-256 of the raw body. Headers carry X-Referral-Source, X-Referral-Key-Id (current or previous), X-Referral-Timestamp and X-Referral-Signature. Three distinct keys of at least 32 bytes are required, and reusing one source's key for another is refused."
+          },
+          {
+            "label": "Route only allowed events",
+            "detail": "SourceEventRouter accepts each event type only from its owning source, and every envelope carries an event id, type, aggregate id, time and payload whose aggregate must match. An event id that arrives again with a different body is rejected, so a replay can never change history."
+          },
+          {
+            "label": "Treat timeouts as unknown, not failed",
+            "detail": "The source client signs the persisted bytes, follows no redirects, and bounds a request to 10 seconds and its response to 128 KiB. A timeout is an unknown outcome: the source must replay the original event or operation id, never invent a new one, so a retried event lands once."
+          },
+          {
+            "label": "Fix the tree at enrolment",
+            "detail": "Each enrolled account gets a unique random code and a /r/CODE link with a server-made QR code. The parent and the ancestry are fixed at enrolment and guarded in SQL; an existing account is never re-parented by scanning a QR, and a missing parent fact is retried rather than replaced by a different referrer."
+          },
+          {
+            "label": "Hand work to Finance through the outbox",
+            "detail": "The referral service never calls a bank, UPI or Razorpay. It writes durable outbox events that only Finance can claim with a lease and acknowledge after its own deduplicated transaction. An acknowledgement means Finance has handled the event, not that money reached anyone."
+          }
+        ],
+        "example": "Order service binds a chef order and later reports it delivered, but the delivered event arrives twice because of a network retry. The second copy has the same event id and body, so it is recorded once. A forged copy with a changed body and an old signature is rejected before it reaches the inbox.",
+        "lab": "Using the referral service's disposable-database tests, send one signed order.bound event, replay it unchanged and then with a changed body, and check the outcomes. Sign an event with the Auth key but claim the Order source and confirm it is refused.",
+        "pitfall": "Never let an app or a support note decide who referred whom or whether an order qualifies; only signed facts from the owning services may.",
+        "questions": [
+          {
+            "id": "referral-architecture-q1",
+            "prompt": "Which service is allowed to claim and acknowledge the referral outbox?",
+            "options": [
+              "Auth",
+              "Order",
+              "Finance",
+              "The chef app"
+            ],
+            "answer": 2,
+            "explanation": "Only Finance claims and acknowledges outbox pages, after its own deduplicated handling."
+          },
+          {
+            "id": "referral-architecture-q2",
+            "prompt": "A source's request times out. What must it do?",
+            "options": [
+              "Send a new event with a new id",
+              "Replay the original event or operation id",
+              "Give up",
+              "Ask support to enter it"
+            ],
+            "answer": 1,
+            "explanation": "A timeout is an unknown outcome; replaying the same id keeps the event idempotent."
+          },
+          {
+            "id": "referral-architecture-q3",
+            "prompt": "Can scanning a referral QR code re-parent an existing account?",
+            "options": [
+              "Yes, the latest scan wins",
+              "No, parent and ancestry are fixed at enrolment",
+              "Only for chefs",
+              "Only within 30 days"
+            ],
+            "answer": 1,
+            "explanation": "Attribution is immutable and guarded in SQL."
+          }
+        ]
+      },
+      {
+        "id": "referral-reward-math",
+        "title": "Work out chef rewards in exact paise",
+        "overview": "The live programme pays chef-only rewards from Craves's own commission when a referred chef sells. The economics were confirmed by the owner and are coded in ChefReferralPolicy under the version CHEF_COMMISSION_20260916; RewardMath does the rounding and the cap. Customer bonuses, customer discounts and the old 14-day policy stay inactive. This lesson reads both classes and works through a sale.",
+        "steps": [
+          {
+            "label": "Check the threshold",
+            "detail": "A sale qualifies when the selling chef's food subtotal in that chef order is 250 rupees or more, 25,000 paise; the test checks 24,999 as no and 25,000 as yes. Two 150-rupee dishes in the same chef order qualify together. Tax, delivery and later discounts are not part of the food subtotal."
+          },
+          {
+            "label": "Allocate three levels",
+            "detail": "The seller's three fixed ancestors earn 2 %, 1.2 % and 0.8 % (200, 120 and 80 basis points). The seller never earns on their own sale, and a missing or ineligible level keeps its share instead of passing it up the chain, so unused shares are retained by Craves."
+          },
+          {
+            "label": "Round each level, then cap",
+            "detail": "Each level is rounded to the nearest paise, then the total is capped at 4 % of the basis, floored to paise, with any overflow trimmed from the earliest level first. On exactly 250 rupees the rewards are 5, 3 and 2 rupees. A randomised test checks 20,000 examples so a rounding paise never moves between levels unexpectedly."
+          },
+          {
+            "label": "Fund only from commission",
+            "detail": "commissionCovers allows a reward only when the verified Craves commission on that order covers it. Nothing is deducted from the selling chef's own earnings, and when the commission evidence is missing or too small the event waits for reconciliation instead of inventing funds."
+          },
+          {
+            "label": "Require paid and delivered",
+            "detail": "A reward needs both a verified payment and a verified delivery. The later of the two starts a 24-hour hold, and delayed event arrival can never shorten it, because the hold is computed from the verified times, not from when events arrived."
+          },
+          {
+            "label": "Post at the 9 AM run",
+            "detail": "Rewards post at the first 9 AM India-time run after the hold has fully elapsed; at exactly 9 AM the run is eligible. A bounded worker may drain the current run after 9 AM without replaying earlier days, so a late start never posts a day twice."
+          }
+        ],
+        "example": "Chef A referred B, B referred C and C referred D. D sells a chef order with 1,000 rupees of food. C earns 20 rupees, B 12 rupees and A 8 rupees, a total of 40 rupees or 4 %, funded from Craves's commission on that order. D's own earnings are untouched, and the rewards post at the first 9 AM run 24 hours after the order was both paid and delivered.",
+        "lab": "Run ChefReferralPolicyTest and RewardMathTest from the referral service. Then add a local test of your own for a subtotal of 333.33 rupees with only levels one and three eligible, compute the expected paise by hand first, and check the second level stays zero rather than moving up.",
+        "pitfall": "Never round in rupees or with floating point, and never fund a reward from the seller's payable: integer paise and verified commission are the whole safety story.",
+        "questions": [
+          {
+            "id": "referral-reward-math-q1",
+            "prompt": "What are the three chef reward rates?",
+            "options": [
+              "5 %, 3 % and 1 %",
+              "2 %, 1.2 % and 0.8 %",
+              "4 % to the first level only",
+              "1 % each"
+            ],
+            "answer": 1,
+            "explanation": "200, 120 and 80 basis points, capped at 4 % in total."
+          },
+          {
+            "id": "referral-reward-math-q2",
+            "prompt": "A level-two ancestor is not an eligible chef. What happens to their share?",
+            "options": [
+              "It moves to level one",
+              "It is retained, not redistributed",
+              "It goes to the seller",
+              "It is paid to Craves's wallet"
+            ],
+            "answer": 1,
+            "explanation": "Missing levels keep their share; nothing rolls up the chain."
+          },
+          {
+            "id": "referral-reward-math-q3",
+            "prompt": "When does a chef reward post?",
+            "options": [
+              "The moment the order is paid",
+              "At the first 9 AM India-time run after a 24-hour hold from the later of paid and delivered",
+              "At the end of the month",
+              "When the chef asks"
+            ],
+            "answer": 1,
+            "explanation": "Both facts are required, the hold cannot be shortened, and posting follows the daily 9 AM run."
+          }
+        ]
+      },
+      {
+        "id": "referral-cap-reversals",
+        "title": "Enforce the monthly cap and reverse refunds correctly",
+        "overview": "The owner set a hard cap on chef referral earnings: each receiving chef can earn at most 1,500 rupees per India calendar month of actual posting. A reward that crosses the cap earns only the remaining allowance, and excess is never shown, carried forward or revived. Refunds reverse only what was actually credited, in the month it was credited. This lesson reads ChefEarningsService and the allowance helpers in ChefReferralPolicy.",
+        "steps": [
+          {
+            "label": "Lock the month before deciding",
+            "detail": "When a reward posts, the service creates the chef's month row if needed and locks it with FOR UPDATE, then reads posted and reversed totals. remainingAllowance returns 150,000 paise minus the net posted amount and refuses, with MONTHLY_REFERRAL_CAP_BREACH, a state that is already over the cap."
+          },
+          {
+            "label": "Credit only what fits",
+            "detail": "The credit is the smaller of the reward and the remaining allowance. After the cap is reached the credit is zero, and the excess is not a pending balance and is not shown to the chef. Ordinary sale earnings are never capped by this rule."
+          },
+          {
+            "label": "Make the decision final",
+            "detail": "Each reward gets one cap decision row with its month and credited amount, even when the credit is zero. Retries, refunds or a new month can therefore never resurrect a skipped reward, and the same reward is never credited twice."
+          },
+          {
+            "label": "Post immutable entries",
+            "detail": "Credits are written as chef posting rows keyed by the reward, such as chef-credit plus the reward id, with the month and amount. Nothing is updated in place; a reversal is a new row that points at the original credit."
+          },
+          {
+            "label": "Reverse in the original month",
+            "detail": "A confirmed refund reverses only the amount actually credited, and restores allowance to the immutable original posting month, not the month the refund arrives. Every partial refund is recalculated from the cumulative refunded food subtotal, so a later refund can only reduce a reward, never increase it, and a replayed refund cannot debit twice."
+          },
+          {
+            "label": "Show the chef only what is true",
+            "detail": "The member view shows the remaining allowance and whether the cap is reached, not an excess or review balance. A chef therefore never sees money they will not receive, and support never has to explain a number that does not exist."
+          }
+        ],
+        "example": "A chef has been credited 1,480 rupees in November. A new 40-rupee reward arrives on 29 November: 20 rupees fit and are credited, and the cap decision is final. On 3 December a refund reverses an earlier 12-rupee November credit; the allowance goes back to November, not December, and the skipped 20 rupees never come back.",
+        "lab": "Write a local test with a chef at 1,490 rupees for the month: post a 25-rupee reward and assert 10 rupees credited and a final decision row. Post the same reward again and assert nothing changes. Then reverse an earlier credit from the same month in the next month and check which month's allowance moved.",
+        "pitfall": "Never carry capped excess into the next month or show it as pending: the owner's rule is that it is simply not earned.",
+        "questions": [
+          {
+            "id": "referral-cap-reversals-q1",
+            "prompt": "A reward crosses the 1,500-rupee monthly cap. What is credited?",
+            "options": [
+              "The full reward",
+              "Only the remaining allowance, with the rest not earned",
+              "Nothing until next month",
+              "The excess as pending"
+            ],
+            "answer": 1,
+            "explanation": "The credit is the smaller of the reward and the remaining allowance; the excess is gone."
+          },
+          {
+            "id": "referral-cap-reversals-q2",
+            "prompt": "Which month gets allowance back when a refund reverses a credit?",
+            "options": [
+              "The month the refund arrives",
+              "The original posting month of the credit",
+              "The next month",
+              "No month"
+            ],
+            "answer": 1,
+            "explanation": "Reversals restore allowance to the immutable original posting month."
+          },
+          {
+            "id": "referral-cap-reversals-q3",
+            "prompt": "Why is a cap decision stored even when the credit is zero?",
+            "options": [
+              "For billing",
+              "So retries, refunds or a new month can never resurrect or double a reward",
+              "To show the chef",
+              "To trigger an alert"
+            ],
+            "answer": 1,
+            "explanation": "One final decision per reward keeps processing idempotent."
+          }
+        ]
+      },
+      {
+        "id": "referral-operations",
+        "title": "Operate the programme: what is on, what stays off",
+        "overview": "The chef programme has been live on the backend since 12 October 2026, switched on through reviewed release pipelines with the owner's approval recorded as policy. Several capabilities are deliberately off and stay off until their own decisions are made. Operating the programme means knowing the switches, the order to turn things off, and the compliance questions still open. This lesson connects the README, the worker and the outbox.",
+        "steps": [
+          {
+            "label": "Know what is live",
+            "detail": "Live: the chef programme under policy CHEF_COMMISSION_20260916, with the Auth, Order and Integration sources sending signed facts and the engine posting chef rewards. The chef earnings worker runs only when its own setting is on, and finance refresh requests flow through the outbox."
+          },
+          {
+            "label": "Know what stays off",
+            "detail": "Off by design: customer awards, wallet settlement, withdrawals, spending, checkout benefits and referral payout execution. Their switches, such as CRAVES_REFERRALS_AWARDS_ENABLED and CRAVES_REFERRAL_CHECKOUT_BENEFITS_ENABLED, are checked as false by the activation step and are not set by it."
+          },
+          {
+            "label": "Keep runtime and migration roles apart",
+            "detail": "The runtime uses a restricted database role for its own schema; migrations run separately with their own confirmation, and normal startup does not run Flyway. The pool defaults to four connections, and a release check keeps pool size times replicas across services within the shared server's budget."
+          },
+          {
+            "label": "Verify Auth sessions strictly",
+            "detail": "Member and admin APIs verify Auth's RS256 tokens with issuer, audience, subject, roles and token version, and check revocation in Redis. If the revocation state is unavailable the service fails closed with 503 rather than trusting a token that might have been revoked."
+          },
+          {
+            "label": "Turn it off in the right order",
+            "detail": "To switch the programme off, set CRAVES_REFERRAL_SOURCE_ENABLED=false on Order first, then Integration, then Auth, and only then CRAVES_REFERRALS_ENABLED=false on the engine. Policy and ledger rows are immutable and stay as history."
+          },
+          {
+            "label": "Keep compliance questions visible",
+            "detail": "Three-level commissions and TDS on referral income should be reviewed by a chartered accountant or a lawyer before the programme is promoted. Until then, no promotion should describe referral income as a guaranteed earning."
+          }
+        ],
+        "example": "Support is asked whether a customer gets a bonus for referring a chef. The answer is no: customer awards and checkout benefits are switched off by design, and only the chef programme is live. The chef who sold gets nothing extra from their own sale; their referrers earn from Craves's commission.",
+        "lab": "Read the activation and verification steps recorded in the referral docs and write down, for each switch, its value today and who decided it. Then plan the switch-off order as a short checklist that names each app in sequence, without running any of it.",
+        "pitfall": "Never switch the engine off before its sources: sources that keep sending to a disabled engine create noise and retries that hide real problems.",
+        "questions": [
+          {
+            "id": "referral-operations-q1",
+            "prompt": "Which capability is live today?",
+            "options": [
+              "Customer wallet spending",
+              "Chef referral rewards",
+              "Referral payout execution",
+              "Checkout benefits"
+            ],
+            "answer": 1,
+            "explanation": "Only the chef programme is on; customer and payout features stay off by design."
+          },
+          {
+            "id": "referral-operations-q2",
+            "prompt": "What is the right order to switch the programme off?",
+            "options": [
+              "Engine first, then sources",
+              "Order, then Integration, then Auth, then the engine",
+              "Auth first only",
+              "All at once"
+            ],
+            "answer": 1,
+            "explanation": "Sources stop first so nothing keeps sending to a disabled engine."
+          },
+          {
+            "id": "referral-operations-q3",
+            "prompt": "What does the service do when it cannot read the token revocation state?",
+            "options": [
+              "Trusts the token",
+              "Fails closed with 503",
+              "Signs the user out",
+              "Uses a cached answer forever"
+            ],
+            "answer": 1,
+            "explanation": "Missing revocation state blocks rather than trusting a possibly revoked token."
+          }
+        ]
+      }
+    ]
+  }
+}

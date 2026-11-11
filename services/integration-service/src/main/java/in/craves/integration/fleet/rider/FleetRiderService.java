@@ -507,6 +507,8 @@ public class FleetRiderService {
         }
         return who + (n == 1 ? " hears first, one rider at a time" : " hear at once, and the first to accept gets it")
             + (rules.offerRounds() > 1 ? ", in up to " + rules.offerRounds() + " rounds" : "") + "."
+            // 0 rounds: no limit (DispatchPolicy.wholeStage).
+            + (rules.offerRounds() == 0 ? " If nobody accepts, riders are asked again until the order's time with Craves riders is up." : "")
             + (rules.byTravelTime() ? " Soonest is by Craves's travel-time estimate; without one, the nearest hear first." : "")
             + (rules.jointMatching() ? " Orders near each other are shared out among the free riders nearby together, not one by one." : "")
             + (rules.nextOrderOffers() ? " You may hear of your next order before this one ends; it waits for you." : "")

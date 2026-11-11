@@ -14,7 +14,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Approval already includes document review. Never manufactures tax declarations or bank verification. */
+/** Approval already includes document review; selling also needs the verified FSSAI number. Never manufactures tax declarations or bank verification. */
 @RestController
 public class ChefFinanceApprovalController {
     public record Approval(UUID chefId, UUID applicationId, String stateCode, Instant reviewedAt) {}
@@ -45,6 +45,12 @@ public class ChefFinanceApprovalController {
             if (!id.toString().equals(node.path("requestId").asText())) return failure(HttpStatus.BAD_REQUEST);
             List<Approval> rows = jdbc.query("SELECT identity_id,id,state,COALESCE(reviewed_at,updated_at) FROM chef_application " +
                 "WHERE status='APPROVED' " +
+                // FSSAI is added after approval: a Chef approved through the current application may sell only once
+                // Craves has verified the saved number. A draft started after approval (an older Chef adding details)
+                // never takes away an approval that was already selling.
+                "AND NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted " +
+                "AND d.created_at <= COALESCE(chef_application.reviewed_at,chef_application.updated_at) " +
+                "AND (d.fssai_reviewed_at IS NULL OR d.fssai_reviewed_number IS DISTINCT FROM d.details->>'fssaiNumber')) " +
                 "ORDER BY identity_id LIMIT ?", (rs,n) -> new Approval(rs.getObject(1,UUID.class),
                     rs.getObject(2,UUID.class), stateCode(rs.getString(3)), rs.getTimestamp(4).toInstant()),
                 ChefFinanceApprovalProtocol.MAX_CHEFS + 1);

@@ -13,20 +13,19 @@ const errorBanner = (page: Page) => page.getByRole("alert").filter({ hasText: /R
 test.beforeEach(async ({ page, backend }) => {
   await rememberChefDevice(page);
   backend.completeDraft();
-  (backend.details as Record<string, unknown>).fssaiNumber = "";
-  await page.goto("/chef/application?step=fssai");
-  await expect(page.getByRole("heading", { level: 1, name: "FSSAI details" })).toBeVisible();
-  await page.getByRole("textbox", { name: "FSSAI registration number", exact: true }).fill("12345678901234");
+  await page.goto("/chef/application?step=kitchen");
+  await expect(page.getByRole("heading", { level: 1, name: "Your kitchen" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Kitchen name", exact: true }).fill("Renamed Kitchen");
 });
 
 test("a dropped save that never reached the server can simply be saved again", async ({ page, backend }) => {
   backend.fail("PUT", "/api/chef/onboarding", "abort");
   await save(page).click();
   await expect(errorBanner(page)).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "FSSAI registration number", exact: true })).toHaveValue("12345678901234");
+  await expect(page.getByRole("textbox", { name: "Kitchen name", exact: true })).toHaveValue("Renamed Kitchen");
   await save(page).click();
   await expect(page.getByRole("heading", { level: 1, name: "Identity verification" })).toBeVisible();
-  expect(backend.details).toMatchObject({ fssaiNumber: "12345678901234" });
+  expect(backend.details).toMatchObject({ kitchenName: "Renamed Kitchen" });
 });
 
 test("BUG: after a save the server committed but the browser timed out, the next save is stuck on 409", async ({ page, backend }) => {
@@ -34,7 +33,7 @@ test("BUG: after a save the server committed but the browser timed out, the next
   backend.fail("PUT", "/api/chef/onboarding", "commit-then-abort");
   await save(page).click();
   await expect(errorBanner(page)).toBeVisible();
-  expect(backend.details).toMatchObject({ fssaiNumber: "12345678901234" }); // the server did save it
+  expect(backend.details).toMatchObject({ kitchenName: "Renamed Kitchen" }); // the server did save it
   await save(page).click();
   await expect(page.getByRole("heading", { level: 1, name: "Identity verification" })).toBeVisible();
 });
@@ -54,7 +53,7 @@ test("a reload recovers from the stuck 409 without losing saved work", async ({ 
   await save(page).click();
   await expect(errorBanner(page)).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("textbox", { name: "FSSAI registration number", exact: true })).toHaveValue("12345678901234");
+  await expect(page.getByRole("textbox", { name: "Kitchen name", exact: true })).toHaveValue("Renamed Kitchen");
   await save(page).click();
   await expect(page.getByRole("heading", { level: 1, name: "Identity verification" })).toBeVisible();
 });

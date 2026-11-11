@@ -79,6 +79,36 @@ test("BUG: the kitchen can be opened with no dishes and says customers can order
   await expect(page.getByText("Customers can order now.")).toHaveCount(0);
 });
 
+test("the first dish going live asks for the FSSAI number, and publishes once Craves has verified it", async ({ page, backend }, testInfo) => {
+  backend.menu = [{ id: "00000000-0000-4000-8000-000000000901", itemName: "Rasmalai", description: null, category: "Sweets", foodType: "VEG", price: 180, currency: "INR", servesCount: null, preparationTimeMinutes: 20, spiceLevel: null, unitPackageWeightGrams: 500, thermoboxRequired: false, available: false, status: "DRAFT", images: [], createdAt: "2026-10-12T09:00:00.000Z", updatedAt: "2026-10-12T09:00:00.000Z" }];
+  await openApprovedChef(page, backend, "/chef/menu");
+  (backend.details as Record<string, unknown>).fssaiNumber = ""; // approved without FSSAI
+  const publish = async () => {
+    await page.getByRole("button", { name: "Publish Rasmalai" }).click();
+    await page.getByRole("dialog", { name: "Publish Rasmalai?" }).getByRole("button", { name: "Publish dish" }).click();
+  };
+  await publish();
+  const popup = page.getByRole("dialog", { name: "Add your FSSAI number" });
+  await expect(popup.getByText(/government requires it for every food business/)).toBeVisible();
+  await popup.getByRole("button", { name: "Save number" }).click();
+  await expect(popup.getByText("Enter your 14-digit FSSAI registration number.")).toBeVisible();
+  await popup.getByRole("button", { name: "Don’t have FSSAI?" }).click();
+  await expect(page.getByRole("dialog", { name: "How to apply for FSSAI" })).toBeVisible();
+  await page.getByRole("button", { name: "I have an FSSAI number" }).click();
+  await popup.getByRole("textbox", { name: "FSSAI registration number" }).fill("12345678901234");
+  await popup.getByRole("button", { name: "Save number" }).click();
+  await expect(popup.getByText(/We are verifying your FSSAI number/)).toBeVisible();
+  await testInfo.attach("fssai-waiting", { body: await page.screenshot(), contentType: "image/png" });
+  expect(backend.details).toMatchObject({ fssaiNumber: "12345678901234", kitchenName: "E2E Test Kitchen" });
+  await popup.getByRole("button", { name: "Done" }).click();
+  await expect(popup).toHaveCount(0);
+  await expect(page.getByText("Rasmalai is live")).toHaveCount(0);
+  // Craves verifies the number; now the dish can go live.
+  backend.fssaiVerified = true;
+  await publish();
+  await expect(page.getByText("Rasmalai is live")).toBeVisible();
+});
+
 test.describe("Add a dish", () => {
   test.beforeEach(async ({ page, backend }) => {
     await openApprovedChef(page, backend, "/chef/menu");

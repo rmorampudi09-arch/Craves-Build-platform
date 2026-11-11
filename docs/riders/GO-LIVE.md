@@ -81,17 +81,17 @@ On 30 Oct the fleet was already on (the move copied the settings), so the plan m
 ## 6. Set up the pilot in the console
 
 1. **Offer rules, then the rate card.**
-   1. **How orders are offered.** Under Dispatch, choose `shadow` and save. Since 1 Nov 2026 the values are built in (`DISPATCH.md` §7): the console shows them and asks only for the mode, and the API fills in any value it isn't sent.
+   1. **How orders are offered.** Under Dispatch, choose `shadow` and save. Since 1 Nov 2026 the values are built in (`DISPATCH.md` §7; since 11 Nov 2026 they are the owner's riders-first rule): the console shows them and asks only for the mode, and the API fills in any value it isn't sent.
 
       | Field | Built in |
       |---|---|
       | Riders who see an order at once | 1 |
-      | Rounds of offers | 3 |
+      | Rounds of offers | No limit: riders are asked again |
       | Fair band | 1.5 km |
-      | Time a rider has to accept | 30 seconds |
-      | Time Craves riders get before Borzo | 120 seconds |
+      | Time a rider has to accept | 20 seconds |
+      | Time Craves riders get before Borzo | 300 seconds (5 minutes) |
 
-      These hand out an order the way food delivery apps do: one rider at a time, nearest first, a short window, then the next rider (DoorDash, Wolt and Gojek publish this; Swiggy and Zomato assign automatically). Save. Do this before the rate card: until one is published, riders have no terms, so the rules start at once. After that, every change to them needs a start at least 14 days away. Shadow offers nothing; it only logs who would have been offered.
+      These hand out an order one rider at a time, a short window each, then the next rider (DoorDash, Wolt and Gojek publish this; Swiggy and Zomato assign automatically), and keep it with Craves riders for the whole 5 minutes before Borzo is asked. Save. Do this before the rate card: until one is published, riders have no terms, so the rules start at once. After that, every change to them needs a start at least 14 days away. Shadow offers nothing; it only logs who would have been offered.
    2. **The rate card.** Under Rate card → New draft, enter the real numbers, their allowed ranges and the English summary. Telugu and Hindi lines wait for a native speaker's sign-off.
    3. **Publish it.** The first card takes effect at once. Every later card needs its start at least 14 days after publishing, and riders see it in the app as "New terms from …" until then.
 2. **Riders.** One application, one decision (`FLOWS.md`).

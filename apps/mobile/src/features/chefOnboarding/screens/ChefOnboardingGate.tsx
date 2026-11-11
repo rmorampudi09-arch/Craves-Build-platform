@@ -283,6 +283,8 @@ const titles: Record<OnboardingState['resumeStep'], string> = {
   waiting: 'Application under review',
   legacy: 'Chef workspace',
 };
+const fssaiLater =
+  'You don’t need an FSSAI registration to apply. You will need to add your FSSAI number later, before your dishes go live to customers. The government requires it for every food business.';
 function inputError(message: string) {
   return new AppApiError('ONBOARDING_INPUT_INVALID', message);
 }
@@ -309,6 +311,8 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
     setState(next);
     setDetails(next.details ?? { ...emptyDetails });
     setStep(next.resumeStep);
+    // Approved without a verified FSSAI number: the Chef works in the app; the note above it asks for the number.
+    setExisting(next.application.status === 'APPROVED' && next.submitted);
     return next;
   }, []);
   const load = useCallback(async () => {
@@ -426,9 +430,6 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
     setMessage('Kitchen location selected. Check the address before saving.');
   }
   async function upload(type: string) {
-    if (type === 'FSSAI_LICENSE') {
-      await save();
-    }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       throw inputError('Allow photo access to choose the document.');
@@ -491,13 +492,32 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
     return <>{fallback}</>;
   }
   if (existing && state?.application.status === 'APPROVED') {
+    const fssaiSaved = /^\d{14}$/.test(state.details?.fssaiNumber ?? '');
     return (
       <View style={styles.full}>
-        <PrimaryButton
-          variant="outline"
-          label="Continue updated onboarding"
-          onPress={() => setExisting(false)}
-        />
+        {state.submitted ? (
+          <View style={styles.notice}>
+            <Text style={styles.text}>
+              {fssaiSaved
+                ? 'Craves is verifying your FSSAI number. You can make your dishes live once it is verified.'
+                : 'Add your FSSAI number. Your dishes go live to customers once Craves has verified it. The government requires it for every food business.'}
+            </Text>
+            <PrimaryButton
+              variant="outline"
+              label={fssaiSaved ? 'Correct FSSAI number' : 'Add FSSAI number'}
+              onPress={() => {
+                setExisting(false);
+                setStep('fssai');
+              }}
+            />
+          </View>
+        ) : (
+          <PrimaryButton
+            variant="outline"
+            label="Continue updated onboarding"
+            onPress={() => setExisting(false)}
+          />
+        )}
         {fallback}
       </View>
     );
@@ -540,7 +560,7 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
         <Text style={styles.text}>
           Your progress is saved with your Craves account.
         </Text>
-        {state.application.status === 'APPROVED' ? (
+        {state.application.status === 'APPROVED' && !state.submitted ? (
           <>
             <Text style={styles.text}>
               Your existing Chef approval stays valid while you complete the
@@ -558,6 +578,7 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
         ) : null}
         {step === 'personal' ? (
           <>
+            <Text style={styles.text}>{fssaiLater}</Text>
             {input('firstName', 'First name')}
             {input('lastName', 'Last name')}
             {input('dateOfBirth', 'Date of birth (YYYY-MM-DD)', false, 10)}
@@ -637,8 +658,9 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
         {step === 'fssai' ? (
           <>
             <Text style={styles.text}>
+              Your dishes go live to customers once Craves has verified your
+              FSSAI number. The government requires it for every food business.
               If you do not have FSSAI yet, learn how to apply or request help.
-              Your next Chef entry returns here until this step is complete.
             </Text>
             <PrimaryButton
               variant={option === 'licence' ? 'primary' : 'outline'}
@@ -675,26 +697,14 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
                   true,
                   14,
                 )}
-                {file('FSSAI_LICENSE', 'FSSAI document')}
                 <PrimaryButton
-                  label="Save and continue"
+                  label="Save FSSAI number"
                   loading={busy}
                   onPress={() => {
                     work(async () => {
                       if (!/^\d{14}$/.test(details.fssaiNumber)) {
                         throw inputError(
                           'Enter the 14-digit FSSAI number to continue.',
-                        );
-                      }
-                      if (
-                        !state.documents.some(
-                          document =>
-                            document.documentType === 'FSSAI_LICENSE' &&
-                            document.status !== 'REJECTED',
-                        )
-                      ) {
-                        throw inputError(
-                          'Upload the FSSAI document or save progress for later.',
                         );
                       }
                       await save();
@@ -778,7 +788,6 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
                   loading={busy}
                   onPress={() => {
                     work(async () => {
-                      await save();
                       helpKey.current ??= requestId();
                       const result = await chefOnboardingApi.help(
                         helpKey.current,
@@ -794,18 +803,10 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
               </>
             ) : null}
             <PrimaryButton
-              variant="outline"
-              label="Save progress for later"
-              loading={busy}
-              onPress={() => {
-                work(async () => {
-                  await save();
-                  setStep('fssai');
-                  setMessage(
-                    'Progress saved. Continue from FSSAI on your next Chef entry.',
-                  );
-                }).catch(() => undefined);
-              }}
+              variant="ghost"
+              label="Back to Chef workspace"
+              disabled={busy}
+              onPress={() => setExisting(true)}
             />
           </>
         ) : null}
@@ -863,8 +864,9 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
               {details.firstName} {details.lastName} · {details.kitchenName}
             </Text>
             <Text style={styles.text}>
-              {proofLabel} · Two kitchen photos · FSSAI document
+              {proofLabel} · Two kitchen photos
             </Text>
+            <Text style={styles.text}>{fssaiLater}</Text>
             <PrimaryButton
               label="Submit for admin review"
               loading={busy}
@@ -909,6 +911,7 @@ export function ChefOnboardingGate({ fallback }: { fallback: ReactNode }) {
 }
 const styles = StyleSheet.create({
   full: { flex: 1 },
+  notice: { padding: spacing.md, backgroundColor: colors.white },
   group: { marginTop: spacing.md },
   label: { fontSize: 15, fontWeight: '700', color: colors.espressoBrown },
   title: { fontSize: 23, fontWeight: '700', color: colors.espressoBrown },

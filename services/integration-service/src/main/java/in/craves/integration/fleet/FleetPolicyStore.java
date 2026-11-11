@@ -49,7 +49,7 @@ public class FleetPolicyStore {
      */
     public static final List<String> DISPATCH_RULE_FIELDS = List.of("offers_at_once", "offer_rounds", "fair_band_m");
     public static final Map<String, List<Long>> DISPATCH_RULE_BOUNDS = Map.of("offers_at_once", List.of(1L, 3L),
-        "offer_rounds", List.of(1L, 5L), "fair_band_m", List.of(0L, 5000L));
+        "offer_rounds", List.of(0L, 5L), "fair_band_m", List.of(0L, 5000L));
     /**
      * The dispatch values Craves runs with, decided on 1 Nov 2026 (docs/riders/DISPATCH.md §2): 30 s to accept, a 120 s
      * fleet stage, within 5 km, then Borzo, then Pidge for 600 s; the pickup detour and cost guard as seeded. The console
@@ -444,10 +444,20 @@ public class FleetPolicyStore {
         public DispatchRules rules() {
             return new DispatchRules(offersAtOnce, offerRounds, fairBandM, rankByTravelTime);
         }
+
+        /**
+         * The owner's rule of 11 Nov 2026 (offerRounds 0, no limit): the order stays with Craves riders for the whole fleet
+         * stage. Riders are asked one after another, again once every rider in range has been, and only an accept ends the
+         * stage before its deadline: Borzo is never asked earlier. No cost guard: riders hear of every order.
+         */
+        public boolean wholeStage() {
+            return offerRounds == 0;
+        }
     }
 
     /**
-     * How orders are offered (Phase 4): how many riders see an order at once, how many rounds the fleet stage runs, and the
+     * How orders are offered (Phase 4): how many riders see an order at once, how many rounds the fleet stage runs (0: no
+     * limit, riders are asked again until it ends; DispatchPolicy.wholeStage), and the
      * fair band in metres (0: nearest first; above 0: among the free riders within it of the nearest, the one who has earned
      * least per online hour today goes first). byTravelTime (Phase 5): "nearest" is the soonest at the kitchen by the
      * travel-time model, when it is live and was judged to rank riders well (FleetEta.ranking); else the nearest by distance.

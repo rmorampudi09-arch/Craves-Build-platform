@@ -158,17 +158,21 @@ class FleetSetupDatabaseTest {
             live.version())).as("published versions never change").isInstanceOf(DataIntegrityViolationException.class);
     }
 
-    /** Decided 1 Nov 2026: the console sends only the mode, and every value and rule left out is the built-in one. */
+    /**
+     * Decided 1 Nov 2026: the console sends only the mode, and every value and rule left out is the built-in one. Since the
+     * owner's rule of 11 Nov 2026 that is 20 s to accept, one rider at a time, asked again for the whole 300 s fleet stage.
+     */
     @Test
     void aModeAloneGetsTheBuiltInDispatch() {
         DispatchPolicyVersion shadow = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             new DispatchPolicyInput("shadow", null, null, null, null, null, null, null, null)));
         assertThat(List.of(shadow.offerSeconds(), shadow.fleetStageSeconds(), shadow.radiusM(), shadow.pickupDetourPercent(),
-            shadow.pidgeStageSeconds())).containsExactly(30, 120, 5000, 130, 600);
-        assertThat(rules(shadow)).as("one rider at a time, up to 3 rounds, fair turns within 1.5 km").isEqualTo(DispatchRules.BUILT_IN);
+            shadow.pidgeStageSeconds())).containsExactly(20, 300, 5000, 130, 600);
+        assertThat(rules(shadow)).as("one rider at a time, no limit on rounds, fair turns within 1.5 km")
+            .isEqualTo(new DispatchRules(1, 0, 1500)).isEqualTo(DispatchRules.BUILT_IN);
         assertThat(tx(setup::setup).builtInDispatch()).isEqualTo(FleetAdminModels.BuiltInDispatch.current());
-        assertThat(FleetAdminModels.BuiltInDispatch.current().offerRounds() * FleetAdminModels.BuiltInDispatch.current().offerSeconds())
-            .as("every round gets its full time inside the fleet stage").isLessThanOrEqualTo(FleetAdminModels.BuiltInDispatch.current().fleetStageSeconds());
+        assertThat(FleetAdminModels.BuiltInDispatch.current().offerSeconds())
+            .as("a rider's full time to accept fits inside the fleet stage").isLessThanOrEqualTo(FleetAdminModels.BuiltInDispatch.current().fleetStageSeconds());
     }
 
     /**
@@ -192,23 +196,24 @@ class FleetSetupDatabaseTest {
         assertThat(rules(whole)).as("0 rounds: no limit, riders are asked again until the stage ends").isEqualTo(new DispatchRules(1, 0, 1500));
         DispatchPolicyVersion kept = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             offering("shadow", null, null, null, null)));
-        assertThat(rules(kept)).as("not sent: the built-in rules").isEqualTo(DispatchRules.BUILT_IN);
-        // 40 s for each of the 3 built-in rounds doesn't fit a 60 s fleet stage.
+        assertThat(rules(kept)).as("not sent: the built-in rules, with no limit on rounds").isEqualTo(DispatchRules.BUILT_IN)
+            .isEqualTo(new DispatchRules(1, 0, 1500));
+        // 40 s for each of 3 rounds doesn't fit a 60 s fleet stage.
         refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
-            new DispatchPolicyInput("shadow", 40, 60, 5000, 130, 500L, 1000L, 600, null)), 400, "VALIDATION_FAILED");
+            new DispatchPolicyInput("shadow", 40, 60, 5000, 130, 500L, 1000L, 600, null, 1, 3, 1500)), 400, "VALIDATION_FAILED");
 
         RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
         tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
         refused(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 3, 1, 0, null)), 422, "RULES_NEED_NOTICE");
         DispatchPolicyVersion stop = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
             new DispatchPolicyInput("off", null, null, null, null, null, null, null, null)));
-        assertThat(rules(stop)).as("the emergency stop needs no notice: it keeps the rules").isEqualTo(new DispatchRules(1, 3, 1500));
+        assertThat(rules(stop)).as("the emergency stop needs no notice: it keeps the rules").isEqualTo(new DispatchRules(1, 0, 1500));
         Instant notice = Instant.now().plus(15, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MICROS);
         tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(), offering("shadow", 3, 1, 0, notice)));
         TermsChange change = new FleetPolicyStore(fleet.db, json).nextTermsChange().orElseThrow();
         assertThat(change.at()).isEqualTo(notice);
         // The 2026-11-v2 lines (V184) are on the draft riders saw, and every version ops sets keeps them.
-        assertThat(change.rulesBefore()).isEqualTo(new DispatchRules(1, 3, 1500, false, true, true));
+        assertThat(change.rulesBefore()).isEqualTo(new DispatchRules(1, 0, 1500, false, true, true));
         assertThat(change.rulesAfter()).isEqualTo(new DispatchRules(3, 1, 0, false, true, true));
         assertThat(change.detourAfter()).isEqualTo(change.detourBefore());
 
@@ -423,8 +428,9 @@ class FleetSetupDatabaseTest {
     }
 
     /**
-     * Production before V185: a rate card in force; 2026-10-v5 in force (Shadow, the built-in values, 1 at once, 3 rounds,
-     * 1.5 km, neither 2026-11-v2 line); and V184's copy of it, 2026-11-v2, published by no one with both lines, in 14 days.
+     * Production as it was before V185, with today's built-in values: a rate card in force; 2026-10-v5 in force (Shadow, the
+     * built-in values, 1 at once, no limit on rounds, 1.5 km, neither 2026-11-v2 line); and V184's copy of it, 2026-11-v2,
+     * published by no one with both lines, in 14 days.
      */
     private void productionAfterV184() {
         fleet.db.execute("""
@@ -434,9 +440,9 @@ class FleetSetupDatabaseTest {
                 SELECT * INTO p FROM fleet_schema.dispatch_policy WHERE version = '2026-10-v1';
                 p.version := '2026-10-v5'; p.status := 'PUBLISHED'; p.mode := 'shadow';
                 p.published_at := now() - INTERVAL '1 day'; p.effective_from := p.published_at; p.created_at := p.published_at;
-                p.offer_seconds := 30; p.fleet_stage_seconds := 120; p.radius_m := 5000; p.per_order_overhead_paise := 500;
+                p.offer_seconds := 20; p.fleet_stage_seconds := 300; p.radius_m := 5000; p.per_order_overhead_paise := 500;
                 p.cost_guard_premium_paise := 1000; p.pidge_stage_seconds := 600;
-                p.pickup_detour_percent := 130; p.offers_at_once := 1; p.offer_rounds := 3; p.fair_band_m := 1500;
+                p.pickup_detour_percent := 130; p.offers_at_once := 1; p.offer_rounds := 0; p.fair_band_m := 1500;
                 p.rank_by_travel_time := false; p.joint_matching := false; p.next_order_offers := false;
                 INSERT INTO fleet_schema.dispatch_policy VALUES (p.*);
             END $$""");

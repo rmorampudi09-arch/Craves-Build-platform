@@ -90,6 +90,10 @@ class FleetRiderServiceTest {
         assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 3, 1500))).isEqualTo(fair);
         assertThat(FleetRiderService.offerRulesLine(new DispatchRules(2, 1, 1000))).isEqualTo("Among the free riders within 1 km of the "
             + "nearest, the 2 who have earned the least per online hour today hear at once, and the first to accept gets it. Declining is free.");
+        // No limit on rounds (0): the order stays with Craves riders, who are asked again.
+        assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 0, 1500))).isEqualTo("Among the free riders within 1.5 km of the "
+            + "nearest, the one who has earned the least per online hour today hears first, one rider at a time. If nobody accepts, riders "
+            + "are asked again until the order's time with Craves riders is up. Declining is free.");
 
         // Phase 5: ranked by travel time, "nearest" is the soonest at the kitchen, and the band is counted in minutes.
         assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 1, 0, true))).isEqualTo("The free rider who can reach the kitchen "

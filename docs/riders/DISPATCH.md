@@ -97,7 +97,7 @@ A new round starts soon after the last one is decided. While a policy runs round
 With rounds set to 0, the order stays with Craves riders for the whole time they get before Borzo (`DispatchPolicy.wholeStage`, `FleetDispatcher.nextRound`):
 
 - **Riders are asked in turn, and then again.** Once every rider in range has been asked, the same riders are asked again. Among the riders who may be asked, those asked the fewest times about this order hear first, so they take turns. A decline and an offer that ran out count the same, and neither changes anything for another order (§1).
-- **A phone rings for one order at most once per time to accept.** A rider who declined is asked again only when that time has passed since their last offer went out.
+- **Orders take turns with a rider, too.** A rider is asked about the same order again only 5 s (one check) after their time to accept has passed since that offer went out, whether they declined or let it run out. In those 5 s another order waiting for riders asks them. Without the gap, the order whose offer just ran out would ask the same rider again before any other order looked, and with more orders than riders the rest would never be offered to anyone. So with one order and one rider nearby, the rider hears of it every 25 s: 20 s to decide, then 5 s of quiet.
 - **With nobody to ask, the order waits for a rider.** One who comes online, or becomes free, hears of it at the next check (every 5 s).
 - **Only the end of that time sends the order on** to Borzo, then Pidge, then the ops queue. An offer still goes out only with its full time left, so in the last seconds nobody is asked.
 - **No cost guard.** No courier is asked for a quote, and every rider in range may hear of the order.

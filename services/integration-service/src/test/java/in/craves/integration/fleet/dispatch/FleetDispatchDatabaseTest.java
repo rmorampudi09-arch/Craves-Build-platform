@@ -548,8 +548,8 @@ class FleetDispatchDatabaseTest {
 
     /**
      * The owner's rule of 11 Nov 2026 (a policy with no limit on rounds): one rider at a time with 20 s each, the same riders
-     * again once all nearby were asked, never the same rider twice within 20 s, no cost guard, and only the deadline hands
-     * the order to Borzo.
+     * again once all nearby were asked, never the same rider about the same order within 25 s (their 20 s and one look more),
+     * no cost guard, and only the deadline hands the order to Borzo.
      */
     @Test
     void withNoLimitOnRoundsRidersAreAskedInTurnAgainAndAgainUntilTheStageEnds() {
@@ -578,23 +578,26 @@ class FleetDispatchDatabaseTest {
         assertThat(reason(second)).containsEntry("round", 2).containsEntry("atOnce", 1);
 
         fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", second);
-        assertThatThrownBy(() -> dispatcher.run(command, couriers, true)).as("both were asked in the last 20 s: the order waits")
+        assertThatThrownBy(() -> dispatcher.run(command, couriers, true)).as("both were asked in the last 25 s: the order waits")
             .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
         assertThat(activeOffers()).isEmpty();
         assertThat(stages()).as("riders keep the order").containsExactly("CRAVES_FLEET:OPEN:");
 
-        twentyOneSecondsPass(nearest);
+        secondsPass(21, nearest);
         assertThatThrownBy(() -> dispatcher.run(command, couriers, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
-        assertThat(activeOffers()).as("20 s after their first offer, the same rider is asked again").containsExactly(nearest);
+        assertThat(activeOffers()).as("their 20 s are over, but not the look that lets another order ask them").isEmpty();
+        secondsPass(5, nearest);
+        assertThatThrownBy(() -> dispatcher.run(command, couriers, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).as("26 s after their first offer, the same rider is asked again").containsExactly(nearest);
         assertThat(reason(nearest)).containsEntry("round", 3);
 
-        twentyOneSecondsPass(null);
+        secondsPass(26, null);
         assertThatThrownBy(() -> dispatcher.run(command, couriers, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
         assertThat(activeOffers()).as("asked once, so before the nearer rider who was asked twice").containsExactly(second);
-        twentyOneSecondsPass(null);
+        secondsPass(26, null);
         assertThatThrownBy(() -> dispatcher.run(command, couriers, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
         assertThat(activeOffers()).as("asked as often: nearest first").containsExactly(nearest);
-        twentyOneSecondsPass(null);
+        secondsPass(26, null);
         assertThatThrownBy(() -> dispatcher.run(command, couriers, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
         assertThat(activeOffers()).containsExactly(second);
         assertThat(reason(second)).as("no limit on rounds").containsEntry("round", 6);
@@ -633,7 +636,7 @@ class FleetDispatchDatabaseTest {
         assertThat(reason(late)).containsEntry("round", 1);
 
         fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", late);
-        twentyOneSecondsPass(null);
+        secondsPass(26, null);
         fleet.db.update("UPDATE fleet_schema.trip_stage SET deadline_at = now() + INTERVAL '15 seconds'");
         assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, false)).as("15 s left, 20 s to accept: nobody is asked, and it waits")
             .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
@@ -644,6 +647,39 @@ class FleetDispatchDatabaseTest {
         fleet.db.update("UPDATE fleet_schema.trip_stage SET opened_at = now() - INTERVAL '301 seconds', deadline_at = now() - INTERVAL '1 second'");
         assertThat(dispatcher.run(command, OptionalLong::empty, false)).isEmpty();
         assertThat(stages()).as("without Borzo, Pidge is next").containsExactly("CRAVES_FLEET:CLOSED:NO_ACCEPT", "PIDGE:OPEN:");
+    }
+
+    /**
+     * More orders than riders: a rider whose offer ran out is asked about the same order again only one look (5 s) later,
+     * so another order waiting for riders asks them first, and the orders take turns instead of one keeping the rider.
+     */
+    @Test
+    void withNoLimitOnRoundsOrdersWaitingForTheSameRiderTakeTurns() {
+        ridersFirst();
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID secondOrder = UUID.fromString("0bde0202-2222-4222-8222-222222222222");
+        FleetDispatchFixtures.kitchen(fleet.db, secondOrder, true);
+        DeliveryCommandMessage second = FleetDispatchFixtures.command(secondOrder);
+
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThatThrownBy(() -> dispatcher.run(second, OptionalLong::empty, true)).as("the only rider is deciding on the first order: it waits")
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(ordersOffered()).containsExactly(chefSubOrderId);
+
+        secondsPass(21, null);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).as("its offer ran out a second ago: not the same rider yet")
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(ordersOffered()).isEmpty();
+        assertThatThrownBy(() -> dispatcher.run(second, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(ordersOffered()).as("the order that was waiting asks the rider next").containsExactly(secondOrder);
+
+        secondsPass(21, null);
+        assertThatThrownBy(() -> dispatcher.run(second, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(ordersOffered()).as("and now the second order leaves the rider to the first").isEmpty();
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(ordersOffered()).containsExactly(chefSubOrderId);
+        assertThat(fleet.db.queryForObject("SELECT max(round) FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
+            + "WHERE t.chef_sub_order_id = ?", Integer.class, chefSubOrderId)).isEqualTo(2);
     }
 
     /** The emergency stop still works at once: with dispatch off, an order waiting for riders goes on to Borzo. */
@@ -935,11 +971,20 @@ class FleetDispatchDatabaseTest {
         FleetDispatchFixtures.policy(fleet.db, "live", 20, 300, 1, 0, 0);
     }
 
-    /** 21 s pass for the rider's offers (null: for every offer): an open one has run out, and its rider may be asked again. */
-    private void twentyOneSecondsPass(UUID rider) {
-        fleet.db.update("UPDATE fleet_schema.trip_offer SET offered_at = offered_at - INTERVAL '21 seconds', expires_at = expires_at - "
-            + "INTERVAL '21 seconds', decided_at = decided_at - INTERVAL '21 seconds' WHERE CAST(? AS uuid) IS NULL OR rider_id = CAST(? AS uuid)",
-            rider, rider);
+    /**
+     * Seconds pass for the rider's offers (null: for every offer). After 21 an open one has run out; after 26 its rider may
+     * be asked about the same order again.
+     */
+    private void secondsPass(int seconds, UUID rider) {
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET offered_at = offered_at - make_interval(secs => ?), expires_at = expires_at - "
+            + "make_interval(secs => ?), decided_at = decided_at - make_interval(secs => ?) WHERE CAST(? AS uuid) IS NULL "
+            + "OR rider_id = CAST(? AS uuid)", seconds, seconds, seconds, rider, rider);
+    }
+
+    /** The orders with an offer a rider is deciding on now. */
+    private List<UUID> ordersOffered() {
+        return fleet.db.queryForList("SELECT t.chef_sub_order_id FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
+            + "WHERE o.state = 'ACTIVE' AND o.expires_at > now()", UUID.class);
     }
 
     /** The order's stages in order, as provider:state:outcome. */

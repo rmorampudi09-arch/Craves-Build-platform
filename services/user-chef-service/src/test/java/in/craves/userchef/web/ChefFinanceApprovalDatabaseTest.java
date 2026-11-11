@@ -42,6 +42,9 @@ class ChefFinanceApprovalDatabaseTest {
         Flyway.configure().dataSource(data).defaultSchema("chef_finance_approval_test").schemas("chef_finance_approval_test")
             .locations("classpath:db/migration").target("1").load().migrate();
         jdbc=new JdbcTemplate(data);controller=new ChefFinanceApprovalController(jdbc,json,key);
+        // Only V1 runs here; these are the V14 draft columns the authority reads (the full flow is in ChefOnboardingDatabaseTest).
+        jdbc.execute("CREATE TABLE chef_onboarding_draft(identity_id UUID PRIMARY KEY,application_id UUID,details JSONB NOT NULL," +
+            "submitted BOOLEAN NOT NULL DEFAULT false,fssai_reviewed_number VARCHAR(14),fssai_reviewed_at TIMESTAMPTZ,created_at TIMESTAMPTZ NOT NULL DEFAULT now())");
     }
     UUID insert(String status,String state,Instant reviewed) {
         UUID chef=UUID.randomUUID();
@@ -66,6 +69,23 @@ class ChefFinanceApprovalDatabaseTest {
         assertTrue(ChefFinanceApprovalProtocol.matches(ChefFinanceApprovalProtocol.sign(key,"RESPONSE",
             response.getHeaders().getFirst(ChefFinanceApprovalProtocol.TIME),response.getBody()),
             response.getHeaders().getFirst(ChefFinanceApprovalProtocol.SIGNATURE)));
+    }
+    @Test void chefApprovedThroughTheCurrentApplicationSellsOnlyAfterFssaiIsVerified()throws Exception {
+        UUID chef=insert("APPROVED","Telangana",Instant.now().minusSeconds(60));
+        jdbc.update("INSERT INTO chef_onboarding_draft(identity_id,application_id,details,submitted,created_at) SELECT identity_id,id,'{}'::jsonb,true,now()-interval '1 day' FROM chef_application WHERE identity_id=?",chef);
+        assertTrue(json.readTree(controller.read(request(0)).getBody()).path("approvals").isEmpty(),"no FSSAI number yet");
+        jdbc.update("UPDATE chef_onboarding_draft SET details='{\"fssaiNumber\":\"12345678901234\"}'::jsonb WHERE identity_id=?",chef);
+        assertTrue(json.readTree(controller.read(request(0)).getBody()).path("approvals").isEmpty(),"saved, not verified");
+        jdbc.update("UPDATE chef_onboarding_draft SET fssai_reviewed_number='12345678901234',fssai_reviewed_at=now() WHERE identity_id=?",chef);
+        assertEquals(chef.toString(),json.readTree(controller.read(request(0)).getBody()).path("approvals").get(0).path("chefId").asText());
+        // An older Chef who starts the added details after approval keeps selling meanwhile.
+        UUID older=insert("APPROVED","Telangana",Instant.now().minusSeconds(3600));
+        jdbc.update("INSERT INTO chef_onboarding_draft(identity_id,application_id,details,submitted) SELECT identity_id,id,'{}'::jsonb,true FROM chef_application WHERE identity_id=?",older);
+        assertEquals(2,json.readTree(controller.read(request(0)).getBody()).path("approvals").size());
+        // Not submitted: the draft says nothing yet.
+        UUID drafting=insert("APPROVED","Telangana",Instant.now().minusSeconds(60));
+        jdbc.update("INSERT INTO chef_onboarding_draft(identity_id,application_id,details,submitted,created_at) SELECT identity_id,id,'{}'::jsonb,false,now()-interval '1 day' FROM chef_application WHERE identity_id=?",drafting);
+        assertEquals(3,json.readTree(controller.read(request(0)).getBody()).path("approvals").size());
     }
     @Test void legacyApprovedRowsUseTheRecordedUpdateAndRevocationIsImmediate()throws Exception {
         UUID chef=insert("APPROVED","TS",null);Instant recorded=Instant.now().minusSeconds(120).truncatedTo(ChronoUnit.MICROS);

@@ -40,7 +40,53 @@ Each service's resources (from the 30 Oct 2026 migration report):
 
 Two things every change to an app has to respect:
 - **Each app runs as its own user-assigned identity** (`id-craves-<feature>-prod`) and must name it in `AZURE_CLIENT_ID`. The services' Azure SDK (`DefaultAzureCredential`) needs that setting to reach Service Bus; without it, the call fails with "Unable to load the proper Managed Identity" and no event leaves the service. Order, integration and subscription ran without it from the move until 1 Nov 2026, so no order event reached Service Bus in that time.
+- **Guest support chat trusts the web server only once told to.** On `ca-craves-user-chef-prod`, set `CRAVES_SUPPORT_GUEST_FORWARDER_HEADER=X-Azure-SocketIP` and `CRAVES_SUPPORT_GUEST_FORWARDER_IPS=20.198.84.102` (the web app's outbound address above, same value as auth's `CRAVES_CENTRAL_OTP_FORWARDING_IPS`). Until then any caller that reaches the API directly can name its own `X-Craves-Visitor` and take the whole shared guest chat budget. The header without the list stops the service from starting; remove the header first. Like any setting change, it only takes effect once traffic is moved to the new revision (next bullet).
 - **Traffic is pinned to a named revision** (multiple-revision mode). A setting changed with `az containerapp update` makes a new revision that gets no traffic until it is moved to it (`docs/riders/GO-LIVE.md` §8).
+- **Rolling one app back** (handbook 108, added 10 Nov 2026): `bash scripts/release/rollback-revision.sh ca-craves-<feature>-prod [revision]` shows which revision takes all traffic now and which it would go back to (by default the newest older revision that is still active and Healthy); add `CONFIRM_ROLLBACK=true` to move all traffic there. It works only on subscription 34eefd95 and `rg-craves-<feature>-prod`, moves traffic only (no image, setting or revision changes, never activates a revision), refuses while traffic is split by a running canary, reads the result back and prints the command that undoes it. The old org's narrow `azure-pipelines-*-rollback.yml` pipelines still target the old resource group: do not run them.
+
+### Web and admin: answer only our Front Door (`X-Azure-FDID`)
+
+`ca-craves-web-prod` (craves.in, www) and `ca-craves-admin-prod` (admin.craves.in) run the same app, `apps/customer-web-next`, and accept Azure Front Door's shared address ranges. Any other company's Front Door profile could send traffic to them and skip our WAF. Our profile, `afd-craves-prod`, stamps every request with `X-Azure-FDID: 59117d14-1c4f-402e-a98b-0fa1009de276`, and Front Door overwrites any value a client sends, so the app can trust the header. The id is not a secret.
+
+The app checks the header first in `src/proxy.ts`, before anything else, in both the customer and the admin mode. Two settings control it, on each app:
+
+| Setting | Value |
+|---|---|
+| `CRAVES_FRONT_DOOR_ID` | `59117d14-1c4f-402e-a98b-0fa1009de276`. The header must equal it exactly; whitespace around the setting is ignored. |
+| `CRAVES_FRONT_DOOR_CHECK` | `off` (default), `report` or `enforce`, in lower case. Unset or any other value means off. |
+
+- **off:** every request is answered, as before.
+- **report:** a request whose header is missing or different is answered as before, and the app logs one line: `ORIGIN_CHECK_MISMATCH mode=report path=<path> hasFdid=<true|false>`. The line has no address, header value or query string.
+- **enforce:** such a request gets `403 Forbidden` with `Cache-Control: no-store`.
+- **A mode set but `CRAVES_FRONT_DOOR_ID` empty:** every request is answered (fail open, so a missing setting can never take the site down), and the app logs `ORIGIN_CHECK_MISCONFIGURED` once per process.
+- Static `_next/static`, `_next/image` and `favicon.ico` are not checked (the proxy's `matcher` skips them).
+
+The code ships switched off. The release template changes only the image and `CRAVES_BUILD_SHA`, so probes and these settings carry over to each release. Rollout, from Cloud Shell (not a pipeline), one app at a time, web first:
+
+1. Make a new revision with:
+   - the header `X-Azure-FDID: 59117d14-1c4f-402e-a98b-0fa1009de276` on the readiness probe, and on every other HTTP probe (startup, liveness) the app has. Under `enforce`, a probe without it gets 403: a failing readiness probe takes the revision out of service, and a failing liveness probe restarts it;
+   - `CRAVES_FRONT_DOOR_ID=59117d14-1c4f-402e-a98b-0fa1009de276` and `CRAVES_FRONT_DOOR_CHECK=report`.
+
+   Move traffic to it (previous bullet), then check craves.in, www and admin.craves.in.
+2. Leave it a day, then read the mismatch lines in `law-craves-prod` (`rg-craves-shared-prod` → Logs):
+
+   ```kusto
+   ContainerAppConsoleLogs_CL
+   | where TimeGenerated > ago(1d) and ContainerAppName_s in ("ca-craves-web-prod", "ca-craves-admin-prod") and Log_s has "ORIGIN_CHECK_"
+   | parse Log_s with * "path=" path " hasFdid=" hasFdid
+   | summarize count() by ContainerAppName_s, path, hasFdid
+   | order by count_ desc
+   ```
+
+   If they come only from scanners, make another revision with `CRAVES_FRONT_DOOR_CHECK=enforce` and move traffic to it. Do not enforce if you see any of these:
+   - any `ORIGIN_CHECK_MISCONFIGURED` line;
+   - a steady stream of `path=/ hasFdid=false`. Front Door's own health probe (`HEAD /` over HTTPS, `User-Agent: Edge Health Probe`) counts only `200` as healthy, and Microsoft does not document whether the probe carries `X-Azure-FDID`. If it does not, enforce would mark the origin unhealthy. With every origin unhealthy, Front Door still sends traffic to all of them, so the site stays up, but the origin health metric drops and its alerts fire. After enforcing, watch the origin health percentage of the web and admin origin groups;
+   - lines that match a release or monitoring job. The `release-web` and `release-admin` pipelines (Azure DevOps `ravitejamm6`) are not in this repo. If their canary health check calls the revision's own `*.azurecontainerapps.io` address without the header, every release would fail its health check and roll back under enforce.
+3. Under `enforce`:
+   - check craves.in, www, admin.craves.in and the availability tests;
+   - check that a request with a wrong `X-Azure-FDID`, sent straight to the container app's `*.azurecontainerapps.io` address, gets 403.
+
+To undo, make a revision with `CRAVES_FRONT_DOOR_CHECK=report` (or `off`) and move traffic to it, or move traffic back to the previous revision.
 
 ## Previous: subscription 721906c9 (idle since 29 Oct 2026, read only)
 

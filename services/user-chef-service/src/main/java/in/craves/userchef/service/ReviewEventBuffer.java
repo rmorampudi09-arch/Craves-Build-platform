@@ -27,7 +27,7 @@ public class ReviewEventBuffer {
             "IN_APP",
             "CHEF_" + "APPROVED_IN_APP",
             "Chef profile approved",
-            "Your Craves chef profile is approved. You can now publish your kitchen and menu.",
+            "Your Craves chef profile is approved. Set up your kitchen and menu. Your dishes go live once Craves has verified your FSSAI number.",
             "CHEF_APPLICATION",
             application.id(),
             Map.of("applicationId", application.id().toString())

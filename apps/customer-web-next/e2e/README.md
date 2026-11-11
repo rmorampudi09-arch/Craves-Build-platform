@@ -1,6 +1,6 @@
 # Chef journey E2E (Playwright)
 
-Regression suite for: new number → OTP → chef application (Basic details, Your kitchen, FSSAI, Identity, Review) → submit → pending → admin approval → chef app (Home, Orders, Menu, Earnings, More, money pages).
+Regression suite for: new number → OTP → chef application (Basic details, Your kitchen, Identity, Review; FSSAI is asked later, when a dish goes live) → submit → pending → admin approval → chef app (Home, Orders, Menu, Earnings, More, money pages).
 
 - `tests/` runs against a **production build** with every `/api` call served by `support/backend.ts` (a stateful fake built from craves.in responses). No backend, no OTP SMS, no flakiness from shared data. Unmocked calls fail the test.
 - `live/` is a **read-only** smoke test for craves.in after a release.

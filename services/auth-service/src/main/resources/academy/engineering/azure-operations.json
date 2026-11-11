@@ -1,0 +1,388 @@
+{
+  "course": {
+    "id": "azure-operations",
+    "service": "azure-production",
+    "title": "Running Craves in production: Azure, releases and recovery",
+    "level": "Advanced",
+    "minutes": 140,
+    "description": "Learn how production is laid out on Azure with one boundary per feature, how secrets and network paths are locked down, how a merge to main becomes a canary release with automatic rollback, how the live runtime lock stops a rebuild from removing live code, and how alerts, rollbacks and backups help the team recover calmly.",
+    "prerequisites": [
+      "platform-engineering"
+    ],
+    "sources": [
+      "services/auth-service/src/main/java/in/craves/auth/AuthServiceApplication.java",
+      "services/auth-service/src/main/java/in/craves/auth/LiveRuntimeLock.java",
+      "apps/customer-web-next/src/proxy.ts",
+      "apps/customer-web-next/src/shared/lib/front-door-origin.ts",
+      ".github/workflows/launch-regression-ci.yml",
+      ".github/workflows/advanced-features-smoke.yml",
+      "services/advanced-features-service/README.md",
+      "services/fleet-engine/README.md",
+      "services/fleet-engine/src/main/java/in/craves/fleetengine/EngineSettings.java",
+      "services/integration-service/src/main/java/in/craves/integration/delivery/command/BorzoPidgeHandoffWorker.java"
+    ],
+    "sourceRevision": "9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605",
+    "lessons": [
+      {
+        "id": "ops-feature-isolation",
+        "title": "Know the production map: one feature, one boundary",
+        "overview": "Since 29 October 2026 production runs in its own Azure subscription in Central India, built so that changing one service can never touch another. Each feature has its own resource group, Container Apps environment, managed identity and Key Vault; only things that are shared by nature live in a shared group. The repository's production environment runbook is the one place that names what is current, and a CI test fails if a retired name comes back. This lesson walks the map.",
+        "steps": [
+          {
+            "label": "Read the per-feature pattern",
+            "detail": "Auth, catalog, order, user-chef, notification, subscription, integration, referral, voice, web, admin and Delivery Intelligence each have a resource group named rg-craves-<feature>-prod with a container app ca-craves-<feature>-prod, their own identity and their own Key Vault. Advanced features follow the same pattern in a group of their own."
+          },
+          {
+            "label": "Know what is shared by nature",
+            "detail": "The shared group holds the container registry, the Service Bus topic for domain events, Redis, email, the API Management gateway, Front Door with its web application firewall, logging and the alert action group. The DNS zone for craves.in has its own locked group; the domain is registered at GoDaddy."
+          },
+          {
+            "label": "Know the databases",
+            "detail": "Auth, integration and referral have their own Postgres servers. Catalog, order, user-chef, notification and subscription share one business server because their code joins tables across schemas; splitting it is a code refactor, not an infrastructure change."
+          },
+          {
+            "label": "Know the app shape",
+            "detail": "Java services and web run on 1 vCPU and 2 GiB with at least 2 and at most 10 replicas, in Multiple revision mode, so a new revision can take part of the traffic while the old one keeps serving. Every resource group has a do-not-delete lock."
+          },
+          {
+            "label": "Keep the environment marker",
+            "detail": "CRAVES_ENVIRONMENT is kept as prodlow, exactly as before the move, because code reads it: the live runtime lock and checks such as the fleet engine's TLS requirement switch on when it starts with prod. Changing it would silently switch those protections off."
+          },
+          {
+            "label": "Trust one map",
+            "detail": "When documents disagree, the production environment runbook wins, and the old subscription is an idle, read-only fallback. Pipelines, scripts and people must use the current names; a test fails the build if a retired name appears again in the repository."
+          }
+        ],
+        "example": "A developer changes the voice gateway's settings. The change lands in the voice resource group, uses the voice identity and reads the voice Key Vault, so even a mistake cannot reach Auth's secrets or the business database. That is the reason for the per-feature layout: the blast radius of any change is one feature.",
+        "lab": "Read the production environment runbook in the repository and draw the map for three features: their resource group, container app, Key Vault and database. Mark which shared resources each one uses, and note which features share the business database and why.",
+        "pitfall": "Never put a new feature's resources in another feature's group or vault to save time; the isolation only works if every feature keeps its own boundary.",
+        "questions": [
+          {
+            "id": "ops-feature-isolation-q1",
+            "prompt": "Why does each feature have its own resource group, identity and Key Vault?",
+            "options": [
+              "To lower the bill",
+              "So a change to one service can never touch another",
+              "Because Azure requires it",
+              "For faster builds"
+            ],
+            "answer": 1,
+            "explanation": "The per-feature boundary limits the blast radius of any change."
+          },
+          {
+            "id": "ops-feature-isolation-q2",
+            "prompt": "Why do five services share one business database server?",
+            "options": [
+              "It is cheaper",
+              "Their code joins tables across schemas, so splitting needs a code refactor",
+              "Azure allows only one server",
+              "For backups"
+            ],
+            "answer": 1,
+            "explanation": "Cross-schema joins tie them together until the code changes."
+          },
+          {
+            "id": "ops-feature-isolation-q3",
+            "prompt": "Why must CRAVES_ENVIRONMENT stay prodlow?",
+            "options": [
+              "It names the region",
+              "Code reads it to switch on protections such as the live runtime lock",
+              "It sets the price tier",
+              "It is the database name"
+            ],
+            "answer": 1,
+            "explanation": "Protections switch on when the value starts with prod."
+          }
+        ]
+      },
+      {
+        "id": "ops-secrets-network",
+        "title": "Keep secrets in Key Vault and traffic on known paths",
+        "overview": "Production keeps secrets only in Key Vault and keeps traffic on known paths. Container apps read secrets through their own managed identity, every feature leaves Azure from its own fixed address, and each layer, from databases to app ingress to the gateway, accepts only the callers it expects. This lesson covers those layers, the web app's own Front Door check, and what the lockdown means for anyone who needs to look inside.",
+        "steps": [
+          {
+            "label": "Store secrets in Key Vault only",
+            "detail": "Secrets live only in each feature's Key Vault, and the container app references them through its user-assigned identity. Passwords for the new resources were regenerated during the move. Nobody pastes a secret into chat, code, a pipeline variable or a log, and scripts that copy secrets never print them."
+          },
+          {
+            "label": "Leave from a fixed address",
+            "detail": "Each feature's Container Apps environment sends outbound traffic through its own NAT gateway, so it has a stable outbound address. Third parties that allow-list Craves, such as payment, messaging and delivery providers, are given these addresses."
+          },
+          {
+            "label": "Restrict every layer",
+            "detail": "Postgres firewalls allow only the consuming features' outbound addresses. Storage and Key Vaults deny by default and allow only the right features. Container app ingress accepts only the gateway's outbound address and the features' addresses, plus Front Door's ranges for web, admin and Delivery Intelligence."
+          },
+          {
+            "label": "Make the gateway answer only Front Door",
+            "detail": "The API gateway's global policy refuses a request unless it carries our Front Door's id header or comes from one of our own outbound addresses. Calling the gateway's own hostname directly therefore gets 403, while api.craves.in works."
+          },
+          {
+            "label": "Check the Front Door id in the web app",
+            "detail": "The web and admin app can check the same header itself in proxy.ts, with CRAVES_FRONT_DOOR_CHECK set to off, report or enforce. Report logs ORIGIN_CHECK_MISMATCH without addresses or values; enforce answers 403. A mode set without the id fails open and logs ORIGIN_CHECK_MISCONFIGURED, so a missing setting can never take the site down."
+          },
+          {
+            "label": "Look inside without weakening it",
+            "detail": "Cloud Shell and laptops cannot reach the databases, Key Vaults or storage directly. Add your own address as a temporary rule, do the read, and remove the rule straight after; the resource group lock must be lifted briefly to delete a firewall rule and put back with the same notes. Pipelines check revision health instead of calling the app."
+          }
+        ],
+        "example": "Support needs to check one table in the auth database. An admin adds the Cloud Shell's address as a temporary firewall rule, runs one read-only query with the password read from Key Vault into a variable, then removes the rule and restores the lock, and the final firewall listing shows only the auth feature's own address again.",
+        "lab": "Read proxy.ts and front-door-origin.ts and write down, for each mode, what happens to a request with a missing header, a wrong header and the right header, and what is logged. Then list the probes that must send the header before enforce can be switched on, and why a missing probe header would take a revision out of service.",
+        "pitfall": "Never open a database, Key Vault or storage account to the internet to make a task easier; add your own address briefly and take it away again.",
+        "questions": [
+          {
+            "id": "ops-secrets-network-q1",
+            "prompt": "How do container apps read their secrets?",
+            "options": [
+              "From environment variables typed by hand",
+              "Through their managed identity from their own Key Vault",
+              "From the repository",
+              "From a shared file"
+            ],
+            "answer": 1,
+            "explanation": "Secrets live only in Key Vault and are referenced through each app's identity."
+          },
+          {
+            "id": "ops-secrets-network-q2",
+            "prompt": "What does the web app do in report mode when the Front Door header is wrong?",
+            "options": [
+              "Answers 403",
+              "Answers as before and logs ORIGIN_CHECK_MISMATCH",
+              "Restarts",
+              "Redirects to Front Door"
+            ],
+            "answer": 1,
+            "explanation": "Report observes first; only enforce refuses with 403."
+          },
+          {
+            "id": "ops-secrets-network-q3",
+            "prompt": "How should someone read a production database from Cloud Shell?",
+            "options": [
+              "Allow all addresses for a day",
+              "Add their own address as a temporary rule and remove it right after",
+              "Copy the database locally",
+              "Ask a third party"
+            ],
+            "answer": 1,
+            "explanation": "Temporary, narrow access keeps the lockdown intact."
+          }
+        ]
+      },
+      {
+        "id": "ops-release-canary",
+        "title": "Release from main with a canary and automatic rollback",
+        "overview": "In Craves, a merge to GitHub main is a production release. A mirror copies main to Azure DevOps, a pipeline per feature builds an image tagged with the commit, and the deploy stage gives the new revision a small share of traffic before all of it, putting traffic back on the previous revision if any check fails. There is no manual approval step, so the checks before merge and during the canary are what keep production safe. This lesson walks one release.",
+        "steps": [
+          {
+            "label": "Mirror main safely",
+            "detail": "Every 15 minutes a mirror job clones GitHub and fast-forward pushes to the Azure DevOps copy of the code. Nobody commits to the mirror, and a rewritten GitHub history makes the job fail loudly rather than overwrite anything."
+          },
+          {
+            "label": "Trigger only the changed feature",
+            "detail": "Each feature has a release pipeline triggered by changes under that feature's path. A change to the Auth service releases Auth and nothing else; a change to the web app releases web and admin."
+          },
+          {
+            "label": "Build once per commit",
+            "detail": "The build stage builds the image in the registry tagged with the first 12 characters of the commit, and skips the build when that tag already exists. Web and admin read their public build arguments from the live app, so a rebuild cannot change them by accident."
+          },
+          {
+            "label": "Roll out with a canary",
+            "detail": "The deploy stage creates a new revision with a suffix from the build id, waits for it to run and be healthy, sends 10 % of traffic for two minutes, then 100 %, and deactivates the old revision. Any failed check puts 100 % back on the old revision and deactivates the new one."
+          },
+          {
+            "label": "Change only the image",
+            "detail": "The deploy changes only the image and CRAVES_BUILD_SHA. Every other setting, probe and switch carries over, which is why a feature switched on by hand, such as Craves Academy, stays on through later releases."
+          },
+          {
+            "label": "Pass the gates before merge",
+            "detail": "Pull requests run the exact-commit launch regression, which builds and verifies the seven core Java services with their database suites and runs every web lint, type check, test and build, plus each feature's own CI. Never merge with a red required check, never skip CI, and for advanced features read the live smoke after the release."
+          }
+        ],
+        "example": "A fix to catalog-service merges at 10:02. The mirror copies it by 10:15, release-catalog builds the image, the new revision becomes healthy, takes 10 % for two minutes and then all traffic. The old revision is deactivated. Had the new revision failed its health check, traffic would have stayed on the old one with no action from anyone.",
+        "lab": "Read the launch regression workflow and list its jobs in order, with what each proves. Then write the timeline of a release for one feature from merge to 100 % traffic, naming each check and what happens if it fails. Do not trigger any pipeline for this exercise.",
+        "pitfall": "Never merge to main to try something out: main is production, and every merge is a release.",
+        "questions": [
+          {
+            "id": "ops-release-canary-q1",
+            "prompt": "What does a merge to GitHub main do?",
+            "options": [
+              "Nothing until someone approves",
+              "Starts a production release of the changed feature after mirroring",
+              "Only runs tests",
+              "Deploys every service"
+            ],
+            "answer": 1,
+            "explanation": "There is no approval gate; the mirror and the feature pipeline release it."
+          },
+          {
+            "id": "ops-release-canary-q2",
+            "prompt": "A new revision fails its health check during the canary. What happens?",
+            "options": [
+              "The release continues",
+              "Traffic goes back to the old revision and the new one is deactivated",
+              "Both revisions serve 50 %",
+              "The service stops"
+            ],
+            "answer": 1,
+            "explanation": "Automatic rollback puts all traffic back on the previous revision."
+          },
+          {
+            "id": "ops-release-canary-q3",
+            "prompt": "Why does a setting switched on by hand survive later releases?",
+            "options": [
+              "It is stored in Git",
+              "The deploy changes only the image and CRAVES_BUILD_SHA",
+              "Releases skip that app",
+              "It does not survive"
+            ],
+            "answer": 1,
+            "explanation": "Every other setting carries over to the new revision."
+          }
+        ]
+      },
+      {
+        "id": "ops-runtime-safety",
+        "title": "Never let a rebuild remove what production runs",
+        "overview": "In October a fix that production had been running was silently removed when a pipeline rebuilt the service from main, because the fix had never been merged to main. The live runtime lock exists so that this cannot happen again unnoticed: every Java service checks, before Spring and Flyway start, that its build contains every class production already relies on. This lesson reads LiveRuntimeLock and the habits that go with it.",
+        "steps": [
+          {
+            "label": "Run the check first",
+            "detail": "Each Java service calls LiveRuntimeLock.verify() as the first line of main, before Spring starts and before Flyway touches the database. When CRAVES_ENVIRONMENT starts with prod, it reads live-runtime-lock.txt and checks that every listed class is present in the build."
+          },
+          {
+            "label": "Fail safely",
+            "detail": "If a class is missing, the service throws LIVE_RUNTIME_LOCK and never starts. The database is untouched, the new revision never becomes ready, and the running revision keeps serving, so the mistake costs a failed release, not an outage or lost data."
+          },
+          {
+            "label": "Keep the list honest in CI",
+            "detail": "A launch test fails if a service skips the check, a controller is not listed, a listed class disappears, or an entry marked live-only is now on main. Adding a controller therefore means adding it to the lock file in the same pull request."
+          },
+          {
+            "label": "Know the limits",
+            "detail": "The lock checks classes, not behaviour: a changed method inside a listed class passes. It also cannot stop someone redeploying an old image or editing settings in the portal. Code review, tests and the canary cover what the lock cannot."
+          },
+          {
+            "label": "Validate settings at startup",
+            "detail": "Services refuse bad settings before taking traffic. The fleet engine's EngineSettings stops the start with every problem named and requires a TLS Redis address when the environment starts with prod; the advanced service fails on invalid module ids. A refused start is far cheaper than a half-working service."
+          },
+          {
+            "label": "Make manual changes like a release",
+            "detail": "When a setting must change by hand, make a new revision with only that setting, keep the old revision active at 0 % for rollback, send a small share of traffic first, check health and logs, then move all traffic. Record what was done in the project notes so the next person knows."
+          }
+        ],
+        "example": "A developer rebuilds integration-service from an old branch that lacks the delivery exceptions controller. In production the new revision throws LIVE_RUNTIME_LOCK naming the missing class and never becomes ready; the running revision keeps serving, and the pipeline's health check rolls the release back.",
+        "lab": "Run the live runtime lock test locally with Python from the repository root and read what it checks. Then, on a scratch branch, remove one controller from a lock file and run the test again to see it fail. Discard the branch.",
+        "pitfall": "Never fix a lock failure by deleting the entry: the failure means the build is missing code production runs, and the fix is to restore that code.",
+        "questions": [
+          {
+            "id": "ops-runtime-safety-q1",
+            "prompt": "When does the live runtime lock run?",
+            "options": [
+              "After Spring starts",
+              "First in main, before Spring and Flyway",
+              "Only in CI",
+              "Once a day"
+            ],
+            "answer": 1,
+            "explanation": "Running first keeps the database untouched when the check fails."
+          },
+          {
+            "id": "ops-runtime-safety-q2",
+            "prompt": "A production build lacks a class listed in the lock file. What happens?",
+            "options": [
+              "It starts with a warning",
+              "It refuses to start; the running revision keeps serving",
+              "It deletes the entry",
+              "It rolls the database back"
+            ],
+            "answer": 1,
+            "explanation": "The new revision never becomes ready, so nothing breaks for users."
+          },
+          {
+            "id": "ops-runtime-safety-q3",
+            "prompt": "What can the lock not detect?",
+            "options": [
+              "A missing controller class",
+              "A changed behaviour inside a listed class",
+              "A missing lock file",
+              "A skipped check"
+            ],
+            "answer": 1,
+            "explanation": "It checks that classes exist, not how they behave."
+          }
+        ]
+      },
+      {
+        "id": "ops-alerts-recovery",
+        "title": "See problems early and recover calmly",
+        "overview": "Good operations means hearing about a problem from an alert rather than from a customer, and having a rehearsed way back. Production has metric alerts, availability tests and log-based alert codes; Container Apps revisions make rollback a traffic change; and databases and storage have backups and soft delete. This lesson covers each, and how to write up an incident so the next one is shorter.",
+        "steps": [
+          {
+            "label": "Know the metric alerts",
+            "detail": "Alerts watch each container app for restarts, 5xx errors and replicas dropping below one, each Postgres server for CPU, storage and connections, Front Door for 5xx rate and origin health, the gateway for capacity, and Service Bus for dead letters. They email the owner through one action group."
+          },
+          {
+            "label": "Know the availability tests",
+            "detail": "Availability tests call craves.in, api.craves.in and admin.craves.in from five locations with a certificate check. A failing test means real users outside Azure cannot reach the site, whatever the internal health says."
+          },
+          {
+            "label": "Use alert codes in logs",
+            "detail": "Code logs CRAVES_ALERT lines for conditions that need a person, such as DELIVERY_HANDOFF_NO_COURIER in the Borzo-to-Pidge worker or FLEET_ETA_MODEL_MISSING in dispatch. They page someone only once the matching alert rules are deployed in the production subscription; until then, search for them in Log Analytics, which keeps 365 days."
+          },
+          {
+            "label": "Roll back with traffic",
+            "detail": "Because revisions run side by side, the fastest rollback is moving traffic weights back to the previous revision, which takes effect in seconds. Pipelines do this automatically on a failed check; by hand, keep the previous revision active until the new one has proved itself."
+          },
+          {
+            "label": "Know the data safety nets",
+            "detail": "Postgres keeps 35 days of geo-redundant backups, and read replicas run in Southeast Asia; promoting one in a disaster is a manual step, and the apps would also need redeploying in that region. Blob storage has 30 days of soft delete and versioning."
+          },
+          {
+            "label": "Write the incident down",
+            "detail": "After an incident, record the timeline, the cause in the code, the fix and what was deliberately not built, as the 14 October handoff write-up does. Prefer running a reviewed script from main over typing ad-hoc commands, so the fix itself can be reviewed and repeated."
+          }
+        ],
+        "example": "At 1:10 pm the restart alert fires for ca-craves-order-prod after a release. The on-call admin sees the new revision restarting, moves 100 % of traffic back to the previous revision, which takes effect at once, and opens the logs. The cause is a missing setting; it is fixed with a new revision, and the write-up records the timeline and the gap.",
+        "lab": "List the alerts that would fire, in order, if the business database ran out of connections during lunch, and what each person should check first. Then write a one-page incident template with timeline, impact, cause in code, fix, follow-ups and what was not built on purpose.",
+        "pitfall": "Never try a fix directly on the only serving revision during an incident: move traffic back first, then fix calmly on a new revision.",
+        "questions": [
+          {
+            "id": "ops-alerts-recovery-q1",
+            "prompt": "What is the fastest way to roll back a bad release?",
+            "options": [
+              "Rebuild from an old branch",
+              "Move traffic weights back to the previous revision",
+              "Restore a database backup",
+              "Delete the app"
+            ],
+            "answer": 1,
+            "explanation": "Revisions run side by side, so a traffic change takes effect in seconds."
+          },
+          {
+            "id": "ops-alerts-recovery-q2",
+            "prompt": "When does a CRAVES_ALERT log line page someone?",
+            "options": [
+              "Always",
+              "Only once the matching alert rules are deployed in the production subscription",
+              "Only on weekends",
+              "Never"
+            ],
+            "answer": 1,
+            "explanation": "Until the rules are deployed, the codes are searchable log lines."
+          },
+          {
+            "id": "ops-alerts-recovery-q3",
+            "prompt": "What does a failing availability test tell you?",
+            "options": [
+              "The database is slow",
+              "Real users outside Azure cannot reach the site, whatever internal health says",
+              "A pipeline failed",
+              "Nothing important"
+            ],
+            "answer": 1,
+            "explanation": "Availability tests call the public hostnames from several locations."
+          }
+        ]
+      }
+    ]
+  }
+}

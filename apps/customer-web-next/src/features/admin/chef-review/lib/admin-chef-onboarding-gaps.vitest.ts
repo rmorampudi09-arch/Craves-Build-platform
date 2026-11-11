@@ -82,13 +82,13 @@ describe("Admin approval explains what is still needed", () => {
     });
   }
 
-  it("keeps approval blocked until FSSAI is recorded and says so", async () => {
+  it("approves without FSSAI, which the Chef adds before a dish goes live", async () => {
     reviewFixtures(false);
     render(createElement(AdminChefReviewDetails, { applicationId: APP, onboardingV2Enabled: true }));
-    expect(await screen.findByText(/Needed: FSSAI number checked/)).toBeTruthy();
-    expect(screen.getByText("Done: Every required document approved (3/3)")).toBeTruthy();
+    expect(await screen.findByText("Done: Every required document approved (3/3)")).toBeTruthy();
     expect(screen.getByText("Done: Chef has submitted the application")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Approve Chef application" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText(/FSSAI number checked/)).toBeNull();
+    expect((screen.getByRole("button", { name: "Approve Chef application" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText(/FSSAI callback: SUP-1001 · OPEN/)).toBeTruthy();
   });
 

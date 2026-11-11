@@ -1,8 +1,8 @@
-/** A pill in a filter row; `on` while its filter or sort is applied. */
+/** A pill in a filter row; `on` while its filter or sort is applied: Craves red tint, 4.9:1 text. */
 export const filterPillClass = (on: boolean) =>
-  `inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full !border px-3.5 text-[0.8125rem] font-bold !shadow-none transition-[background-color,border-color,scale] duration-(--dur-micro) active:scale-[0.97] ${
+  `inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full !border px-3.5 text-[0.8125rem] font-bold !shadow-none transition-[background-color,border-color,color,scale] duration-(--dur-micro) active:scale-[0.97] ${
     on
-      ? "!border-[#1A1A1A] !bg-[#F1F3F5] !text-[#1A1A1A]"
+      ? "!border-[#C92716] !bg-[#FDEAE8] !text-[#C92716]"
       : "!border-[#E5E7EB] !bg-white !text-[#1A1A1A] hover:!bg-[#F1F3F5]"
   }`;
 

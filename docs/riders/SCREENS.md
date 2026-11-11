@@ -259,6 +259,8 @@ your area", and outline-compact "Check again". The reason card and "Disagree?" a
 
 ## 3. Terms and rate card — `03-Terms.png` (390 × 1180)
 
+**Removed from the app in 1.3.4:** nothing on this screen; the guarantee line below comes from the server and goes with its own change.
+
 **Header:** variant A. Title "Terms and rate card", chip neutral "Offline". No tab bar.
 
 A rider accepting terms for the first time was just approved, so a success banner heads the screen: bold "You're
@@ -315,6 +317,8 @@ approved", then "One last step before your first order: read how you are paid, t
 
 ## 5. Home, offline — `05-HomeOffline.png` (390 × 844)
 
+**Removed from the app in 1.3.4:** the slot card and its guarantee banner.
+
 **Header:** variant A. Title "Hi, Ravi" (first name), chip neutral "Offline". Tab bar, Home active.
 
 1. **Warning banner** (y 86–173):
@@ -356,6 +360,8 @@ This is the camera screen with the explainer copy on it. Full-bleed dark: backgr
    - Accessibility label: "Take selfie".
 
 ## 7. Home, online — `07-HomeOnline.png` (390 × 844)
+
+**Removed from the app in 1.3.4:** "Slot ends", the paid-waiting banners and the rest point card.
 
 **Header:** variant A. Title "Hi, Ravi", chip live "Online · waiting for orders". Tab bar, Home active.
 
@@ -588,6 +594,8 @@ No header, no SOS, no tab bar. Full-screen card that rings; 40 s total, shown at
 
 ## 18. SOS — `18-Sos.png` (390 × 844)
 
+**Removed from the app in 1.3.4:** the last sentence, about booked slots paid while recovering.
+
 No header, no tab bar.
 
 1. "Emergency" 30/700 `colors.error`, top ≈ 36.
@@ -702,6 +710,8 @@ If the notice changed while the rider read it, an alert says "The notice changed
 ---
 
 ## 23. Phase 4 additions (no PNG)
+
+**Removed from the app in 1.3.4:** the break note about the slot guarantee.
 
 Built with the shared pieces above. The copy is in `strings/en.ts`, with Telugu and Hindi waiting for review. The rules behind it are in `DISPATCH.md`.
 

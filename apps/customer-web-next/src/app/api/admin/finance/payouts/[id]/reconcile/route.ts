@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { isSameOrigin } from "@/shared/lib/request-security";
 import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 import { payoutReconcileRequestSchema, payoutReconcileResponseSchema } from "@/features/admin/finance/lib/finance-reconciliation-contract";
@@ -13,10 +14,11 @@ export async function POST(request: NextRequest, context: Context) {
   const {id} = await context.params;
   if (!z.string().uuid().safeParse(id).success) return fail(400, "INVALID_PAYOUT_INSTRUCTION");
   if (!request.headers.get("content-type")?.startsWith("application/json")) return fail(415, "JSON_REQUIRED");
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > 8192) return fail(413, "REQUEST_TOO_LARGE");
+  // Runs before the session is checked, so read the body like every other BFF write: bounded, timed, slot-counted.
+  const bounded = await boundBffRequest(request, {maxBytes: 8192});
+  if (bounded instanceof NextResponse) return bounded;
   let parsed;
-  try {parsed = payoutReconcileRequestSchema.safeParse(JSON.parse(raw));}
+  try {parsed = payoutReconcileRequestSchema.safeParse(JSON.parse(await bounded.text()));}
   catch {return fail(400, "INVALID_RECONCILIATION_REQUEST");}
   if (!parsed.success) return fail(400, "INVALID_RECONCILIATION_REQUEST");
   try {

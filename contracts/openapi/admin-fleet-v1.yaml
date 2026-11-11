@@ -1859,7 +1859,7 @@ components:
         pilotKitchens: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/PilotKitchen' } }
         builtInDispatch: { $ref: '#/components/schemas/BuiltInDispatch' }
     BuiltInDispatch:
-      description: "How Craves dispatches (decided 1 Nov 2026): one rider at a time, 30 s to accept, up to 3 rounds, fair turns within 1.5 km, within 5 km, Borzo after 120 s, then Pidge for 600 s. A version saved without a value gets it from here; the console shows these read-only."
+      description: "How Craves dispatches (the owner's rule of 11 Nov 2026): one rider at a time, 20 s to accept, no limit on rounds (offerRounds 0: riders are asked again), fair turns within 1.5 km, within 5 km, Borzo after 300 s, then Pidge for 600 s. A version saved without a value gets it from here; the console shows these read-only."
       allOf:
         - { $ref: '#/components/schemas/DispatchPolicyValues' }
         - { $ref: '#/components/schemas/OfferRulesValues' }

@@ -173,16 +173,6 @@ public class PromotionsService implements PersonalDataContributor {
         return repository.redemption(redemptionId, false).orElseThrow();
     }
 
-    /** M24a: the funding and per-person limit of a person's redemption, read by order-service at checkout. */
-    @Transactional(readOnly = true)
-    public PromotionsInternalController.InternalRedemptionTerms checkoutTerms(UUID person, UUID redemptionId) {
-        notErased(person);
-        PromotionRedemption redemption = own(person, redemptionId, false);
-        Promotion promotion = repository.promotion(redemption.promotionId(), false).orElseThrow();
-        return new PromotionsInternalController.InternalRedemptionTerms(redemption.id(), redemption.promotionId(), redemption.discountPaise(),
-                redemption.status(), promotion.terms().fundedBy(), promotion.terms().perPersonLimit());
-    }
-
     /**
      * M24a: order-service gives the discount back when payment fails or lapses, or the order is cancelled before fulfilment.
      * A confirmed redemption is released only for the order it was confirmed with. Repeating it is harmless.

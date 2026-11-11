@@ -8,13 +8,11 @@ import java.util.UUID;
 import org.springframework.core.env.Environment;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -29,10 +27,6 @@ public class PromotionsInternalController {
 
     public record InternalRedemptionRelease(@NotNull UUID personId, UUID orderId) { }
 
-    /** What order-service checks before keeping a reservation at checkout: who funds it and the per-person limit. */
-    public record InternalRedemptionTerms(UUID id, UUID promotionId, long discountPaise, PromotionsDtos.RedemptionStatus status,
-                                          PromotionsDtos.FundedBy fundedBy, int perPersonLimit) { }
-
     private final PromotionsService service;
     private final ModuleRuntime runtime;
     private final Environment environment;
@@ -41,14 +35,6 @@ public class PromotionsInternalController {
         this.service = service;
         this.runtime = runtime;
         this.environment = environment;
-    }
-
-    @GetMapping("/checkout-terms")
-    public ResponseEntity<InternalRedemptionTerms> checkoutPromotionRedemptionTerms(
-            @RequestHeader(value = InternalSecret.HEADER, required = false) String secret, @PathVariable UUID redemptionId,
-            @RequestParam UUID personId) {
-        ready(secret);
-        return reply(service.checkoutTerms(personId, redemptionId));
     }
 
     @PostMapping("/confirm")

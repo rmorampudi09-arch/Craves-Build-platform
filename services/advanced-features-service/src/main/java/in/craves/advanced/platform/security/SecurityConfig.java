@@ -48,6 +48,7 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.POST, "/internal/v1/account-erasure/**").permitAll();
                     // M24a: PromotionsInternalController checks the shared secret itself.
                     auth.requestMatchers(HttpMethod.POST, "/internal/v1/promotions/redemptions/*/confirm", "/internal/v1/promotions/redemptions/*/release").permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/internal/v1/promotions/redemptions/*/checkout-terms").permitAll();
                     auth.requestMatchers("/api/v1/**").authenticated();
                     auth.anyRequest().denyAll();
                 })

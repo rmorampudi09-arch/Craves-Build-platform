@@ -20,6 +20,7 @@ public class WorkerSchedulingConfiguration {
     public static final String PAYMENT_SCHEDULER = "paymentScheduler";
     public static final String PAYOUT_SCHEDULER = "payoutScheduler";
     public static final String FINANCE_SCHEDULER = "financeScheduler";
+    public static final String COMPANY_SHARE_SCHEDULER = "companyShareScheduler";
 
     // Declaring any scheduler makes Spring Boot back off its default one, so keep it for jobs added later.
     @Bean(name = "taskScheduler")
@@ -66,6 +67,12 @@ public class WorkerSchedulingConfiguration {
     @Bean(name = FINANCE_SCHEDULER)
     ThreadPoolTaskScheduler financeScheduler() {
         return pool("finance-", 1);
+    }
+
+    // M24d: company-share refund credits call the advanced service, so a slow answer stalls nothing else.
+    @Bean(name = COMPANY_SHARE_SCHEDULER)
+    ThreadPoolTaskScheduler companyShareScheduler() {
+        return pool("company-share-", 1);
     }
 
     // CH-04: the watchdog and alert monitors get a plain pool of their own, so a stalled worker cannot silence them.

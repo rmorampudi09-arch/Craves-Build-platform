@@ -29,6 +29,9 @@ public class OrderFinancialFinalizationService {
     private in.craves.integration.referrals.checkout.ReferralCheckoutFundingService referralFunding;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     public void setReferralFunding(in.craves.integration.referrals.checkout.ReferralCheckoutFundingService service){this.referralFunding=service;}
+    private in.craves.integration.corporatemeals.CompanyShareCheckoutFundingService companyShareFunding;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    public void setCompanyShareFunding(in.craves.integration.corporatemeals.CompanyShareCheckoutFundingService service){this.companyShareFunding=service;}
     private final JdbcTemplate jdbc;private final ObjectMapper json;private final LedgerPostingService ledger;private final ChefPayoutService payouts;private final boolean enabled;
     public OrderFinancialFinalizationService(JdbcTemplate jdbc,ObjectMapper json,LedgerPostingService ledger,ChefPayoutService payouts,
         @Value("${CRAVES_FINANCE_FINALIZATION_ENABLED:false}") boolean enabled){this.jdbc=jdbc;this.json=json;this.ledger=ledger;this.payouts=payouts;this.enabled=enabled;}
@@ -81,6 +84,8 @@ public class OrderFinancialFinalizationService {
         var rows=jdbc.queryForList("SELECT s.payload::text FROM payment_schema.finance_order_binding b JOIN payment_schema.finance_issued_snapshot s ON s.id=b.snapshot_id WHERE b.chef_order_id=?",order);
         if(rows.isEmpty())return new Receipt(order,"NO_BINDING",null);
         JsonNode snapshot=parse(rows.getFirst().get("payload").toString());UUID chef=id(snapshot,"chefIdentityId"),checkout=id(snapshot,"checkoutId");
+        // M24d: ask order-service about a company share before taking the capture locks (the answer is remembered once CONFIRMED).
+        if(companyShareFunding!=null)companyShareFunding.confirmedForCheckout(checkout);
         lock("chef-payout/"+chef);lock("finance-source/"+order);
         var binding=jdbc.queryForMap("SELECT * FROM payment_schema.finance_order_binding WHERE chef_order_id=? FOR UPDATE",order);
         if("REVIEW_REQUIRED".equals(binding.get("state")))return new Receipt(order,"SOURCE_REVIEW_REQUIRED",(UUID)binding.get("earning_journal_id"));
@@ -148,6 +153,12 @@ public class OrderFinancialFinalizationService {
         var existing=jdbc.queryForList("SELECT * FROM payment_schema.finance_capture WHERE checkout_id=?",checkout);
         if(!existing.isEmpty()) {
             var prior=existing.getFirst();if(!payment.get("id").equals(prior.get("payment_order_id")) || !ref.equals(prior.get("provider_payment_id")))return null;return prior;
+        }
+        // M24d slice 3b-2: the company's share becomes a receivable only once order-service confirmed it in M10 for this checkout.
+        if(!companyShare.isEmpty() && (companyShareFunding==null || !companyShareFunding.confirmedForCheckout(checkout,false))) {
+            if(Boolean.TRUE.equals(jdbc.queryForObject("SELECT created_at<now()-interval '24 hours' FROM payment_schema.company_share_checkout_funding WHERE checkout_id=?",Boolean.class,checkout)))
+                org.slf4j.LoggerFactory.getLogger(OrderFinancialFinalizationService.class).warn("CRAVES_ALERT alert=COMPANY_SHARE_CAPTURE_WAITING checkoutId={} (company share not confirmed for 24 h: staff resolve the M10 charge)",checkout);
+            return null;
         }
         String key="checkout/"+checkout+"/verified-capture/v1";UUID paymentId=(UUID)payment.get("id");
         var lines=new ArrayList<LedgerJournal.Line>();lines.add(new LedgerJournal.Line("GATEWAY_CLEARING","INR",LedgerMoney.text(collected),"0.00",null,null,null,paymentId,null,null));

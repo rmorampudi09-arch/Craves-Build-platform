@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
-  Activity, BarChart3, Bike, CalendarClock, Route, ScanFace, Wallet, Users, PackageSearch, ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
+  Activity, BarChart3, Bike, Route, ScanFace, Wallet, Users, PackageSearch, ArrowRight, BellRing, ChefHat, CircleUserRound, ClipboardList, Gauge, GraduationCap,
   LayoutDashboard, LifeBuoy, LogOut, Menu, ReceiptText, Search, SearchCheck, ShieldCheck, SlidersHorizontal, Truck, X
 } from "lucide-react";
 import { observeAdminSession, logoutAdminSession } from "@/features/admin/shell/lib/admin-renewal";
@@ -23,7 +23,7 @@ const icons = {
   delivery: Truck, chefs: ChefHat, accounts: ShieldCheck, finance: ReceiptText,
   plans: ReceiptText, subscriptions: ClipboardList, capacity: Gauge,
   notifications: BellRing, academy: GraduationCap,
-  riders: Bike, "fleet-trips": Route, "fleet-slots": CalendarClock, "fleet-setup": SlidersHorizontal, "fleet-health": Activity, "fleet-support": LifeBuoy, "fleet-payouts": Wallet, "fleet-selfies": ScanFace
+  riders: Bike, "fleet-trips": Route, "fleet-banner": BellRing, "fleet-setup": SlidersHorizontal, "fleet-health": Activity, "fleet-support": LifeBuoy, "fleet-payouts": Wallet, "fleet-selfies": ScanFace
 };
 
 function Navigation({ pathname, close }: { pathname: string; close?: () => void }) {

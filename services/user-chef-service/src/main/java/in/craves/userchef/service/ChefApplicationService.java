@@ -226,7 +226,7 @@ public class ChefApplicationService {
         }
         // An erased application can not be acted on (every review action is 409), so it never waits in the pending queue.
         String notErased = status == ChefApplicationStatus.PENDING ? " AND erased_at IS NULL" : "";
-        return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND (d.fssai_reviewed_at IS NULL OR d.fssai_reviewed_number IS DISTINCT FROM d.details->>'fssaiNumber' OR EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.removed_at IS NULL AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED'))))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))" + notErased, status.name(), status.name());
+        return findApplications("WHERE (status = ? OR (? = 'PENDING' AND status = 'APPROVED' AND EXISTS(SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=true AND ((d.details->>'fssaiNumber' IS NOT NULL AND d.fssai_reviewed_number IS DISTINCT FROM d.details->>'fssaiNumber') OR EXISTS(SELECT 1 FROM chef_kyc_document k WHERE k.application_id=chef_application.id AND k.removed_at IS NULL AND k.document_type IN ('SELECTED_PROOF_FRONT','SELECTED_PROOF_BACK','KITCHEN_PHOTO_1','KITCHEN_PHOTO_2','FSSAI_LICENSE') AND k.status <> 'APPROVED'))))) AND (status = 'APPROVED' OR NOT EXISTS (SELECT 1 FROM chef_onboarding_draft d WHERE d.application_id=chef_application.id AND d.submitted=false))" + notErased, status.name(), status.name());
     }
 
     @Transactional(readOnly = true)
@@ -285,8 +285,6 @@ public class ChefApplicationService {
 
     private void requireCompleteApplicationDocuments(UUID applicationId) {
         Set<KycDocumentType> required = requiredApplicationDocuments(applicationId, true);
-        if(hasOnboardingDraft(applicationId) && !onboardingFssaiVerified(applicationId))
-            throw ApiException.conflict("FSSAI_VERIFICATION_REQUIRED","Review and record the current FSSAI registration number before approving this application.");
         List<KycDocumentResponse> evidence = listApplicationEvidence(applicationId);
         Set<KycDocumentType> uploaded = evidence.stream()
             .map(KycDocumentResponse::documentType)
@@ -335,8 +333,7 @@ public class ChefApplicationService {
             return REQUIRED_APPLICATION_DOCUMENTS;
         }
         var metadata = rows.getFirst();
-        if (approving && (!metadata.submitted() || metadata.proof() == null ||
-            metadata.fssai() == null || !metadata.fssai().matches("[0-9]{14}")))
+        if (approving && (!metadata.submitted() || metadata.proof() == null))
             throw ApiException.conflict("ONBOARDING_INCOMPLETE", "The Chef must complete and submit the saved onboarding application.");
         if (metadata.proof() == null)
             return Set.of(KycDocumentType.KITCHEN_PHOTO_1, KycDocumentType.KITCHEN_PHOTO_2, KycDocumentType.FSSAI_LICENSE);
@@ -348,10 +345,6 @@ public class ChefApplicationService {
         } catch (IllegalArgumentException ex) {
             throw ApiException.conflict("ONBOARDING_STATE_INVALID", "The saved Chef document choice is invalid.");
         }
-    }
-
-    public boolean onboardingFssaiVerified(UUID applicationId) {
-        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("SELECT EXISTS(SELECT 1 FROM chef_onboarding_draft WHERE application_id=? AND fssai_reviewed_number=details->>'fssaiNumber' AND fssai_reviewed_at IS NOT NULL)",Boolean.class,applicationId));
     }
 
     public boolean onboardingSubmissionBlocked(UUID applicationId) {
@@ -436,7 +429,8 @@ public class ChefApplicationService {
         );
     }
 
-    private List<KycDocumentResponse> listApplicationEvidence(UUID applicationId) {
+    /** No access check: callers check who may see this application's evidence. */
+    public List<KycDocumentResponse> listApplicationEvidence(UUID applicationId) {
         return jdbcTemplate.query(
             "SELECT * FROM chef_kyc_document WHERE application_id = ? AND removed_at IS NULL AND document_type IN ('APPLICANT_PHOTO', 'GOVERNMENT_ID_FRONT', 'GOVERNMENT_ID_BACK', 'TAX_ID_CARD', 'KITCHEN_PHOTO_1', 'KITCHEN_PHOTO_2', 'FSSAI_LICENSE', 'SELECTED_PROOF_FRONT', 'SELECTED_PROOF_BACK') ORDER BY document_type",
             this::mapDocument, applicationId

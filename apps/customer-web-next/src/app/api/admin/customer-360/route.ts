@@ -130,7 +130,8 @@ export async function POST(request: NextRequest) {
   const reason = safeText(input.reason, 500);
   const action = safeText(input.action, 20) ?? "all";
   if (!identityId || !isUuid(identityId)) return NextResponse.json({ code: "INVALID_CUSTOMER_ID" }, { status: 400 });
-  if (!reason || reason.length < 10) return NextResponse.json({ code: "ADMIN_REASON_REQUIRED" }, { status: 400 });
+  // Sent as the X-Admin-Reason header, which holds printable ASCII only; anything else made fetch throw (503).
+  if (!reason || !/^[\x20-\x7E]{10,500}$/.test(reason)) return NextResponse.json({ code: "ADMIN_REASON_REQUIRED" }, { status: 400 });
   if (!(["all", "orders", "payments", "refunds"] as string[]).includes(action)) {
     return NextResponse.json({ code: "INVALID_CUSTOMER_360_ACTION" }, { status: 400 });
   }

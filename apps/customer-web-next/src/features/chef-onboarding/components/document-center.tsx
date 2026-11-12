@@ -219,7 +219,7 @@ export function DocumentCenter({ mode, orders = [] }: Props) {
     const signal = lifetime.current!.signal;
     const result = documentEmailSchema.parse(await jsonRequest(`/api/documents/${item.id}/email`, signal, { method: "POST", headers: { "Idempotency-Key": keyFor(`email:${item.id}`) } }));
     setEmailState((old) => ({ ...old, [item.id]: result.status }));
-    done(mode === "chef" ? text.emailing : "Email copy queued for your current verified account email. Provider acceptance is not confirmation of inbox delivery.");
+    done(mode === "chef" ? text.emailing : "We’re emailing a copy to your verified email. Check your inbox and spam folder.");
   }
   async function refresh() {
     await loadHistory();

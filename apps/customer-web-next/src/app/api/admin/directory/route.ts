@@ -30,7 +30,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const action = safeText(body?.action, 30);
   const reason = safeText(body?.reason, 500);
-  if (!reason || reason.length < 10) return NextResponse.json({ code: "ADMIN_REASON_REQUIRED" }, { status: 400 });
+  // Sent as the X-Admin-Reason header, which holds printable ASCII only; anything else made fetch throw (503).
+  if (!reason || !/^[\x20-\x7E]{10,500}$/.test(reason)) return NextResponse.json({ code: "ADMIN_REASON_REQUIRED" }, { status: 400 });
 
   try {
     let upstream: Response;

@@ -115,3 +115,16 @@ describe("CodeSlots", () => {
     await waitFor(() => expect(input.value).toBe(""));
   });
 });
+
+describe("CodeSlots extras", () => {
+  it("starts from defaultValue, takes its name from ariaLabel, and ticks the last slot once accepted", () => {
+    const { container, rerender } = render(createElement(CodeSlots, { defaultValue: "12a3", ariaLabel: "Six-digit email code", status: "idle" }));
+    const input = screen.getByLabelText("Six-digit email code") as HTMLInputElement;
+    expect(input.value).toBe("123");
+    expect(container.querySelector(".code-slot-check")).toBeNull();
+    rerender(createElement(CodeSlots, { defaultValue: "12a3", ariaLabel: "Six-digit email code", status: "success" }));
+    const slots = container.querySelectorAll(".code-slot");
+    expect(slots[slots.length - 1].querySelector(".code-slot-check")).toBeTruthy();
+    expect(container.querySelectorAll(".code-slot-check")).toHaveLength(1);
+  });
+});

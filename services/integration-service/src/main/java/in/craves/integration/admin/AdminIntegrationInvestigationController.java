@@ -152,7 +152,7 @@ public class AdminIntegrationInvestigationController {
                 rs.getObject("id", UUID.class), rs.getObject("chef_sub_order_id", UUID.class),
                 rs.getObject("order_id", UUID.class), rs.getString("status"),
                 rs.getObject("ready_at", OffsetDateTime.class), rs.getObject("dispatch_at", OffsetDateTime.class),
-                rs.getObject("idempotency_key", UUID.class), rs.getObject("source_event_id", UUID.class),
+                rs.getString("idempotency_key"), rs.getObject("source_event_id", UUID.class),
                 rs.getInt("attempt_count"), rs.getObject("scheduled_sequence_number", Long.class),
                 rs.getString("service_bus_message_id"), rs.getString("reconciliation_provider_id"),
                 rs.getString("reconciliation_client_reference"),
@@ -180,8 +180,33 @@ public class AdminIntegrationInvestigationController {
                 rs.getObject("created_at", OffsetDateTime.class), rs.getObject("updated_at", OffsetDateTime.class)
             ), command.chefSubOrderId()
         ).stream().findFirst().orElse(null);
+        ProofOfDeliverySnapshot proof = job == null ? null : proofOfDelivery(job.deliveryJobId());
         persistAudit(audit);
-        return response(audit.correlationId(), new DeliveryInvestigationResponse(command, job));
+        return response(audit.correlationId(), new DeliveryInvestigationResponse(command, job, proof));
+    }
+
+    /** The newest event of the job (webhook or tracking poll) that carries proof of delivery (handbook E26); at most the 50 newest. */
+    private ProofOfDeliverySnapshot proofOfDelivery(UUID deliveryJobId) {
+        return jdbcTemplate.query(
+            """
+            SELECT provider_id, payload::text AS body, occurred_at, normalized_status
+              FROM delivery_schema.delivery_event
+             WHERE delivery_job_id = ?
+             ORDER BY occurred_at DESC, created_at DESC
+             LIMIT 50
+            """,
+            rs -> {
+                while (rs.next()) {
+                    ProofOfDeliverySnapshot proof = ProofOfDelivery.read(rs.getString("provider_id"), rs.getString("body"),
+                        rs.getObject("occurred_at", OffsetDateTime.class), rs.getString("normalized_status"));
+                    if (proof != null) {
+                        return proof;
+                    }
+                }
+                return null;
+            },
+            deliveryJobId
+        );
     }
 
     private AuditContext audit(Authentication authentication, String resourceType, UUID resourceId,
@@ -264,9 +289,10 @@ public class AdminIntegrationInvestigationController {
     public record OutboxSnapshot(UUID eventId, String eventType, String eventVersion, String status, int attemptCount,
         OffsetDateTime nextAttemptAt, OffsetDateTime publishedAt, String brokerMessageId,
         String lastError, OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
-    public record DeliveryInvestigationResponse(DeliveryCommandSnapshot command, DeliveryJobSnapshot job) {}
+    public record DeliveryInvestigationResponse(DeliveryCommandSnapshot command, DeliveryJobSnapshot job,
+        ProofOfDeliverySnapshot proofOfDelivery) {}
     public record DeliveryCommandSnapshot(UUID commandId, UUID chefSubOrderId, UUID orderId, String status,
-        OffsetDateTime readyAt, OffsetDateTime dispatchAt, UUID idempotencyKey, UUID sourceEventId,
+        OffsetDateTime readyAt, OffsetDateTime dispatchAt, String idempotencyKey, UUID sourceEventId,
         int attemptCount, Long scheduledSequenceNumber, String serviceBusMessageId,
         String reconciliationProviderId, String reconciliationClientReference,
         OffsetDateTime reconciliationStartedAt, int reconciliationAttemptCount,
@@ -276,4 +302,12 @@ public class AdminIntegrationInvestigationController {
         String status, String providerStatus, OffsetDateTime bookedAt,
         OffsetDateTime lastStatusObservedAt, String lastStatusSource, OffsetDateTime nextTrackingAt,
         OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
+    /**
+     * What the provider recorded at the drop; null fields were not sent (or were erased). {@code status} is the delivery status
+     * Craves read from that event and {@code occurredAt} the provider's time for it.
+     */
+    public record ProofOfDeliverySnapshot(String providerId, String status, OffsetDateTime occurredAt, OffsetDateTime courierVisitAt,
+        String recipientName, String recipientPosition, List<ProofPhoto> photos) {}
+    /** {@code kind}: PLACE or SIGNATURE (Borzo), PROOF (Pidge); only https links are returned. */
+    public record ProofPhoto(String kind, String url) {}
 }

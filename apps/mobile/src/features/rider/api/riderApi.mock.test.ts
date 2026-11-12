@@ -68,14 +68,14 @@ describe('mock rider server', () => {
   it('lets a pending rider correct their sign-up, setting aside an account sent in the old name', async () => {
     const mock = setup();
     mock.controls.setStatus('PENDING');
-    await mock.api.signUp({ name: 'K Gopi', language: 'en', vehicleKind: 'BICYCLE', adult: true });
-    await mock.api.submitPayoutAccount({ method: 'UPI', holderName: 'K Gopi', upiId: 'gopi@axl' });
-    expect((await mock.api.getProfile()).payoutAccountSubmitted).toBe('go****@axl');
-
-    // A bicycle had no plate on file, so a scooter needs one.
+    // No plate on file yet, so one is needed.
     await expect(
       mock.api.signUp({ name: 'K Gopi', language: 'en', vehicleKind: 'PETROL', adult: true }),
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    await mock.api.signUp({ name: 'K Gopi', language: 'en', vehicleKind: 'ELECTRIC', vehicleRegNumber: 'TS09EA1234', adult: true });
+    await mock.api.submitPayoutAccount({ method: 'UPI', holderName: 'K Gopi', upiId: 'gopi@axl' });
+    expect((await mock.api.getProfile()).payoutAccountSubmitted).toBe('go****@axl');
+
     const me = await mock.api.signUp({
       name: 'Kancharla Gopi',
       language: 'te',
@@ -244,12 +244,9 @@ describe('mock rider server', () => {
     ).resolves.toMatchObject({ shiftCredential: expect.any(String) });
   });
 
-  it('has demo data for every screen: slot, rest point, banner, pay lines, sealed bag, WhatsApp', async () => {
+  it('has demo data for every screen: banner, pay lines, sealed bag, WhatsApp', async () => {
     const mock = setup();
     expect(await mock.api.getHome()).toMatchObject({
-      nextSlot: { zoneName: 'Madhapur & Kondapur' },
-      guaranteedPerHourPaise: 8000,
-      restPoint: { name: "Lakshmi's Kitchen", area: 'Madhapur' },
       banner: { tone: 'warning', text: expect.stringContaining('rain') },
     });
     expect((await mock.api.getMe()).supportWhatsappUrl).toBe(

@@ -14,7 +14,7 @@ const RiderSection = () => {
             </h2>
 
             <p className="rider__text">
-              Homemade meals, carefully packed and brought to your door - with the care that started in the kitchen.
+              Homemade meals, carefully packed and brought to your door.
             </p>
           </div>
 

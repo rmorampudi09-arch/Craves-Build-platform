@@ -491,6 +491,13 @@ nav[aria-label="Customer services"] a:focus-visible {
   }
 }
 
+/* Saving something: the heart fills and gives one small pop (every save heart on the site). */
+@keyframes craves-heart-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
 /* Support chat: a new message settles in; the typing dots breathe in sequence. */
 @keyframes craves-chat-in {
   from { opacity: 0; transform: translateY(6px) scale(0.98); }

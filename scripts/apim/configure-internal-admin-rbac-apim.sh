@@ -73,6 +73,7 @@ put_operation "get-internal-admin-user" "GET" "/users/{identityId}" "Get interna
 put_operation "put-internal-admin-user-roles" "PUT" "/users/{identityId}/roles" "Replace internal administrator roles"
 put_operation "put-internal-admin-staff-role-grants" "PUT" "/staff-role-grants" "Grant Chef and internal administrator roles to staff"
 put_operation "get-internal-admin-role-changes" "GET" "/role-changes" "List internal role changes"
+put_operation "post-internal-admin-chef-role-revoke" "POST" "/users/{identityId}/chef-role/revoke" "Revoke the Chef role"
 
 verify_operation() {
   local ID="$1" EXPECTED_METHOD="$2" EXPECTED_TEMPLATE="$3"
@@ -93,6 +94,7 @@ verify_operation "get-internal-admin-user" "GET" "/users/{identityId}"
 verify_operation "put-internal-admin-user-roles" "PUT" "/users/{identityId}/roles"
 verify_operation "put-internal-admin-staff-role-grants" "PUT" "/staff-role-grants"
 verify_operation "get-internal-admin-role-changes" "GET" "/role-changes"
+verify_operation "post-internal-admin-chef-role-revoke" "POST" "/users/{identityId}/chef-role/revoke"
 
 GATEWAY_URL=$(az apim show -g "$RG" -n "$APIM" --query gatewayUrl -o tsv)
 [[ "$GATEWAY_URL" == https://* ]] || fail "APIM HTTPS gateway URL was not returned"

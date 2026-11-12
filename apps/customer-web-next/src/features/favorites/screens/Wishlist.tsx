@@ -39,7 +39,7 @@ function WishlistPage() {
   const [failure, setFailure] = useState<LoadFailure>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  // Saving a kitchen from a dish card reloads Home chefs so the new save shows there.
+  // Saving a kitchen from a dish card reloads Kitchens so the new save shows there.
   const [homesKey, setHomesKey] = useState(0);
   const rememberScroll = useReturnScroll(ready && !loading);
 
@@ -279,7 +279,7 @@ function WishlistPage() {
                 Dishes
               </TabsTrigger>
               <TabsTrigger value="homes" className={TAB_TRIGGER}>
-                Home chefs
+                Kitchens
               </TabsTrigger>
             </TabsList>
             {/* Both tabs stay mounted, so switching keeps each list and its scroll. */}

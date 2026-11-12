@@ -9,7 +9,6 @@ import {
   IdCard,
   Landmark,
   RefreshCw,
-  ShieldCheck,
   Store,
   UserRound,
 } from "lucide-react";
@@ -22,7 +21,7 @@ import { ChefOnboardingBank, type BankFormMode } from "@/features/chef-onboardin
 import {
   ChefBasicDetails,
   ChefKitchenDetails,
-  ChefFssaiDetails,
+  FssaiLaterNote,
   ChefIdentityDetails,
   ChefReviewDetails,
 } from "@/features/chef-onboarding/components/chef-onboarding-sections";
@@ -44,7 +43,6 @@ import {
   chefSectionLabel,
   chefSectionTitle,
   firstIncompleteSection,
-  fssaiGuideText,
   sectionProgress,
   type ChefFormSection,
   type ChefSectionProgress,
@@ -158,7 +156,6 @@ const TEXT = messages({
 const SECTION_ICONS: Record<ChefFormSection, ReactNode> = {
   personal: <UserRound size={20} aria-hidden="true" />,
   kitchen: <Store size={20} aria-hidden="true" />,
-  fssai: <ShieldCheck size={20} aria-hidden="true" />,
   documents: <IdCard size={20} aria-hidden="true" />,
   bank: <Landmark size={20} aria-hidden="true" />,
 };
@@ -320,7 +317,6 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
   const section = CHEF_SECTIONS.includes(screen as ChefFormSection)
     ? (screen as ChefFormSection)
     : null;
-  const guide = screen === "fssai" && flow.fssaiGuide ? fssaiGuideText(language) : null;
   const saveLabel = flow.fromReview ? text.saveReturn : text.saveContinue;
   const phase = applicationPhase({
     application: state.application,
@@ -339,8 +335,8 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
           ? "unsaved"
           : "saved";
 
-  const title = guide ? guide.title : chefSectionTitle(screen, language);
-  const description = guide ? guide.description : chefSectionDescription(screen, language);
+  const title = chefSectionTitle(screen, language);
+  const description = chefSectionDescription(screen, language);
   const heading =
     screen === "resume" && flow.details.firstName
       ? format(text.welcomeBack, { name: flow.details.firstName })
@@ -397,7 +393,6 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
     );
   else if (screen === "review")
     footer = primary(text.submit, { onClick: () => void flow.submit() });
-  else if (guide) footer = primary(saveLabel, { onClick: () => void flow.continueWithoutFssai() });
   else if (section === "bank")
     footer = (
       <button
@@ -433,7 +428,7 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
     <ChefOnboardingShell
       title={heading}
       description={description}
-      screenKey={`${screen}${guide ? "-guide" : ""}`}
+      screenKey={screen}
       saveState={saveState}
       busy={busy}
       onBack={screen === "submitted" || screen === "status" ? null : flow.back}
@@ -468,11 +463,12 @@ export function ChefOnboardingWorkspace({ fallback }: { fallback: ReactNode }) {
           }}
         >
           {screen === "personal" ? (
-            <ChefBasicDetails flow={flow} />
+            <div className="cob-stack">
+              <ChefBasicDetails flow={flow} />
+              <FssaiLaterNote />
+            </div>
           ) : screen === "kitchen" ? (
             <ChefKitchenDetails flow={flow} />
-          ) : screen === "fssai" ? (
-            <ChefFssaiDetails flow={flow} />
           ) : (
             <ChefIdentityDetails flow={flow} />
           )}

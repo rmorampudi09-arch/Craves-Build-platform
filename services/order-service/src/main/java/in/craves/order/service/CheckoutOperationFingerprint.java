@@ -23,6 +23,8 @@ final class CheckoutOperationFingerprint {
         if (request.promotion() != null && !request.promotion().isNull()) append(canonical, "promotion=" + request.promotion());
         // Same rule for options: hashed in canonical (sorted) form, so the same picks in another order are the same attempt.
         if (request.menuOptions() != null && !request.menuOptions().isNull()) append(canonical, "menuOptions=" + in.craves.order.advanced.MenuOptionCheckout.canonical(request.menuOptions()));
+        // Same rule for a company charge: hashed only when sent, in its parsed form (defaults filled in, unknown fields refused).
+        if (request.companyCharge() != null && !request.companyCharge().isNull()) append(canonical, "companyCharge=" + in.craves.order.advanced.CompanyShareCheckout.parse(request.companyCharge()));
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));

@@ -1,0 +1,388 @@
+{
+  "course": {
+    "id": "rider-fleet",
+    "service": "rider-fleet",
+    "title": "Craves riders: dispatch, trips, pay and the fleet engine",
+    "level": "Advanced",
+    "minutes": 140,
+    "description": "Learn how Craves offers orders to its own riders with rules a rider can read on one screen, how a trip moves from offer to delivery with Borzo and Pidge as fallbacks, how pay becomes ledger entries and bank payouts that can never be sent twice, and how the fleet engine and the travel-time model are rolled out in shadow before they decide anything.",
+    "prerequisites": [
+      "delivery"
+    ],
+    "sources": [
+      "services/integration-service/src/main/java/in/craves/integration/fleet/dispatch/FleetDispatcher.java",
+      "services/integration-service/src/main/java/in/craves/integration/fleet/FleetPolicyStore.java",
+      "services/integration-service/src/main/java/in/craves/integration/fleet/rider/FleetShiftService.java",
+      "services/integration-service/src/main/java/in/craves/integration/fleet/rider/FleetLocationService.java",
+      "services/integration-service/src/main/java/in/craves/integration/fleet/trip/FleetTripService.java",
+      "services/integration-service/src/main/java/in/craves/integration/fleet/money/FleetEarnings.java",
+      "services/integration-service/src/main/java/in/craves/integration/fleet/money/FleetPayouts.java",
+      "services/integration-service/src/main/java/in/craves/integration/fleet/FleetRain.java",
+      "services/fleet-engine/README.md",
+      "services/fleet-engine/src/main/java/in/craves/fleetengine/dispatch/DispatchEngine.java"
+    ],
+    "sourceRevision": "9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605",
+    "lessons": [
+      {
+        "id": "fleet-rider-promises",
+        "title": "Start from what every rider can count on",
+        "overview": "Craves runs its own riders to deliver its chefs' food well, not to squeeze riders. The dispatch rules are short enough to read on one screen, and each promise is kept by code and a test: saying no is free, only three things decide who hears of an order first, every offer says why it came, and rules change only with 14 days' notice. This lesson covers those promises and the checks that decide which riders can hear of an order at all.",
+        "steps": [
+          {
+            "label": "Keep declining free",
+            "detail": "Declining or missing an offer is never counted: there is no acceptance rate, no cooldown and no lost place in line. The decline route changes only that offer, and dispatch reads no offer history, so a rider who says no to one order is treated exactly the same for the next one."
+          },
+          {
+            "label": "Use only three ranking inputs",
+            "detail": "Only nearness to the kitchen, pay per online hour today and minutes waited decide who hears first. Ratings, acceptance, history before today and hidden scores are never used. Where a travel-time model is allowed, it predicts minutes from places and times only, never from who the rider is."
+          },
+          {
+            "label": "Explain every offer",
+            "detail": "Each offer stores why it was made in trip_offer.reason, with the rule, the rider's place, how many riders were ranked and the round, and the offer card shows a plain line such as you are the nearest free rider. Ops see the same reason, and the rider sees it in their own data download."
+          },
+          {
+            "label": "Change rules only with notice",
+            "detail": "The rules are in the app, in the rider's language, and a change needs 14 days' notice; the database refuses an offer-rule change without it. Changing a promise changes riders' terms, which needs a lawyer's review as well, under laws such as Telangana Act 21 of 2026 that the dispatch rules are written against."
+          },
+          {
+            "label": "Check who can hear of an order",
+            "detail": "A rider hears of an order only if they are ACTIVE, on an open shift and not on a break; free, with no trip in progress and no open offer; heard from, meaning the phone called in the last 45 seconds with a real, not mock, location under 3 minutes old and can ring; and inside the policy radius of the kitchen, 5 km to start."
+          },
+          {
+            "label": "Open shifts carefully",
+            "detail": "Starting a shift checks the rider is ACTIVE, the phone is the rider's one bound device, the app is new enough, the licence, registration, insurance and pollution papers have a verified copy that has not expired, and a selfie is valid. The shift credential is 32 random bytes stored only as SHA-256, valid 12 hours, and works only for location and device calls."
+          }
+        ],
+        "example": "Anita declines an offer because her bike's tyre is low. Two minutes later another order comes up near her; she is still the nearest free rider, so she hears of it first, and the card says so. Nothing about the earlier decline was stored against her.",
+        "lab": "Read FleetDispatcher's eligibility query and list every condition with the line that enforces it. Then, in a local database, create two riders at the same distance with different pay per online hour today and confirm which one a fair turn offers first, and that a declined offer changes nothing for the next order.",
+        "pitfall": "Never add an acceptance rate, rating or hidden score to dispatch: it breaks a written promise to riders and the law the promise is built on.",
+        "questions": [
+          {
+            "id": "fleet-rider-promises-q1",
+            "prompt": "Which of these can decide who hears of an order first?",
+            "options": [
+              "The rider's rating",
+              "The rider's acceptance rate",
+              "Pay per online hour today",
+              "Offers declined last week"
+            ],
+            "answer": 2,
+            "explanation": "Only nearness, pay per online hour today and minutes waited are used."
+          },
+          {
+            "id": "fleet-rider-promises-q2",
+            "prompt": "Why must a rider's phone have called in the last 45 seconds with a recent real location?",
+            "options": [
+              "To track the rider's breaks",
+              "So offers only go to phones that can actually ring and riders who are really nearby",
+              "To charge the rider",
+              "To measure acceptance"
+            ],
+            "answer": 1,
+            "explanation": "Being heard from is part of eligibility, so an order is not held by a silent phone."
+          },
+          {
+            "id": "fleet-rider-promises-q3",
+            "prompt": "How long is a shift credential valid, and for what?",
+            "options": [
+              "24 hours, every route",
+              "12 hours, only location and device calls",
+              "Forever, only offers",
+              "1 hour, sign-in only"
+            ],
+            "answer": 1,
+            "explanation": "The credential is stored as a hash, expires 12 hours after the shift starts and opens only two routes."
+          }
+        ]
+      },
+      {
+        "id": "fleet-dispatch-chain",
+        "title": "Follow an order through the dispatch chain",
+        "overview": "The fleet is the first stage of delivery for each chef order. When the dispatch policy is live, FleetDispatcher creates a trip and offers it to riders in rounds; if no rider accepts in time, the order moves to Borzo, then Pidge, then the ops queue, exactly as before the fleet existed. Locks make sure an order never has two couriers and a rider never gets two offers at once. This lesson walks the chain step by step.",
+        "steps": [
+          {
+            "label": "Know the built-in rules",
+            "detail": "Since 1 November the rules are built in, so riders get orders the way the large apps hand them out: one rider at a time, 30 seconds to accept, up to 3 rounds, fair turns within 1.5 km, a 5 km radius, then Borzo after at most 120 seconds. The console only switches the mode between off, shadow and live, and records each version."
+          },
+          {
+            "label": "Create the trip in one transaction",
+            "detail": "In live mode one transaction creates the trip as SEARCHING with an order code made from the chef sub-order id, the fleet stage with its deadline and the first round of offers. Pay, the rate card version and both distances are locked into each offer, so what the rider accepts is exactly what they will be paid."
+          },
+          {
+            "label": "Send later rounds only with full time",
+            "detail": "A next round goes to riders not yet asked, ranked again, and only if the stage still has a full offer time left. If not, the stage closes and Borzo is next, so no rider's time to decide is ever cut short. The stage row is locked, so two workers never send the same round."
+          },
+          {
+            "label": "Keep one writer per rider",
+            "detail": "An accept and every offer insert first lock the rider's row, offers in rider-id order. An offer for another order therefore waits for a committing accept and then finds the rider busy, instead of ringing on a phone that can no longer take it."
+          },
+          {
+            "label": "Fall back without doubling couriers",
+            "detail": "The stage closes on an accept, which books the delivery job as the Craves fleet with the rider card, or at its deadline, after which Borzo opens and routing books as before. A late accept finds the stage closed and gets 410. A Pidge stage past its deadline or an uncertain booking goes to the ops queue with the FLEET_DISPATCH_QUEUE alert."
+          },
+          {
+            "label": "Watch silent riders and cancellations",
+            "detail": "A rider on the way to the kitchen whose phone has not called for 90 seconds loses the trip. At the kitchen, 90 seconds of silence alerts ops and the trip goes back only at 300 seconds, and never after the chef handed over the food. A cancelled order ends the trip, pays the rider for the state reached and cancels any booked Borzo or Pidge courier through a separate job."
+          }
+        ],
+        "example": "An order is ready in Madhapur. The nearest free rider gets 30 seconds and lets it pass while parking; the next nearest accepts in round 2. Pay, distances and the rate card version were locked when the offer was made, the chef sees the rider card, and Borzo is never called for this order.",
+        "lab": "Using the dispatch database tests as a guide, script a local scenario with three riders and one order: let round 1 expire, accept in round 2, then try a late accept from round 1 and confirm it gets 410. Repeat with no accepts and check that the stage closes and Borzo opens.",
+        "pitfall": "Never cancel one courier and book another outside these locks and stages: that is how an order ends up with two riders, or none.",
+        "questions": [
+          {
+            "id": "fleet-dispatch-chain-q1",
+            "prompt": "When does a later round of offers go out?",
+            "options": [
+              "Immediately after a decline, always",
+              "Only if the stage still has a full offer time left",
+              "Only after Borzo fails",
+              "Only when ops approve"
+            ],
+            "answer": 1,
+            "explanation": "A round never starts unless the rider will get their full time to decide."
+          },
+          {
+            "id": "fleet-dispatch-chain-q2",
+            "prompt": "Why are pay and distances locked into each offer?",
+            "options": [
+              "To speed up dispatch",
+              "So what the rider accepts is exactly what they will be paid",
+              "To hide them from ops",
+              "Because rate cards change hourly"
+            ],
+            "answer": 1,
+            "explanation": "The offer carries locked pay, rate card version and distances."
+          },
+          {
+            "id": "fleet-dispatch-chain-q3",
+            "prompt": "A rider taps accept after the fleet stage closed. What happens?",
+            "options": [
+              "The rider gets the order anyway",
+              "The accept gets 410 because the stage is closed",
+              "Both rider and Borzo deliver",
+              "The order is cancelled"
+            ],
+            "answer": 1,
+            "explanation": "A late accept finds the stage closed, so an order never gets two couriers."
+          }
+        ]
+      },
+      {
+        "id": "fleet-trips-pay",
+        "title": "Turn trips into pay that cannot be counted twice",
+        "overview": "Rider pay is set by a published rate card and locked into each offer. When a trip ends with pay, FleetEarnings turns each pay line into an earnings row and a balanced journal in the immutable ledger, keyed so a second credit is impossible. Pay waits 24 hours before it can be withdrawn, and holds or support issues pause only the trip they concern. This lesson reads FleetTripService and FleetEarnings.",
+        "steps": [
+          {
+            "label": "Read the trip states",
+            "detail": "A trip moves SEARCHING, ASSIGNED (on the way to the kitchen), AT_PICKUP, PICKED_UP, then AT_DROP and delivered. Each state is sent through the existing delivery-status pipeline as the provider craves_fleet, so the chef and the customer see the rider card and progress exactly as they do for Borzo or Pidge."
+          },
+          {
+            "label": "Price a trip from the rate card",
+            "detail": "On the draft rate card a trip with a 4.2 km drop and a 1.8 km pickup pays 67 rupees: a base of 40, 19.80 for the drop distance and 7.20 for the pickup distance. A trip whose customer is unreachable or that fails after pickup is paid in full like a delivery, a trip cancelled earlier is paid for the state it reached, and rain mode adds a rain top-up line from the card in force."
+          },
+          {
+            "label": "Credit after the trip commits",
+            "detail": "A trip that ends with pay publishes FleetTripPayFinalized; after the trip's transaction commits, the fleet pool credits it in its own transaction, so a failed credit never undoes a delivery. A money job credits any finished trip still missing its credit, which makes the process safe to retry."
+          },
+          {
+            "label": "Write balanced, keyed journals",
+            "detail": "Each pay line becomes a rider_earning row keyed fleet-trip-pay/{trip}/{component}/{revision} and a journal with the same key: debit DELIVERY_EXPENSE, credit RIDER_PAYABLE. The unique key in both tables makes a second credit impossible, and every trip's journal lines net to zero."
+          },
+          {
+            "label": "Wait before money is withdrawable",
+            "detail": "A row is pending until 24 hours after the delivery and counts towards the balance only once past that, with no active hold on its trip and no open support issue raised before then. Photo deliveries, failed deliveries and riders lost before pickup get a hold released at midnight India time 7 days later at the latest."
+          },
+          {
+            "label": "Adjust with revisions, not edits",
+            "detail": "Payments admins adjust a credited trip with a later revision of a component and a reason the rider sees. A positive adjustment is pay like any other; a negative one is debt recovered only from future pay at the weekly cap, never taken from a bank account. TDS withholding exists behind a switch that starts off."
+          }
+        ],
+        "example": "A trip pays 67 rupees and is credited at 8:10 pm. The rider reports the drop distance was wrong; support opens an issue, which holds only that trip. A payments admin adds a revision 2 of the drop-km component for 6 rupees with a reason, and both amounts become withdrawable once the issue is fixed and the 24 hours have passed.",
+        "lab": "In a local database, finish one trip and run the credit twice; assert there is one earning row per component and one journal whose lines net to zero. Then add a negative adjustment and show that it becomes debt recovered from the next week's pay instead of reducing a past payout.",
+        "pitfall": "Never update or delete an earning or journal row to fix pay: add a revision with a reason, so the rider and the ledger can always explain every rupee.",
+        "questions": [
+          {
+            "id": "fleet-trips-pay-q1",
+            "prompt": "What stops a trip from being credited twice?",
+            "options": [
+              "A daily report",
+              "The unique key fleet-trip-pay/{trip}/{component}/{revision} in earnings and journals",
+              "The rider's app",
+              "Manual checks by ops"
+            ],
+            "answer": 1,
+            "explanation": "The same business key in both tables makes a second credit impossible."
+          },
+          {
+            "id": "fleet-trips-pay-q2",
+            "prompt": "When does trip pay count towards the withdrawable balance?",
+            "options": [
+              "Immediately",
+              "24 hours after delivery, with no active hold or open issue on the trip",
+              "At the end of the month",
+              "When ops approve each trip"
+            ],
+            "answer": 1,
+            "explanation": "Pay is pending for 24 hours, and holds or issues pause only their own trip."
+          },
+          {
+            "id": "fleet-trips-pay-q3",
+            "prompt": "How is an overpayment corrected?",
+            "options": [
+              "By deleting the earning row",
+              "By a negative revision recovered from future pay at the weekly cap",
+              "By debiting the rider's bank",
+              "By pausing the rider"
+            ],
+            "answer": 1,
+            "explanation": "Negative adjustments become debt recovered from future pay, never from a bank."
+          }
+        ]
+      },
+      {
+        "id": "fleet-payouts",
+        "title": "Pay riders by bank transfer, never twice",
+        "overview": "Nothing moves money by itself. FleetPayouts builds bank files, a second payments admin approves them, and a person uploads each approved file to the bank's IMPS bulk upload once. A payout is paid in the ledger only when its bank reference, the UTR, is recorded. Weekly payouts and one free daily withdrawal give riders quick access to their pay without any risk of double payment. This lesson follows a payout from balance to bank statement.",
+        "steps": [
+          {
+            "label": "Compute the balance",
+            "detail": "Available is released pay net of TDS, minus payouts that did not fail, including requested withdrawals, minus debt recovered. Withdrawable is available minus this week's recovery, which is outstanding debt up to the weekly cap, and never below zero."
+          },
+          {
+            "label": "Run the weekly file",
+            "detail": "A weekly file made on a Monday pays every rider with a verified, unpaused account their whole withdrawable balance by IMPS, with no minimum. Making it records this week's recovery. Riders with nothing, a negative balance or no account are left out, and debt is never debited from a bank."
+          },
+          {
+            "label": "Allow one daily withdrawal",
+            "detail": "A rider may withdraw once a day in India time, free, up to the withdrawable balance. The request is a payout at once, so the balance drops at once, and the next daily file takes every request for that date or before that is not already in a file."
+          },
+          {
+            "label": "Use maker and checker",
+            "detail": "A payments admin makes the file in the console, never in a spreadsheet, and downloads it, which is audited. A different payments admin checks totals, counts, unusually large payouts and accounts changed in the last 7 days, then approves; the maker approving their own file gets 403 SAME_APPROVER."
+          },
+          {
+            "label": "Upload once and record UTRs",
+            "detail": "The approved file is uploaded to the bank once and marked sent. A payout belongs to one file and stays processing until ops enter its UTR or a final failure; nothing re-sends it. Only a UTR posts the ledger: debit RIDER_PAYABLE, credit BANK, with the UTR as evidence."
+          },
+          {
+            "label": "Handle failures and reversals",
+            "detail": "A failed payout keeps the money in the rider's balance and pauses the account until ops set a new one with the rider. A file never uploaded can be cancelled with a reason; one that might have reached the bank cannot. A bank reversal after a UTR is recorded as its own journal, puts the money back and pauses the account."
+          }
+        ],
+        "example": "On Monday a payments admin makes the weekly file for 14 riders. A second admin notices one account changed two days ago, calls the rider to confirm it, and approves. The file is uploaded once; by evening 13 UTRs are entered and one payout fails for a closed account, so that rider's money stays in their balance until a new account is verified.",
+        "lab": "In a local database, create earnings for three riders, make a weekly file and try to approve it as the maker (expect 403). Approve as another admin, mark it sent, enter two UTRs and one failure, and check the balances, the paused account and that the ledger posted only the two paid payouts.",
+        "pitfall": "Never upload a bank file twice or re-send a payout the bank still shows as processing; mark each outcome instead.",
+        "questions": [
+          {
+            "id": "fleet-payouts-q1",
+            "prompt": "When does a payout post to the ledger as paid?",
+            "options": [
+              "When the file is made",
+              "When ops enter its UTR from the bank",
+              "When the rider requests it",
+              "At midnight"
+            ],
+            "answer": 1,
+            "explanation": "Only a recorded UTR posts the payout, with the UTR as evidence."
+          },
+          {
+            "id": "fleet-payouts-q2",
+            "prompt": "The admin who made a payout file tries to approve it. What happens?",
+            "options": [
+              "It is approved",
+              "It is refused with 403 SAME_APPROVER",
+              "It is sent to the bank",
+              "It is cancelled"
+            ],
+            "answer": 1,
+            "explanation": "Maker and checker must be different payments admins."
+          },
+          {
+            "id": "fleet-payouts-q3",
+            "prompt": "A payout fails because the account is closed. Where does the money go?",
+            "options": [
+              "It is lost",
+              "It stays in the rider's balance and their payouts pause until a new account is set",
+              "It goes to Craves",
+              "It is retried automatically every hour"
+            ],
+            "answer": 1,
+            "explanation": "Failures keep the money in the balance and pause the account for a person to fix."
+          }
+        ]
+      },
+      {
+        "id": "fleet-engine-eta",
+        "title": "Scale dispatch with the fleet engine and travel-time model",
+        "overview": "Two Phase 5 pieces prepare the fleet for many riders: the fleet engine, a separate Java service that keeps live rider state in Redis and ranks riders in parallel per map block, and a travel-time model that predicts minutes from places and times. Both start in shadow, where they only log what they would do, and Postgres always keeps the last word. This lesson reads the fleet engine's README and DispatchEngine, and the rules for the model and rain mode.",
+        "steps": [
+          {
+            "label": "Feed the engine from Postgres",
+            "detail": "integration-service sends each change that matters to dispatch, once its transaction commits, as a protobuf event on the rider's Redis stream: a ping on every location call, a refresh after offers, accepts, declines and shift changes, and offline when the shift ends. Callers only queue, so Redis never slows a rider's call."
+          },
+          {
+            "label": "Rank per map block",
+            "detail": "Each 0.05 degree block, about 5.5 km, has one actor: a virtual thread with a bounded queue, and all blocks run in parallel. An actor ranks the orders waiting in its block together and shares the riders out with the Hungarian method, so no rider is proposed twice, falling back to a greedy method past a size limit or under load."
+          },
+          {
+            "label": "Shadow before live",
+            "detail": "In shadow the engine only compares its choices with the Java dispatcher's and logs FLEET_ENGINE_SHADOW with agree same, same set or differ. Live, dispatch waits up to 300 ms for the engine's reply, the engine holds the chosen riders for 5 seconds, and dispatch re-checks them in Postgres, which still allows one active offer per rider."
+          },
+          {
+            "label": "Predict minutes without people",
+            "detail": "The travel-time model is gradient-boosted trees trained in Python on Craves's own delivered trips, using distance, both ends' coordinates, direction, India hour and weekday and the leg, never who the rider is. Production never runs Python: Java evaluates the exported trees exactly as scikit-learn does, tested to the bit."
+          },
+          {
+            "label": "Let only a good model rank",
+            "detail": "A version may decide who hears first only if, on trips it never saw, it ordered pairs of riders correctly at least as often as the straight line did. Otherwise riders are ranked by distance and ops get FLEET_ETA_NOT_RANKING. Going live needs at least 500 delivered legs and a week in shadow; ranking by it also needs 14 days' notice to riders."
+          },
+          {
+            "label": "Know rain mode",
+            "detail": "Rain mode starts off. When on, riders get at least 45 seconds to accept, an order runs at most 2 rounds, the search starts 5 minutes earlier and each offer adds the rate card's rain top-up as its own line; severe sends new orders straight to Borzo or Pidge. Its first use also needs riders to have had 14 days' notice."
+          }
+        ],
+        "example": "During a shadow week the engine logs FLEET_ENGINE_SHADOW agree=differ for a cluster of orders near Hitec City at lunch. The team reads the logs and finds that Postgres had marked two riders busy a moment before the engine's state caught up, exactly the case live mode handles by re-checking. Nothing changed for riders while they learned this.",
+        "lab": "Run the fleet engine's tests locally with redis-server on the path. Then feed it a recorded batch of ranking requests in shadow and count same, same set and differ answers. For the model, read the held-out ranking verdict of a candidate version and write down whether it may rank and why.",
+        "pitfall": "Never switch the engine or the model straight to live: shadow logs are the only safe way to learn how they behave with real riders.",
+        "questions": [
+          {
+            "id": "fleet-engine-eta-q1",
+            "prompt": "Who keeps the last word on offers when the fleet engine is live?",
+            "options": [
+              "Redis",
+              "Postgres, which re-checks the riders and allows one active offer per rider",
+              "The rider app",
+              "The engine alone"
+            ],
+            "answer": 1,
+            "explanation": "The engine's state is a cache; integration-service writes every offer in Postgres."
+          },
+          {
+            "id": "fleet-engine-eta-q2",
+            "prompt": "What may the travel-time model use as input?",
+            "options": [
+              "The rider's rating",
+              "Places and times such as distance, coordinates, hour and weekday",
+              "The rider's past declines",
+              "The rider's earnings"
+            ],
+            "answer": 1,
+            "explanation": "It predicts roads, not people: no rider identity or history goes in."
+          },
+          {
+            "id": "fleet-engine-eta-q3",
+            "prompt": "What must a model version prove before it may decide who hears first?",
+            "options": [
+              "That it is newer",
+              "That on unseen trips it orders riders at least as well as the straight line",
+              "That ops like it",
+              "That it runs in Python"
+            ],
+            "answer": 1,
+            "explanation": "Only a version whose ranking verdict is better may rank."
+          }
+        ]
+      }
+    ]
+  }
+}

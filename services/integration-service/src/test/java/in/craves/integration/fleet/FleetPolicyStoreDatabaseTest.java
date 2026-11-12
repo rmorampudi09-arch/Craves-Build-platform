@@ -139,7 +139,7 @@ class FleetPolicyStoreDatabaseTest {
 
     @Test
     void aDispatchPolicyKeepsItsRangesStartsNowOrOnADateAtLeastFourteenDaysAwayAndGoesLiveOnlyWithARateCard() {
-        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET effective_from = now() + INTERVAL '15 days', offer_seconds = 20");
+        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET effective_from = now() + INTERVAL '15 days', offer_seconds = 10");
         assertThatThrownBy(() -> store.publishDispatchPolicy("2026-10-v1", UUID.randomUUID())).isInstanceOfSatisfying(FleetApiException.class,
             error -> assertThat(error.code()).isEqualTo("VERSION_REFUSED"));
         fleet.db.update("UPDATE fleet_schema.dispatch_policy SET offer_seconds = 40, mode = 'live'");

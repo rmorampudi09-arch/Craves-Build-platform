@@ -127,7 +127,7 @@ On a live build, after `CRAVES_FLEET_PRIVACY_NOTICE_VERSION` and `CRAVES_FLEET_P
 
 Set-up:
 - Two pilot riders, A and B, online near one pilot kitchen, on a live build, in test mode.
-- A dispatch policy in `live` with the rules from `DISPATCH.md` §7: one rider at a time, 30 s to accept, 3 rounds.
+- A dispatch policy in `live` with the rules from `DISPATCH.md` §7: one rider at a time, 20 s to accept, asked again for 5 minutes.
 - For steps 3, 4 and 6, `CRAVES_FLEET_RIDER_CHOICES_ENABLED` on, after the gateway runs this release (`GO-LIVE.md` §8).
 
 1. **Why this offer.** Place a test order at the kitchen.

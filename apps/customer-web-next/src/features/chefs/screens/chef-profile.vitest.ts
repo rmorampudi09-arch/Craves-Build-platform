@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Synthetic kitchen, menu and address; the APIs are mocked, nothing is fetched.
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -30,6 +30,7 @@ vi.mock("@/features/cart/components/CustomerFloatingCart", () => ({
 }));
 
 import ChefProfilePage from "@/features/chefs/screens/ChefProfile";
+import { getVegMode, setVegMode } from "@/shared/hooks/use-veg-mode";
 
 const profile = {
   id: KITCHEN, kitchenName: "Ammi's Dastarkhwan", displayName: null, description: null, areaName: "Tolichowki",
@@ -49,6 +50,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  setVegMode("off");
   vi.unstubAllGlobals();
   delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo;
 });
@@ -83,9 +85,31 @@ describe("Kitchen page", () => {
     api.loadKitchenMenu.mockResolvedValue([]);
     render(createElement(ChefProfilePage));
     expect(await screen.findByRole("heading", { name: "No dishes right now" })).toBeTruthy();
-    expect(screen.getByText("Ammi's Dastarkhwan hasn't put up today's dishes yet. Save this kitchen to find it again, or see other home chefs.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "See other home chefs" }).getAttribute("href")).toBe("/chefs");
+    expect(screen.getByText("Ammi's Dastarkhwan hasn't put up today's dishes yet. Save this kitchen to find it again, or see other kitchens.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "See other kitchens" }).getAttribute("href")).toBe("/chefs");
     expect(screen.getByRole("button", { name: "Save this kitchen" })).toBeTruthy();
+  });
+
+  it("in veg mode shows only the veg dishes, says how many are hidden, and one tap shows them all", async () => {
+    const dal = { ...biryani, id: "11111111-2222-4333-8444-666666666666", name: "Dal tadka", category: "Curry", veg: true, foodType: "VEG" };
+    api.discoverKitchens.mockResolvedValue(nearby([KITCHEN]));
+    api.loadKitchenMenu.mockResolvedValue([biryani, dal]);
+    act(() => setVegMode("pure"));
+    render(createElement(ChefProfilePage));
+    expect(await screen.findByText("Dal tadka")).toBeTruthy();
+    expect(screen.queryByText("Mutton biryani")).toBeNull();
+    expect(screen.getByText("Veg mode: 1 non-veg dish hidden")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show all dishes" }));
+    expect(getVegMode()).toBe("off");
+    expect(await screen.findByText("Mutton biryani")).toBeTruthy();
+    cleanup();
+
+    // Nothing veg on the menu: say so, with the same way back.
+    api.loadKitchenMenu.mockResolvedValue([biryani]);
+    act(() => setVegMode("veg-dishes"));
+    render(createElement(ChefProfilePage));
+    expect(await screen.findByRole("heading", { name: "No veg dishes here" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show all dishes" })).toBeTruthy();
   });
 
   it("says plainly when the kitchen isn't on Craves", async () => {

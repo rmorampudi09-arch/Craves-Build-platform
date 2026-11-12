@@ -132,6 +132,9 @@ public class AcademyCatalog {
             if (course.path("sources").isEmpty() || course.path("lessons").isEmpty() || course.path("minutes").asInt() <= 0) {
                 throw new IllegalStateException("Invalid academy course: " + courseId);
             }
+            if (course.has("sourceRevision") && !course.path("sourceRevision").asText().matches("[a-f0-9]{40}")) {
+                throw new IllegalStateException("Academy course source revision must be pinned: " + courseId);
+            }
             for (JsonNode lesson : course.path("lessons")) {
                 String lessonId = lesson.path("id").asText();
                 if (lessonId.isBlank() || !lessonIds.add(lessonId) || lesson.path("questions").isEmpty()) {
@@ -163,6 +166,11 @@ public class AcademyCatalog {
 
     public String version() { return catalog.path("version").asText(); }
     public String sourceRevision() { return catalog.path("sourceRevision").asText(); }
+    /** Courses added after the base snapshot pin their own immutable revision; the others use the catalog's. */
+    public String sourceRevision(String courseId) {
+        String pinned = course(courseId).path("sourceRevision").asText("");
+        return pinned.isEmpty() ? sourceRevision() : pinned;
+    }
     public JsonNode courses() { return catalog.path("courses"); }
     public JsonNode publicCatalog() {
         ObjectNode copy = catalog.deepCopy();

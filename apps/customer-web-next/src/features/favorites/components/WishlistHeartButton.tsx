@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Heart } from "lucide-react";
 import {
   customerFavoritesLoaded,
   getCustomerFavoriteIds,
@@ -10,6 +9,7 @@ import {
   subscribeCustomerFavorites,
 } from "@/features/favorites/api/customerFavorites";
 import type { Dish } from "@/features/dish/api/dishes";
+import { SaveHeartButton } from "@/shared/ui/buttons/SaveHeartButton";
 
 interface WishlistHeartButtonProps {
   item: Pick<Dish, "id" | "name" | "chef" | "price" | "img">;
@@ -18,7 +18,7 @@ interface WishlistHeartButtonProps {
 }
 
 /**
- * Floating heart that saves a dish to the customer's account (the same
+ * The site's save heart (SaveHeartButton) for a dish: it saves the dish to the customer's account (the same
  * "Saved" list as every other heart) and stays in sync wherever it's shown.
  */
 export function WishlistHeartButton({
@@ -67,31 +67,21 @@ export function WishlistHeartButton({
     }
   }
 
-  const dim = size === "sm" ? "h-8 w-8" : "h-10 w-10";
-  const iconDim = size === "sm" ? "h-4 w-4" : "h-5 w-5";
-
   return (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        void toggle();
-      }}
+    <SaveHeartButton
+      saved={saved}
       disabled={!ready || busy}
-      aria-pressed={saved}
-      aria-label={saved ? `Remove ${item.name} from Saved` : `Save ${item.name}`}
-      title={error || (saved ? "Saved" : "Save")}
-      className={`flex ${dim} items-center justify-center rounded-full !border-0 !bg-white !p-0 !shadow-[0_2px_8px_rgba(26,26,26,0.16)] disabled:!opacity-100 ${className}`}
+      label={saved ? `Remove ${item.name} from Saved` : `Save ${item.name}`}
+      title={error || undefined}
+      onToggle={() => void toggle()}
+      onPhoto
+      size={size === "sm" ? "sm" : "md"}
+      className={className}
     >
-      <Heart
-        className={`${iconDim} ${saved ? "fill-[#F62E18] text-[#F62E18]" : "text-[#1A1A1A]"}`}
-        aria-hidden="true"
-      />
       <span className="sr-only" role="status">
         {error}
       </span>
-    </button>
+    </SaveHeartButton>
   );
 }
 

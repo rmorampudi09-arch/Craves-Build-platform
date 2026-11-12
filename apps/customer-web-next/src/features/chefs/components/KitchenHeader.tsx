@@ -1,79 +1,88 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type UIEvent } from "react";
 import { useReducedMotion } from "framer-motion";
-import { ArrowLeft, Pause, Play } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { FavoriteKitchenHeart } from "@/shared/ui/buttons/FavoriteKitchenHeart";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 
-/** Each kitchen photo stays this long before the next fades in (as in the app). */
-const SLIDE_MS = 4_000;
-const DOTS = 5;
 const roundButton = "flex h-10 w-10 shrink-0 items-center justify-center rounded-full !border-0 !bg-white !p-0 text-[#1A1A1A] !shadow-[0_2px_8px_rgba(26,26,26,0.16)]";
 
-/** The kitchen's 4:3 photos, whole (never cropped) on a neutral backdrop, one after another. */
+/**
+ * The kitchen's photos, whole (never cropped), side by side: people swipe, or tap a dot or arrow.
+ * They never move on their own (owner, 5 Nov 2026), so there is no pause button. On wide screens a
+ * soft, blurred copy of the same photo fills the sides instead of grey bars.
+ */
 function KitchenPhotos({ name, photos }: { name: string; photos: string[] }) {
-  // Moving photos can be paused (WCAG 2.2.2) and never move for reduced motion.
   const reduceMotion = useReducedMotion();
-  // null until the button is used; after that the customer's Play or Pause alone decides (APG carousel).
-  const [paused, setPaused] = useState<boolean | null>(null);
-  // A photo that fails to load leaves the slideshow instead of showing a broken image.
+  // A photo that fails to load leaves the strip instead of showing a broken image.
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const usable = useMemo(() => photos.filter((url) => !failed.has(url)), [photos, failed]);
+  const drop = (src: string) => () => setFailed((value) => new Set(value).add(src));
   const [index, setIndex] = useState(0);
-  const rootRef = useRef<HTMLElement>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const count = usable.length;
-  const current = count ? index % count : 0;
-
-  useEffect(() => {
-    if (reduceMotion || paused || count < 2) return;
-    const timer = window.setInterval(() => {
-      // A hidden tab holds the current photo; so do a pointer over the photos or focus in them, until Play or Pause.
-      if (document.hidden || (paused === null && rootRef.current?.matches(":hover, :focus-within"))) return;
-      setIndex((value) => (value + 1) % count);
-    }, SLIDE_MS);
-    return () => window.clearInterval(timer);
-  }, [count, paused, reduceMotion]);
+  const current = Math.min(index, Math.max(count - 1, 0));
 
   // No photos: a plain band just tall enough that the chef face starts below Back and the heart.
   if (!count) return <div className="h-28 bg-[#F1F3F5]" />;
 
-  const firstDot = Math.max(0, Math.min(current - 2, count - DOTS));
+  const onScroll = (event: UIEvent<HTMLDivElement>) => {
+    const width = event.currentTarget.clientWidth;
+    if (width) setIndex(Math.min(count - 1, Math.round(event.currentTarget.scrollLeft / width)));
+  };
+  const show = (next: number) => {
+    const strip = stripRef.current;
+    if (strip?.clientWidth) strip.scrollTo({ left: next * strip.clientWidth, behavior: reduceMotion ? "instant" : "smooth" });
+  };
+  const arrow = "absolute top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full !border-0 !bg-white/90 !p-0 text-[#1A1A1A] !shadow-[0_2px_10px_rgba(26,26,26,0.18)] hover:!bg-white md:flex";
+
   return (
-    <section ref={rootRef} aria-roledescription="carousel" aria-label={`${name} kitchen photos`} className="relative h-[75vw] max-h-[28rem] w-full overflow-hidden bg-[#F1F3F5]">
-      {usable.map((src, position) => (
-        <img
-          key={src}
-          src={src}
-          alt={`${name} kitchen photo ${position + 1} of ${count}`}
-          aria-hidden={position === current ? undefined : true}
-          loading={position === 0 ? "eager" : "lazy"}
-          fetchPriority={position === 0 ? "high" : "auto"}
-          decoding="async"
-          draggable={false}
-          onError={() => setFailed((value) => new Set(value).add(src))}
-          className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-700 ease-in-out motion-reduce:transition-none ${position === current ? "opacity-100" : "opacity-0"}`}
-        />
-      ))}
-      {count > 1 ? (
-        <div className={`absolute bottom-3 right-3 z-10 flex min-h-8 items-center gap-1.5 rounded-full bg-[#1A1A1A]/45 pl-3 backdrop-blur-sm md:right-6 ${reduceMotion ? "pr-3" : "pr-0"}`}>
-          {usable.slice(firstDot, firstDot + DOTS).map((src, position) => (
-            <span
-              key={src}
-              aria-hidden="true"
-              className={`h-1.5 rounded-full bg-white transition-[width,opacity] duration-300 motion-reduce:transition-none ${firstDot + position === current ? "w-4" : "w-1.5 opacity-60"}`}
+    <section aria-roledescription="carousel" aria-label={`${name} kitchen photos`} className="relative h-[75vw] max-h-[28rem] w-full overflow-hidden bg-[#F1F3F5]">
+      <div
+        ref={stripRef}
+        onScroll={onScroll}
+        className="flex h-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {usable.map((src, position) => (
+          <div key={src} className="relative h-full w-full shrink-0 snap-center snap-always overflow-hidden">
+            {/* Wider than 4:3 (from sm), the photo's own colours, blurred, fill the sides: no grey bars. */}
+            <img src={src} alt="" aria-hidden="true" loading="lazy" decoding="async" draggable={false} onError={drop(src)} className="absolute inset-0 hidden h-full w-full scale-110 object-cover opacity-80 blur-2xl sm:block" />
+            <img
+              src={src}
+              alt={`${name} kitchen photo ${position + 1} of ${count}`}
+              loading={position === 0 ? "eager" : "lazy"}
+              fetchPriority={position === 0 ? "high" : "auto"}
+              decoding="async"
+              draggable={false}
+              onError={drop(src)}
+              className="relative h-full w-full object-contain"
             />
-          ))}
-          {reduceMotion ? null : (
-            <button
-              type="button"
-              onClick={() => setPaused(!paused)}
-              aria-label={paused ? "Play kitchen photos" : "Pause kitchen photos"}
-              className="flex h-8 w-8 items-center justify-center rounded-full !border-0 !bg-transparent !p-0 !min-h-0 !min-w-0 text-white !shadow-none"
-            >
-              {paused ? <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" /> : <Pause className="h-3.5 w-3.5 fill-current" aria-hidden="true" />}
-            </button>
-          )}
-        </div>
+          </div>
+        ))}
+      </div>
+      {count > 1 ? (
+        <>
+          <button type="button" onClick={() => show(current - 1)} disabled={current === 0} aria-label="Previous photo" className={`${arrow} left-4 lg:left-8 ${current === 0 ? "invisible" : ""}`}>
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <button type="button" onClick={() => show(current + 1)} disabled={current === count - 1} aria-label="Next photo" className={`${arrow} right-4 lg:right-8 ${current === count - 1 ? "invisible" : ""}`}>
+            <ChevronRight className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <div className="absolute bottom-3 right-3 z-10 flex items-center rounded-full bg-[#1A1A1A]/45 px-1.5 backdrop-blur-sm md:right-6">
+            {usable.map((src, position) => (
+              <button
+                key={src}
+                type="button"
+                onClick={() => show(position)}
+                aria-label={`Show photo ${position + 1} of ${count}`}
+                aria-current={position === current ? "true" : undefined}
+                className="flex h-7 min-w-5 items-center justify-center !border-0 !bg-transparent !p-0 !shadow-none"
+              >
+                <span aria-hidden="true" className={`h-1.5 rounded-full bg-white transition-[width,opacity] duration-300 motion-reduce:transition-none ${position === current ? "w-4" : "w-1.5 opacity-60"}`} />
+              </button>
+            ))}
+          </div>
+        </>
       ) : null}
     </section>
   );
@@ -103,7 +112,7 @@ export function KitchenHeader({ kitchenId, name, chefPhotoUrl, photos, solid, on
             <ChefFace photoUrl={chefPhotoUrl} name={name} size={32} />
             <span className="truncate font-display text-base font-black text-[#1A1A1A]">{name}</span>
           </div>
-          <FavoriteKitchenHeart kitchenId={kitchenId} kitchenName={name} className="shrink-0 !h-10 !w-10" />
+          <FavoriteKitchenHeart kitchenId={kitchenId} kitchenName={name} size="sm" onPhoto className="shrink-0" />
         </div>
       </header>
       <KitchenPhotos name={name} photos={photos} />

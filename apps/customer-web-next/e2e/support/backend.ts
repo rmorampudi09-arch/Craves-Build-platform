@@ -30,6 +30,9 @@ export class FakeBackend {
   application: Json = FakeBackend.emptyApplication();
   progressStatus = "DRAFT";
   kitchen: Json | null = null;
+  menu: Json[] = [];
+  /** Set by the admin "Record verified FSSAI number" action. */
+  fssaiVerified = false;
   calls: { method: string; path: string; body: unknown }[] = [];
   unmatched: string[] = [];
   private faults: Fault[] = [];
@@ -91,7 +94,6 @@ export class FakeBackend {
     if (!d.firstName || !d.dateOfBirth) return "personal";
     if (!d.kitchenName || !d.postalCode || d.latitude == null) return "kitchen";
     if (!has("KITCHEN_PHOTO_1") || !has("KITCHEN_PHOTO_2")) return "kitchen-photos";
-    if (!d.fssaiNumber) return "fssai";
     if (!d.proofKind || !has("SELECTED_PROOF_FRONT")) return "documents";
     return "review";
   }
@@ -103,7 +105,7 @@ export class FakeBackend {
       enabled: true, legacy: false, version: this.version, resumeStep: this.resumeStep(), submitted: this.submitted,
       phoneNumber: this.identity.phoneNumber, details: this.details, application: { ...this.application, documents: this.documents },
       documents: this.documents, requiredDocuments: required, supportPhone: "8000000000", supportEmail: "support@example.invalid",
-      progress: { status: this.progressStatus, reason: null, nextAction: this.submitted ? "VIEW_STATUS" : "EDIT_APPLICATION", fssaiVerified: false, termsVersion: "craves-chef-terms-20261008-v1", sections: [] },
+      progress: { status: this.progressStatus, reason: null, nextAction: this.submitted ? "VIEW_STATUS" : "EDIT_APPLICATION", fssaiVerified: this.fssaiVerified, termsVersion: "craves-chef-terms-20261008-v1", sections: [] },
       bankEnrollmentRequired: this.bankEnrollmentRequired, callbackRequest: null,
     };
   }
@@ -214,7 +216,15 @@ export class FakeBackend {
       this.kitchen = { id: uuid(900), kitchenName: "E2E Test Kitchen", displayName: "E2E Chef", description: "Synthetic kitchen", phoneNumber: me.phoneNumber, email: me.email, addressLine1: "Flat 101", addressLine2: "KPHB Colony", landmark: null, areaName: "Kukatpally", city: "Hyderabad", state: "Telangana", postalCode: "500072", latitude: 17.4948, longitude: 78.4001, status: "DRAFT", createdAt: NOW, updatedAt: NOW, ...(this.kitchen ?? {}), ...(body ?? {}) };
       return ok(this.kitchen);
     }
-    if (key === "GET /api/chef/menu" || key === "GET /api/chef/orders" || key === "GET /api/chef/earnings") return ok([]);
+    if (key === "GET /api/chef/menu") return ok(this.menu);
+    const dish = method === "PUT" ? this.menu.find((item) => path === `/api/chef/menu/${item.id}`) : undefined;
+    if (dish) {
+      // The web server refuses to put a dish live until Craves has verified the chef's FSSAI number.
+      if (body?.status === "ACTIVE" && !(this.fssaiVerified && /^[0-9]{14}$/.test(String(this.details?.fssaiNumber ?? ""))))
+        return ok({ code: "FSSAI_REQUIRED", message: "Your dishes can go live once Craves has verified your FSSAI number." }, 409);
+      return ok(Object.assign(dish, body));
+    }
+    if (key === "GET /api/chef/orders" || key === "GET /api/chef/earnings") return ok([]);
     if (key === "GET /api/chef/orders/page") return ok({ orders: [], nextCursor: null, hasMore: false });
     if (key === "GET /api/chef/reviews") return ok({ items: [], nextCursor: null, hasMore: false });
     if (key === "GET /api/chef/subscription-plans") return ok([]);

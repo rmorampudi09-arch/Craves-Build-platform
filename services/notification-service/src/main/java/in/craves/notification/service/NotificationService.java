@@ -21,19 +21,32 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class NotificationService {
     private static final String EMAIL_KEY_SUFFIX = "-email";
+    private static final String SMS_KEY_SUFFIX = "-sms";
     private static final int MAX_INBOX_PAGE_SIZE = 100;
     private static final int MAX_CURSOR_LENGTH = 512;
     private static final Set<String> INBOX_ROLES = Set.of("CHEF", "CUSTOMER");
 
     private final NotificationRepository repository;
     private final ImportantEmailPolicyProperties importantEmailPolicy;
+    private final SmsPolicyProperties smsPolicy;
 
+    /** SMS stays off (no template listed). */
     public NotificationService(
         NotificationRepository repository,
         ImportantEmailPolicyProperties importantEmailPolicy
     ) {
+        this(repository, importantEmailPolicy, new SmsPolicyProperties());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public NotificationService(
+        NotificationRepository repository,
+        ImportantEmailPolicyProperties importantEmailPolicy,
+        SmsPolicyProperties smsPolicy
+    ) {
         this.repository = repository;
         this.importantEmailPolicy = importantEmailPolicy;
+        this.smsPolicy = smsPolicy;
     }
 
     @Transactional
@@ -46,7 +59,34 @@ public class NotificationService {
         if (importantEmailPolicy.shouldFanOut(request, channel)) {
             createImportantEmailCopy(request);
         }
+        if (smsPolicy.shouldFanOut(request, channel)) {
+            createSmsCopy(request);
+        }
         return response;
+    }
+
+    /** Handbook 082: the same event as a transactional SMS; the text comes from its DLT template, never from title or body. */
+    private void createSmsCopy(CreateNotificationRequest request) {
+        String smsRequestKey = suffixedKey(request.requestKey(), SMS_KEY_SUFFIX);
+        if (repository.findByRequestKey(smsRequestKey).isPresent()) {
+            return;
+        }
+        createNew(new CreateNotificationRequest(
+            smsRequestKey,
+            request.sourceService(),
+            request.eventType(),
+            request.userId(),
+            request.userRole(),
+            NotificationChannel.SMS,
+            request.templateCode(),
+            null,
+            request.title(),
+            request.body(),
+            request.targetType(),
+            request.targetId(),
+            request.payload(),
+            request.priority()
+        ));
     }
 
     private void createImportantEmailCopy(CreateNotificationRequest request) {
@@ -76,10 +116,12 @@ public class NotificationService {
     private NotificationRequestResponse createNew(CreateNotificationRequest request) {
         UUID requestId = UUID.randomUUID();
         NotificationChannel channel = request.channel() == null ? NotificationChannel.IN_APP : request.channel();
-        if (channel == NotificationChannel.SMS) {
+        if (channel == NotificationChannel.SMS && !smsPolicy.accepts(request)) {
             throw new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,
-                "Transactional SMS is not enabled; Firebase Phone Authentication remains the OTP channel"
+                smsPolicy.isEnabled()
+                    ? "No SMS template is configured for this event"
+                    : "Transactional SMS is not enabled; Firebase Phone Authentication remains the OTP channel"
             );
         }
         NotificationStatus initialStatus = channel == NotificationChannel.IN_APP
@@ -185,12 +227,16 @@ public class NotificationService {
     }
 
     private static String emailRequestKey(String requestKey) {
+        return suffixedKey(requestKey, EMAIL_KEY_SUFFIX);
+    }
+
+    private static String suffixedKey(String requestKey, String suffix) {
         String normalized = requestKey.trim();
-        int maximumBaseLength = 160 - EMAIL_KEY_SUFFIX.length();
+        int maximumBaseLength = 160 - suffix.length();
         if (normalized.length() > maximumBaseLength) {
             normalized = normalized.substring(0, maximumBaseLength);
         }
-        return normalized + EMAIL_KEY_SUFFIX;
+        return normalized + suffix;
     }
 
     private static String emailTemplateCode(String templateCode) {

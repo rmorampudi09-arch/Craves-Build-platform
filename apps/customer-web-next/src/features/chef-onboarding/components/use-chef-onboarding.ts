@@ -12,7 +12,6 @@ import { chefEmailEligible, type EmailVerificationState } from "@/features/sign-
 import {
   EMPTY_ONBOARDING,
   parseOnboardingState,
-  type CallbackRequest,
   type OnboardingDetails,
   type OnboardingState,
 } from "@/features/chef-onboarding/lib/chef-onboarding-v2-contract";
@@ -66,8 +65,6 @@ export async function chefOnboardingApi(
 const INCOMPLETE_MESSAGES: Record<ChefFormSection, string> = {
   personal: "Complete your basic details before submitting your application.",
   kitchen: "Complete your kitchen details and add both kitchen photos before submitting.",
-  fssai:
-    "Add your 14-digit FSSAI registration number before submitting. If you don’t have one yet, use “Don’t have FSSAI?” for help.",
   documents: "Upload your identity document before submitting your application.",
   bank: "Confirm your bank details before submitting your application.",
 };
@@ -148,19 +145,14 @@ export function useChefOnboarding() {
     [notice, setNotice] = useState("");
   const fieldError = fieldErrors[0] ?? null;
   const [fromReview, setFromReview] = useState(false),
-    [terms, setTerms] = useState(false),
-    [callback, setCallback] = useState<CallbackRequest | null>(null);
-  // An open or contacted request blocks a duplicate; a resolved one lets the applicant ask again.
-  const callbackCase = callback && callback.status !== "RESOLVED" ? callback.caseNumber : "";
-  const [fssaiGuide, setFssaiGuideState] = useState(false);
+    [terms, setTerms] = useState(false);
   const currentState = useRef(state),
     currentDetails = useRef(details),
     inFlight = useRef(false),
     autosave = useRef<Promise<void> | null>(null),
     mounted = useRef(true);
   const owner = useRef(captureSessionContext()),
-    upload = useRef<XMLHttpRequest | null>(null),
-    helpKey = useRef<string | null>(null);
+    upload = useRef<XMLHttpRequest | null>(null);
   const current = useCallback(() => mounted.current && isSessionContextCurrent(owner.current), []);
   // The screen behind the bare /chef/application URL, chosen from the saved draft on load.
   const entry = useRef<ChefFormScreen>("personal");
@@ -255,7 +247,6 @@ export function useChefOnboarding() {
       }
       currentState.current = next;
       setState(next);
-      setCallback(next.callbackRequest ?? null);
       setSignedOut(false);
       setUnavailable(false);
       // A chef application starts from what the chef enters: nothing is copied from the customer profile.
@@ -271,7 +262,6 @@ export function useChefOnboarding() {
       setDirty(Boolean(unsaved));
       if (unsaved) setNotice("You’re signed in again. What you typed before is still here: save it to keep it.");
       setFromReview(false);
-      setFssaiGuideState(false);
       const destination: ChefFormScreen =
         next.application.status === "APPROVED" && next.legacy ||
           next.application.status === "REJECTED" && next.progress?.nextAction !== "EDIT_APPLICATION" ||
@@ -453,7 +443,6 @@ export function useChefOnboarding() {
   /** Shows a screen and clears transient messages from the previous one. */
   function show(next: ChefFormScreen) {
     setScreen(next);
-    setFssaiGuideState(false);
     setFieldErrors([]);
     setError("");
     setNotice("");
@@ -492,29 +481,6 @@ export function useChefOnboarding() {
       setFromReview(false);
     });
   }
-  /** Saves the FSSAI help view as a draft and lets the applicant finish the other sections. */
-  async function continueWithoutFssai() {
-    const value = currentDetails.current.fssaiNumber.trim();
-    if (value && !/^[0-9]{14}$/.test(value)) {
-      setFssaiGuideState(false);
-      focusError({
-        field: "fssaiNumber",
-        message: "Finish your 14-digit FSSAI number, or clear it to continue without one for now.",
-      });
-      return;
-    }
-    await work(async () => {
-      const saved = await persist();
-      go(afterSectionSave("fssai", fromReview, saved));
-      setFromReview(false);
-    });
-  }
-  function setFssaiGuide(open: boolean) {
-    setFssaiGuideState(open);
-    setFieldErrors([]);
-    setError("");
-    setNotice("");
-  }
   /** The first section a reviewer flagged, otherwise the first incomplete one. */
   function nextCorrection(): ChefFormSection | "review" {
     const saved = currentState.current;
@@ -532,10 +498,6 @@ export function useChefOnboarding() {
   }
   function back() {
     if (busy) return;
-    if (screen === "fssai" && fssaiGuide) {
-      setFssaiGuide(false);
-      return;
-    }
     if (fromReview) {
       go("review");
       setFromReview(false);
@@ -650,40 +612,6 @@ export function useChefOnboarding() {
       if (current()) setBusy(false);
     }
   }
-  async function requestCallback() {
-    if (callbackCase) return;
-    await work(async () => {
-      const saved = await persist();
-      helpKey.current ??= crypto.randomUUID();
-      const fssai = currentDetails.current.fssaiNumber;
-      const result = await chefOnboardingApi("/api/chef/onboarding/help", "POST", {
-        requestKey: helpKey.current,
-        message: [
-          "Category: FSSAI application callback",
-          "Request: Please call me on my verified mobile number to help me apply for FSSAI registration.",
-          `Application: ${saved.application.id ?? "Not created yet"} (${saved.application.status})`,
-          "Onboarding stage: FSSAI details",
-          `FSSAI status: ${/^[0-9]{14}$/.test(fssai) ? "Number added" : "No FSSAI number yet"}`,
-          `Verified mobile: ${saved.phoneNumber || "On file"}`,
-          `Preferred language: ${currentDetails.current.language}`,
-        ].join("\n"),
-      });
-      if (
-        !result ||
-        typeof result !== "object" ||
-        !("id" in result) ||
-        typeof result.id !== "string" ||
-        !("caseNumber" in result) ||
-        typeof result.caseNumber !== "string" ||
-        !result.caseNumber
-      )
-        throw new Error(
-          "Your callback request could not be confirmed. Retry to check the same request.",
-        );
-      if (current())
-        setCallback({ caseNumber: result.caseNumber, status: "OPEN", requestedAt: new Date().toISOString() });
-    });
-  }
   function savedBank(next: BankStatus) {
     if (!current()) return;
     setBank(next);
@@ -748,12 +676,7 @@ export function useChefOnboarding() {
     fromReview,
     terms,
     setTerms,
-    callbackCase,
-    callback,
     nextCorrection,
-    fssaiGuide,
-    setFssaiGuide,
-    continueWithoutFssai,
     open,
     go,
     cancelUpload,
@@ -771,7 +694,6 @@ export function useChefOnboarding() {
     kitchenReadyForPhotos,
     goToField,
     removeFile,
-    requestCallback,
     savedBank,
     bankBusy,
     submit,

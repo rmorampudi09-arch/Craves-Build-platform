@@ -610,7 +610,7 @@ export function ChefApplicationWorkspace() {
         <StepHeader part={7} label="Identity documents" onBack={() => go("fssai")} />
         <div className="mt-7"><IconCircle><ShieldCheck className="h-7 w-7" aria-hidden="true" /></IconCircle></div>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">Verify your identity</h1>
-        <p className="mt-3 text-base leading-7 text-[#6B6B6B]">We ask every chef to provide these details so we know who is preparing your food. Your ID photos are kept private and secure.</p>
+        <p className="mt-3 text-base leading-7 text-[#6B6B6B]">We ask every chef to provide these details so we know who is preparing the food. Your ID photos are kept private and secure.</p>
         <div className="mt-6 space-y-3 rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]">{["A clear photo of you", "Front of your government ID", "Back of the same ID", "Your PAN card"].map((item) => <p key={item} className="flex items-center gap-3"><Camera className="h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />{item}</p>)}</div>
         <button type="button" onClick={() => go("documents")} className="mt-7 min-h-12 w-full rounded-full bg-[#F62E18] px-6 font-semibold text-white">Continue</button>
       </section>

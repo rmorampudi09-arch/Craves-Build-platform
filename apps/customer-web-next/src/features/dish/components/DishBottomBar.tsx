@@ -33,7 +33,13 @@ function priceLabel(price: number): string {
 }
 
 const stepperButtonClass =
-  "flex h-11 w-11 items-center justify-center !bg-transparent !text-[#F62E18] transition-[background-color] duration-(--dur-micro) hover:!bg-white active:!bg-[#E5E7EB] active:duration-0 disabled:cursor-not-allowed disabled:opacity-40";
+  "flex h-11 w-11 items-center justify-center !bg-transparent !text-[#C92716] transition-[background-color] duration-(--dur-micro) hover:!bg-white active:!bg-[#E5E7EB] active:duration-0 disabled:cursor-not-allowed disabled:opacity-40";
+/** Add is deep red text and outline, no fill; Added and View cart are the cart bar's leaf green (owner, 5 Nov 2026). */
+const ACTION =
+  "relative ml-auto inline-flex min-h-12 flex-1 items-center justify-center overflow-hidden whitespace-nowrap rounded-full !px-4 text-[1.0625rem] font-bold transition-[background-color,color,box-shadow] duration-(--dur-component) sm:min-w-52 sm:flex-none sm:!px-8";
+const ADD_ACTION =
+  "!bg-white !text-[#C92716] !shadow-[inset_0_0_0_1.5px_#C92716] hover:!bg-[#FDEAE8] active:!bg-[#F9D5D1] disabled:cursor-progress";
+const CART_ACTION = "!bg-[#17803D] !text-white !shadow-[0_6px_16px_rgba(23,128,61,0.28)] hover:!bg-[#12692F] active:!bg-[#12692F]";
 
 /**
  * The phone's one add control on a dish page. It stays mounted (so the tab bar
@@ -104,7 +110,7 @@ export function DishBottomBar({
                 ? "Added to cart"
                 : `View cart, ${cartTotalLabel}`
           }
-          className="craves-primary-action relative ml-auto flex-1 overflow-hidden !px-4 sm:min-w-52 sm:flex-none sm:!px-8"
+          className={`${ACTION} ${mode === "add" ? ADD_ACTION : CART_ACTION}`}
         >
           <AnimatePresence mode="wait" initial={false}>
             {/* The new cart line shows at once, so there is no "Adding" label to flash. One label

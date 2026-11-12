@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -62,6 +63,14 @@ public class FleetStatusBridge {
         this.json = json;
     }
 
+    /** Delivery Intelligence hears of every rider who becomes an order's courier (a bean whenever the fleet is). */
+    private FleetIntelligence intelligence;
+
+    @Autowired(required = false)
+    public void setIntelligence(FleetIntelligence intelligence) {
+        this.intelligence = intelligence;
+    }
+
     /**
      * In the accept's transaction: the order's delivery job as craves_fleet with the trip id, its COURIER_ASSIGNED event
      * (rider card), and the delivery command marked done. False if the order already has a delivery job.
@@ -88,6 +97,9 @@ public class FleetStatusBridge {
             UUID.randomUUID(), DeliveryCommandModels.DELIVERY_STATUS_CHANGED, "1.0", Instant.now(), trip.orderId(), null,
             "integration-service", "delivery-job/" + job, data)));
         commands.findByChefSubOrderId(trip.chefSubOrderId()).ifPresent(command -> commands.markCompleted(command.id()));
+        if (intelligence != null) {
+            intelligence.record(trip.chefSubOrderId());
+        }
         return true;
     }
 
@@ -128,6 +140,9 @@ public class FleetStatusBridge {
         outbox.enqueue(DeliveryCommandModels.DELIVERY_STATUS_CHANGED, job, trip.orderId(), json.valueToTree(new EventEnvelope<>(
             UUID.randomUUID(), DeliveryCommandModels.DELIVERY_STATUS_CHANGED, "1.0", Instant.now(), trip.orderId(), null,
             "integration-service", "delivery-job/" + job, data)));
+        if (intelligence != null) {
+            intelligence.record(trip.chefSubOrderId());
+        }
         return true;
     }
 

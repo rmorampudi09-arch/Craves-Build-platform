@@ -34,6 +34,16 @@ describe("GET /api/discovery/kitchens", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
+  it("passes veg mode's food type on to Catalog, and refuses any other value", async () => {
+    catalog.mockResolvedValue(Response.json({ latitude: 17.4, longitude: 78.4, radiusMeters: 10_000, page, kitchens: [KITCHEN] }));
+    const veg = await GET(new NextRequest("https://craves.in/api/discovery/kitchens?latitude=17.4&longitude=78.4&foodType=VEG"));
+    expect(veg.status).toBe(200);
+    expect(catalog).toHaveBeenCalledWith("/discovery/kitchens?latitude=17.4&longitude=78.4&radiusMeters=10000&page=0&size=20&foodType=VEG");
+    const odd = await GET(new NextRequest("https://craves.in/api/discovery/kitchens?latitude=17.4&longitude=78.4&foodType=VEGAN"));
+    expect(odd.status).toBe(400);
+    expect(catalog).toHaveBeenCalledOnce();
+  });
+
   it("keeps Catalog's failure status without caching it", async () => {
     catalog.mockResolvedValue(Response.json({ message: "down" }, { status: 503 }));
     const response = await discover();

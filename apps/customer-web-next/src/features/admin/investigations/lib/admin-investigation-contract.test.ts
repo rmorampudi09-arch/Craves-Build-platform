@@ -20,6 +20,8 @@ test("requires an exact resource, UUID and auditable reason", () => {
   });
   assert.equal(parseAdminInvestigationRequest({ resource: "order", resourceId: ID, reason: "short" }), null);
   assert.equal(parseAdminInvestigationRequest({ resource: "unknown", resourceId: ID, reason: "A valid long reason" }), null);
+  // A header cannot carry it: the old code answered 503 instead of 400.
+  assert.equal(parseAdminInvestigationRequest({ resource: "order", resourceId: ID, reason: "Refund dispute ₹500 on CRV-101" }), null);
 });
 
 test("reduces order investigations to an explicit operator allow-list", () => {

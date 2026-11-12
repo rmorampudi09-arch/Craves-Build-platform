@@ -11,9 +11,10 @@ export function unreadBadgeLabel(count: number | null): string | null {
 }
 
 /** The bell's accessible name: "Notifications, 3 unread". */
-export function notificationsLabel(count: number | null): string {
+/** `name` matches a visible label ("Alerts"), so voice control can say what it sees. */
+export function notificationsLabel(count: number | null, name = "Notifications"): string {
   const label = unreadBadgeLabel(count);
-  return label ? `Notifications, ${label} unread` : "Notifications";
+  return label ? `${name}, ${label} unread` : name;
 }
 
 /**

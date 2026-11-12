@@ -1,0 +1,461 @@
+{
+  "course": {
+    "id": "advanced-ordering",
+    "service": "advanced-features-service",
+    "title": "Ordering extras: groups, events, companies, changes and kitchen load",
+    "level": "Practitioner",
+    "minutes": 168,
+    "description": "Study the advanced ordering modules: group orders, party and bulk requests, corporate and team meals, order changes agreed by both sides, small batches with checkout holds, kitchen load, and live order activity. Each one stays inside its own rules and leaves Order service as the authority for the real order and its money.",
+    "prerequisites": [
+      "advanced-platform",
+      "orders"
+    ],
+    "sources": [
+      "services/advanced-features-service/src/main/java/in/craves/advanced/grouporders/GroupOrderService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/bulkorders/BulkOrderRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/bulkorders/BulkOrderService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/corporatemeals/CorporateMealsRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/corporatemeals/CorporateMealsService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/orderamendments/OrderAmendmentRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/kitchencapacity/KitchenCapacityService.java",
+      "services/order-service/src/main/java/in/craves/order/advanced/BatchHoldCheckout.java",
+      "services/order-service/src/main/java/in/craves/order/advanced/KitchenLoad.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/liveactivities/LiveActivityRules.java"
+    ],
+    "sourceRevision": "9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605",
+    "lessons": [
+      {
+        "id": "adv-group-orders",
+        "title": "Run a group order that one host pays for",
+        "overview": "A group order lets friends or colleagues add their own dishes to one order from one kitchen while a single host pays. The module keeps the group's state, the join code and each person's picks; Order service still prices and places the real order. Two product choices shape everything: one kitchen per group, because multi-chef economics is an owner decision, and host pays, because split payments were deferred by the handbook. This lesson follows a group from creation to the checkout hand-off and its clean-up.",
+        "steps": [
+          {
+            "label": "Create the group and its code",
+            "detail": "The host creates a group for one kitchen with a join window between 15 minutes and 24 hours, 60 minutes by default. People join with an 8-character code in the form XXXX-XXXX, which carries about 40 bits of randomness. When the window ends the group locks itself, so a code that leaks later cannot add strangers to an order."
+          },
+          {
+            "label": "Let each person edit only their own picks",
+            "detail": "Every member changes only their own dishes. The host can remove people, lock and unlock the group, cancel it and hand it off to checkout. Limits are technical bounds, not prices: at most 20 people, 20 dishes per person and 100 of one dish per order."
+          },
+          {
+            "label": "Hand off with live prices",
+            "detail": "At checkout hand-off the service re-reads live prices and availability from Catalog and refuses the hand-off if any dish became unavailable, listing what changed. It never assumes that a price stored when someone joined is still true."
+          },
+          {
+            "label": "Fill the host's real cart only when asked",
+            "detail": "With applyToCart=true the hand-off fills the host's real cart through Order service. A non-empty cart is refused unless replaceCart=true, so nobody loses a cart they were building. Order service stays the authority for the final total, including fees and taxes."
+          },
+          {
+            "label": "Make the hand-off repeatable",
+            "detail": "Repeating the hand-off returns the stored result instead of filling the cart twice. A host whose phone timed out can simply tap again; the cart is not doubled and no member's picks are lost."
+          },
+          {
+            "label": "Clean up old groups",
+            "detail": "Closed groups are purged after 30 days and abandoned ones 7 days after their window ends. A group order holds people's choices, so keeping it forever would be personal data without a purpose."
+          }
+        ],
+        "example": "Kiran hosts a lunch group for six colleagues from one kitchen. One colleague's biryani is switched off by the chef before Kiran hands off, so the hand-off is refused and names that dish. The colleague picks another dish, Kiran hands off again, and Order service prices the cart as usual.",
+        "lab": "With a disposable database, create a group, join it with three test identities and add dishes. Switch one dish to unavailable in a fake Catalog and confirm the hand-off is refused. Then hand off twice with applyToCart=true and prove the second call returns the stored result without filling the cart again.",
+        "pitfall": "Never compute the final payable inside the group module: the hand-off prepares the cart, and only Order service decides what the host pays.",
+        "questions": [
+          {
+            "id": "adv-group-orders-q1",
+            "prompt": "Why does the checkout hand-off re-read prices from Catalog?",
+            "options": [
+              "To apply a group discount",
+              "Because a dish's price or availability may have changed since people joined",
+              "To charge each member separately",
+              "To lock the kitchen"
+            ],
+            "answer": 1,
+            "explanation": "The group stores picks, not authority; live prices and availability are checked again at hand-off."
+          },
+          {
+            "id": "adv-group-orders-q2",
+            "prompt": "What happens when the host's cart already has items and replaceCart is not set?",
+            "options": [
+              "The items are merged",
+              "The hand-off is refused so the existing cart is not lost",
+              "The old items are deleted",
+              "A second cart is created"
+            ],
+            "answer": 1,
+            "explanation": "applyToCart refuses a non-empty cart unless the host explicitly asks to replace it."
+          },
+          {
+            "id": "adv-group-orders-q3",
+            "prompt": "A host taps hand-off twice after a timeout. What does the second call do?",
+            "options": [
+              "Fills the cart a second time",
+              "Returns the stored result of the first hand-off",
+              "Cancels the group",
+              "Locks every member out"
+            ],
+            "answer": 1,
+            "explanation": "The hand-off is repeatable: a second call returns what the first one produced."
+          }
+        ]
+      },
+      {
+        "id": "adv-bulk-orders",
+        "title": "Handle party and bulk requests without invented rules",
+        "overview": "Party and bulk orders are requests, not instant orders: a customer asks one kitchen for many portions for an event, the chef quotes, and the customer accepts. The commercial rules, such as the minimum portions, the notice needed, how far ahead people may book and the deposit share, are staff data with no defaults. Until staff enter them, requests answer 503 BULK_ORDERS_NOT_CONFIGURED. This lesson reads BulkOrderRules and BulkOrderService to see how a request moves and what the module deliberately leaves to Order service.",
+        "steps": [
+          {
+            "label": "Read the versioned rules",
+            "detail": "Platform or payments admins set the minimum portions, minimum notice in hours, booking horizon in days and the deposit share from 0 to 100 %. Each change is a new, audited version, and rules whose minimum notice is longer than the booking horizon are refused. GET /policy is public so the apps can show the rules before someone asks."
+          },
+          {
+            "label": "Validate the request",
+            "detail": "A signed-in customer asks one kitchen for up to 30 dishes, quantities summed per dish, for an event time that fits the rules, with an optional guest count and notes. Dishes must be on that kitchen's public menu today. One dish can have at most 5000 portions, and names and list prices are snapshotted so the quote stays understandable."
+          },
+          {
+            "label": "Bound the load on chefs",
+            "detail": "A person may have at most 10 open requests whose events are still ahead. The check runs before Catalog is asked; it is not atomic, so two requests sent at the same moment can both pass it. That is a known, documented limit."
+          },
+          {
+            "label": "Quote as the owning chef",
+            "detail": "Only the kitchen's chef, confirmed through Catalog with the chef's token, can quote. A quote prices every requested dish exactly once, at most 1,00,000.00 a portion as a typo bound, with a validity that ends no later than the event. The deposit is the current staff share of the total, rounded down to whole paise and fixed into the quote."
+          },
+          {
+            "label": "Accept exactly what was seen",
+            "detail": "The customer accepts with the expectedVersion of the quote they saw, while it is valid and before the event. A new quote replaces the last one and is audited, so a customer can never accept a quote that changed under them. The chef may decline with a reason, and requests lapse when the event passes."
+          },
+          {
+            "label": "Keep privacy and authority in place",
+            "detail": "The chef never sees who asked: no customer id appears in any chef view, and contact happens through the order or support chat. An accepted request is final here; placing the order and taking the deposit belong to Order service, and cancelling after acceptance follows the order's own cancellation and refund rules."
+          }
+        ],
+        "example": "A customer asks a kitchen for 120 portions of veg pulao and 80 of paneer curry for a housewarming in five days. The chef quotes both dishes with a validity of two days. The customer accepts version 2 of the quote; when Order service later places the order, the deposit stored with that quote is the amount to take.",
+        "lab": "Write a test that tries a bulk request before any rules exist and expects 503 BULK_ORDERS_NOT_CONFIGURED. Add rules, create a request, quote it twice and confirm that accepting the first version fails while accepting the second works. Finally check that the chef's view contains no customer identifier.",
+        "pitfall": "Never put a default minimum, notice period or deposit share in code: those are commercial decisions that staff enter and version.",
+        "questions": [
+          {
+            "id": "adv-bulk-orders-q1",
+            "prompt": "What do bulk requests answer before staff enter the rules?",
+            "options": [
+              "They use built-in defaults",
+              "503 BULK_ORDERS_NOT_CONFIGURED",
+              "They are accepted without a deposit",
+              "They are forwarded to support"
+            ],
+            "answer": 1,
+            "explanation": "The rules have no defaults; the module refuses to run until staff set them."
+          },
+          {
+            "id": "adv-bulk-orders-q2",
+            "prompt": "Why does the customer accept with expectedVersion?",
+            "options": [
+              "To pay faster",
+              "So they can only accept the exact quote they saw, not one that changed",
+              "To skip the deposit",
+              "To hide the quote from the chef"
+            ],
+            "answer": 1,
+            "explanation": "A newer quote replaces the old one; accepting a stale version is refused."
+          },
+          {
+            "id": "adv-bulk-orders-q3",
+            "prompt": "How is the deposit in a quote calculated?",
+            "options": [
+              "By the chef freely",
+              "As the current staff-set share of the total, rounded down to whole paise",
+              "As a flat 50 %",
+              "By Order service after acceptance"
+            ],
+            "answer": 1,
+            "explanation": "The deposit is fixed into the quote from the staff rule at quoting time."
+          }
+        ]
+      },
+      {
+        "id": "adv-corporate-meals",
+        "title": "Let companies pay a share of their people's meals",
+        "overview": "Corporate meals let a company pay part of each member's meal, and team meals let a manager order for a team. Everything commercial is entered by Craves staff exactly as agreed with each company: the share, the per-meal maximum, meals per day, meal days and window, the monthly budget, an optional cap per member and payment terms. Nothing is seeded, so a company pays for nothing until its terms are set. This lesson follows a membership, a charge and a monthly statement through CorporateMealsRules and CorporateMealsService.",
+        "steps": [
+          {
+            "label": "Set the company terms",
+            "detail": "Platform and payments admins create the company with a seat limit and its terms: a share from 1 to 100 % up to a per-meal maximum, 1 to 5 meals per member per India day, meal days and one daily window in India time that cannot run past midnight, a required monthly budget and payment terms. Until then charges answer 409 COMPANY_TERMS_NOT_SET; every change is audited."
+          },
+          {
+            "label": "Manage people with invites",
+            "detail": "One company per person at a time. Staff add managers; managers create invite codes of 43 random characters, shown once and stored only as SHA-256, valid 1 to 30 days with a use limit no larger than the seat limit and at most 20 open per company. A person joins with a code and the name their company will see, and can leave at any time."
+          },
+          {
+            "label": "Compute the company share",
+            "detail": "The share is whole paise rounded down, never more than the meal or the per-meal maximum, and trimmed to what is left of the monthly budget and the member's monthly cap. When nothing is left the request is refused with the reason. The meal counts on the India date and time it is charged, the order's time, not the delivery time."
+          },
+          {
+            "label": "Order for a team",
+            "detail": "A manager orders a team meal for 2 people up to the seat limit, on the same days and window. The company pays its share up to the per-meal maximum times the headcount, and team meals count only against the company budget, never against the manager's own meals or cap. Collecting each person's picks reuses group orders."
+          },
+          {
+            "label": "Reserve, confirm, release",
+            "detail": "Checkout reserves under the company row lock (one waiting reservation per person, Idempotency-Key supported), then confirms with the order id or releases. A reservation lasts 10 minutes and keeps counting 30 seconds after it expires, so replicas with slightly different clocks never overspend a budget. Staff can void a charge with a reason."
+          },
+          {
+            "label": "Read the monthly statement",
+            "detail": "Staff and the company's managers read one statement per India month with confirmed charges only, totals, one line per person and the due date from the payment terms. Invoices and GST documents are not built in this module: the statement is the data that a finance document would be made from."
+          }
+        ],
+        "example": "A company pays 50 % up to 100 rupees a meal with a monthly budget of 20,000 rupees. An employee's 180-rupee lunch gets a 90-rupee company share. Late in the month only 40 rupees of budget remain, so the next lunch gets a 40-rupee share and the employee pays the rest; once the budget is used up, the share is refused with that reason.",
+        "lab": "Set up a test company with terms, invite two members and a manager, and run three reservations that cross the monthly budget. Assert the trimmed share on the third, confirm one reservation and let another expire, then read the statement and check that only confirmed charges appear.",
+        "pitfall": "Never estimate a company share from the app's cart total alone: the share is decided under the company lock from the terms and remaining budget, and Order service owns the final total.",
+        "questions": [
+          {
+            "id": "adv-corporate-meals-q1",
+            "prompt": "A company has no terms yet. What happens when a member tries to use it?",
+            "options": [
+              "A default 10 % share applies",
+              "409 COMPANY_TERMS_NOT_SET",
+              "The member pays nothing",
+              "The order is sent to support"
+            ],
+            "answer": 1,
+            "explanation": "Nothing is seeded; a company pays for nothing until staff enter its agreed terms."
+          },
+          {
+            "id": "adv-corporate-meals-q2",
+            "prompt": "Which budget does a team meal count against?",
+            "options": [
+              "The manager's personal cap",
+              "Only the company's monthly budget",
+              "Each member's daily meals",
+              "None"
+            ],
+            "answer": 1,
+            "explanation": "Team meals count against the company budget, never the manager's own meals or cap."
+          },
+          {
+            "id": "adv-corporate-meals-q3",
+            "prompt": "Why does an expired reservation keep counting for 30 seconds?",
+            "options": [
+              "To punish the customer",
+              "So replicas whose clocks differ slightly can never overspend a budget",
+              "To give the chef time to cook",
+              "Because the database is slow"
+            ],
+            "answer": 1,
+            "explanation": "The grace window covers clock skew between replicas, so a budget is never used twice."
+          }
+        ]
+      },
+      {
+        "id": "adv-order-amendments",
+        "title": "Change a placed order only when both sides agree",
+        "overview": "Order changes cover the everyday cases after payment: a customer wants less of something, or a chef ran out of an ingredient and proposes a substitute. Either side proposes, the other accepts or declines, and nothing ever makes an order cost more. The module records the agreement and the money effect; it does not edit, refund or charge the order itself. This lesson reads OrderAmendmentRules to see when changes are allowed and what kinds exist.",
+        "steps": [
+          {
+            "label": "Check who may propose and when",
+            "detail": "The customer may ask while the order is PAID, CHEF_ACCEPTANCE_PENDING or CHEF_ACCEPTED; the chef may propose from CHEF_ACCEPTANCE_PENDING to PREPARING. A proposal can be accepted only while the order is still in the kitchen. Each side reads the order with its own token, so another kitchen's order answers like a missing one."
+          },
+          {
+            "label": "Keep one proposal at a time",
+            "detail": "One proposal waits at a time per order, each side makes at most 5 per order, and an unanswered one lapses after 10 minutes. Accepting needs the version the person saw, and once a newer proposal exists an older one can never be accepted, whatever a replica's clock says."
+          },
+          {
+            "label": "Know the four kinds of change",
+            "detail": "REMOVE drops a line, REDUCE lowers a quantity, REPLACE swaps in another dish from the same kitchen that Catalog sells right now, and ADJUST changes the preparation of the same dish, such as tofu instead of paneer, with a required note. Removing every dish is refused because that is a cancellation with its own rules."
+          },
+          {
+            "label": "Never make it cost more",
+            "detail": "A substitute may cost at most what the customer paid for the line; adding dishes is a new order. Every reason a change does not fit is reported at once, so the person can fix everything in one go instead of one error at a time."
+          },
+          {
+            "label": "Record the money effect only",
+            "detail": "Changes are priced at the order lines' own prices, before order-wide discounts such as wallet, referral or promotions, and the amendment stores the gross food subtotal change, never above zero. Applying the change and refunding through the refund rules belong to the order-service hook, which must share order-wide discounts so it never refunds more than was paid."
+          },
+          {
+            "label": "Protect privacy in views and audit",
+            "detail": "No customer id appears in any view; the chef sees the order, not the person. Staff in platform, support, operations and audit roles can read every change on an order for disputes. The audit trail records what changed and the amount, never the free-text notes."
+          }
+        ],
+        "example": "A chef runs out of paneer and proposes ADJUST on one line: tofu instead of paneer, with a note. The customer accepts within the 10 minutes using the version they saw. The amendment records a zero money change, the kitchen cooks the tofu version, and nothing is refunded because the price did not change.",
+        "lab": "Write tests for one order: a customer REDUCE accepted by the chef, a chef REPLACE that costs more than the line (refused with the reason), and a stale acceptance after a newer proposal (refused). Check that the audit rows contain the amount but none of the notes.",
+        "pitfall": "Never treat an accepted amendment as a refund: the module only records the agreed change, and Order service applies it and refunds through its own rules.",
+        "questions": [
+          {
+            "id": "adv-order-amendments-q1",
+            "prompt": "What kind of change makes the line cheaper or equal but keeps the same dish with a different preparation?",
+            "options": [
+              "REMOVE",
+              "REDUCE",
+              "REPLACE",
+              "ADJUST"
+            ],
+            "answer": 3,
+            "explanation": "ADJUST keeps the dish and changes its preparation, with a required note."
+          },
+          {
+            "id": "adv-order-amendments-q2",
+            "prompt": "Why is removing every dish in an order refused?",
+            "options": [
+              "Chefs would lose money",
+              "Because that is a cancellation, which has its own rules",
+              "The database cannot store it",
+              "Customers must keep at least two dishes"
+            ],
+            "answer": 1,
+            "explanation": "An amendment cannot empty an order; cancellation and its refund rules apply instead."
+          },
+          {
+            "id": "adv-order-amendments-q3",
+            "prompt": "An older proposal is accepted after a newer one was created. What happens?",
+            "options": [
+              "It is applied first",
+              "It is refused, because a newer proposal exists",
+              "Both are applied",
+              "The newer one is withdrawn"
+            ],
+            "answer": 1,
+            "explanation": "Once a newer proposal exists, an older one can never be accepted."
+          }
+        ]
+      },
+      {
+        "id": "adv-kitchen-batches",
+        "title": "Sell small batches and show honest kitchen load",
+        "overview": "Home kitchens often cook a fixed number of portions. The kitchen-capacity module lets a chef publish a batch for a day and lets customers hold portions while they check out, so a dish never sells more portions than exist. Order service adds two pieces behind switches that start off: confirming batch holds inside checkout, and a kitchen-load estimate from live orders. This lesson reads KitchenCapacityService, BatchHoldCheckout and KitchenLoad.",
+        "steps": [
+          {
+            "label": "Publish a batch",
+            "detail": "A chef publishes portions of a dish for an India date from today up to 30 days ahead, 1 to 1000 portions, with an optional order cutoff and ready time. The chef can change portions, but never below what is already held or confirmed, change the cutoff and ready time, or close the batch; holds already taken stay valid."
+          },
+          {
+            "label": "Hold portions during checkout",
+            "detail": "A signed-in person holds portions while checking out: one live hold per person per batch and at most 50 portions per person per batch, with Idempotency-Key support. Holds are accepted only while the batch is open, before its cutoff and before its service date is over."
+          },
+          {
+            "label": "Let holds expire without a sweeper",
+            "detail": "A hold lasts 10 minutes by default (CRAVES_ADV_BATCH_HOLD_MINUTES, kept between 1 and 60). Expired holds simply stop counting 30 seconds later, so replicas with slightly different clocks never sell a portion twice. Holds, confirmations and voids lock the batch row, and the chef can void a hold that no real order backs, with a reason."
+          },
+          {
+            "label": "Confirm holds inside checkout",
+            "detail": "With CRAVES_ADVANCED_CHECKOUT_BATCH_HOLDS_ENABLED on, a checkout may carry one to three batchHolds. Order service confirms each one inside the checkout transaction with the customer's token. A refused hold gives 409 BATCH_HOLD_ plus the module's code, an unreachable module 503 BATCH_HOLDS_UNAVAILABLE, and either one rolls back the whole checkout and keeps the cart. While the switch is off, a checkout that sends holds is refused, never silently ignored."
+          },
+          {
+            "label": "Respect the connection budget",
+            "detail": "The confirmations hold a database connection, and the pool is small, so each replica runs one batch-hold checkout at a time; another that waits more than 2 seconds gets 503 BATCH_HOLDS_BUSY. Checkouts without holds never wait. A documented limit: if the order commit fails after a hold was confirmed, the chef sees and voids it."
+          },
+          {
+            "label": "Show kitchen load from live orders",
+            "detail": "GET /api/v1/orders/kitchen-load answers busy and extra minutes from the kitchen's open orders times an operations-set number of minutes, in steps of at least 15 minutes and three orders, capped. It stays off until operations set both CRAVES_KITCHEN_LOAD_MINUTES_PER_OPEN_ORDER and CRAVES_KITCHEN_LOAD_MAX_EXTRA_MINUTES; nobody sees the order count, and each replica asks the database at most once per kitchen every 30 seconds."
+          }
+        ],
+        "example": "A chef publishes 20 portions of Sunday mutton biryani. Eighteen are confirmed and two customers each hold one. A third customer is told it is sold out; ten minutes later one hold expires unused, and 30 seconds after that its portion becomes available again without any clean-up job.",
+        "lab": "In a disposable environment, publish a batch of 3 portions, take holds for 2 and 1 portions with two identities, and show that a third identity is refused. Let one hold expire and confirm the portion returns after the grace window. Then run checkout with the batch-hold switch off and check the 409 BATCH_HOLDS_NOT_ENABLED answer.",
+        "pitfall": "Never count portions in the app or trust a client's clock: the batch row lock and the server's own expiry decide what is left.",
+        "questions": [
+          {
+            "id": "adv-kitchen-batches-q1",
+            "prompt": "Why do expired holds keep counting for 30 seconds?",
+            "options": [
+              "To slow down buyers",
+              "So replicas with slightly different clocks never sell a portion twice",
+              "To give chefs time to cook",
+              "Because a sweeper job runs every 30 seconds"
+            ],
+            "answer": 1,
+            "explanation": "The grace window covers clock skew; no sweeper is needed."
+          },
+          {
+            "id": "adv-kitchen-batches-q2",
+            "prompt": "What does a checkout that sends batchHolds get while the order-service switch is off?",
+            "options": [
+              "The holds are ignored",
+              "409 BATCH_HOLDS_NOT_ENABLED",
+              "The holds are confirmed later",
+              "200 with a warning"
+            ],
+            "answer": 1,
+            "explanation": "The switch-off state refuses holds explicitly rather than silently ignoring them."
+          },
+          {
+            "id": "adv-kitchen-batches-q3",
+            "prompt": "When does the kitchen-load answer start showing extra minutes?",
+            "options": [
+              "Immediately with built-in defaults",
+              "Only after operations set both the minutes-per-order and maximum settings",
+              "After 10 orders",
+              "When the chef switches it on in the app"
+            ],
+            "answer": 1,
+            "explanation": "No default is invented; it stays off (configured: false) until both settings are valid."
+          }
+        ]
+      },
+      {
+        "id": "adv-live-activity",
+        "title": "Follow an order on the lock screen",
+        "overview": "Live order activity feeds iOS Live Activities and the Dynamic Island, and an Android ongoing notification, with the state of a customer's own order. The module reads Order service with the customer's token every time, maps the status to a small set of stages, and stores only the push token the app registers. Sending pushes through Apple's service is not built yet, so apps poll while open. This lesson reads LiveActivityRules and the controller around it.",
+        "steps": [
+          {
+            "label": "Map status to a stage",
+            "detail": "GET /live-activities/orders/{orderId}/state returns Order service's status, a stage (PAYMENT_PENDING, PLACED, COOKING, READY, ON_THE_WAY, DELIVERED, ENDED for rejected, cancelled or refunded orders, or UNKNOWN for a status this build does not know), a step from 0 to 5 and isFinal, which tells the app to end the activity."
+          },
+          {
+            "label": "Keep Order service the authority",
+            "detail": "Nothing about the order is copied into the module; each read goes to Order service with the caller's token, so a customer only ever sees their own order. No arrival time is shown, because no service exposes one that is reliable today."
+          },
+          {
+            "label": "Register the push token",
+            "detail": "PUT /live-activities/orders/{orderId} with the ActivityKit push token records that the app follows that order. Only the caller's own unfinished order is accepted: a finished one answers 409 ORDER_FINISHED and another person's answers 404. A new token for the same order replaces the old one."
+          },
+          {
+            "label": "Bound activities per person",
+            "detail": "At most 10 activities can be live per person (409 TOO_MANY_ACTIVITIES). An activity also ends, and its token is cleared, when its state is read and the order is finished, or when the person registers another one after it went 24 hours without a refresh, so an uninstalled app cannot hold the cap forever."
+          },
+          {
+            "label": "End and list activities",
+            "detail": "DELETE ends an activity and clears its token while keeping the row; GET /live-activities lists the caller's activities without any tokens. Tokens are personal data: the export lists activities without tokens, and erasing deletes them."
+          },
+          {
+            "label": "Know what still needs the owner",
+            "detail": "Pushing updates through Apple Push Notification service needs Apple's push key, key id, team id and bundle id in Key Vault, plus a trigger on order status changes. Until then the app refreshes by polling the state endpoint while open, and iOS ends an activity by itself after at most 8 to 12 hours."
+          }
+        ],
+        "example": "A customer starts a Live Activity after paying. The app polls the state endpoint and the stage moves from PLACED to COOKING to READY. When the order is delivered, the next read returns isFinal, the module clears the token, and the app ends the activity on the lock screen.",
+        "lab": "With a fake Order gateway, register a token for an unfinished order, read the state through three statuses, then mark the order delivered and check that the read returns isFinal and clears the token. Try registering an eleventh activity for one person and expect 409.",
+        "pitfall": "Never show an arrival time on the lock screen until a service exposes a reliable one; a confident wrong time is worse than none.",
+        "questions": [
+          {
+            "id": "adv-live-activity-q1",
+            "prompt": "Where does the live activity get an order's status?",
+            "options": [
+              "From a copy stored in the module",
+              "From Order service, read with the customer's token each time",
+              "From the rider app",
+              "From the push token"
+            ],
+            "answer": 1,
+            "explanation": "The module copies nothing about the order; Order service stays the authority."
+          },
+          {
+            "id": "adv-live-activity-q2",
+            "prompt": "What stage does a refunded order show?",
+            "options": [
+              "DELIVERED",
+              "ENDED",
+              "UNKNOWN",
+              "PLACED"
+            ],
+            "answer": 1,
+            "explanation": "Rejected, cancelled and refunded orders map to ENDED, and isFinal tells the app to stop."
+          },
+          {
+            "id": "adv-live-activity-q3",
+            "prompt": "Why do apps poll the state endpoint today?",
+            "options": [
+              "Polling is cheaper than push",
+              "Sending updates through Apple's push service needs keys and a status trigger not yet set up",
+              "Apple forbids push for food orders",
+              "The module has no state endpoint"
+            ],
+            "answer": 1,
+            "explanation": "APNs delivery needs the owner's Apple push key details and an order-status trigger; until then apps poll."
+          }
+        ]
+      }
+    ]
+  }
+}

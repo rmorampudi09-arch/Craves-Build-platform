@@ -5,13 +5,13 @@ import { fleetError, matchFleetRoute, UUID, type FleetFile, type FleetRoute } fr
 import { RIDER_ROUTES } from "./rider-contract";
 import { TRIP_ROUTES } from "./trip-contract";
 import { PAYOUT_ROUTES } from "./payout-contract";
-import { SLOT_ROUTES } from "./slot-contract";
+import { BANNER_ROUTES } from "./banner-contract";
 import { SETUP_ROUTES } from "./setup-contract";
 import { HEALTH_ROUTES } from "./health-contract";
 import { SUPPORT_ROUTES } from "./support-contract";
 
 export const FLEET_ROUTES: readonly FleetRoute[] = [
-  ...RIDER_ROUTES, ...TRIP_ROUTES, ...PAYOUT_ROUTES, ...SLOT_ROUTES, ...SETUP_ROUTES, ...HEALTH_ROUTES, ...SUPPORT_ROUTES,
+  ...RIDER_ROUTES, ...TRIP_ROUTES, ...PAYOUT_ROUTES, ...BANNER_ROUTES, ...SETUP_ROUTES, ...HEALTH_ROUTES, ...SUPPORT_ROUTES,
 ];
 
 const NO_STORE = { "Cache-Control": "no-store, private", Pragma: "no-cache" };
@@ -28,7 +28,8 @@ export async function fleetProxy(request: NextRequest, segments: string[], route
 
   const query = new URLSearchParams();
   for (const [name, value] of request.nextUrl.searchParams) {
-    if (!route.query?.[name]?.safeParse(value).success) return fail(400, "INVALID_FLEET_QUERY", `The ${name} filter is not valid.`);
+    // Own keys only: `?constructor=1` would otherwise reach Object.prototype and throw instead of answering 400.
+    if (!route.query || !Object.hasOwn(route.query, name) || !route.query[name].safeParse(value).success) return fail(400, "INVALID_FLEET_QUERY", `The ${name} filter is not valid.`);
     query.set(name, value);
   }
 

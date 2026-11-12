@@ -8,6 +8,15 @@ import org.springframework.stereotype.Component;
 public class InternalAdminRbacProperties {
     private boolean apiEnabled = false;
     private int maximumListSize = 100;
+    private boolean chefRoleRevokeEnabled = false;
+
+    public boolean isChefRoleRevokeEnabled() {
+        return chefRoleRevokeEnabled;
+    }
+
+    public void setChefRoleRevokeEnabled(boolean chefRoleRevokeEnabled) {
+        this.chefRoleRevokeEnabled = chefRoleRevokeEnabled;
+    }
 
     public boolean isApiEnabled() {
         return apiEnabled;

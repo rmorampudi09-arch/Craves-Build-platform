@@ -2,8 +2,8 @@
   "version": "academy-2026-09-13-v3",
   "sourceRevision": "9cf4aea069fa6a077fdef111bf2df4eeada696fc",
   "reviewedOn": "2026-09-13",
-  "evidenceLabel": "Source-grounded Craves engineering training: 15 courses, 75 lessons, 150 graded questions and 25 ungraded reasoning checkpoints. Practical laboratories require separate implementation and peer-review evidence; quiz completion does not certify production access or deployment. Source examples are an immutable repository snapshot, not a statement of current runtime activation.",
+  "evidenceLabel": "Source-grounded Craves engineering training: 25 courses, 121 lessons, 242 graded questions and 71 ungraded reasoning checkpoints. The 10 courses added on 10 November 2026 (advanced features, riders, chef referral, voice support, Delivery Intelligence and production operations) are pinned to their own later repository snapshot. Practical laboratories require separate implementation and peer-review evidence; quiz completion does not certify production access or deployment. Source examples are immutable repository snapshots, not a statement of current runtime activation.",
   "gradedQuestionsPerLesson": 2,
   "enhancements": ["auth.json", "people.json", "catalog.json", "orders.json", "payments.json", "delivery.json", "subscriptions.json", "notifications.json", "web.json"],
-  "newCourses": ["platform.json", "java-engineering.json", "mobile-engineering.json", "data-engineering.json", "document-engineering.json", "service-labs.json"]
+  "newCourses": ["platform.json", "java-engineering.json", "mobile-engineering.json", "data-engineering.json", "document-engineering.json", "service-labs.json", "advanced-platform.json", "advanced-ordering.json", "advanced-discovery.json", "advanced-growth.json", "advanced-trust-privacy.json", "rider-fleet.json", "chef-referral.json", "voice-support.json", "delivery-intelligence.json", "azure-operations.json"]
 }

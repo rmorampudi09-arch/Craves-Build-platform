@@ -117,7 +117,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
               ? "Delivery updates will appear here once a delivery partner picks up your order."
               : responseMessage(
                   deliveryRaw,
-                  "Delivery updates are taking a break. Your order status above is still current.",
+                  "Delivery updates aren’t available right now. Your order status above is still current.",
                 ),
           );
         }
@@ -279,7 +279,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
                     order={order}
                     delivery={delivery}
                     now={lastUpdatedAt ?? new Date()}
-                    // The same heading as the order page ("Waiting for the chef"), not the list's pill ("Awaiting chef").
+                    // The same heading as the order page ("Waiting for Lakshmi to confirm"), not the list's pill ("Awaiting kitchen").
                     title={orderJourney(order, delivery?.status ?? null).title}
                   />
                 ) : (

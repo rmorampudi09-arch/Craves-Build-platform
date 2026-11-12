@@ -17,7 +17,7 @@ import { chefBalanceSchema, payoutSchema, type ChefBalance } from "@/features/ad
 
 const TEXT = messages({
   en: {
-    loadFailed: "Your finance balance is unavailable. No amount is being estimated.",
+    loadFailed: "Your balance couldn’t load, so no amount is shown.",
     unavailable: "Balance unavailable",
     title: "Money you can take out",
     notPaid: "Not paid to you yet",

@@ -35,6 +35,9 @@ describe("admin fleet BFF", () => {
   it("forwards only known filters", async () => {
     expect((await fleetProxy(request("riders?status=BLOCKED"), ["riders"])).status).toBe(400);
     expect((await fleetProxy(request("riders?sort=name"), ["riders"])).status).toBe(400);
+    // Prototype names used to throw instead of answering 400.
+    expect((await fleetProxy(request("riders?constructor=1"), ["riders"])).status).toBe(400);
+    expect((await fleetProxy(request("riders?__proto__=1"), ["riders"])).status).toBe(400);
     expect(upstream).not.toHaveBeenCalled();
     upstream.mockResolvedValue(Response.json({ riders: [], nextCursor: null }));
     expect((await fleetProxy(request("riders?status=ACTIVE&search=98"), ["riders"])).status).toBe(200);
@@ -137,12 +140,9 @@ describe("admin fleet BFF", () => {
     expect(upstream.mock.calls[1][2]).toEqual({ method: "POST", headers: { "Idempotency-Key": KEY } });
   });
 
-  it("checks a vehicle, a slot and a banner before they reach the server", async () => {
+  it("checks a vehicle and a banner before they reach the server", async () => {
     const cases: [string, string, unknown, string][] = [
       ["PUT", `riders/${RIDER}/vehicle`, { label: "Honda Activa 6G", regNumber: "ts 09 ea 1234" }, "Enter the registration number, like TS09EA1234."],
-      ["POST", "slots", { riderId: RIDER, zoneName: "Madhapur", startsAt: "2026-10-21T12:30:00Z", endsAt: "2026-10-21T08:30:00Z", guaranteedPerHourPaise: 8000 }, "The slot must end after it starts."],
-      ["POST", "slots", { riderId: RIDER, zoneName: "Madhapur", startsAt: "2026-10-21T08:30:00Z", endsAt: "2026-10-21T12:30:00Z", guaranteedPerHourPaise: 80.5 }, "Expected integer, received float"],
-      ["POST", `slots/${DOC}/cancel`, { reason: "" }, "Write a reason of at least 3 characters."],
       ["PUT", "banner", { tone: "danger", text: "Rain", until: "2026-10-21T12:30:00Z" }, "Invalid enum value. Expected 'info' | 'warning', received 'danger'"],
       ["PUT", "banner", { tone: "warning", text: "x".repeat(161), until: "2026-10-21T12:30:00Z" }, "Keep the banner to 160 characters."],
     ];
@@ -154,12 +154,11 @@ describe("admin fleet BFF", () => {
     expect(upstream).not.toHaveBeenCalled();
   });
 
-  it("lists slots by date range and rider only", async () => {
-    expect((await fleetProxy(request("slots?from=2026-10-21&to=tomorrow"), ["slots"])).status).toBe(400);
-    expect((await fleetProxy(request("slots?from=2026-10-21&zone=Madhapur"), ["slots"])).status).toBe(400);
-    upstream.mockResolvedValue(Response.json({ slots: [] }));
-    expect((await fleetProxy(request(`slots?from=2026-10-21&to=2026-10-27&riderId=${RIDER}`), ["slots"])).status).toBe(200);
-    expect(upstream.mock.calls[0][1]).toBe(`/admin/fleet/slots?from=2026-10-21&to=2026-10-27&riderId=${RIDER}`);
+  it("forwards no slot path: booked slots were removed from the console in 1.3.4", async () => {
+    expect((await fleetProxy(request(`slots?from=2026-10-21&to=2026-10-27&riderId=${RIDER}`), ["slots"])).status).toBe(404);
+    const path = `slots/${DOC}/cancel`;
+    expect((await fleetProxy(request(path, { method: "POST", body: { reason: "Rider is unwell" } }), segments(path))).status).toBe(404);
+    expect(upstream).not.toHaveBeenCalled();
   });
 
   it("answers 204 when no banner is showing and when the banner is cleared", async () => {
@@ -172,8 +171,8 @@ describe("admin fleet BFF", () => {
     expect(upstream.mock.calls[1][2]).toEqual({ method: "DELETE", headers: { "Idempotency-Key": KEY } });
     expect((await fleetProxy(request("banner", { method: "DELETE", key: null }), ["banner"])).status).toBe(400);
     // 204 means "nothing" only where the contract says so.
-    const path = `slots/${DOC}/cancel`;
-    expect((await fleetProxy(request(path, { method: "POST", body: { reason: "Rider is unwell" } }), segments(path))).status).toBe(502);
+    const path = `riders/${RIDER}/vehicle`;
+    expect((await fleetProxy(request(path, { method: "PUT", body: { label: "Honda Activa 6G", regNumber: "TS09EA1234" } }), segments(path))).status).toBe(502);
   });
 
   it("publishes a rate card only by a version-shaped path, and removes pilot entries with 204", async () => {

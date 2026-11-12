@@ -73,8 +73,11 @@ test("fills the four steps by status, with the order page's title", () => {
     const live = getLiveOrder([order("7f6392a6-1111-4111-8111-111111111111", status)], NOW);
     return live && [live.status, live.title, live.doneSteps];
   };
-  assert.deepEqual(present("CHEF_ACCEPTED"), ["Accepted", "Chef accepted", 1]);
-  assert.deepEqual(present("PREPARING"), ["Cooking", "Preparing your food", 1]);
+  // "Relangi" doesn't name its cook, so the kitchen does the cooking in the title.
+  assert.deepEqual(present("CHEF_ACCEPTED"), ["Accepted", "The kitchen accepted", 1]);
+  assert.deepEqual(present("PREPARING"), ["Cooking", "The kitchen is cooking your order", 1]);
+  const named = getLiveOrder([{ ...order("7f6392a6-1111-4111-8111-111111111111", "PREPARING"), kitchenName: "Lakshmi's Kitchen" }], NOW);
+  assert.equal(named?.title, "Lakshmi is cooking your order");
   assert.deepEqual(present("READY_FOR_PICKUP"), ["Ready", "Ready for pickup", 2]);
   assert.deepEqual(present("OUT_FOR_DELIVERY"), ["On the way", "On the way", 3]);
   assert.equal(LIVE_ORDER_STEPS.length, 4);

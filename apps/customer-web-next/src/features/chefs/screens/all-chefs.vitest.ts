@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Synthetic kitchens and address; the APIs are mocked, nothing is fetched.
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -29,6 +29,7 @@ vi.mock("@/features/home/components/KitchensGrid", () => ({
 }));
 
 import AllChefsPage from "@/features/chefs/screens/AllChefs";
+import { getVegMode, setVegMode } from "@/shared/hooks/use-veg-mode";
 
 const kitchen = (n: number, kitchenName: string) => ({
   id: `4a000000-0000-4000-8000-00000000000${n}`, kitchenName, displayName: null, description: null, areaName: "Kondapur",
@@ -39,7 +40,11 @@ beforeEach(() => {
   api.discoverKitchens.mockReset();
   api.loadKitchenPage.mockReset();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  setVegMode("off");
+  vi.unstubAllGlobals();
+});
 
 describe("Chefs tab", () => {
   it("titles the page like the app and shows the next page of kitchens on Show more", async () => {
@@ -47,21 +52,55 @@ describe("Chefs tab", () => {
     api.loadKitchenPage.mockResolvedValue({ kitchens: [kitchen(2, "Biryani House")], hasNext: false, totalElements: 2 });
     render(createElement(AllChefsPage));
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Discover home chefs" })).toBeTruthy();
-    expect(screen.getByPlaceholderText("Search chefs, kitchens or area")).toBeTruthy();
-    fireEvent.click(await screen.findByRole("button", { name: "Show 1 more home chefs" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Kitchens" })).toBeTruthy();
+    expect(screen.getByPlaceholderText("Search kitchens, cooks or area")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Show 1 more kitchens" }));
     expect(await screen.findByText("Biryani House")).toBeTruthy();
     expect(api.loadKitchenPage).toHaveBeenCalledWith(17.46, 78.36, 10_000, 1, undefined);
     expect(screen.getByText("Asha's Kitchen")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Show/ })).toBeNull();
   });
 
+  it("in veg mode lists pure veg kitchens only, or every kitchen that cooks veg, by the catalog's counts", async () => {
+    const [asha, biryani, sweets] = [kitchen(1, "Asha's Kitchen"), kitchen(2, "Biryani House"), kitchen(3, "Sweet Home")];
+    api.discoverKitchens.mockResolvedValue({ kitchens: [asha, biryani, sweets], radiusMeters: 10_000, hasNext: false, totalElements: 3 });
+    // Asha: 2 of 2 dishes veg; Biryani House: 1 of 2; Sweet Home: none.
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => Response.json({
+      kitchens: url.includes("foodType=VEG") ? [{ id: asha.id, activeMenuItemCount: 2 }, { id: biryani.id, activeMenuItemCount: 1 }] : [asha, biryani, sweets],
+      page: { hasNext: false },
+    })));
+    act(() => setVegMode("pure"));
+    render(createElement(AllChefsPage));
+    expect(await screen.findByText("Asha's Kitchen")).toBeTruthy();
+    expect(screen.queryByText("Biryani House")).toBeNull();
+    expect(screen.queryByText("Sweet Home")).toBeNull();
+    act(() => setVegMode("veg-dishes"));
+    expect(await screen.findByText("Biryani House")).toBeTruthy();
+    expect(screen.queryByText("Sweet Home")).toBeNull();
+    act(() => setVegMode("off"));
+    expect(await screen.findByText("Sweet Home")).toBeTruthy();
+  });
+
+  it("says when no kitchen nearby is pure veg, and offers veg dishes from every kitchen", async () => {
+    api.discoverKitchens.mockResolvedValue({ kitchens: [kitchen(2, "Biryani House")], radiusMeters: 10_000, hasNext: false, totalElements: 1 });
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => Response.json({
+      kitchens: url.includes("foodType=VEG") ? [{ id: kitchen(2, "").id, activeMenuItemCount: 1 }] : [kitchen(2, "Biryani House")],
+      page: { hasNext: false },
+    })));
+    act(() => setVegMode("pure"));
+    render(createElement(AllChefsPage));
+    expect(await screen.findByRole("heading", { name: "No pure veg kitchens near you yet" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show veg dishes from all kitchens" }));
+    expect(getVegMode()).toBe("veg-dishes");
+    expect(await screen.findByText("Biryani House")).toBeTruthy();
+  });
+
   it("says no kitchen matches a search, and clears it", async () => {
     api.discoverKitchens.mockResolvedValue({ kitchens: [kitchen(1, "Asha's Kitchen")], radiusMeters: 10_000, hasNext: false, totalElements: 1 });
     render(createElement(AllChefsPage));
-    fireEvent.change(await screen.findByPlaceholderText("Search chefs, kitchens or area"), { target: { value: "dosa" } });
+    fireEvent.change(await screen.findByPlaceholderText("Search kitchens, cooks or area"), { target: { value: "dosa" } });
     expect(await screen.findByRole("heading", { name: "No matching kitchens" })).toBeTruthy();
-    expect(screen.getByText("Try another chef, kitchen name or area.")).toBeTruthy();
+    expect(screen.getByText("Try another kitchen, cook or area.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
     expect(await screen.findByText("Asha's Kitchen")).toBeTruthy();
   });

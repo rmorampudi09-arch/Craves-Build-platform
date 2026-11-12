@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  Heart,
   ImageOff,
   Share2,
 } from "lucide-react";
 import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
+import { SaveHeartButton } from "@/shared/ui/buttons/SaveHeartButton";
 import {
   customerFavoritesLoaded,
   getCustomerFavoriteIds,
@@ -150,28 +150,15 @@ export function DishImageHeader({ dish }: DishImageHeaderProps) {
 
           <div className="absolute inset-x-0 top-0 flex items-center justify-end p-3.5 sm:p-4">
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void handleFavorite()}
+              <SaveHeartButton
+                saved={favorite}
                 disabled={!favoritesReady || favoriteBusy}
-                aria-pressed={favorite}
-                aria-label={
-                  favorite
-                    ? `Remove ${dish.name} from saved dishes`
-                    : `Save ${dish.name}`
-                }
-                title={favoriteError ?? (favorite ? "Saved" : "Save dish")}
-                className="!flex !h-11 !w-11 !items-center !justify-center !rounded-full !border !border-white/80 !bg-white !p-0 !text-[#1A1A1A] !shadow-[0_7px_22px_rgba(26,26,26,0.12)] transition-colors hover:!text-[#F62E18] disabled:cursor-wait disabled:opacity-60"
-              >
-                <Heart
-                  className={`h-5 w-5 ${
-                    favorite
-                      ? "fill-[#F62E18] text-[#F62E18]"
-                      : "text-current"
-                  } ${favoriteBusy ? "animate-pulse" : ""}`}
-                  aria-hidden="true"
-                />
-              </button>
+                label={favorite ? `Remove ${dish.name} from saved dishes` : `Save ${dish.name}`}
+                title={favoriteError ?? undefined}
+                onToggle={() => void handleFavorite()}
+                onPhoto
+                className="!h-11 !min-h-11 !w-11 !min-w-11"
+              />
 
               {typeof navigator !== "undefined" && "share" in navigator ? (
                 <button

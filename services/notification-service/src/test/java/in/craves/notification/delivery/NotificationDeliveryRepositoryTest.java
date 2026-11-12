@@ -52,4 +52,20 @@ class NotificationDeliveryRepositoryTest {
         assertThat(deadLetterStatement).contains("attempt_count = EXCLUDED.attempt_count");
         assertThat(deadLetterStatement).doesNotContain("DO NOTHING");
     }
+
+    @Test
+    void teamAlertsIgnoreTheApplicantsChannelPreference() {
+        // A TEAM_ALERT goes to a Craves mailbox, so the applicant turning their own email off must not drop it.
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        new NotificationDeliveryRepository(jdbcTemplate).claim("EMAIL", 10, 8, 5);
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).query(sql.capture(), any(org.springframework.jdbc.core.RowMapper.class), any(Object[].class));
+        assertThat(sql.getValue()).contains("request.target_type = 'TEAM_ALERT' OR COALESCE((");
+
+        JdbcTemplate skipJdbc = mock(JdbcTemplate.class);
+        new NotificationPreferenceSkipWorker(skipJdbc).skipDisabledPreferences();
+        ArgumentCaptor<String> skipSql = ArgumentCaptor.forClass(String.class);
+        verify(skipJdbc).update(skipSql.capture());
+        assertThat(skipSql.getValue()).contains("AND request.target_type IS DISTINCT FROM 'TEAM_ALERT'");
+    }
 }

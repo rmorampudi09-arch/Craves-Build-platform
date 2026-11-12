@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { isSameOrigin } from "@/shared/lib/request-security";
 import { authenticatedApiFetch, SessionRequiredError } from "@/shared/lib/server-api";
 import { chefBalanceSchema, draftSchema, financeRoute, financeViewSchema, payoutSchema, subscriptionPreviewSchema, deliveryPreviewSchema } from "@/features/admin/finance/lib/finance-contract";
@@ -12,9 +13,11 @@ export async function financeProxy(request: NextRequest, scope: "admin" | "chef"
   let payload: string | undefined;
   if (request.method === "POST") {
     if (!request.headers.get("content-type")?.startsWith("application/json")) return fail(415, "JSON_REQUIRED");
-    const raw = await request.text();
-    if (new TextEncoder().encode(raw).byteLength > 65536) return fail(413, "FINANCE_REQUEST_TOO_LARGE");
-    try { payload = JSON.stringify(JSON.parse(raw)); } catch { return fail(400, "INVALID_JSON"); }
+    // This runs before the session is checked, so the body is read like every other BFF write: bounded while
+    // streaming, timed, and counted against the reader slots, never a plain text() anyone can keep open.
+    const bounded = await boundBffRequest(request, { maxBytes: 65536 });
+    if (bounded instanceof NextResponse) return bounded;
+    try { payload = JSON.stringify(JSON.parse(await bounded.text())); } catch { return fail(400, "INVALID_JSON"); }
   }
   try {
     const response = await authenticatedApiFetch(request, path, {method: request.method,

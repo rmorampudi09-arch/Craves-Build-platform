@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { boundBffRequest } from "@/shared/lib/bff-request-limits";
 import { publicApiFetch } from "@/shared/lib/public-api";
+import { socketPeerKey } from "@/shared/lib/request-security";
 
 export const dynamic = "force-dynamic";
 
@@ -19,14 +20,13 @@ function failure(status: number, code: string) {
 }
 
 /**
- * The backend limits each visitor by this key. Front Door sets X-Azure-ClientIP itself; the raw address
- * never leaves the web server, only its hash does, and it is kept in memory only.
+ * The backend limits each visitor by this key: the TCP peer Front Door saw (X-Azure-SocketIP; X-Azure-ClientIP and
+ * X-Forwarded-For can be written by the caller, which would give a script a fresh limit per request). Anything but
+ * a literal IP shares the "unknown" bucket. The raw address never leaves the web server, only its hash does, and it
+ * is kept in memory only.
  */
 function visitorKey(request: NextRequest): string {
-  const ip = request.headers.get("x-azure-clientip")?.trim()
-    || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-    || "unknown";
-  return createHash("sha256").update(`craves-support-guest:${ip}`).digest("hex");
+  return createHash("sha256").update(`craves-support-guest:${socketPeerKey(request) ?? "unknown"}`).digest("hex");
 }
 
 // Support chat for visitors who are not signed in: general and sign-in help, plus a callback request.

@@ -6,7 +6,6 @@ in.craves.order.admin.AdminDashboardController
 in.craves.order.admin.AdminOrderInvestigationController
 in.craves.order.admin.explorer.AdminExplorerController
 in.craves.order.advanced.KitchenLoadController
-in.craves.order.advanced.MenuOptionCheckoutController
 in.craves.order.advanced.PromotionCheckoutController
 in.craves.order.erasure.AccountErasureController
 in.craves.order.launchpolicy.LaunchPolicyController

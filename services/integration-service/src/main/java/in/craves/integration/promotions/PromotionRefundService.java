@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
  * (integer paise, ordered by chef-order id, remainder on the last); a refund of r out of a chef order's gross g
  * returns floor(r * net / g) to the provider, so the cash refunded for a checkout never exceeds what was collected.
  * Order-service still sees the amount it asked for in every status event. Always on for frozen checkouts, whatever the switch says.
- * M24d slice 3: a frozen company share (V186) is shared across the chef orders the same way.
+ * M24d slice 3: a frozen company share (V189) is shared across the chef orders the same way.
  */
 @Service
 public class PromotionRefundService {
@@ -72,7 +72,7 @@ public class PromotionRefundService {
         }
     }
 
-    public static Map<UUID, Long> shares(long amount, Map<UUID, Long> weights) {
+    static Map<UUID, Long> shares(long amount, Map<UUID, Long> weights) {
         var ids = new ArrayList<>(weights.keySet());
         ids.sort(Comparator.comparing(UUID::toString));
         long total = 0;

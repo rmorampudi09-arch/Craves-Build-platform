@@ -32,7 +32,6 @@ public class CompanyShareCheckoutFundingService {
     private static final Set<String> PAYABLE = Set.of("RESERVED", "CONFIRMING", "CONFIRMED");
     private final JdbcTemplate db;
     private final RestClient orders;
-    private final RestClient ordersQuick;
     private final RestClient advanced;
     private final String orderKey;
     private final String advancedSecret;
@@ -53,7 +52,6 @@ public class CompanyShareCheckoutFundingService {
         this.enabled = enabled;
         this.clock = clock;
         this.orders = builder.clone().baseUrl(config.internalBaseUrl()).requestFactory(timeouts(10)).build();
-        this.ordersQuick = builder.clone().baseUrl(config.internalBaseUrl()).requestFactory(timeouts(3)).build();
         this.advanced = advancedBaseUrl == null || advancedBaseUrl.isBlank() ? null : builder.clone().baseUrl(advancedBaseUrl).requestFactory(timeouts(3)).build();
         this.orderKey = config.internalKey();
         this.advancedSecret = advancedSecret == null ? "" : advancedSecret;
@@ -133,32 +131,6 @@ public class CompanyShareCheckoutFundingService {
             if (expires.isAfter(clock.instant())) return;
         }
         throw conflict("Company share reservation has lapsed; please check out again");
-    }
-
-    /**
-     * M24d slice 3b-2: capture books the company's share as a receivable only once order-service has confirmed the charge in M10
-     * for this checkout (a late payment whose confirm went to REVIEW never becomes a receivable on its own). Remembered once seen,
-     * so order-service is asked only until then; any failure answers false and capture waits for the next pass. Runs inside the
-     * finalization transaction, hence the short deadline. Always on for frozen checkouts, whatever the switch says.
-     */
-    public boolean confirmedForCheckout(UUID checkout) { return confirmedForCheckout(checkout, true); }
-
-    /** With ask=false only the remembered confirmation counts (no HTTP call: used while capture holds its locks). */
-    public boolean confirmedForCheckout(UUID checkout, boolean ask) {
-        var frozen = db.queryForList("SELECT charge_id FROM payment_schema.company_share_checkout_funding WHERE checkout_id=?", checkout);
-        if (frozen.isEmpty()) return false;
-        if (Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM payment_schema.company_share_checkout_confirmation WHERE checkout_id=?)", Boolean.class, checkout))) return true;
-        if (!ask) return false;
-        JsonNode p;
-        try {
-            p = ordersQuick.get().uri("/payments/checkout/{id}/company-share", checkout).header("X-Craves-Internal-Secret", orderKey).retrieve().body(JsonNode.class);
-        } catch (RestClientException e) {
-            return false;
-        }
-        Object charge = frozen.getFirst().get("charge_id");
-        if (p == null || !"CONFIRMED".equals(p.path("state").asText()) || !charge.toString().equals(p.path("chargeId").asText())) return false;
-        db.update("INSERT INTO payment_schema.company_share_checkout_confirmation(checkout_id,charge_id) VALUES (?,?) ON CONFLICT (checkout_id) DO NOTHING", checkout, charge);
-        return true;
     }
 
     public boolean exists(UUID checkout) {

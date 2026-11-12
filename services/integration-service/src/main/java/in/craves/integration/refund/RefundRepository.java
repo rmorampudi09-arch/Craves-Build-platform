@@ -23,9 +23,6 @@ public class RefundRepository {
     private in.craves.integration.promotions.PromotionRefundService promotionRefunds;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     public void setPromotionRefunds(in.craves.integration.promotions.PromotionRefundService service){this.promotionRefunds=service;}
-    private in.craves.integration.corporatemeals.CompanyShareRefundCreditService companyShareCredits;
-    @org.springframework.beans.factory.annotation.Autowired(required=false)
-    public void setCompanyShareCredits(in.craves.integration.corporatemeals.CompanyShareRefundCreditService service){this.companyShareCredits=service;}
 
     public RefundRepository(JdbcTemplate jdbcTemplate, RefundStatusEventFactory statusEventFactory) {
         this.jdbcTemplate = jdbcTemplate;
@@ -193,8 +190,6 @@ public class RefundRepository {
 
         recordObservation(workItem,"VERIFIED_RESULT",providerResult.cfRefundId(),providerResult.providerStatus(),
             RazorpayRefundClient.hash(providerResult.providerPayload()),occurredAt);
-        // M24d: the company's part of a refunded company-share line is credited on its M10 statement (worker, same transaction as SUCCESS).
-        if(companyShareCredits!=null && "SUCCESS".equals(databaseStatus))companyShareCredits.enqueue(workItem.refundId());
         var event=statusEventFactory.create(workItem,normalizedStatus,providerResult,occurredAt);
         // A verified recovery can correct an earlier published failure without rewriting it.
         insertStatusOutbox(new SerializedRefundStatusEvent(event.eventId(),event.eventType(),event.eventVersion(),

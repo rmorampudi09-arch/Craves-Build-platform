@@ -14,9 +14,11 @@ import in.craves.advanced.corporatemeals.CorporateMealsDtos.NewCompanyInvite;
 import in.craves.advanced.platform.data.Cursor;
 import in.craves.advanced.platform.data.Idempotency;
 import in.craves.advanced.platform.security.CurrentUser;
+import in.craves.advanced.platform.web.ApiProblem;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,9 +39,13 @@ public class CorporateMealsController {
     private final CorporateMealsService service;
     private final Idempotency idempotency;
 
-    public CorporateMealsController(CorporateMealsService service, Idempotency idempotency) {
+    private final boolean checkoutHoldsCharges;
+
+    public CorporateMealsController(CorporateMealsService service, Idempotency idempotency,
+                                    @Value("${CRAVES_ADVANCED_CHECKOUT_COMPANY_SHARE_ENABLED:false}") boolean checkoutHoldsCharges) {
         this.service = service;
         this.idempotency = idempotency;
+        this.checkoutHoldsCharges = checkoutHoldsCharges;
     }
 
     @PostMapping("/join")
@@ -74,6 +80,8 @@ public class CorporateMealsController {
 
     @PostMapping("/charges/{chargeId}/confirm")
     public ResponseEntity<CompanyCharge> confirmCompanyMeal(@PathVariable UUID chargeId, @Valid @RequestBody CompanyChargeConfirm request) {
+        // M24d: once checkout applies company shares, order-service confirms them after payment; a person could otherwise bind one to another order.
+        if (checkoutHoldsCharges) throw ApiProblem.conflict("COMPANY_SHARE_CONFIRMED_BY_CHECKOUT", "Company payments are confirmed by checkout after payment");
         return ok(service.confirm(CurrentUser.id(), chargeId, request.orderId()));
     }
 

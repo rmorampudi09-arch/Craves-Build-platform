@@ -1,8 +1,9 @@
 import { formatOrderStatus, type CustomerOrder } from "./order-contract.ts";
 import type { DeliveryStatus } from "./delivery-status.ts";
+import { orderWords } from "../../../shared/lib/order-words.ts";
 
 /** What the order page shows on the blurred map until the food leaves the kitchen. */
-export const KITCHEN_STEPS = ["Awaiting chef", "Chef accepted", "Ready for pickup"] as const;
+export const KITCHEN_STEPS = ["Awaiting kitchen", "Accepted", "Ready for pickup"] as const;
 
 export type OrderJourney =
   /** Still in the kitchen: blurred map, KITCHEN_STEPS[step] is current (-1 = not paid yet). */
@@ -37,19 +38,20 @@ function readyIn(minutes: number | null): string {
 
 /** Where the order is and what to tell the customer, in the app's words. */
 export function orderJourney(
-  order: Pick<CustomerOrder, "status" | "prepTimeMinutes">,
+  order: Pick<CustomerOrder, "status" | "prepTimeMinutes" | "kitchenName">,
   delivery: DeliveryStatus | null,
 ): OrderJourney {
+  const words = orderWords(order.kitchenName);
   switch (order.status) {
     case "PAYMENT_PENDING":
-      return { kind: "KITCHEN", step: -1, title: "Payment pending", detail: "Finish the payment to send this order to the chef." };
+      return { kind: "KITCHEN", step: -1, title: "Payment pending", detail: "Finish the payment to send this order to the kitchen." };
     case "PAID":
     case "CHEF_ACCEPTANCE_PENDING":
-      return { kind: "KITCHEN", step: 0, title: "Waiting for the chef", detail: "The chef will confirm your order shortly." };
+      return { kind: "KITCHEN", step: 0, title: words.waiting, detail: words.waitingDetail };
     case "CHEF_ACCEPTED":
-      return { kind: "KITCHEN", step: 1, title: "Chef accepted", detail: `Your order is confirmed and cooked fresh.${readyIn(order.prepTimeMinutes)}` };
+      return { kind: "KITCHEN", step: 1, title: words.accepted, detail: `Your order is confirmed and cooked fresh.${readyIn(order.prepTimeMinutes)}` };
     case "PREPARING":
-      return { kind: "KITCHEN", step: 1, title: "Preparing your food", detail: `The chef is cooking now.${readyIn(order.prepTimeMinutes)}` };
+      return { kind: "KITCHEN", step: 1, title: words.cooking, detail: `Cooked fresh, just for you.${readyIn(order.prepTimeMinutes)}` };
     case "READY_FOR_PICKUP":
       // The delivery update can land before the order status catches up.
       return hasLeftKitchen(delivery)
@@ -60,7 +62,7 @@ export function orderJourney(
     case "DELIVERED":
       return { kind: "DELIVERY", delivered: true, title: "Delivered", detail: "Your order has been delivered. Enjoy your meal!" };
     case "CHEF_REJECTED":
-      return { kind: "CLOSED", title: "Chef declined", detail: "The chef could not take this order." };
+      return { kind: "CLOSED", title: "Kitchen declined", detail: "The kitchen could not take this order." };
     case "CANCELLED":
       return { kind: "CLOSED", title: "Order cancelled", detail: "This order will not be delivered." };
     case "REFUND_PENDING":

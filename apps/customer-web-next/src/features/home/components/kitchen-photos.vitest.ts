@@ -4,11 +4,6 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const motion = vi.hoisted(() => ({ reduce: false }));
-vi.mock("framer-motion", async (original) => ({
-  ...(await original<typeof import("framer-motion")>()),
-  useReducedMotion: () => motion.reduce,
-}));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => createElement("a", { href: to }, children),
 }));
@@ -26,47 +21,39 @@ const grid = (props: Partial<Parameters<typeof KitchensGrid>[0]> = {}) => render
   kitchens: [kitchen], searchTerm: "", state: "ready", message: "",
   onSelectKitchen: () => {}, onRetry: () => {}, onManageAddress: () => {}, dishes: [], limit: 8, ...props,
 }));
-/** The photos in each card, in order; the one fading in or shown sits on top (z-[2]). */
+/** The photos in each card, in order. */
 const photos = (container: HTMLElement, card = 0) =>
-  [...container.querySelectorAll("li")[card].querySelectorAll(".aspect-\\[100\\/63\\] img")].map((img) => ({
-    src: img.getAttribute("src"),
-    shown: img.className.includes("z-[2]"),
-  }));
-const shownPhoto = (container: HTMLElement, card = 0) => photos(container, card).find((photo) => photo.shown)?.src;
+  [...container.querySelectorAll("li")[card].querySelectorAll(".aspect-\\[16\\/9\\] img")].map((img) => img.getAttribute("src"));
 
 // The heart reads the saved kitchens once; signed-out here, so the list is empty.
 beforeEach(() => {
-  motion.reduce = false;
   vi.stubGlobal("fetch", vi.fn(async () => Response.json({ items: [], nextCursor: null })));
 });
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  window.localStorage.clear();
 });
 
 it("drops a kitchen photo that fails to load instead of showing a broken image", () => {
   const { container } = grid({ dishes: [dish(a, 200), dish(b, 180)] });
-  // Off screen (no observer here) the slideshow is still, so only the first photo loads.
-  expect(photos(container).map((photo) => photo.src)).toEqual([a]);
+  expect(photos(container)).toEqual([a, b]);
   fireEvent.error(container.querySelector(`li img[src="${a}"]`)!);
-  expect(photos(container).map((photo) => photo.src)).toEqual([b]);
+  expect(photos(container)).toEqual([b]);
   // With no photo left the card shows its chef-hat tile, not an empty or broken frame.
   fireEvent.error(container.querySelector(`li img[src="${b}"]`)!);
   expect(photos(container)).toEqual([]);
-  expect(container.querySelector("li .aspect-\\[100\\/63\\] > svg")).toBeTruthy();
+  expect(container.querySelector("li .aspect-\\[16\\/9\\] > svg")).toBeTruthy();
 });
 
-it("Home cards name the kitchen first and show the chef face, a heart, prep time, the bio and the cheapest dish", () => {
+it("Home cards show the food, the cook's face, who cooks, a heart, prep time and the cheapest dish", () => {
   const onSelectKitchen = vi.fn();
   const { container } = grid({ kitchens: [{ ...kitchen, chefPhotoUrl: "https://img.craves.test/chef.webp" }], dishes: [dish(a, 240, 40), dish(b, 120.5, 15)], onSelectKitchen });
   expect(container.querySelector('img[src="https://img.craves.test/chef.webp"]')).toBeTruthy();
   expect(container.querySelector("li h3")?.textContent).toBe("Ammi's Dastarkhwan");
-  expect(screen.getByRole("button", { name: "Save Ammi's Dastarkhwan" })).toBeTruthy();
+  expect(screen.getByText("Cooked by Ammi · Tolichowki · 3.4 km")).toBeTruthy();
   expect(screen.getByText("15–40 min")).toBeTruthy();
-  expect(screen.getByText("Home-cooked meals prepared with care.")).toBeTruthy();
-  expect(screen.getByText("Starts from ₹120.50")).toBeTruthy();
+  expect(screen.getByText("₹120.50")).toBeTruthy();
   // The heart is beside the card button, not inside it: saving never opens the kitchen.
   fireEvent.click(screen.getByRole("button", { name: "Save Ammi's Dastarkhwan" }));
   expect(onSelectKitchen).not.toHaveBeenCalled();
@@ -86,62 +73,46 @@ it("Home shows only kitchens cooking something nearby, at most the limit, and st
   // A kitchen with dishes but no dish photos gets the chef-hat tile and no prep time.
   cleanup();
   const noPhoto = grid({ dishes: [{ kitchenId: kitchen.id, img: "/brand/craves-logo.svg", price: 99 }] });
-  expect(noPhoto.container.querySelector("li .aspect-\\[100\\/63\\] > svg")).toBeTruthy();
+  expect(noPhoto.container.querySelector("li .aspect-\\[16\\/9\\] > svg")).toBeTruthy();
   expect(screen.queryByText(/ min$/)).toBeNull();
 });
 
-it("names the section like the app with See all; the chefs page keeps its own title and cards", () => {
-  grid({ dishes: [dish(a, 200)] });
+it("names the section with See all and how many kitchens; the Kitchens page keeps its own title and cards", () => {
+  grid({ dishes: [dish(a, 200)], totalNearby: 24 });
   expect(screen.getByRole("heading", { name: "Top kitchens near you" })).toBeTruthy();
-  expect(screen.getByRole("link", { name: "See all kitchens near you" }).getAttribute("href")).toBe("/chefs");
+  expect(screen.getByRole("link", { name: "See all 24 kitchens" }).getAttribute("href")).toBe("/chefs");
   cleanup();
-  grid({ limit: undefined, totalNearby: 37, renderKitchen: (item) => createElement("p", null, `card ${item.kitchenName}`) });
+  // Before the count is known it still says what it opens.
+  grid({ dishes: [dish(a, 200)] });
+  expect(screen.getByRole("link", { name: "See all kitchens" })).toBeTruthy();
+  cleanup();
+  grid({ limit: undefined, totalNearby: 37, renderKitchen: (item) => createElement("li", null, `card ${item.kitchenName}`) });
   expect(screen.getByRole("heading", { name: "Nearby kitchens" })).toBeTruthy();
   // The app's count: every kitchen within 10 km, not just the page loaded so far.
   expect(screen.getByText("37 within 10 km")).toBeTruthy();
   expect(screen.getByText("card Ammi's Dastarkhwan")).toBeTruthy();
 });
 
-it("fades each card forward every 4 s, the next card 0.8 s later, only on screen, and Pause stops it", () => {
+it("never moves the photos on its own: no timers and no pause or play button; people swipe", () => {
   vi.useFakeTimers();
-  vi.stubGlobal("IntersectionObserver", class {
-    constructor(private readonly callback: IntersectionObserverCallback) {}
-    observe() { this.callback([{ intersectionRatio: 1 } as IntersectionObserverEntry], this as unknown as IntersectionObserver); }
-    disconnect() {}
-  });
   const { container } = grid({ kitchens: [kitchen, second], dishes: [dish(a, 200), dish(b, 210), dish(c, 220), dish(c, 230, undefined, second.id), dish(a, 240, undefined, second.id)] });
-  // On screen, the next photo loads ahead of its turn.
-  expect(photos(container).map((photo) => photo.src)).toEqual([a, b]);
-  expect([shownPhoto(container, 0), shownPhoto(container, 1)]).toEqual([a, c]);
-  act(() => vi.advanceTimersByTime(4_000));
-  expect([shownPhoto(container, 0), shownPhoto(container, 1)]).toEqual([b, c]);
-  act(() => vi.advanceTimersByTime(800));
-  expect([shownPhoto(container, 0), shownPhoto(container, 1)]).toEqual([b, a]);
-  // After the last photo the first fades in over it again: always forward.
-  act(() => vi.advanceTimersByTime(3_200));
-  expect(shownPhoto(container, 0)).toBe(c);
-  act(() => vi.advanceTimersByTime(4_000));
-  expect(shownPhoto(container, 0)).toBe(a);
-  fireEvent.click(screen.getByRole("button", { name: "Pause kitchen photos" }));
+  expect(vi.getTimerCount()).toBe(0);
+  expect(screen.queryByRole("button", { name: /pause|play/i })).toBeNull();
+  // A swipe moves the strip; the dots follow it.
+  const strip = container.querySelector("li .snap-x") as HTMLDivElement;
+  Object.defineProperty(strip, "clientWidth", { configurable: true, value: 300 });
+  strip.scrollLeft = 600;
+  fireEvent.scroll(strip);
+  const dots = [...container.querySelectorAll("li")[0].querySelectorAll("[aria-hidden='true'] > span")];
+  expect(dots.map((dot) => dot.className.includes("w-4"))).toEqual([false, false, true]);
   act(() => vi.advanceTimersByTime(12_000));
-  expect(shownPhoto(container, 0)).toBe(a);
-  expect(window.localStorage.getItem("craves.kitchen-photos.paused")).toBe("1");
-  expect(screen.getByRole("button", { name: "Play kitchen photos" })).toBeTruthy();
-});
-
-it("keeps the photos still, with no pause button, for reduced motion", () => {
-  motion.reduce = true;
-  vi.useFakeTimers();
-  const { container } = grid({ dishes: [dish(a, 200), dish(b, 210)] });
-  act(() => vi.advanceTimersByTime(12_000));
-  expect(shownPhoto(container)).toBe(a);
-  expect(screen.queryByRole("button", { name: /kitchen photos/ })).toBeNull();
+  expect(photos(container)).toEqual([a, b, c]);
 });
 
 it("shows plain words with a drawing when kitchens can't load, need an address, or don't match", () => {
   const onRetry = vi.fn();
   grid({ state: "error", message: "HTTP 503 upstream", onRetry });
-  expect(screen.getByRole("heading", { name: "We couldn't load home chefs near you" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "We couldn't load kitchens near you" })).toBeTruthy();
   expect(screen.queryByText(/503/)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Try again" }));
   expect(onRetry).toHaveBeenCalledOnce();
@@ -155,7 +126,7 @@ it("shows plain words with a drawing when kitchens can't load, need an address, 
   grid({ ...chefsPage, searchTerm: " dosa " });
   expect(screen.getByRole("heading", { name: "No kitchens match “dosa”" })).toBeTruthy();
   cleanup();
-  grid({ ...chefsPage, message: "No home chefs near you are cooking spicy dishes right now." });
-  expect(screen.getByRole("heading", { name: "No home chefs near you yet" })).toBeTruthy();
-  expect(screen.getByText("No home chefs near you are cooking spicy dishes right now.")).toBeTruthy();
+  grid({ ...chefsPage, message: "No kitchens near you are cooking spicy dishes right now." });
+  expect(screen.getByRole("heading", { name: "No home kitchens near you yet" })).toBeTruthy();
+  expect(screen.getByText("No kitchens near you are cooking spicy dishes right now.")).toBeTruthy();
 });

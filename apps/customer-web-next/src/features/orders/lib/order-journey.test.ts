@@ -6,7 +6,7 @@ import { parseDeliveryStatusResponse } from "./delivery-status.ts";
 
 const ORDER_ID = "11111111-2222-4333-8444-555555555555";
 
-const at = (status: string, prepTimeMinutes: number | null = null) => ({ status, prepTimeMinutes });
+const at = (status: string, prepTimeMinutes: number | null = null, kitchenName = "Lakshmi's Kitchen") => ({ status, prepTimeMinutes, kitchenName });
 /** Where the order is, without its words. */
 const shape = (journey: ReturnType<typeof orderJourney>) =>
   Object.fromEntries(Object.entries(journey).filter(([key]) => key !== "title" && key !== "detail"));
@@ -39,17 +39,20 @@ test("each step says what the app says", () => {
     const { title, detail } = orderJourney(at(status, prep), delivery);
     return [title, detail];
   };
-  assert.deepEqual(words("PAYMENT_PENDING"), ["Payment pending", "Finish the payment to send this order to the chef."]);
-  assert.deepEqual(words("CHEF_ACCEPTANCE_PENDING"), ["Waiting for the chef", "The chef will confirm your order shortly."]);
-  assert.deepEqual(words("CHEF_ACCEPTED", null, 20), ["Chef accepted", "Your order is confirmed and cooked fresh. Ready in about 20 min."]);
-  assert.deepEqual(words("PREPARING", null, 15), ["Preparing your food", "The chef is cooking now. Ready in about 15 min."]);
-  assert.deepEqual(words("PREPARING"), ["Preparing your food", "The chef is cooking now."]);
+  assert.deepEqual(words("PAYMENT_PENDING"), ["Payment pending", "Finish the payment to send this order to the kitchen."]);
+  assert.deepEqual(words("CHEF_ACCEPTANCE_PENDING"), ["Waiting for Lakshmi to confirm", "Lakshmi will confirm your order shortly."]);
+  assert.deepEqual(words("CHEF_ACCEPTED", null, 20), ["Lakshmi accepted", "Your order is confirmed and cooked fresh. Ready in about 20 min."]);
+  assert.deepEqual(words("PREPARING", null, 15), ["Lakshmi is cooking your order", "Cooked fresh, just for you. Ready in about 15 min."]);
+  assert.deepEqual(words("PREPARING"), ["Lakshmi is cooking your order", "Cooked fresh, just for you."]);
+  // A kitchen not named after its cook is "the kitchen".
+  const unnamed = orderJourney(at("CHEF_ACCEPTANCE_PENDING", null, "Hyderabadi Dum House"), null);
+  assert.deepEqual([unnamed.title, unnamed.detail], ["Waiting for the kitchen to confirm", "The kitchen will confirm your order shortly."]);
   assert.deepEqual(words("READY_FOR_PICKUP", "AT_PICKUP"), ["Ready for pickup", "Packed and waiting for the delivery partner."]);
   assert.deepEqual(words("READY_FOR_PICKUP", "PICKED_UP"), ["On the way", "Your order has been picked up and is coming to you."]);
   assert.deepEqual(words("OUT_FOR_DELIVERY", "IN_TRANSIT"), ["On the way", "Your order is in transit."]);
   assert.deepEqual(words("OUT_FOR_DELIVERY", "AT_DROPOFF"), ["Arriving at your location", "The delivery partner has reached the drop-off area."]);
   assert.deepEqual(words("DELIVERED"), ["Delivered", "Your order has been delivered. Enjoy your meal!"]);
-  assert.deepEqual(words("CHEF_REJECTED"), ["Chef declined", "The chef could not take this order."]);
+  assert.deepEqual(words("CHEF_REJECTED"), ["Kitchen declined", "The kitchen could not take this order."]);
   assert.deepEqual(words("CANCELLED"), ["Order cancelled", "This order will not be delivered."]);
   assert.deepEqual(words("REFUND_PENDING"), ["Refund in progress", "Your refund is being processed."]);
   assert.deepEqual(words("REFUNDED"), ["Refunded", "Your payment has been refunded."]);

@@ -5,6 +5,7 @@ import { AppApiError } from '../../../core/http/apiError';
 import { tokenMemory } from '../../../core/security/tokenMemory';
 import { fakeHttp, type FakeReply } from './fakeHttp';
 import { liveRiderApi, stepTap } from './riderApi.live';
+import { RIDER_APP_LATEST_URL } from '../riderConfig';
 
 /** Records parts like React Native's FormData does; Node's FormData turns the {uri, name, type} file parts into text. */
 class PartsForm {
@@ -249,12 +250,14 @@ describe('live rider API: every path in rider-v1.yaml', () => {
   ] as const)('%s', async (_name, call, method, url, body) => {
     reply = () => ({ status: 200, data: {} });
     await call();
-    expect(calls).toHaveLength(1);
-    expect(calls[0].method).toBe(method);
-    expect(calls[0].url).toBe(url);
-    expect(calls[0].timeout).toBe(12_000);
+    // getMe also reads the newest published version from craves.in (its own tests at the end).
+    const api = calls.filter(c => c.url !== RIDER_APP_LATEST_URL);
+    expect(api).toHaveLength(1);
+    expect(api[0].method).toBe(method);
+    expect(api[0].url).toBe(url);
+    expect(api[0].timeout).toBe(12_000);
     expect(
-      calls[0].data === undefined ? undefined : JSON.parse(calls[0].data),
+      api[0].data === undefined ? undefined : JSON.parse(api[0].data),
     ).toEqual(body);
   });
 
@@ -721,5 +724,51 @@ describe('live rider API: errors become AppApiError', () => {
         '/api/v1/rider/terms',
       ]);
     });
+  });
+});
+
+// Every release raises the bar (ship-rider-app writes the version beside the APK, craves.in/rider/version points there).
+describe('live rider API: the newest published version', () => {
+  const server = { status: 'ACTIVE', minAppVersion: '1.2.0' };
+  let clock = 1_000;
+  // Each case starts more than 10 minutes after the last, so nothing remembered from it is used.
+  const later = () => (clock += 11 * 60_000);
+  const publish = (versionName: unknown, status = 200) => {
+    reply = config =>
+      config.url === RIDER_APP_LATEST_URL
+        ? { status, data: { versionName } }
+        : { status: 200, data: server };
+  };
+  const published = () => calls.filter(c => c.url === RIDER_APP_LATEST_URL);
+
+  let now: jest.SpyInstance;
+  beforeEach(() => {
+    now = jest.spyOn(Date, 'now').mockImplementation(() => clock);
+  });
+  afterEach(() => now.mockRestore());
+
+  it('asks for the newer version, reads it without the sign-in, and remembers it for 10 minutes', async () => {
+    later();
+    publish('1.3.4');
+    expect((await liveRiderApi.getMe()).minAppVersion).toBe('1.3.4');
+    expect(published()).toHaveLength(1);
+    expect(header(published()[0], 'Authorization')).toBeUndefined();
+
+    clock += 9 * 60_000;
+    expect((await liveRiderApi.getMe()).minAppVersion).toBe('1.3.4');
+    expect(published()).toHaveLength(1);
+  });
+
+  it.each([
+    ['older than the server minimum', '1.1.9', 200],
+    ['the same version', '1.2.0', 200],
+    ['not a version', 'latest', 200],
+    ['missing', undefined, 200],
+    ['not there', undefined, 404],
+    ['unreachable', '9.0.0', 503],
+  ] as const)('keeps the server minimum when the published version is %s', async (_case, version, status) => {
+    later();
+    publish(version, status);
+    expect(await liveRiderApi.getMe()).toEqual(server);
   });
 });

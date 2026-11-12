@@ -1,15 +1,16 @@
 // The live order bubble's model, ported from the app (features/liveOrder/liveOrderModel.ts). Browser-safe.
 import { formatDishPrice } from "./kitchen-dish-summary.ts";
 import { shortOrderNumber } from "./order-number.ts";
+import { orderWords } from "./order-words.ts";
 
 export const LIVE_ORDER_STEPS = ["Accepted", "Cooked", "On the way", "Delivered"] as const;
 
-/** Orders the chef has accepted that are not delivered yet: the short status, the order page's title and how many steps are done. */
-const LIVE_STATUSES: Record<string, { status: string; title: string; doneSteps: number }> = {
-  CHEF_ACCEPTED: { status: "Accepted", title: "Chef accepted", doneSteps: 1 },
-  PREPARING: { status: "Cooking", title: "Preparing your food", doneSteps: 1 },
-  READY_FOR_PICKUP: { status: "Ready", title: "Ready for pickup", doneSteps: 2 },
-  OUT_FOR_DELIVERY: { status: "On the way", title: "On the way", doneSteps: 3 },
+/** Orders the kitchen has accepted that are not delivered yet: the short status, the order page's title and how many steps are done. */
+const LIVE_STATUSES: Record<string, { status: string; title: (kitchenName: string) => string; doneSteps: number }> = {
+  CHEF_ACCEPTED: { status: "Accepted", title: (kitchen) => orderWords(kitchen).accepted, doneSteps: 1 },
+  PREPARING: { status: "Cooking", title: (kitchen) => orderWords(kitchen).cooking, doneSteps: 1 },
+  READY_FOR_PICKUP: { status: "Ready", title: () => "Ready for pickup", doneSteps: 2 },
+  OUT_FOR_DELIVERY: { status: "On the way", title: () => "On the way", doneSteps: 3 },
 };
 
 /** An order still "in progress" this long after it was placed is stuck, not live: no bubble for it. */
@@ -106,7 +107,7 @@ export function getLiveOrder(orders: unknown, now = Date.now()): LiveOrder | nul
     orderId: newest.id,
     kitchenName: newest.kitchenName,
     status: live.status,
-    title: live.title,
+    title: live.title(newest.kitchenName),
     reference: `Order #${shortOrderNumber(newest.id)}`,
     doneSteps: live.doneSteps,
     paid: formatLiveOrderMoney(newest.grandTotal, currency),

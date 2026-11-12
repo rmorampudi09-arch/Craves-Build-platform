@@ -1,0 +1,316 @@
+{
+  "course": {
+    "id": "advanced-trust-privacy",
+    "service": "advanced-features-service",
+    "title": "Trust, policies and privacy: reports, disputes, rules and your data",
+    "level": "Advanced",
+    "minutes": 112,
+    "description": "Learn how reports, disputes and risk flags are handled without anyone judging their own case, how staff-set policies for serviceability, refunds, provider ranking and notification frequency are versioned and evaluated, and how people export, erase and ask to delete their data across every module.",
+    "prerequisites": [
+      "advanced-platform"
+    ],
+    "sources": [
+      "services/advanced-features-service/src/main/java/in/craves/advanced/trust/TrustService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/trust/TrustRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/policies/PolicyRules.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/policies/PolicyService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/data/PersonalDataContributor.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/tastedata/PersonalDataEraser.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/tastedata/TasteDataController.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/mydata/MyDataController.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/accountdeletion/AccountDeletionService.java",
+      "services/advanced-features-service/src/main/java/in/craves/advanced/platform/erasure/AccountErasureService.java"
+    ],
+    "sourceRevision": "9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605",
+    "lessons": [
+      {
+        "id": "adv-trust-cases",
+        "title": "Handle reports, disputes and risk flags fairly",
+        "overview": "The trust module gives Craves three tools: reports for moderation, disputes about a customer's own finished order, and risk flags that staff raise on a person or a kitchen. Each has its own rules about who may file, who decides and what each side sees. One rule runs through all of them: nobody decides a case they are part of, and nothing in the module pays money; Order service pays a decided refund through its own refund rules. This lesson reads TrustRules and TrustService.",
+        "steps": [
+          {
+            "label": "File reports with limits",
+            "detail": "Any signed-in person reports a kitchen, a dish, a review or a person with a reason such as food safety, hygiene, wrong label, misleading, abuse, fraud or spam, in their own words and optionally with the order it concerns. One open report per person and target and at most 20 a day keep the queue usable."
+          },
+          {
+            "label": "Decide reports without exposing the reporter",
+            "detail": "Platform, compliance and operations admins uphold or dismiss a report with a note, audited without the reporter's words. Acting on an upheld report, such as pausing a kitchen or correcting a label, happens where that content lives. The reporter sees the outcome, never staff notes or who decided."
+          },
+          {
+            "label": "Open disputes on finished orders",
+            "detail": "A customer disputes their own paid order once it is over: delivered, rejected or in a refund state. The window, counted from the order's last change, has no default; until staff set it, disputes answer 503 DISPUTES_NOT_CONFIGURED. Only a delivered order can get money back here, up to refundablePaise, its total."
+          },
+          {
+            "label": "Hear both sides",
+            "detail": "The kitchen's chef sees disputes about their orders, never who opened them, and adds their side while the dispute is open. Platform and payments admins decide RESOLVED, optionally with a refund, or REJECTED, with a note both sides see and the version they read. One live dispute per order, and at most 3 in all."
+          },
+          {
+            "label": "Keep decisions independent",
+            "detail": "No staff member decides their own case: not a dispute they opened or answered as the chef, not one about their own kitchen, not a report they filed or that names them, not a flag on themselves. Support admins only read, because Auth defines that role as read-only."
+          },
+          {
+            "label": "Flag risk without automatic punishment",
+            "detail": "Platform, compliance, operations and payments admins raise a flag with a severity and a reason and clear it with a note, both audited. The subject summary gives counts only. What to do at which numbers is a staff decision, so no automatic score, threshold or block is built."
+          }
+        ],
+        "example": "A customer disputes a delivered order because two dishes were missing and claims 180 rupees. The chef adds that the rider collected a sealed bag. A payments admin who has nothing to do with the kitchen resolves it with a 180-rupee refund and a note both sides can read, and Order service then pays that refund through its refund rules.",
+        "lab": "In a local database, set a dispute window and open a dispute on a delivered test order. Try to decide it with the admin identity that owns the kitchen and expect a refusal. Decide it with another payments admin and check that the chef's view shows the outcome but not the customer's identity.",
+        "pitfall": "Never build an automatic block or score from trust counts without an owner decision; people's livelihoods depend on these outcomes.",
+        "questions": [
+          {
+            "id": "adv-trust-cases-q1",
+            "prompt": "Who may decide a dispute about a kitchen?",
+            "options": [
+              "Its own chef",
+              "A platform or payments admin who is not part of the case",
+              "Any support admin",
+              "The customer"
+            ],
+            "answer": 1,
+            "explanation": "Only platform or payments admins decide, and never in a case they are part of."
+          },
+          {
+            "id": "adv-trust-cases-q2",
+            "prompt": "What do disputes answer before staff set the dispute window?",
+            "options": [
+              "They use a 7-day default",
+              "503 DISPUTES_NOT_CONFIGURED",
+              "They are always accepted",
+              "They go to email"
+            ],
+            "answer": 1,
+            "explanation": "The window has no default; disputes wait for a staff-set, versioned policy."
+          },
+          {
+            "id": "adv-trust-cases-q3",
+            "prompt": "Does the trust module pay a decided refund itself?",
+            "options": [
+              "Yes, immediately",
+              "No, Order service pays it through its own refund rules",
+              "Yes, through the referral wallet",
+              "Only for chefs"
+            ],
+            "answer": 1,
+            "explanation": "Nothing here moves money; the decision is handed to Order service's refund rules."
+          }
+        ]
+      },
+      {
+        "id": "adv-policy-engines",
+        "title": "Evaluate staff-set policies without assuming anything",
+        "overview": "Four business rules that the handbook left to Craves staff live in the policies module: serviceability, cancellation and refund, delivery provider ranking and notification frequency. Each is a versioned document with a pure evaluator, so nothing is stored when a rule is evaluated. Until staff switch on a version, reading or evaluating that policy answers 503 POLICY_NOT_SET. This lesson reads PolicyRules and PolicyService.",
+        "steps": [
+          {
+            "label": "Know the four policies",
+            "detail": "Serviceability sets a straight-line kitchen-to-customer limit with optional per-city limits and paused cities. Cancellation and refund has one rule per stage and party: allowed or not, food refund percentage, and whether the delivery and platform fees are refunded. Provider ranking weights price, ETA and reliability. Notification frequency caps sends per category with optional quiet hours."
+          },
+          {
+            "label": "Draft and switch on versions",
+            "detail": "Staff draft a version, validated strictly so unknown fields and out-of-range values are refused with every problem listed, then switch it on; the previous one is retired. Versions are never edited or deleted, so every past rule stays on record with who drafted it and who switched it on. A draft older than the live version cannot be switched on (409 POLICY_OUTDATED)."
+          },
+          {
+            "label": "Use four eyes on money",
+            "detail": "Refund rules are drafted and switched on by platform or payments admins, and the second step must be done by a different admin. The other three policies are handled by platform or operations admins, and support and audit admins read the history."
+          },
+          {
+            "label": "Evaluate refunds safely",
+            "detail": "The order status maps to a stage the same way live activities do; a missing stage and party rule means not allowed. The food refund rounds down and the total never exceeds paidPaise, which callers pass after wallet and referral discounts. When the cap applies, the platform fee and then the delivery fee give way first, so the parts always add up to the total."
+          },
+          {
+            "label": "Rank providers explainably",
+            "detail": "Provider scores are min-max normalised across the eligible quotes, lower price and ETA being better and unknown reliability counting as worst, with ties broken by provider code. Disabled and too-slow providers come last with a reason, so a dispatcher can see why a provider was not chosen."
+          },
+          {
+            "label": "Check notification frequency",
+            "detail": "Notification checks take the caller's own recent send times, because this module keeps no send log, and return the earliest time the failed rules allow, never inside quiet hours. Each replica caches the active versions for up to 30 seconds; the replica that switches a version on drops its copy after the commit."
+          }
+        ],
+        "example": "A payments admin drafts refund rules where a customer cancelling while the order is COOKING gets 50 % of the food back and no fees. A second payments admin switches it on. For a cooking order paid 300 rupees with 250 of food, evaluation returns a 125-rupee food refund and nothing for fees, and the same answer is reproducible from the stored version.",
+        "lab": "Draft a serviceability policy with one paused city and evaluate an address inside it. Draft refund rules and try to switch them on with the same admin who drafted them, expecting a refusal. Then evaluate a refund whose parts would exceed what was paid and check that the fees give way first.",
+        "pitfall": "Never invent a policy value to make an evaluation work: until staff switch on a version, the honest answer is POLICY_NOT_SET.",
+        "questions": [
+          {
+            "id": "adv-policy-engines-q1",
+            "prompt": "What does evaluating a policy answer before any version is switched on?",
+            "options": [
+              "A sensible default",
+              "503 POLICY_NOT_SET",
+              "An empty rule that allows everything",
+              "The last draft"
+            ],
+            "answer": 1,
+            "explanation": "Nothing is seeded or assumed; the policy must be switched on first."
+          },
+          {
+            "id": "adv-policy-engines-q2",
+            "prompt": "Who may switch on refund rules drafted by a payments admin?",
+            "options": [
+              "The same admin",
+              "A different platform or payments admin",
+              "Any support admin",
+              "The chef"
+            ],
+            "answer": 1,
+            "explanation": "Refund rules need four eyes: the second step must be a different admin."
+          },
+          {
+            "id": "adv-policy-engines-q3",
+            "prompt": "When a refund's parts would exceed what was paid, what gives way first?",
+            "options": [
+              "The food refund",
+              "The platform fee, then the delivery fee",
+              "Nothing, the cap is ignored",
+              "The customer's wallet"
+            ],
+            "answer": 1,
+            "explanation": "The total never exceeds paidPaise; fees give way first so the parts add up."
+          }
+        ]
+      },
+      {
+        "id": "adv-export-erase",
+        "title": "Export and erase a person's data across modules",
+        "overview": "People can download what Craves keeps about them and erase what the advanced modules hold. Two endpoints do this. my-taste-data exports and erases every advanced module's personal data through one interface, PersonalDataContributor. my-data builds one download that also includes the person's profile, addresses, orders and favourites, read from the owning services with the person's own token. This lesson shows how both stay complete and honest about what they could not read.",
+        "steps": [
+          {
+            "label": "Implement PersonalDataContributor",
+            "detail": "Every module that holds personal data implements PersonalDataContributor: it exports what it holds for a person and erases it. Because export and erase go through the same interface, a new module is covered the moment it registers, and nobody has to remember to update a central list."
+          },
+          {
+            "label": "Export advanced data",
+            "detail": "GET /my-taste-data/export returns everything the advanced modules hold about the caller, along with the consent switches personalization and productAnalytics, which default to off. Push tokens and other secrets are exported as facts about the record, never as the raw value."
+          },
+          {
+            "label": "Erase with an explicit confirmation",
+            "detail": "DELETE /my-taste-data needs the header X-Confirm-Erase: ERASE and keeps only a receipt with a count and the modules touched, no content. It also deletes the stored replies of the person's keyed requests, which are caches and so are not counted in the receipt."
+          },
+          {
+            "label": "Keep counters honest after erase",
+            "detail": "Modules erase what no longer counts and unlink the rest from the person: a used promotion stays counted against its budget, a claim stays in an offer's count, an accepted order change stays with the order. Totals that money or limits depend on never move backwards because someone erased their data."
+          },
+          {
+            "label": "Build the full download",
+            "detail": "GET /my-data/export reads the profile, addresses, every page of orders, favourite dishes, chefs and kitchens, and for a chef the kitchen, each from the owning service through api.craves.in with the caller's token. It adds the advanced export and stores nothing."
+          },
+          {
+            "label": "Say what is missing",
+            "detail": "A section that could not be read in full, because of an error, a timeout or more than 50 pages, is null and named in missing, with complete false. A 404 for the profile or kitchen means nothing is kept yet, so it is null but not missing, and a 401 from any source asks the person to sign in again."
+          }
+        ],
+        "example": "A customer downloads their data before a phone change. The file has their profile, three addresses, 42 orders across five pages, saved dishes and the advanced export with their taste profile. The favourites service timed out, so favoriteKitchens is null, listed in missing, and complete is false; they can simply try again later.",
+        "lab": "Add a fake module that implements PersonalDataContributor and holds one row for a test person. Export and check the row appears, erase with the confirmation header and check the receipt counts it, then export again and confirm it is gone. Make one gateway fail during my-data and assert it is named in missing.",
+        "pitfall": "Never return a partial export that looks complete: every section that could not be read must be named, and complete must say false.",
+        "questions": [
+          {
+            "id": "adv-export-erase-q1",
+            "prompt": "How does a new module become part of export and erase?",
+            "options": [
+              "By editing a central list",
+              "By implementing PersonalDataContributor",
+              "By a nightly job",
+              "It cannot"
+            ],
+            "answer": 1,
+            "explanation": "Export and erase go through the interface, so a registered module is covered automatically."
+          },
+          {
+            "id": "adv-export-erase-q2",
+            "prompt": "What does the erase keep?",
+            "options": [
+              "A full copy for 30 days",
+              "Only a receipt with a count and the modules, no content",
+              "Everything except orders",
+              "The person's name"
+            ],
+            "answer": 1,
+            "explanation": "The erase leaves a receipt without content."
+          },
+          {
+            "id": "adv-export-erase-q3",
+            "prompt": "my-data cannot read a person's favourites in time. What does the download show?",
+            "options": [
+              "An empty list",
+              "favoriteKitchens is null, named in missing, and complete is false",
+              "An error for the whole download",
+              "Last month's favourites"
+            ],
+            "answer": 1,
+            "explanation": "Missing sections are explicit, so a partial export never looks complete."
+          }
+        ]
+      },
+      {
+        "id": "adv-account-deletion",
+        "title": "Process account deletion requests end to end",
+        "overview": "No Craves service used to let a customer or chef delete their account; the help text said to email support. App stores require deletion to start in the app, and India's DPDP Act gives an erasure right. The account-deletion module accepts the request, gives staff an ordered queue, and on completion erases the person's data in every advanced module in one transaction. Removing the core account in other services stays with staff and Auth's deletion coordinator. This lesson reads AccountDeletionService and the shared AccountErasureService.",
+        "steps": [
+          {
+            "label": "Ask with a deliberate header",
+            "detail": "A signed-in person asks with POST /account-deletion and the header X-Confirm-Delete: DELETE, with an optional reason up to 500 characters. One open request per person: asking again, or two taps at once, returns the same request. At most 3 new requests per person in 24 hours stop ask-and-withdraw loops from flooding the queue."
+          },
+          {
+            "label": "Let people change their mind",
+            "detail": "The person can read the request and withdraw it until staff start working on it. After that the request moves only through staff steps, each with the expectedVersion the admin saw and an audit row."
+          },
+          {
+            "label": "Work the staff queue",
+            "detail": "The queue lists requests oldest first. Platform and compliance admins start, complete or refuse; a refusal needs a message to the person, for example an order still on its way, an open dispute or money owed. Support and audit admins read, and staff never handle their own request."
+          },
+          {
+            "label": "Complete atomically or not at all",
+            "detail": "Completing erases the person's data in every advanced module in the same transaction, with the same eraser as the self-service erase. If any module is switched off or unavailable, completing answers 503 ERASE_INCOMPLETE naming it, nothing is erased and the request stays in progress, so a request is never marked done while data remains."
+          },
+          {
+            "label": "Remove the core account separately",
+            "detail": "The module deletes nothing in other services. Sign-in, profile, addresses and kitchen are removed with the existing admin tools and Auth's deletion coordinator, which calls each service's internal erasure route. Order and invoice records stay as the law requires; the exact retention period is for the owner and a chartered accountant to confirm."
+          },
+          {
+            "label": "Keep the request as the record",
+            "detail": "The request itself is kept as the record of what the person asked and what Craves did: it appears in their export, and the self-service erase or completion clears the free-text reason but keeps the request. There is no automatic deletion timer and no promised turnaround; both are owner decisions."
+          }
+        ],
+        "example": "A customer asks to delete their account while an order is on its way. A compliance admin refuses with the message that the order must be delivered first. Two days later the customer asks again; the admin completes it, every advanced module erases the person in one transaction, and the core account is then removed through the deletion coordinator.",
+        "lab": "In a local environment, create a deletion request, withdraw it, and create it again. Switch one module off and try to complete the request: expect 503 ERASE_INCOMPLETE naming that module and no data erased anywhere. Switch it back on, complete again, and check the audit trail.",
+        "pitfall": "Never mark a deletion complete while any module still holds the person's data; an honest in-progress state is better than a false done.",
+        "questions": [
+          {
+            "id": "adv-account-deletion-q1",
+            "prompt": "What does a person send to ask for account deletion?",
+            "options": [
+              "An email to support",
+              "POST /account-deletion with the header X-Confirm-Delete: DELETE",
+              "A DELETE on their profile",
+              "A phone call"
+            ],
+            "answer": 1,
+            "explanation": "The explicit header makes the request deliberate; asking again returns the same request."
+          },
+          {
+            "id": "adv-account-deletion-q2",
+            "prompt": "Completing a request while one module is switched off gives what?",
+            "options": [
+              "Success with a warning",
+              "503 ERASE_INCOMPLETE naming the module, and nothing is erased",
+              "Partial erasure",
+              "The request is withdrawn"
+            ],
+            "answer": 1,
+            "explanation": "Completion is all or nothing, so a request is never marked done while data remains."
+          },
+          {
+            "id": "adv-account-deletion-q3",
+            "prompt": "Does completing a request delete the person's sign-in and orders in other services?",
+            "options": [
+              "Yes, automatically",
+              "No, staff and Auth's deletion coordinator remove the core account; legal records stay",
+              "Only the orders",
+              "Only the sign-in"
+            ],
+            "answer": 1,
+            "explanation": "The module erases advanced data only; other services are handled separately and lawfully."
+          }
+        ]
+      }
+    ]
+  }
+}

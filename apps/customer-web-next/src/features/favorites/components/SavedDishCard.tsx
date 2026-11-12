@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { Heart } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useCartLine } from "@/features/cart/components/CustomerFloatingCart";
@@ -15,6 +14,7 @@ import {
 import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
 import { useFavoriteKitchen } from "@/shared/hooks/use-favorite-kitchen";
 import { CartStepper } from "@/shared/ui/buttons/CartStepper";
+import { SaveHeartButton } from "@/shared/ui/buttons/SaveHeartButton";
 
 const TONE: Record<SavedTone, string> = {
   positive: "bg-[#E8F7F1] text-[#166B49]",
@@ -158,15 +158,7 @@ export function SavedDishCard({
           ) : null}
         </div>
 
-        <button
-          type="button"
-          onClick={onRemove}
-          disabled={busy}
-          className="flex h-12 !min-h-12 w-12 !min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-transparent !p-0 !text-[#F62E18] !shadow-none transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#F1F3F5] motion-safe:active:scale-[0.94] disabled:cursor-wait disabled:opacity-50"
-          aria-label={`Remove ${name} from saved dishes`}
-        >
-          <Heart className="h-6 w-6 fill-current" aria-hidden="true" />
-        </button>
+        <SaveHeartButton saved disabled={busy} label={`Remove ${name} from saved dishes`} onToggle={onRemove} className="shrink-0" />
       </div>
 
       {open || canAdd || quantity > 0 ? (

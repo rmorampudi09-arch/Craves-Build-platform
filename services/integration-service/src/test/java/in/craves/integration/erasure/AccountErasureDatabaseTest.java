@@ -71,7 +71,8 @@ class AccountErasureDatabaseTest {
           "points":[{"address":"Kitchen road 1","contact_person":{"name":"Chef Kitchen","phone":"8888888888"},"latitude":"17.4","longitude":"78.4"},
             {"address":"12 Real Street, Flat 4","contact_person":{"name":"Real Person","phone":"9876543210"},"latitude":"17.4412345",
              "longitude":"78.3912345","note":"Gate code 1234","building_number":"12","delivery_id":11712,
-             "tracking_url":"https://tracking.example/11712","delivery":{"status":"parcel_picked_up"}}]}}""";
+             "tracking_url":"https://tracking.example/11712","delivery":{"status":"parcel_picked_up"},
+             "checkin":{"recipient_full_name":"Real Person","recipient_position":"Neighbour"},"sign_photo_url":"https://borzo.example/real-sign.jpg"}]}}""";
     private static final String[] PERSONAL = {"Real Person", "9876543210", "real.person@example.com"};
     /** Legal records and everything of someone else's: a chef erase, a blocked erase and the other side never change them. */
     private static final List<String> MONEY_TABLES = List.of(
@@ -754,7 +755,9 @@ class AccountErasureDatabaseTest {
         return text.replace("12 Real Street, Flat 4", "[deleted]").replace("12 Real Street", "[deleted]").replace("Flat 4", "[deleted]")
             .replace("Near Real Temple", "[deleted]").replace("Gate code 1234", "[deleted]").replace("500081", "000000")
             .replace("17.4412345", "0").replace("78.3912345", "0").replace("\"building_number\": \"12\"", "\"building_number\": \"[deleted]\"")
-            .replace("9876543210", AccountErasureService.ERASED_PHONE).replace("Real Person", AccountErasureService.ERASED_NAME);
+            .replace("9876543210", AccountErasureService.ERASED_PHONE).replace("Real Person", AccountErasureService.ERASED_NAME)
+            .replace("\"recipient_position\": \"Neighbour\"", "\"recipient_position\": \"[deleted]\"")
+            .replace("\"https://borzo.example/real-sign.jpg\"", "\"[deleted]\"");
     }
 
     private static void assertErased(String table, String column, UUID id, String before) {

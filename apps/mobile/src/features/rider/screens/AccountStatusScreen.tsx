@@ -10,7 +10,7 @@ import {formatClock, formatDay} from '../domain/format';
 import {resolveGate} from '../domain/gate';
 import {riderMessage} from '../domain/problem';
 import {useRiderShell} from '../navigation';
-import {RIDER_APP_VERSION} from '../riderConfig';
+import {RIDER_APP_DOWNLOAD_URL, RIDER_APP_VERSION} from '../riderConfig';
 import {useRecheck, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {ApplicationScreen} from './ApplicationScreen';
@@ -52,10 +52,17 @@ export function AccountStatusScreen() {
       testID="rider-account-status"
       footer={
         <>
+          {block === 'UPDATE_REQUIRED' ? (
+            <BottomAction
+              label={a.updateNow}
+              onPress={() => Linking.openURL(RIDER_APP_DOWNLOAD_URL).catch(() => undefined)}
+              testID="rider-update-now"
+            />
+          ) : null}
           <BottomAction
             label={strings.common.callSupport}
-            // Waiting on the rate card is nothing to call about; a paused or closed account is.
-            variant={block === 'RATES_PENDING' ? 'outline' : 'primary'}
+            // Waiting on the rate card or an update is nothing to call about; a paused or closed account is.
+            variant={block === 'RATES_PENDING' || block === 'UPDATE_REQUIRED' ? 'outline' : 'primary'}
             leftIcon="phone-outline"
             onPress={() => call(me.data.supportPhone)}
             testID="rider-call-support"
@@ -69,18 +76,6 @@ export function AccountStatusScreen() {
         <View style={styles.intro}>
           <Title>{a.titles[block]}</Title>
           <Text style={styles.secondary}>{block === 'UPDATE_REQUIRED' ? a.updateBody(RIDER_APP_VERSION, me.data.minAppVersion) : a.bodies[block]}</Text>
-        </View>
-      ) : null}
-      {block === 'UPDATE_REQUIRED' ? (
-        <View testID="rider-whats-new">
-          <Card>
-            <Text style={styles.strong}>{a.whatsNewTitle}</Text>
-            {a.whatsNew.map(line => (
-              <Text key={line} style={styles.secondary}>
-                {line}
-              </Text>
-            ))}
-          </Card>
         </View>
       ) : null}
       {block === 'RATES_PENDING' ? (

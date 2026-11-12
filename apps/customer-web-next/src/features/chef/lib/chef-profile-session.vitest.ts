@@ -289,7 +289,7 @@ describe("profile owner privacy", () => {
     await confirmSignOut();
     await act(async () => { late.resolve(Response.json({ signedOut: false }, { status: 503 })); });
     await screen.findByRole("button", { name: "Try again" });
-    await screen.findByText("Your account details are temporarily unavailable. Sign-out controls remain available below.");
+    await screen.findByText("Your account details are temporarily unavailable. You can still sign out below.");
     expect(navigate).not.toHaveBeenCalled();
     expect(screen.queryByText(/Chef A private address/)).toBeNull();
     expect(getSession()?.id).toBe(a.id);
@@ -410,7 +410,7 @@ describe("Chef menu save and recovery", () => {
     fireEvent.click(screen.getByRole("switch", { name: /Customers can order it/ }));
     fireEvent.click(screen.getByRole("button", { name: "Save dish" }));
     expect((await screen.findByRole("alert")).textContent).toContain(code);
-    expect(screen.getByRole("alert").textContent?.toLowerCase()).toContain("publishing");
+    expect(screen.getByRole("alert").textContent?.toLowerCase()).toMatch(/publishing|go live/);
     expect((screen.getByRole("button", { name: "Save dish" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByRole("button", { name: "Reload menu to check the save" })).toBeNull();
     expect((screen.getByLabelText(/Dish name/) as HTMLInputElement).value).toBe("Fixture dish");

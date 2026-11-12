@@ -30,8 +30,6 @@ public class ReferralFinanceObservation {
         long captured=captures.size()==1?paise((BigDecimal)captures.getFirst().get("captured_amount")):0;
         // M24a: a Craves-funded promotion is part of what the checkout was paid with (customer funds = gross).
         if(captured>0)captured+=db.queryForList("SELECT discount_paise FROM payment_schema.promotion_checkout_funding WHERE checkout_id=?",Long.class,checkout).stream().mapToLong(Long::longValue).sum();
-        // M24d: so is a company share (billed to the company on its M10 statement).
-        if(captured>0)captured+=db.queryForList("SELECT company_share_paise FROM payment_schema.company_share_checkout_funding WHERE checkout_id=?",Long.class,checkout).stream().mapToLong(Long::longValue).sum();
         if(captured==0 && funding.size()==1)captured=((Number)funding.getFirst().get("gross_paise")).longValue();
         long food=paise(new BigDecimal(snapshot.path("customerFood").asText()));
         BigDecimal total=new BigDecimal(snapshot.path("customerTotal").asText());

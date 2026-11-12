@@ -45,9 +45,6 @@ public class PaymentService {
     private in.craves.integration.promotions.PromotionCheckoutFundingService promotionFunding;
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     public void setPromotionFunding(in.craves.integration.promotions.PromotionCheckoutFundingService funding){this.promotionFunding=funding;}
-    private in.craves.integration.corporatemeals.CompanyShareCheckoutFundingService companyShareFunding;
-    @org.springframework.beans.factory.annotation.Autowired(required=false)
-    public void setCompanyShareFunding(in.craves.integration.corporatemeals.CompanyShareCheckoutFundingService funding){this.companyShareFunding=funding;}
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final PaymentProviderProperties provider;
@@ -92,13 +89,11 @@ public class PaymentService {
             if(referralFunding==null || !routing.razorpay())throw new ResponseStatusException(HttpStatus.CONFLICT,"Referral checkout funding is not enabled for this provider");
             BigDecimal net=referralFunding.prepare(authorizationHeader,checkout.id(),checkout.customerIdentityId(),checkout.grandTotal(),checkout.currency());
             checkout=new CheckoutResponse(checkout.id(),checkout.customerIdentityId(),checkout.status(),checkout.currency(),net,true);
-        } else if(promotionFunding!=null || companyShareFunding!=null) {
+        } else if(promotionFunding!=null) {
             // M24a: collect only the net amount of a Craves-funded promotion; a payment already created keeps its frozen amount.
-            BigDecimal net=promotionFunding==null?null:promotionFunding.prepare(checkout.id(),checkout.customerIdentityId(),checkout.grandTotal(),checkout.currency());
-            // M24d: or only the person's part of a company-share checkout (order-service never allows both on one checkout).
-            if(net==null && companyShareFunding!=null)net=companyShareFunding.prepare(checkout.id(),checkout.customerIdentityId(),checkout.grandTotal(),checkout.currency());
+            BigDecimal net=promotionFunding.prepare(checkout.id(),checkout.customerIdentityId(),checkout.grandTotal(),checkout.currency());
             if(net!=null) {
-                if(!routing.razorpay())throw new ResponseStatusException(HttpStatus.CONFLICT,"Promotion or company share checkout funding is not enabled for this provider");
+                if(!routing.razorpay())throw new ResponseStatusException(HttpStatus.CONFLICT,"Promotion checkout funding is not enabled for this provider");
                 checkout=new CheckoutResponse(checkout.id(),checkout.customerIdentityId(),checkout.status(),checkout.currency(),net,false);
             }
         }

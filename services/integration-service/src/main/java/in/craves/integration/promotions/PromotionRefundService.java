@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
  * (integer paise, ordered by chef-order id, remainder on the last); a refund of r out of a chef order's gross g
  * returns floor(r * net / g) to the provider, so the cash refunded for a checkout never exceeds what was collected.
  * Order-service still sees the amount it asked for in every status event. Always on for frozen checkouts, whatever the switch says.
+ * M24d slice 3: a frozen company share (V189) is shared across the chef orders the same way.
  */
 @Service
 public class PromotionRefundService {
@@ -32,8 +33,11 @@ public class PromotionRefundService {
 
     /** Provider refund amount for a requested chef-order refund; the requested amount when the checkout has no frozen promotion. */
     public BigDecimal allocate(RefundRequestedData data, BigDecimal requested) {
-        var rows = db.queryForList("SELECT buyer_id,gross_paise,discount_paise FROM payment_schema.promotion_checkout_funding WHERE checkout_id=?", data.checkoutId());
+        // M24d: a frozen company share is shared the same way (the person gets back only what they paid; the company's part is credited on its M10 statement).
+        var rows = db.queryForList("SELECT buyer_id,gross_paise,discount_paise FROM payment_schema.promotion_checkout_funding WHERE checkout_id=? "
+            + "UNION ALL SELECT buyer_id,gross_paise,company_share_paise FROM payment_schema.company_share_checkout_funding WHERE checkout_id=?", data.checkoutId(), data.checkoutId());
         if (rows.isEmpty()) return requested;
+        if (rows.size() != 1) throw new RefundNonRetryableException("Checkout carries both a promotion and a company share");
         var f = rows.getFirst();
         if (!data.customerIdentityId().equals(f.get("buyer_id"))) throw new RefundNonRetryableException("Refund customer does not match the promotion checkout");
         long gross = ((Number) f.get("gross_paise")).longValue(), discount = ((Number) f.get("discount_paise")).longValue();
@@ -56,7 +60,8 @@ public class PromotionRefundService {
 
     /** Status events keep the amount order-service requested (it refuses any other); the provider amount stays on the refund row. */
     public SerializedRefundStatusEvent customerEvent(SerializedRefundStatusEvent event) {
-        var asked = db.queryForList("SELECT r.request_event_payload->'data'->>'refundAmount' AS asked FROM payment_schema.refund r JOIN payment_schema.promotion_checkout_funding f ON f.checkout_id=r.checkout_id WHERE r.chef_sub_order_id=?", event.subject());
+        var asked = db.queryForList("SELECT r.request_event_payload->'data'->>'refundAmount' AS asked FROM payment_schema.refund r WHERE r.chef_sub_order_id=? "
+            + "AND (EXISTS (SELECT 1 FROM payment_schema.promotion_checkout_funding f WHERE f.checkout_id=r.checkout_id) OR EXISTS (SELECT 1 FROM payment_schema.company_share_checkout_funding c WHERE c.checkout_id=r.checkout_id))", event.subject());
         if (asked.isEmpty() || asked.getFirst().get("asked") == null) return event;
         try {
             var payload = (ObjectNode) json.readTree(event.payloadJson());

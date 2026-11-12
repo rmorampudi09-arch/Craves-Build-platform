@@ -193,8 +193,17 @@ public final class ApiDtos {
         String foodType,
         BigDecimal unitPrice,
         int quantity,
-        BigDecimal lineTotal
+        BigDecimal lineTotal,
+        // M24c: the menu options this line was priced with (unitPrice already includes them); absent without options.
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<OrderItemChoice> chosenOptions
     ) {
+        public OrderItemResponse(UUID id, UUID menuItemId, String itemName, String category, String foodType,
+            BigDecimal unitPrice, int quantity, BigDecimal lineTotal) {
+            this(id, menuItemId, itemName, category, foodType, unitPrice, quantity, lineTotal, null);
+        }
+    }
+
+    public record OrderItemChoice(String group, String choice, BigDecimal price) {
     }
 
     public record OrderResponse(

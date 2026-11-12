@@ -54,6 +54,14 @@ class MenuOptionCheckoutDatabaseTest extends FinancialCheckoutDatabaseTest {
   JsonNode frozen=(JsonNode)read.invoke(null,jdbc,json,value.id());
   assertEquals(1,frozen.path("lines").size());assertEquals(36900,frozen.path("lines").get(0).path("basePaise").asLong());assertEquals(41400,frozen.path("lines").get(0).path("unitPaise").asLong());
   assertEquals(choice.toString(),frozen.path("lines").get(0).path("choices").get(0).path("choiceId").asText());assertEquals("LUNCH",frozen.path("lines").get(0).path("mealPeriod").asText());
+  // Slice D: the chosen options show with the line in the checkout, customer and chef history and the order document.
+  var shown=java.util.List.of(new in.craves.order.web.ApiDtos.OrderItemChoice("Spice","Extra raita",new BigDecimal("45.00")));
+  assertEquals(shown,item.chosenOptions());
+  var history=new in.craves.order.service.OrderHistoryService(jdbc);
+  assertEquals(shown,history.listCustomerOrders(actor,10,null,null).orders().getFirst().items().getFirst().chosenOptions());
+  assertEquals(shown,history.listChefOrders(new in.craves.order.security.CravesPrincipal(chef,"",java.util.Set.of("CHEF")),10,null,null).orders().getFirst().items().getFirst().chosenOptions());
+  var document=new in.craves.order.web.OrderDocumentSourceController(jdbc,true).order(actor,value.orders().getFirst().id(),false,"INR","Asia/Kolkata").getBody();
+  assertTrue(json.writeValueAsString(document).contains("(Spice: Extra raita)"),"document names the chosen options");
   assertThrows(RuntimeException.class,()->jdbc.execute("UPDATE order_schema.menu_option_checkout_line SET unit_paise=1"));
   assertThrows(RuntimeException.class,()->jdbc.execute("DELETE FROM order_schema.menu_option_checkout_line"));
  }

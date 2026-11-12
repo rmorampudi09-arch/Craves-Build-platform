@@ -110,9 +110,10 @@ function HomeBody() {
 
       <SkeletonBlock className="mt-8 h-7 w-60 max-w-full rounded-full" />
       <SkeletonBlock className="mt-2 h-3.5 w-72 max-w-full rounded-full" soft />
-      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 3 }, (_, index) => (
-          <CardSkeleton key={index} media="aspect-[16/9]" />
+      {/* Home's dish grid and photo shape (DISH_GRID and DISH_PHOTO in features/home). */}
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:gap-5 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <CardSkeleton key={index} media="aspect-[4/3] sm:aspect-[3/2] lg:aspect-[16/10]" />
         ))}
       </div>
     </div>
@@ -238,21 +239,18 @@ function CartBody() {
 }
 
 /** A Chefs-tab kitchen card: chef face, name and heart, then the photo strip and the prep time and price line. */
-export function KitchenDiscoverCardSkeleton() {
+/** The Kitchens page card: photo, then the cook's face, the kitchen and the price on one line. */
+function KitchenCardSkeleton() {
   return (
-    <div className="rounded-[1.35rem] border border-[#E5E7EB] bg-white p-3 sm:p-3.5" aria-hidden="true">
-      <div className="flex items-center gap-3">
-        <SkeletonBlock className="h-14 w-14 shrink-0 rounded-full" />
+    <div className="overflow-hidden rounded-[18px] border border-[#EEE9E4] bg-white" aria-hidden="true">
+      <SkeletonBlock className="aspect-[2/1] w-full rounded-none lg:aspect-[16/9]" />
+      <div className="flex gap-2.5 px-3 pb-3 pt-2.5">
+        <SkeletonBlock className="h-10 w-10 shrink-0 rounded-full" />
         <div className="min-w-0 flex-1 space-y-2">
           <SkeletonBlock className="h-4 w-2/3 rounded-full" />
           <SkeletonBlock className="h-3 w-1/2 rounded-full" soft />
+          <SkeletonBlock className="h-3 w-3/4 rounded-full" soft />
         </div>
-        <SkeletonBlock className="h-10 w-10 shrink-0 rounded-full" soft />
-      </div>
-      <SkeletonBlock className="mt-3 h-[9.5rem] w-full rounded-2xl" />
-      <div className="mt-3 flex justify-between gap-3">
-        <SkeletonBlock className="h-3 w-32 rounded-full" soft />
-        <SkeletonBlock className="h-3 w-16 rounded-full" soft />
       </div>
     </div>
   );
@@ -263,9 +261,9 @@ function ChefsBody() {
     <div className="mx-auto max-w-[88rem] px-4 pt-3 md:px-7 md:pt-4 lg:px-10">
       <SkeletonBlock className="h-3 w-36 rounded-full" soft />
       <SkeletonBlock className="mt-3 h-8 w-64 max-w-full rounded-full" />
-      <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-5 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5 xl:grid-cols-4">
         {Array.from({ length: 6 }, (_, index) => (
-          <KitchenDiscoverCardSkeleton key={index} />
+          <KitchenCardSkeleton key={index} />
         ))}
       </div>
     </div>

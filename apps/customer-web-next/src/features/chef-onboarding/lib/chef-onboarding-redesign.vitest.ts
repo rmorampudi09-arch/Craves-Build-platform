@@ -161,7 +161,7 @@ describe("Redesigned Chef onboarding popup", () => {
     saved.documents = [];
     open();
     expect(await screen.findByRole("heading", { name: "Welcome back, Fixture" })).toBeTruthy();
-    expect(screen.getAllByText("Not started")).toHaveLength(3);
+    expect(screen.getAllByText("Not started")).toHaveLength(2);
     expect(screen.getByText("Complete")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Continue application" }));
     await screen.findByRole("heading", { name: "Your kitchen" });
@@ -185,28 +185,18 @@ describe("Redesigned Chef onboarding popup", () => {
     expect(screen.queryByText(/Storage|Add more/i)).toBeNull();
   });
 
-  it("lets an applicant continue without FSSAI but routes submission back to the FSSAI number", async () => {
+  it("does not ask for FSSAI at signup and says it is needed before dishes go live", async () => {
     saved.details = { ...saved.details!, fssaiNumber: "" };
     open();
-    fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
-    await screen.findByRole("heading", { name: "FSSAI details" });
-    fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
-    await screen.findByRole("heading", { name: "How to apply for FSSAI" });
-    expect(screen.getAllByRole("listitem").length).toBeGreaterThanOrEqual(5);
-    expect(screen.queryByRole("button", { name: /Call us|Chat with us/ })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "I have an FSSAI number" }));
-    await screen.findByRole("heading", { name: "FSSAI details" });
-    fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Save and continue" }));
-    await screen.findByRole("heading", { name: "Identity verification" });
-    fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
+    expect(screen.queryByRole("button", { name: /FSSAI/ })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Review application" }));
     await screen.findByRole("heading", { name: "Review your application" });
-    expect(screen.getByText("Not added yet")).toBeTruthy();
+    expect(screen.getByText(/add your FSSAI number later, before your dishes go live/)).toBeTruthy();
+    expect(screen.getByText(/government requires it for every food business/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit FSSAI" })).toBeNull();
     fireEvent.click(screen.getByLabelText(/I confirm these details are correct/));
     fireEvent.click(screen.getByRole("button", { name: "Submit application" }));
-    await screen.findByRole("heading", { name: "FSSAI details" });
-    expect((await screen.findByRole("alert")).textContent).toContain("Add your 14-digit FSSAI");
-    expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(false);
+    await waitFor(() => expect(fetcher.mock.calls.some(([url]) => String(url).endsWith("/submit"))).toBe(true));
   });
 
   it("shows a more-information request on the status screen and opens the affected section", async () => {
@@ -402,34 +392,6 @@ describe("Backend gap fixes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save and continue" }));
     await screen.findByRole("heading", { name: "Review your application" });
     expect(saved.details?.proofHasBack).toBe(false);
-  });
-
-  it("shows an earlier callback request after a reload and an English fallback guide", async () => {
-    saved.details = { ...saved.details!, fssaiNumber: "", language: "te" };
-    saved.callbackRequest = { caseNumber: "SUP-2041", status: "OPEN", requestedAt: "2026-10-09T05:00:00Z" };
-    fetcher.mockImplementation((input, init) =>
-      String(input).startsWith("/api/chef/onboarding/content")
-        ? Promise.resolve(
-            Response.json([
-              {
-                id: "22222222-2222-4222-8222-222222222222", language: "en", title: "Apply for FSSAI",
-                kind: "ARTICLE", body: "Synthetic English guide", published: true, ready: true, version: 1,
-                contentType: null, fileSizeBytes: null, createdAt: "2026-10-09T00:00:00Z",
-              },
-            ]),
-          )
-        : normal(input, init),
-    );
-    open();
-    fireEvent.click(await screen.findByRole("button", { name: "Continue application" }));
-    await screen.findByRole("heading", { name: "FSSAI details" });
-    fireEvent.click(screen.getByRole("button", { name: "Don’t have FSSAI?" }));
-    // The English guide shows as it is: no "not in your language" line under the language choice.
-    expect(await screen.findByText("Apply for FSSAI")).toBeTruthy();
-    expect(screen.queryByText(/showing the English guide|in this language/)).toBeNull();
-    expect(screen.getByText("Request received")).toBeTruthy();
-    expect(screen.getByText(/SUP-2041/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Request a call from Craves" })).toBeNull();
   });
 
   it("names reviewer-requested sections and shows the short application reference", async () => {

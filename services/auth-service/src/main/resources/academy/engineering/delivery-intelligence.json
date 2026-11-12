@@ -1,0 +1,316 @@
+{
+  "course": {
+    "id": "delivery-intelligence",
+    "service": "delivery-intelligence-admin",
+    "title": "Delivery Intelligence: choosing couriers and investigating deliveries",
+    "level": "Advanced",
+    "minutes": 112,
+    "description": "Learn how integration-service scores and chooses a delivery provider for each chef order, how routing falls back from Borzo to Pidge without ever booking two couriers, how the read-only Delivery Intelligence dashboard shows evidence without leaking secrets, and how operations work delivery exception cases.",
+    "prerequisites": [
+      "delivery"
+    ],
+    "sources": [
+      "apps/delivery-intelligence-admin/README.md",
+      "services/integration-service/src/main/java/in/craves/integration/delivery/DeliveryIntelligenceService.java",
+      "services/integration-service/src/main/java/in/craves/integration/config/DeliveryIntelligenceProperties.java",
+      "services/integration-service/src/main/java/in/craves/integration/delivery/command/DeliveryProviderRouter.java",
+      "services/integration-service/src/main/java/in/craves/integration/delivery/command/BorzoPidgeHandoffWorker.java",
+      "services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence/AdminDeliveryIntelligenceController.java",
+      "services/integration-service/src/main/java/in/craves/integration/admin/deliveryintelligence/DeliveryIntelligenceReadRepository.java",
+      "apps/delivery-intelligence-admin/src/lib/delivery-history.ts",
+      "apps/delivery-intelligence-admin/src/lib/server-api.ts",
+      "services/integration-service/src/main/java/in/craves/integration/admin/deliveryexceptions/DeliveryExceptionService.java"
+    ],
+    "sourceRevision": "9cc6f67d8ec73c04e47cddcb26b1f26cfaa4f605",
+    "lessons": [
+      {
+        "id": "di-provider-ranking",
+        "title": "Score and choose a delivery provider",
+        "overview": "For every chef order, Delivery Intelligence ranks the delivery candidates and records why. Each candidate gets a proximity score and a quality score made from a predicted success probability, the provider's rolling record and a small exploration term, and the final choice is drawn with a softmax so good providers win most of the time while others still get a fair test. Every candidate's numbers are stored with the assignment. This lesson reads DeliveryIntelligenceService and its settings.",
+        "steps": [
+          {
+            "label": "Skip ineligible candidates",
+            "detail": "A candidate is skipped when its provider is inactive, does not serve the order's area, or reports it is not available. Skipped candidates are still recorded after the ranked ones, so an investigator can see who was considered and why they were not used."
+          },
+          {
+            "label": "Compute quality",
+            "detail": "Quality is 0.55 times the predicted success probability times 100, plus 0.35 times the provider's rolling combined score, plus 0.10 times an exploration sample times 100. The success predictor uses the order's distance, hour and weekday with the provider's metrics, and the exploration sample comes from a Beta distribution of the provider's successes and failures."
+          },
+          {
+            "label": "Compute proximity",
+            "detail": "Proximity is 100 times one minus the pickup distance divided by the 5 km search radius, or, when only an ETA is known, one minus the pickup ETA divided by 30 minutes, kept between 0 and 100. With neither, a neutral 50 is used, so a provider is not punished for missing data."
+          },
+          {
+            "label": "Combine and choose",
+            "detail": "The final score is 0.60 times proximity plus 0.40 times quality. The default strategy is STOCHASTIC: a softmax with temperature 10 over the final scores, so the best candidate is most likely but not certain. GREEDY always takes the top score. The random draw is seeded from the chef sub-order and order ids, so the same order always makes the same choice."
+          },
+          {
+            "label": "Record the assignment once",
+            "detail": "The assignment stores every candidate's rank, scores, quote and status, SELECTED, RANKED or skipped, with a version string naming the predictor, rolling, bandit and proximity-quality models. A second request for the same chef sub-order that loses a race gets the stored assignment back, so one order never has two."
+          },
+          {
+            "label": "Learn from outcomes",
+            "detail": "Recorded outcomes are scored into a composite, and 70 or more counts as a success. A nightly maintenance job at 2 AM India time refreshes the providers' rolling metrics, which feed tomorrow's rankings. Settings such as the weights and the radius are validated at startup."
+          }
+        ],
+        "example": "Two providers can take an order. Borzo's courier is 1 km away and Pidge's 3 km away, so Borzo's proximity is 80 and Pidge's 40; their quality scores are close. Borzo's final score is clearly higher and the softmax picks it most of the time; on this order's fixed seed it is picked, and both candidates' numbers are saved for the investigator.",
+        "lab": "Copy the scoring arithmetic into a small local script or test and compute the final scores for three made-up candidates, one with distance, one with only an ETA and one with neither. Then run the softmax with temperature 10 and estimate each candidate's chance of being chosen.",
+        "pitfall": "Never change a weight or the temperature in production without comparing outcomes first: small changes move real orders between providers.",
+        "questions": [
+          {
+            "id": "di-provider-ranking-q1",
+            "prompt": "Why is the stochastic choice seeded from the order ids?",
+            "options": [
+              "To be fair to riders",
+              "So the same order always makes the same choice and can be explained later",
+              "To pick the cheapest provider",
+              "To hide the choice"
+            ],
+            "answer": 1,
+            "explanation": "A deterministic seed makes each choice reproducible from the recorded scores."
+          },
+          {
+            "id": "di-provider-ranking-q2",
+            "prompt": "A candidate has neither a pickup distance nor an ETA. What proximity does it get?",
+            "options": [
+              "0",
+              "A neutral 50",
+              "100",
+              "It is skipped"
+            ],
+            "answer": 1,
+            "explanation": "Missing data gets the neutral unknown proximity score."
+          },
+          {
+            "id": "di-provider-ranking-q3",
+            "prompt": "What weights combine proximity and quality in the final score?",
+            "options": [
+              "0.50 and 0.50",
+              "0.60 and 0.40",
+              "0.40 and 0.60",
+              "0.90 and 0.10"
+            ],
+            "answer": 1,
+            "explanation": "Final score is 0.60 times proximity plus 0.40 times quality."
+          }
+        ]
+      },
+      {
+        "id": "di-routing-handoff",
+        "title": "Fall back from Borzo to Pidge without two couriers",
+        "overview": "Choosing a provider is half of the job; booking one safely is the other half. DeliveryProviderRouter tries the ranked candidates in order, and a separate worker hands an order from Borzo to Pidge when Borzo finds no courier in time. The design rule is that no failure or lost callback may ever book two couriers. This lesson reads both classes and the fix made after an order was left without a rider on 14 October.",
+        "steps": [
+          {
+            "label": "Try ranked candidates in order",
+            "detail": "The router tries the selected candidate first and then the others by rank, up to a maximum number of attempts. It separates a provider that is temporarily unavailable, a create whose result is uncertain and needs reconciliation, and a create that definitely did not happen, because only the last one is safe to treat as a plain failure."
+          },
+          {
+            "label": "Give Borzo its 120 seconds",
+            "detail": "Borzo has 120 seconds from the first selection attempt to assign a courier. The handoff worker is deliberately separate from the completed delivery command, so a lost process or a missed callback cannot create two couriers by retrying the whole command."
+          },
+          {
+            "label": "Cancel before the fallback",
+            "detail": "When Borzo has no courier in time and Pidge has quoted, the worker cancels Borzo through its API before booking Pidge. This order of steps is on purpose: two couriers can never both be booked for one chef order."
+          },
+          {
+            "label": "Stop retrying a certain failure",
+            "detail": "On 14 October Pidge refused the fallback booking after Borzo was cancelled, and the worker retried every few minutes for hours with only warnings. Since the fix, a Pidge booking that was rejected or cancelled after Borzo's cancellation moves the handoff to MANUAL_REVIEW and logs CRAVES_ALERT DELIVERY_HANDOFF_NO_COURIER once."
+          },
+          {
+            "label": "Keep retrying an uncertain one",
+            "detail": "An uncertain Pidge fallback, with no quote yet or an outcome that needs reconciliation, still retries so a booking is never doubled, and logs CRAVES_ALERT DELIVERY_HANDOFF_STALLED once at attempt 7, about 10 minutes in. Both alert codes page someone only once the alert rules are deployed in the production subscription."
+          },
+          {
+            "label": "Leave rebooking to a new design",
+            "detail": "Automatic rebooking with a fresh Pidge reference is not built on purpose. Pidge booking, webhooks and reconciliation are keyed on the chef sub-order reference, so a second reference needs its own design to rule out two couriers. Until then a person books a rider by hand or cancels and refunds."
+          }
+        ],
+        "example": "An order is ready at 11:18 pm. Borzo searches for 120 seconds and finds nobody, so the worker cancels Borzo and books Pidge, but Pidge's partner price has changed and Pidge cancels its own booking. The handoff moves to MANUAL_REVIEW and the alert line appears once, so operations can book a rider by hand instead of discovering the problem hours later.",
+        "lab": "Read the handoff worker's state handling and draw the states from Borzo searching to a booked Pidge courier, marking which ones retry, which ones go to manual review and which alert each one logs. Then write a test that simulates a rejected Pidge booking after Borzo's cancellation and asserts MANUAL_REVIEW.",
+        "pitfall": "Never retry a provider call forever with only warnings: a certain failure needs a person, and a person needs an alert.",
+        "questions": [
+          {
+            "id": "di-routing-handoff-q1",
+            "prompt": "Why does the worker cancel Borzo before booking Pidge?",
+            "options": [
+              "Borzo is more expensive",
+              "So two couriers can never both be booked for one chef order",
+              "Pidge requires it",
+              "To save the quote"
+            ],
+            "answer": 1,
+            "explanation": "Cancelling first is the deliberate rule against double couriers."
+          },
+          {
+            "id": "di-routing-handoff-q2",
+            "prompt": "Pidge rejects the fallback after Borzo was cancelled. What happens now?",
+            "options": [
+              "The worker retries forever",
+              "The handoff moves to MANUAL_REVIEW and one alert is logged",
+              "Borzo is rebooked automatically",
+              "The order is refunded automatically"
+            ],
+            "answer": 1,
+            "explanation": "Since the fix, a certain failure goes to a person with DELIVERY_HANDOFF_NO_COURIER."
+          },
+          {
+            "id": "di-routing-handoff-q3",
+            "prompt": "Why is automatic rebooking with a new Pidge reference not built?",
+            "options": [
+              "Pidge forbids it",
+              "Bookings, webhooks and reconciliation are keyed on one reference, so it needs its own design",
+              "It is too expensive",
+              "Riders asked for it"
+            ],
+            "answer": 1,
+            "explanation": "A second reference could create two couriers without a careful design."
+          }
+        ]
+      },
+      {
+        "id": "di-dashboard-investigation",
+        "title": "Read the Delivery Intelligence dashboard",
+        "overview": "The Delivery Intelligence dashboard is a read-only Next.js app mounted at /delivery-intelligence behind the admin.craves.in Front Door host. It shows delivery volume, provider share, retries and dead letters, and lets an admin investigate one order by any of its ids. It never cancels, dispatches, retries or switches providers. This lesson reads the BFF helpers, the history logic and the backend controller.",
+        "steps": [
+          {
+            "label": "Keep tokens on the server",
+            "detail": "The browser never receives the Craves bearer token. The existing HTTP-only access cookie is read only by the app's server routes and forwarded server to server to the Craves API base, so a script running in the page cannot steal an admin session."
+          },
+          {
+            "label": "Read the overview",
+            "detail": "The overview endpoint returns command, job and event volume, delivered and active counts, provider-selection share from the recorded assignments, and retry, reconciliation, provider-wait and dead-letter indicators. An attention list shows failed and stuck commands with independent paging."
+          },
+          {
+            "label": "Use history controls correctly",
+            "detail": "History covers all time by default, or the last 24 hours, seven days, thirty days or custom India dates, both days included. Pages hold 5, 25, 50 or 100 records, 25 by default. Moving through one list keeps the other list's position, and polling pauses while browsing so newly timestamped events do not shift the page."
+          },
+          {
+            "label": "Investigate one order",
+            "detail": "An admin can look up an order by Craves order id, chef sub-order id, delivery command, job or assignment id, or a provider reference. The investigation shows candidate ranking and scores, the selected provider, the command's recovery state, normalised tracking events and provider-neutral courier and ETA telemetry."
+          },
+          {
+            "label": "Audit every investigation",
+            "detail": "Each order investigation writes a row to the append-only admin investigation audit table. Looking at a delivery is an access to customer data, so it leaves a record of who looked, even though nothing was changed."
+          },
+          {
+            "label": "Show evidence, not secrets",
+            "detail": "Raw webhook payloads, webhook signature hashes, provider secrets, access tokens, tracking URLs and provider error text are never returned to the dashboard. Admins see the facts needed to decide, and nothing that would let them act as Craves towards a provider."
+          }
+        ],
+        "example": "A customer complains that an order from last Saturday arrived late. An operations admin chooses a custom date range, finds the order, and opens the investigation: Borzo was selected with the top score, the courier was assigned after four minutes, and pickup was delayed by the kitchen. The admin answers the customer with facts, and the lookup is audited.",
+        "lab": "Run the dashboard's history tests and read them alongside delivery-history.ts. Add one test for a custom range that starts and ends on the same India date and check that the whole day is included. Then list, from the controller, the two backend routes the dashboard uses.",
+        "pitfall": "Never add an action button to this dashboard: provider changes belong to the provider tooling and the delivery exception console, where they are versioned and audited.",
+        "questions": [
+          {
+            "id": "di-dashboard-investigation-q1",
+            "prompt": "How does the dashboard call the Craves API without exposing the token?",
+            "options": [
+              "It stores the token in local storage",
+              "Its server routes read the HTTP-only cookie and forward the token server to server",
+              "It uses a shared admin key in the browser",
+              "It asks the admin to paste the token"
+            ],
+            "answer": 1,
+            "explanation": "The bearer token never reaches the browser."
+          },
+          {
+            "id": "di-dashboard-investigation-q2",
+            "prompt": "Which of these does the dashboard return?",
+            "options": [
+              "Raw webhook payloads",
+              "Provider secrets",
+              "Candidate ranking and scores for an order",
+              "Tracking URLs"
+            ],
+            "answer": 2,
+            "explanation": "It shows decision evidence and never secrets, raw payloads or tracking URLs."
+          },
+          {
+            "id": "di-dashboard-investigation-q3",
+            "prompt": "Why does an investigation write an audit row even though it changes nothing?",
+            "options": [
+              "To bill the admin",
+              "Because viewing a delivery is an access to customer data that should leave a record",
+              "To refresh the cache",
+              "To alert the customer"
+            ],
+            "answer": 1,
+            "explanation": "Read access to personal delivery data is itself audited."
+          }
+        ]
+      },
+      {
+        "id": "di-delivery-exceptions",
+        "title": "Work delivery exception cases",
+        "overview": "Some deliveries need a person: a courier who never arrives, a provider that stops answering, a customer who cannot be reached. The delivery exceptions module in integration-service gives operations a case for each such delivery job, with a fixed set of actions and a full history. It is off until CRAVES_DELIVERY_EXCEPTIONS_ENABLED is set, and every route answers 404 while off. This lesson reads DeliveryExceptionService.",
+        "steps": [
+          {
+            "label": "Open a case on a delivery job",
+            "detail": "A case opens on a delivery job with a reason code, such as PICKUP_DELAYED, RIDER_NOT_ASSIGNED, RIDER_UNREACHABLE, CUSTOMER_UNREACHABLE, ADDRESS_ISSUE, FOOD_DAMAGED or PROVIDER_CANCELLED, and an optional note, which is required for OTHER. From the admin console a case can open by order id, which works when the order has one delivery job; an order with a job per kitchen gets 409 listing their ids, or the case opens directly by job id."
+          },
+          {
+            "label": "Keep one active case per job",
+            "detail": "A unique index allows one active case per delivery job, safe under concurrent opens. Closed cases accept no further actions, and every action is kept in an append-only history, so the story of a case can always be read back."
+          },
+          {
+            "label": "Use the fixed actions",
+            "detail": "Actions are ACKNOWLEDGE, ASSIGN to an operations person, REQUEST_REASSIGNMENT to another active provider, RESOLVE and DISMISS, the last two with a required note. Each action carries the expectedVersion the admin saw and is refused with 409 if the case moved. ASSIGN without an assignee gives the case to the admin who sent it."
+          },
+          {
+            "label": "Record reassignment, never execute it",
+            "detail": "A reassignment request is recorded, never executed by the module. Cancelling one provider and booking another automatically risks two riders and two provider charges, as the 14 October handoff incident showed, so operations performs the switch with the existing provider tooling and resolves the case with a note."
+          },
+          {
+            "label": "Respect roles",
+            "detail": "Platform and operations admins act on cases; support and audit admins only read, because Auth defines those roles as read-only. Staff appear as short identity ids, since the console has no staff directory."
+          },
+          {
+            "label": "Leave thresholds to the owner",
+            "detail": "No case is opened automatically. The Delivery Intelligence attention list already shows failed and stuck commands; which of them should become cases, and after how long, is an operations threshold for the owner to set, not something to invent in code."
+          }
+        ],
+        "example": "A Pidge courier has not reached the kitchen 25 minutes after booking. An operations admin opens a case by order id with the reason PICKUP_DELAYED, takes it, and records a reassignment request to Borzo. She cancels Pidge and books Borzo with the provider tooling, then resolves the case with a note naming both bookings, and the history shows each step.",
+        "lab": "With the switch on in a local environment, open a case on a test delivery job, try to open a second one on the same job and expect a refusal, then act on the case with a stale version and expect 409. Read the history rows and check that each action is there with its actor.",
+        "pitfall": "Never make the case console cancel or book couriers by itself: recording the request and letting a person switch providers is what keeps an order from getting two riders.",
+        "questions": [
+          {
+            "id": "di-delivery-exceptions-q1",
+            "prompt": "What does REQUEST_REASSIGNMENT do?",
+            "options": [
+              "Cancels and rebooks automatically",
+              "Records the request; operations switch providers with existing tooling",
+              "Refunds the customer",
+              "Closes the case"
+            ],
+            "answer": 1,
+            "explanation": "The module records reassignment but never executes it, to avoid two couriers."
+          },
+          {
+            "id": "di-delivery-exceptions-q2",
+            "prompt": "Two admins try to open a case on the same delivery job at once. What happens?",
+            "options": [
+              "Two cases are created",
+              "Only one active case exists, enforced by a unique index",
+              "Both are refused",
+              "The job is cancelled"
+            ],
+            "answer": 1,
+            "explanation": "One active case per job is safe under concurrent opens."
+          },
+          {
+            "id": "di-delivery-exceptions-q3",
+            "prompt": "Who may act on cases?",
+            "options": [
+              "Support admins",
+              "Platform and operations admins",
+              "Any signed-in user",
+              "Chefs"
+            ],
+            "answer": 1,
+            "explanation": "Support and audit admins only read; platform and operations admins act."
+          }
+        ]
+      }
+    ]
+  }
+}

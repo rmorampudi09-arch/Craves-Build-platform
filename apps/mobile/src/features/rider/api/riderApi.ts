@@ -19,9 +19,6 @@ import type {
   Trip,
   TripAction,
   TripEarning,
-  SlotBooking,
-  SlotsPage,
-  SlotStandby,
 } from './contract';
 import {riderApiMode} from '../riderConfig';
 import {liveRiderApi} from './riderApi.live';
@@ -88,11 +85,6 @@ export interface RiderApi {
   requestWithdrawal(amountPaise: Paise, key: string): Promise<void>;
   reportIssue(issue: SupportIssue): Promise<void>;
   sendSos(input: {tripId?: string; fix?: RiderFix}): Promise<void>;
-  /** App 1.3.3 (R-07): booked peak slots. book: 409 SLOT_WAVE_NOT_OPEN, SLOT_FULL, SLOT_HOURS_LIMIT, SLOT_OVERLAP; cancel: 409 SLOT_STARTED. */
-  getSlots(): Promise<SlotsPage>;
-  bookSlot(capacityId: string): Promise<SlotBooking>;
-  standbySlot(capacityId: string): Promise<SlotStandby>;
-  cancelSlotBooking(bookingId: string): Promise<SlotBooking>;
 }
 
 /** Idempotency-Key: rider-{action}-{offerId or tripId}-{riderId}, plus an attempt for retried OTPs. */

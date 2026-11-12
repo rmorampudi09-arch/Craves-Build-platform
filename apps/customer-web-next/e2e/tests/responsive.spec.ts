@@ -17,7 +17,6 @@ const screens: Screen[] = [
   { name: "sign-in", path: "/chef/sign-in", h1: "Sign in to your kitchen", setup: () => {} },
   { name: "basic-details", path: "/chef/application?step=personal", h1: "Basic details", setup: draft },
   { name: "kitchen", path: "/chef/application?step=kitchen", h1: "Your kitchen", setup: draft },
-  { name: "fssai", path: "/chef/application?step=fssai", h1: "FSSAI details", setup: draft },
   { name: "identity", path: "/chef/application?step=documents", h1: "Identity verification", setup: draft },
   { name: "review", path: "/chef/application?step=review", h1: "Review your application", setup: draft },
   { name: "status-approved", path: "/chef/application/status", h1: "Your application", setup: approved },

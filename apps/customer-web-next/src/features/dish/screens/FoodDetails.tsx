@@ -384,7 +384,7 @@ function DishDetailPage() {
                           type="button"
                           onClick={() => setQty((value) => Math.max(1, value - 1))}
                           disabled={qty <= 1 || adding}
-                          className="flex h-11 w-11 items-center justify-center rounded-l-full !bg-transparent !p-0 !text-[#F62E18] hover:!bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                          className="flex h-11 w-11 items-center justify-center rounded-l-full !bg-transparent !p-0 !text-[#C92716] hover:!bg-white disabled:cursor-not-allowed disabled:opacity-40"
                           aria-label="Decrease quantity"
                         >
                           <Minus className="h-4 w-4" aria-hidden="true" />
@@ -394,7 +394,7 @@ function DishDetailPage() {
                           type="button"
                           onClick={() => setQty((value) => Math.min(50, value + 1))}
                           disabled={adding || qty >= 50}
-                          className="flex h-11 w-11 items-center justify-center rounded-r-full !bg-transparent !p-0 !text-[#F62E18] hover:!bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                          className="flex h-11 w-11 items-center justify-center rounded-r-full !bg-transparent !p-0 !text-[#C92716] hover:!bg-white disabled:cursor-not-allowed disabled:opacity-40"
                           aria-label="Increase quantity"
                         >
                           <Plus className="h-4 w-4" aria-hidden="true" />
@@ -414,7 +414,7 @@ function DishDetailPage() {
                     type="button"
                     onClick={() => void handleAddToCart()}
                     disabled={adding}
-                    className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-[#F62E18] !px-6 !text-sm !font-black !text-white !shadow-[0_9px_24px_rgba(26,26,26,0.14)] transition-[box-shadow,scale] duration-(--dur-micro) hover:!shadow-[0_12px_30px_rgba(26,26,26,0.14)] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 max-lg:!hidden"
+                    className="!mt-4 !inline-flex !min-h-12 !w-full !items-center !justify-center !gap-2 !rounded-full !bg-white !px-6 !text-base !font-bold !text-[#C92716] !shadow-[inset_0_0_0_1.5px_#C92716] transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#FDEAE8] active:!bg-[#F9D5D1] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60 max-lg:!hidden"
                   >
                     <CravesCartIcon className="h-4 w-4" />
                     {adding ? "Adding…" : "Add to cart"}

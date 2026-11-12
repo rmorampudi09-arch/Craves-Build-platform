@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { CodeSlots } from "@/shared/ui/forms/code-slots";
 import { chefEmailEligible, emailVerificationTiming, verificationEmail, EMAIL_VERIFICATION_MAX_LENGTH, type EmailVerificationState } from "@/features/sign-in/lib/email-verification-contract";
 import { createEmailSendAttempt, EmailVerificationClientError, fetchEmailVerification, type EmailSendAttempt } from "@/features/sign-in/lib/email-verification-client";
 import { captureSessionContext, getSession, getSessionEmailRevision, isSessionContextCurrent, isSessionReady, invalidateSession, loadSession, setSessionEmailVerification, subscribeSession, type SessionContext } from "@/features/auth/api/cravesAuth";
@@ -282,33 +283,24 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
                 ? "We couldn’t send the email. Try again when resend is available."
                 : `We sent a code to ${pending.maskedEmail}. Check your inbox and spam folder.`}
             </span>
-            <div className="cob-control">
-              <input
-                id={`${id}-code`}
-                aria-label="Six-digit email code"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                value={code}
-                disabled={disabled || timing.expiresIn === 0}
-                placeholder="000000"
-                className="cob-input cob-input--with-adornment cob-mono"
-                style={{ letterSpacing: code ? "0.3em" : undefined, fontWeight: 700 }}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-              />
-              <span className="cob-adornment">
-                <button
-                  type="button"
-                  className="cob-inline-action"
-                  disabled={disabled || timing.expiresIn === 0 || !/^\d{6}$/.test(code)}
-                  onClick={() => void verify()}
-                >
-                  Verify email
-                </button>
-              </span>
-            </div>
+            {/* The same code slots as phone sign-in, everywhere a code is typed. */}
+            <CodeSlots
+              id={`${id}-code`}
+              aria-label="Six-digit email code"
+              value={code}
+              status={busy ? "verifying" : "idle"}
+              disabled={disabled || timing.expiresIn === 0}
+              onChange={setCode}
+            />
+            <button
+              type="button"
+              className="cob-inline-action"
+              style={{ alignSelf: "flex-start" }}
+              disabled={disabled || timing.expiresIn === 0 || !/^\d{6}$/.test(code)}
+              onClick={() => void verify()}
+            >
+              Verify email
+            </button>
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 16px" }}>
               <button
                 type="button"
@@ -431,21 +423,15 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
             >
               Enter the 6-digit code
             </label>
-            <div className="mt-2 flex gap-2">
-              <input
+            <div className="mt-2 flex flex-col gap-2">
+              <CodeSlots
                 id={`${id}-code`}
                 aria-label="Six-digit email code"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]{6}"
-                maxLength={6}
                 value={code}
+                status={busy ? "verifying" : "idle"}
                 disabled={disabled || timing.expiresIn === 0}
-                className="min-h-11 min-w-0 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-center text-base font-bold tracking-[0.24em] text-[#1A1A1A] outline-none focus:border-[#F62E18] focus:ring-2 focus:ring-[#1A1A1A]/10"
-                onChange={(event) =>
-                  setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                }
+                onChange={setCode}
+                slotSize={40}
               />
               <button
                 type="button"
@@ -521,7 +507,7 @@ export function EmailVerificationPanel({ initialEmail = "", required = false, co
         <p className="text-sm">{timing.expiresIn > 0 ? `Code expires in ${Math.floor(timing.expiresIn / 60)}m ${timing.expiresIn % 60}s.` : "This code has expired. Request a new code."}</p>
         <div>
           <label htmlFor={`${id}-code`} className="text-sm font-semibold">Six-digit email code</label>
-          <input id={`${id}-code`} type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} disabled={disabled || timing.expiresIn === 0} className={inputClass} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} />
+          <CodeSlots id={`${id}-code`} value={code} status={busy ? "verifying" : "idle"} disabled={disabled || timing.expiresIn === 0} onChange={setCode} className="mt-2" />
         </div>
         <div className="flex flex-wrap gap-3">
           <button type="button" className="btn-primary disabled:opacity-50" disabled={disabled || timing.expiresIn === 0 || !/^\d{6}$/.test(code)} onClick={() => void verify()}>Verify email</button>

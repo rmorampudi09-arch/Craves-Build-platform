@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentTransportError, readDocumentBytes } from "./document-transport";
-import { isSameOrigin } from "./request-security";
+import { isSameOrigin, socketPeerKey } from "./request-security";
 
 const PRIVATE_HEADERS = { "Cache-Control": "private, no-store, max-age=0", Pragma: "no-cache" };
 const JSON_BYTES = 64 * 1024;
 const MULTIPART_BYTES = 10 * 1024 * 1024;
+// Readers are counted before the session is checked, so the slots must not be something one caller can
+// hold: the totals only bound memory (128 × 64 KiB, 6 × 12 MiB), and each TCP peer gets a few of them.
+const JSON_READERS = { total: 128, perPeer: 8 };
+const UPLOAD_READERS = { total: 6, perPeer: 2 };
 let jsonReads = 0;
 let uploadReads = 0;
+const peerReads = new Map<string, number>();
+
+function peerKey(request: NextRequest, multipart: boolean): string | null {
+  const peer = socketPeerKey(request);
+  return peer === null ? null : `${multipart ? "upload" : "json"}:${peer}`;
+}
 
 function rejected(status: number, code: string): NextResponse {
   return NextResponse.json({ code }, { status, headers: PRIVATE_HEADERS });
@@ -40,8 +50,13 @@ export async function boundBffRequest(request: NextRequest, options: { maxBytes?
   if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > limit)) {
     return rejected(413, "REQUEST_BODY_TOO_LARGE");
   }
-  if ((multipart ? uploadReads >= 2 : jsonReads >= 16)) return rejected(429, "REQUEST_READER_BUSY");
+  const readers = multipart ? UPLOAD_READERS : JSON_READERS;
+  const peer = peerKey(request, multipart);
+  if ((multipart ? uploadReads : jsonReads) >= readers.total || (peer !== null && (peerReads.get(peer) ?? 0) >= readers.perPeer)) {
+    return rejected(429, "REQUEST_READER_BUSY");
+  }
   if (multipart) uploadReads += 1; else jsonReads += 1;
+  if (peer !== null) peerReads.set(peer, (peerReads.get(peer) ?? 0) + 1);
   try {
     const bytes = await readDocumentBytes(request.body, limit, timeoutMs);
     if (!multipart && !json && bytes.byteLength > 0) return rejected(415, "JSON_REQUIRED");
@@ -64,5 +79,9 @@ export async function boundBffRequest(request: NextRequest, options: { maxBytes?
     return rejected(400, "INVALID_REQUEST_BODY");
   } finally {
     if (multipart) uploadReads -= 1; else jsonReads -= 1;
+    if (peer !== null) {
+      const remaining = (peerReads.get(peer) ?? 1) - 1;
+      if (remaining > 0) peerReads.set(peer, remaining); else peerReads.delete(peer);
+    }
   }
 }

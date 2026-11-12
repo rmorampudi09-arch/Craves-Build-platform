@@ -14,7 +14,7 @@ function noticeFor(hash: string, channel?: string): Notice | null {
     href: '/contact', action: 'Contact Craves',
   };
   if (hash === '#chef-guidelines') return {
-    title: 'Start your home-chef journey',
+    title: 'Home chef guidelines',
     text: 'The chef application lists the details and documents needed to get started. Contact our team for guidance on your kitchen, packaging and onboarding.',
     href: '/chef/application', action: 'Open chef application',
   };

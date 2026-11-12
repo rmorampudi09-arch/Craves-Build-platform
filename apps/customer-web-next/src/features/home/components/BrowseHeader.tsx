@@ -1,4 +1,4 @@
-import { useSyncExternalStore, type KeyboardEvent } from "react";
+import { useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bell, CalendarDays, ChevronDown, ClipboardList } from "lucide-react";
 import {
@@ -18,7 +18,8 @@ import { AppleSwitch } from "@/shared/ui/AppleSwitch";
 import { rememberReturnRoute, toCustomerReturnRoute } from "@/shared/lib/return-navigation";
 import { getSession, subscribeSession } from "@/features/auth/api/cravesAuth";
 import { notificationsLabel, UnreadBadge, useCustomerUnreadCount } from "@/shared/components/notifications/unread-badge";
-import type { HomeFoodPreference } from "@/features/home/lib/home-return-state";
+import { setVegMode, useVegMode, type VegMode } from "@/shared/hooks/use-veg-mode";
+import { Sheet } from "@/shared/ui/overlays/overlay";
 
 interface BrowseHeaderProps {
   locationLabel: string;
@@ -35,8 +36,10 @@ interface BrowseHeaderProps {
   onSearchSubmit?: () => void;
   /** Pointer down on a search field: a chance to fetch the search UI before focus. */
   onSearchIntent?: () => void;
-  foodPreference?: HomeFoodPreference;
-  onFoodPreferenceChange?: (preference: HomeFoodPreference) => void;
+  /** Show the Veg switch (Home and the Kitchens page); veg mode itself applies everywhere. */
+  vegToggle?: boolean;
+  /** After the customer turns veg mode on, off or changes it. */
+  onVegModeChange?: () => void;
   returnPath?: string;
   onBack?: () => void;
   backLabel?: string;
@@ -44,20 +47,40 @@ interface BrowseHeaderProps {
   searchPlaceholder?: string;
 }
 
+/** One quiet round button for every header action (owner, 5 Nov 2026): grey tile, ink icon. */
 const headerIconActionClass =
-  "h-9 w-9 items-center justify-center rounded-full !bg-[#F1F3F5] lg:h-10 lg:w-10 !text-[#F62E18] transition-[background-color,color,box-shadow] duration-200 ease-out hover:!bg-white hover:!text-[#F62E18] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30";
+  "h-9 w-9 items-center justify-center rounded-full !bg-[#F1F3F5] lg:h-10 lg:w-10 !text-[#1A1A1A] transition-[background-color,box-shadow] duration-200 ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30";
+/** The same tile with its name beside the icon from xl, where there is room for it. */
+const headerActionClass =
+  "relative inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-full !bg-[#F1F3F5] text-[0.8125rem] font-bold !text-[#1A1A1A] transition-[background-color,box-shadow] duration-200 ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30 lg:h-10 lg:w-10 xl:w-auto xl:pl-3 xl:pr-3.5";
+const headerActionLabel = "hidden whitespace-nowrap xl:inline";
 
-function FoodPreferenceQuickToggles({
-  value,
-  onChange,
+/** The veg mark Indian menus use: a green square with a dot. */
+function VegMark({ size = "sm" }: { size?: "sm" | "md" }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex shrink-0 items-center justify-center rounded-[3px] border-[1.5px] border-[#2E7D32] bg-white ${size === "md" ? "h-5 w-5" : "h-3 w-3"}`}
+    >
+      <span className={`rounded-full bg-[#2E7D32] ${size === "md" ? "h-2.5 w-2.5" : "h-1.5 w-1.5"}`} />
+    </span>
+  );
+}
+
+/** Turning it on asks which veg mode (the sheet below); turning it off is one tap. */
+function VegModeSwitch({
+  onTurnOn,
+  onTurnOff,
   className = "",
   compact = false,
 }: {
-  value: HomeFoodPreference;
-  onChange: (preference: HomeFoodPreference) => void;
+  onTurnOn: () => void;
+  onTurnOff: () => void;
   className?: string;
   compact?: boolean;
 }) {
+  const mode = useVegMode();
+  const label = mode === "pure" ? "Pure veg" : "Veg";
   return (
     <div
       className={[
@@ -69,25 +92,57 @@ function FoodPreferenceQuickToggles({
       ].join(" ")}
     >
       <AppleSwitch
-        checked={value === "veg"}
-        onCheckedChange={(checked) => onChange(checked ? "veg" : "all")}
+        checked={mode !== "off"}
+        onCheckedChange={(checked) => (checked ? onTurnOn() : onTurnOff())}
         label={
-          <span className="inline-flex items-center gap-1.5">
-            {/* The veg mark Indian menus use: a green square with a dot. */}
-            <span
-              aria-hidden="true"
-              className="flex h-3 w-3 items-center justify-center rounded-[3px] border-[1.5px] border-[#2E7D32]"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-[#2E7D32]" />
-            </span>
-            Veg
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <VegMark />
+            {label}
           </span>
         }
         size="sm"
         tone="veg"
-        aria-label="Veg only"
+        aria-label={`${label} mode`}
       />
     </div>
+  );
+}
+
+const VEG_CHOICES: { mode: Exclude<VegMode, "off">; title: string; detail: string }[] = [
+  { mode: "pure", title: "Pure veg kitchens only", detail: "Kitchens that cook nothing but veg food." },
+  { mode: "veg-dishes", title: "Veg dishes from all kitchens", detail: "Every kitchen, showing only its veg dishes." },
+];
+
+/** Swiggy's question when veg mode turns on: pure veg kitchens, or veg dishes from every kitchen. */
+function VegModeSheet({ open, onOpenChange, onChoose }: { open: boolean; onOpenChange: (open: boolean) => void; onChoose: (mode: VegMode) => void }) {
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Veg mode"
+      description="Choose what you see on Home, Kitchens, kitchen menus and search. This device remembers it."
+      closeLabel="Keep veg mode off"
+    >
+      <div className="mt-1 grid gap-3 pb-1">
+        {VEG_CHOICES.map((choice) => (
+          <button
+            key={choice.mode}
+            type="button"
+            onClick={() => {
+              onChoose(choice.mode);
+              onOpenChange(false);
+            }}
+            className="flex min-h-16 w-full items-center gap-3.5 rounded-2xl !border-[1.5px] !border-[#E5E7EB] !bg-white p-4 text-left !shadow-none transition-[background-color,border-color,scale] duration-(--dur-micro) hover:!border-[#2E7D32] hover:!bg-[#F2F8F2] motion-safe:active:scale-[0.98]"
+          >
+            <VegMark size="md" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-base font-bold text-[#1A1A1A]">{choice.title}</span>
+              <span className="mt-0.5 block text-sm text-[#6B6B6B]">{choice.detail}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Sheet>
   );
 }
 
@@ -101,8 +156,8 @@ export function BrowseHeader({
   onSearchActivate,
   onSearchSubmit,
   onSearchIntent,
-  foodPreference,
-  onFoodPreferenceChange,
+  vegToggle = false,
+  onVegModeChange,
   returnPath = "/home",
   onBack,
   backLabel = "Back to home",
@@ -116,6 +171,13 @@ export function BrowseHeader({
   // The bell's red count; guests have no inbox, so nothing is asked for them.
   const signedIn = useSyncExternalStore(subscribeSession, () => Boolean(getSession()), () => false);
   const unread = useCustomerUnreadCount(signedIn);
+  const [vegSheetOpen, setVegSheetOpen] = useState(false);
+  const askVegMode = () => setVegSheetOpen(true);
+  const chooseVegMode = (mode: VegMode) => {
+    setVegMode(mode);
+    onVegModeChange?.();
+  };
+  const vegOff = () => chooseVegMode("off");
 
   // Compact search bar slides in while scrolling back up (shared chrome controller).
   const { compact: mobileCompact } = useScrollChrome();
@@ -190,51 +252,29 @@ export function BrowseHeader({
             />
           </label>
 
-          {foodPreference && onFoodPreferenceChange ? (
-            <FoodPreferenceQuickToggles
-              value={foodPreference}
-              onChange={onFoodPreferenceChange}
-              className="hidden lg:flex"
-            />
-          ) : null}
+          {vegToggle ? <VegModeSwitch onTurnOn={askVegMode} onTurnOff={vegOff} className="hidden lg:flex" /> : null}
 
-          <Link
-            to="/subscriptions"
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-full bg-[#F1F3F5] text-xs font-extrabold text-[#1A1A1A] transition-[background-color,box-shadow] hover:bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] lg:h-10 lg:w-10 2xl:w-auto 2xl:px-3.5"
-            aria-label="Open meal plans"
-            title="Meal plans"
-          >
-            <CalendarDays className="h-[1.05rem] w-[1.05rem] text-[#F62E18]" aria-hidden="true" />
-            <span className="hidden 2xl:inline">Meal plans</span>
+          {/* Meal plans, Orders, Alerts and Profile share one button style. */}
+          <Link to="/subscriptions" className={headerActionClass} aria-label="Open meal plans" title="Meal plans">
+            <CalendarDays className="h-[1.05rem] w-[1.05rem] shrink-0" aria-hidden="true" />
+            <span className={headerActionLabel}>Meal plans</span>
           </Link>
 
-          <Link
-            to="/notifications"
-            className={"relative flex shrink-0 " + headerIconActionClass}
-            aria-label={notificationsLabel(unread)}
-            title="Notifications"
-          >
-            <Bell className="h-[1.08rem] w-[1.08rem]" aria-hidden="true" />
+          {/* On desktop, orders are one tap away (phones have the tab bar). */}
+          <Link to="/orders" className={headerActionClass} aria-label="Open your orders" title="Your orders">
+            <ClipboardList className="h-[1.05rem] w-[1.05rem] shrink-0" aria-hidden="true" />
+            <span className={headerActionLabel}>Orders</span>
+          </Link>
+
+          <Link to="/notifications" className={headerActionClass} aria-label={notificationsLabel(unread, "Alerts")} title="Alerts">
+            <Bell className="h-[1.08rem] w-[1.08rem] shrink-0" aria-hidden="true" />
+            <span className={headerActionLabel}>Alerts</span>
             <UnreadBadge count={unread} />
           </Link>
 
-          <Link
-            to="/profile"
-            className={"flex shrink-0 " + headerIconActionClass}
-            aria-label="Open profile"
-            title="Profile"
-          >
-            <FaUser className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
-          </Link>
-
-          {/* Where the chef switch used to sit: on desktop, orders are one tap away (phones have the tab bar). */}
-          <Link
-            to="/orders"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F62E18] text-white shadow-[0_8px_18px_rgba(26,26,26,0.14)] transition-[translate,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(26,26,26,0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/35 motion-reduce:transform-none lg:h-10 lg:w-10"
-            aria-label="Open your orders"
-            title="Your orders"
-          >
-            <ClipboardList className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
+          <Link to="/profile" className={headerActionClass} aria-label="Open profile" title="Profile">
+            <FaUser className="h-[1.05rem] w-[1.05rem] shrink-0" aria-hidden="true" />
+            <span className={headerActionLabel}>Profile</span>
           </Link>
 
           <button
@@ -316,14 +356,7 @@ export function BrowseHeader({
               />
             </label>
 
-            {foodPreference && onFoodPreferenceChange ? (
-              <FoodPreferenceQuickToggles
-                value={foodPreference}
-                onChange={onFoodPreferenceChange}
-                compact
-                className="flex shrink-0"
-              />
-            ) : null}
+            {vegToggle ? <VegModeSwitch onTurnOn={askVegMode} onTurnOff={vegOff} compact className="flex shrink-0" /> : null}
           </div>
         </div>
       </div>
@@ -359,16 +392,10 @@ export function BrowseHeader({
               aria-label="Search homemade dishes or home kitchens"
             />
           </label>
-          {foodPreference && onFoodPreferenceChange ? (
-            <FoodPreferenceQuickToggles
-              value={foodPreference}
-              onChange={onFoodPreferenceChange}
-              compact
-              className="flex shrink-0"
-            />
-          ) : null}
+          {vegToggle ? <VegModeSwitch onTurnOn={askVegMode} onTurnOff={vegOff} compact className="flex shrink-0" /> : null}
         </div>
       </div>
+      {vegToggle ? <VegModeSheet open={vegSheetOpen} onOpenChange={setVegSheetOpen} onChoose={chooseVegMode} /> : null}
     </>
   );
 }

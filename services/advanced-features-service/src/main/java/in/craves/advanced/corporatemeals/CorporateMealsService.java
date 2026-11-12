@@ -3,6 +3,7 @@ package in.craves.advanced.corporatemeals;
 import in.craves.advanced.corporatemeals.CorporateMealsDtos.ChargeStatus;
 import in.craves.advanced.corporatemeals.CorporateMealsDtos.CompanyChange;
 import in.craves.advanced.corporatemeals.CorporateMealsDtos.CompanyCharge;
+import in.craves.advanced.corporatemeals.CorporateMealsDtos.CompanyChargeCreditView;
 import in.craves.advanced.corporatemeals.CorporateMealsDtos.CompanyInviteView;
 import in.craves.advanced.corporatemeals.CorporateMealsDtos.CompanyMealAllowance;
 import in.craves.advanced.corporatemeals.CorporateMealsDtos.CompanyMealCart;
@@ -25,6 +26,7 @@ import in.craves.advanced.corporatemeals.CorporateMealsDtos.NewCompany;
 import in.craves.advanced.corporatemeals.CorporateMealsDtos.NewCompanyInvite;
 import in.craves.advanced.corporatemeals.CorporateMealsRepository.Charge;
 import in.craves.advanced.corporatemeals.CorporateMealsRepository.Company;
+import in.craves.advanced.corporatemeals.CorporateMealsRepository.Credit;
 import in.craves.advanced.corporatemeals.CorporateMealsRepository.Invite;
 import in.craves.advanced.corporatemeals.CorporateMealsRepository.Member;
 import in.craves.advanced.corporatemeals.CorporateMealsRepository.StatementRow;
@@ -316,7 +318,7 @@ public class CorporateMealsService implements PersonalDataContributor {
         }
         long share = share(company, member, cart, subtotal, now);
         Charge charge = new Charge(UUID.randomUUID(), companyId, person, cart.kind(), cart.headcount(), CorporateMealsRules.indiaDate(now), subtotal,
-                share, ChargeStatus.RESERVED, null, now.plus(RESERVATION), now);
+                share, ChargeStatus.RESERVED, null, now.plus(RESERVATION), now, 0);
         repository.insertCharge(charge, member.displayName(), now);
         return view(repository.charge(charge.id(), false).orElseThrow());
     }
@@ -420,6 +422,51 @@ public class CorporateMealsService implements PersonalDataContributor {
             repository.setCharge(chargeId, ChargeStatus.RELEASED, charge.orderId() != null ? charge.orderId() : orderId, clock.instant());
         }
         return view(repository.charge(chargeId, false).orElseThrow());
+    }
+
+    /**
+     * M24d: Finance gives the company back its part of a refund of the order a charge paid for. One credit per refund id (a repeat with
+     * the same values answers the recorded credit), only on a CONFIRMED charge of that order, and never more than the share still owed.
+     * A charge whose person erased their data is still credited when the order matches: the money is the company's, not the person's.
+     */
+    @Transactional
+    public CompanyChargeCreditView creditRefund(UUID person, UUID chargeId, UUID orderId, UUID refundId, long amountPaise) {
+        notErased(person);
+        Charge charge = repository.charge(chargeId, true)
+                .filter(found -> found.personId().equals(person) || (ERASED.equals(found.personId()) && orderId.equals(found.orderId())))
+                .orElseThrow(CorporateMealsService::chargeNotFound);
+        Optional<Credit> earlier = repository.credit(refundId);
+        if (earlier.isPresent()) {
+            Credit credit = earlier.get();
+            if (!credit.chargeId().equals(chargeId) || !credit.orderId().equals(orderId) || credit.amountPaise() != amountPaise) {
+                throw ApiProblem.conflict("CREDIT_REFUND_CONFLICT", "This refund was already credited with other values");
+            }
+            return creditView(credit, charge);
+        }
+        boolean gaveBack = charge.status() == ChargeStatus.RELEASED || charge.status() == ChargeStatus.VOIDED;
+        if (gaveBack && orderId.equals(charge.orderId())) {
+            // Released (order cancelled before acceptance) or voided by staff: the company owes nothing for this order any more.
+            return new CompanyChargeCreditView(refundId, chargeId, orderId, 0, charge.creditedPaise(), 0, clock.instant());
+        }
+        if (charge.status() != ChargeStatus.CONFIRMED) {
+            throw ApiProblem.conflict("CHARGE_NOT_CONFIRMED", "Only a used company payment can be credited");
+        }
+        if (!orderId.equals(charge.orderId())) throw ApiProblem.conflict("CHARGE_CONFIRMED", "This company payment is used for another order");
+        if (amountPaise > charge.sharePaise() - charge.creditedPaise()) {
+            throw ApiProblem.conflict("CREDIT_EXCEEDS_SHARE", "The credit is more than the company share still owed for this order");
+        }
+        Credit credit = new Credit(refundId, chargeId, orderId, amountPaise, clock.instant());
+        try {
+            repository.insertCredit(credit);
+        } catch (DuplicateKeyException raced) { // the same refund id credited on another charge meanwhile
+            throw ApiProblem.conflict("CREDIT_REFUND_CONFLICT", "This refund was already credited with other values");
+        }
+        return creditView(credit, repository.charge(chargeId, false).orElseThrow());
+    }
+
+    private static CompanyChargeCreditView creditView(Credit credit, Charge charge) {
+        return new CompanyChargeCreditView(credit.refundId(), credit.chargeId(), credit.orderId(), credit.amountPaise(), charge.creditedPaise(),
+                charge.sharePaise() - charge.creditedPaise(), credit.createdAt());
     }
 
     /** The placeholder that erased charges carry is nobody: internal callers cannot act on erased people's rows. */

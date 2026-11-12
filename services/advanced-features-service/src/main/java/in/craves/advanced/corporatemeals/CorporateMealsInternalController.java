@@ -1,12 +1,10 @@
 package in.craves.advanced.corporatemeals;
 
 import in.craves.advanced.corporatemeals.CorporateMealsDtos.CompanyCharge;
-import in.craves.advanced.corporatemeals.CorporateMealsDtos.CompanyChargeCreditView;
 import in.craves.advanced.platform.module.ModuleRuntime;
 import in.craves.advanced.platform.security.InternalSecret;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import java.util.UUID;
 import org.springframework.core.env.Environment;
 import org.springframework.http.CacheControl;
@@ -22,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * M24d: order-service reads a reserved company share at checkout, confirms it once Finance has seen the person's part paid, and
- * releases it when payment fails or lapses or the order is cancelled before fulfilment; Finance credits the company's part of a refund. Those moments have no customer token, so the
+ * releases it when payment fails or lapses or the order is cancelled before fulfilment. Those moments have no customer token, so the
  * shared internal secret authenticates the caller and {@code personId} must own the charge. Answers like the module while it is off.
  */
 @RestController
@@ -31,9 +29,6 @@ public class CorporateMealsInternalController {
     public record InternalCompanyChargeConfirm(@NotNull UUID personId, @NotNull UUID orderId) { }
 
     public record InternalCompanyChargeRelease(@NotNull UUID personId, UUID orderId) { }
-
-    public record InternalCompanyChargeCredit(@NotNull UUID personId, @NotNull UUID orderId, @NotNull UUID refundId,
-                                              @Positive long amountPaise) { }
 
     private final CorporateMealsService service;
     private final ModuleRuntime runtime;
@@ -67,14 +62,6 @@ public class CorporateMealsInternalController {
             @Valid @RequestBody InternalCompanyChargeRelease request) {
         ready(secret);
         return reply(service.releaseForOrder(request.personId(), chargeId, request.orderId()));
-    }
-
-    @PostMapping("/credit")
-    public ResponseEntity<CompanyChargeCreditView> creditRefundedCompanyCharge(
-            @RequestHeader(value = InternalSecret.HEADER, required = false) String secret, @PathVariable UUID chargeId,
-            @Valid @RequestBody InternalCompanyChargeCredit request) {
-        ready(secret);
-        return reply(service.creditRefund(request.personId(), chargeId, request.orderId(), request.refundId(), request.amountPaise()));
     }
 
     private void ready(String secret) {

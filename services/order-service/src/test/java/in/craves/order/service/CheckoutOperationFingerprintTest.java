@@ -38,14 +38,4 @@ class CheckoutOperationFingerprintTest {
         assertThat(CheckoutOperationFingerprint.of(new Request(address, null, snapshot, null, null, json.readTree("{\"" + dish + "\":[\"" + b + "\",\"" + a + "\"]}")))).isEqualTo(ab);
         assertThat(ab).isNotEqualTo(plain).isNotEqualTo(CheckoutOperationFingerprint.of(new Request(address, null, snapshot, null, null, json.readTree("{\"" + dish + "\":[\"" + a + "\"]}"))));
     }
-    @Test void aCompanyChargeIsHashedInParsedFormAndOnlyWhenSent() throws Exception {
-        var json = new com.fasterxml.jackson.databind.ObjectMapper();
-        var snapshot = new CartSnapshotRequest(cart, List.of(new CartSnapshotItem(item, 1, at)));
-        String plain = CheckoutOperationFingerprint.of(new Request(address, null, snapshot));
-        assertThat(CheckoutOperationFingerprint.of(new Request(address, null, snapshot, null, null, null, null))).isEqualTo(plain);
-        String meal = CheckoutOperationFingerprint.of(new Request(address, null, snapshot, null, null, null, json.readTree("{}")));
-        assertThat(CheckoutOperationFingerprint.of(new Request(address, null, snapshot, null, null, null, json.readTree("{\"kind\":\"MEAL\"}")))).isEqualTo(meal);
-        assertThat(meal).isNotEqualTo(plain).isNotEqualTo(CheckoutOperationFingerprint.of(new Request(address, null, snapshot, null, null, null,
-            json.readTree("{\"kind\":\"TEAM_MEAL\",\"headcount\":4}"))));
-    }
 }

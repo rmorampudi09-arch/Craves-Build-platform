@@ -88,8 +88,7 @@ public final class ApiDtos {
 
     public record CheckoutRequest(UUID deliveryAddressId, String note, com.fasterxml.jackson.databind.JsonNode referralBenefits,
                                   com.fasterxml.jackson.databind.JsonNode batchHolds, com.fasterxml.jackson.databind.JsonNode promotion,
-                                  com.fasterxml.jackson.databind.JsonNode menuOptions, com.fasterxml.jackson.databind.JsonNode companyCharge) {
-        public CheckoutRequest(UUID deliveryAddressId,String note,com.fasterxml.jackson.databind.JsonNode referralBenefits,com.fasterxml.jackson.databind.JsonNode batchHolds,com.fasterxml.jackson.databind.JsonNode promotion,com.fasterxml.jackson.databind.JsonNode menuOptions) { this(deliveryAddressId,note,referralBenefits,batchHolds,promotion,menuOptions,null); }
+                                  com.fasterxml.jackson.databind.JsonNode menuOptions) {
         public CheckoutRequest(UUID deliveryAddressId,String note,com.fasterxml.jackson.databind.JsonNode referralBenefits,com.fasterxml.jackson.databind.JsonNode batchHolds,com.fasterxml.jackson.databind.JsonNode promotion) { this(deliveryAddressId,note,referralBenefits,batchHolds,promotion,null); }
         public CheckoutRequest(UUID deliveryAddressId,String note,com.fasterxml.jackson.databind.JsonNode referralBenefits,com.fasterxml.jackson.databind.JsonNode batchHolds) { this(deliveryAddressId,note,referralBenefits,batchHolds,null); }
         public CheckoutRequest(UUID deliveryAddressId,String note,com.fasterxml.jackson.databind.JsonNode referralBenefits) { this(deliveryAddressId,note,referralBenefits,null); }

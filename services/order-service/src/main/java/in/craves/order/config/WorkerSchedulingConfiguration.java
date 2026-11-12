@@ -17,7 +17,6 @@ public class WorkerSchedulingConfiguration {
     public static final String CHEF_ACCEPTANCE_SCHEDULER = "chefAcceptanceScheduler";
     public static final String SUBSCRIPTION_CALLBACK_SCHEDULER = "subscriptionCallbackScheduler";
     public static final String PROMOTION_SCHEDULER = "promotionCheckoutScheduler";
-    public static final String COMPANY_SHARE_SCHEDULER = "companyShareCheckoutScheduler";
 
     // Declaring any scheduler makes Spring Boot back off its default one, so keep it for jobs added later.
     @Bean(name = "taskScheduler")
@@ -41,12 +40,6 @@ public class WorkerSchedulingConfiguration {
     @Bean(name = PROMOTION_SCHEDULER)
     ThreadPoolTaskScheduler promotionCheckoutScheduler() {
         return pool("promotion-checkout-", 1);
-    }
-
-    // M24d: confirms and releases checkout company shares over HTTP, on its own thread like the promotions.
-    @Bean(name = COMPANY_SHARE_SCHEDULER)
-    ThreadPoolTaskScheduler companyShareCheckoutScheduler() {
-        return pool("company-share-checkout-", 1);
     }
 
     @Bean(name = SUBSCRIPTION_CALLBACK_SCHEDULER)

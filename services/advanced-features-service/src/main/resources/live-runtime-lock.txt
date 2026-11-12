@@ -3,7 +3,6 @@
 # See docs/runbooks/live-runtime-safety.md.
 in.craves.advanced.platform.erasure.AccountErasureController
 in.craves.advanced.promotions.PromotionsInternalController
-in.craves.advanced.corporatemeals.CorporateMealsInternalController
 in.craves.advanced.menuoptions.MenuOptionsInternalController
 in.craves.advanced.platform.module.FeatureStatusController
 in.craves.advanced.foodlists.FoodListController

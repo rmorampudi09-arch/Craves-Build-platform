@@ -93,6 +93,10 @@ public final class CorporateMealsDtos {
                                 long companySharePaise, long memberSharePaise, ChargeStatus status, UUID orderId, Instant expiresAt,
                                 Instant createdAt) { }
 
+    /** M24d internal: one refund's credit and the charge's totals after it. */
+    public record CompanyChargeCreditView(UUID refundId, UUID chargeId, UUID orderId, long amountPaise, long creditedPaise,
+                                          long remainingSharePaise, Instant createdAt) { }
+
     public record CompanyChargeConfirm(@NotNull UUID orderId) { }
 
     public record CompanyChargeVoid(@NotBlank @Size(max = 300) String reason) { }

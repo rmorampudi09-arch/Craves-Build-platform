@@ -195,4 +195,85 @@ class CorporateMealsInternalIT extends IntegrationTestBase {
         internal(bobs, "confirm", SECRET, Map.of("personId", bob, "orderId", UUID.randomUUID())).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CHARGE_EXPIRED"));
     }
+
+    Map<String, Object> credit(UUID person, UUID order, UUID refund, long amount) {
+        return Map.of("personId", person, "orderId", order, "refundId", refund, "amountPaise", amount);
+    }
+
+    @Test
+    void financeCreditsRefundedSharesOncePerRefundAndNeverAboveTheShare() throws Exception {
+        company(1_000_000);
+        String charge = reserve(alice);
+        UUID order = UUID.randomUUID();
+        UUID first = UUID.randomUUID();
+        // Only a used share can be credited.
+        internal(charge, "credit", SECRET, credit(alice, order, first, 5000)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CHARGE_NOT_CONFIRMED"));
+        internal(charge, "confirm", SECRET, Map.of("personId", alice, "orderId", order)).andExpect(status().isOk());
+        internal(charge, "credit", null, credit(alice, order, first, 5000)).andExpect(status().isUnauthorized());
+        internal(charge, "credit", "wrong", credit(alice, order, first, 5000)).andExpect(status().isUnauthorized());
+        internal(charge, "credit", SECRET, credit(bob, order, first, 5000)).andExpect(status().isNotFound());
+        internal(charge, "credit", SECRET, credit(new UUID(0, 0), order, first, 5000)).andExpect(status().isNotFound());
+        internal(charge, "credit", SECRET, credit(alice, order, first, 0)).andExpect(status().isBadRequest());
+        internal(charge, "credit", SECRET, credit(alice, UUID.randomUUID(), first, 5000)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CHARGE_CONFIRMED"));
+        internal(charge, "credit", SECRET, credit(alice, order, first, 5000)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.refundId").value(first.toString())).andExpect(jsonPath("$.amountPaise").value(5000))
+                .andExpect(jsonPath("$.creditedPaise").value(5000)).andExpect(jsonPath("$.remainingSharePaise").value(10000));
+        // A retry of the same refund answers the same credit; other values for it are refused.
+        internal(charge, "credit", SECRET, credit(alice, order, first, 5000)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.amountPaise").value(5000)).andExpect(jsonPath("$.creditedPaise").value(5000));
+        internal(charge, "credit", SECRET, credit(alice, order, first, 4000)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CREDIT_REFUND_CONFLICT"));
+        UUID second = UUID.randomUUID();
+        internal(charge, "credit", SECRET, credit(alice, order, second, 10001)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CREDIT_EXCEEDS_SHARE"));
+        internal(charge, "credit", SECRET, credit(alice, order, second, 10000)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.creditedPaise").value(15000)).andExpect(jsonPath("$.remainingSharePaise").value(0));
+        internal(charge, "credit", SECRET, credit(alice, order, UUID.randomUUID(), 1)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CREDIT_EXCEEDS_SHARE"));
+        // The same refund id cannot be credited on another charge.
+        String bobs = reserve(bob);
+        UUID bobsOrder = UUID.randomUUID();
+        internal(bobs, "confirm", SECRET, Map.of("personId", bob, "orderId", bobsOrder)).andExpect(status().isOk());
+        internal(bobs, "credit", SECRET, credit(bob, bobsOrder, first, 5000)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CREDIT_REFUND_CONFLICT"));
+        assertCredits(charge, 15000, 2);
+        // A share already given back for the order (cancelled before acceptance) owes nothing: answered as done, nothing stored.
+        internal(bobs, "release", SECRET, Map.of("personId", bob, "orderId", bobsOrder)).andExpect(status().isOk());
+        internal(bobs, "credit", SECRET, credit(bob, bobsOrder, UUID.randomUUID(), 5000)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.amountPaise").value(0)).andExpect(jsonPath("$.remainingSharePaise").value(0));
+        internal(bobs, "credit", SECRET, credit(bob, UUID.randomUUID(), UUID.randomUUID(), 5000)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CHARGE_NOT_CONFIRMED"));
+        assertCredits(bobs, 0, 0);
+    }
+
+    void assertCredits(String charge, long credited, int rows) {
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("SELECT credited_paise FROM adv_corporate_meals.charge WHERE id = ?::uuid",
+                Long.class, charge)).isEqualTo(credited);
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("SELECT count(*) FROM adv_corporate_meals.charge_credit WHERE charge_id = ?::uuid",
+                Integer.class, charge)).isEqualTo(rows);
+    }
+
+    @Test
+    void creditsGoBackToTheBudgetAndOffTheStatementAndSurviveTheErase() throws Exception {
+        company(30_000); // room for two shares of 150.00
+        UUID alicesOrder = UUID.randomUUID();
+        String alices = reserve(alice);
+        internal(alices, "confirm", SECRET, Map.of("personId", alice, "orderId", alicesOrder)).andExpect(status().isOk());
+        String bobs = reserve(bob);
+        internal(bobs, "confirm", SECRET, Map.of("personId", bob, "orderId", UUID.randomUUID())).andExpect(status().isOk());
+        Map<String, Object> cart = Map.of("kind", "MEAL", "items", List.of(Map.of("menuItemId", biryani.id(), "quantity", 1)));
+        send(post(BASE + "/charges"), bearer(managerId, "CUSTOMER"), cart).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("COMPANY_BUDGET_USED"));
+        // Alice erases her data; a later refund of her order still credits the company.
+        mvc.perform(delete("/api/v1/advanced/my-taste-data").header("Authorization", bearer(alice, "CUSTOMER")).header("X-Confirm-Erase", "ERASE")).andExpect(status().isOk());
+        internal(alices, "credit", SECRET, credit(alice, alicesOrder, UUID.randomUUID(), 15000)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.remainingSharePaise").value(0));
+        reserve(managerId);
+        String month = java.time.YearMonth.from(CLOCK.instant().atZone(ZoneId.of("Asia/Kolkata"))).toString();
+        String companyId = jdbc.queryForObject("SELECT company_id::text FROM adv_corporate_meals.charge WHERE id = ?::uuid", String.class, bobs);
+        mvc.perform(get(BASE + "/admin/companies/" + companyId + "/statement").param("month", month).header("Authorization", admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.companySharePaise").value(15000));
+    }
 }

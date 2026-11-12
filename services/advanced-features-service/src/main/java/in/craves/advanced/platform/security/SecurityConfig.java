@@ -49,6 +49,7 @@ public class SecurityConfig {
                     // M24a: PromotionsInternalController checks the shared secret itself.
                     auth.requestMatchers(HttpMethod.POST, "/internal/v1/promotions/redemptions/*/confirm", "/internal/v1/promotions/redemptions/*/release").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/internal/v1/promotions/redemptions/*/checkout-terms").permitAll();
+                    auth.requestMatchers(HttpMethod.POST, "/internal/v1/menu-options/checkout-quote").permitAll();
                     auth.requestMatchers("/api/v1/**").authenticated();
                     auth.anyRequest().denyAll();
                 })

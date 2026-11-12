@@ -40,7 +40,7 @@ public class NotificationInternalClient {
                 "CHEF_APPROVED_IN_APP",
                 null,
                 "Chef profile approved",
-                "Your Craves chef profile is approved. You can now publish your kitchen and menu.",
+                "Your Craves chef profile is approved. Set up your kitchen and menu. Your dishes go live once Craves has verified your FSSAI number.",
                 "CHEF_APPLICATION",
                 application.id(),
                 Map.of("applicationId", application.id().toString()),
@@ -137,6 +137,33 @@ public class NotificationInternalClient {
                 kitchenId,
                 Map.of("kitchenId", kitchenId.toString()),
                 3
+            )
+        );
+    }
+
+    /**
+     * Plain-text email to a Craves team mailbox about one applicant (the chef sign-up alerts). notification-service sends a
+     * TEAM_ALERT only to `address`, and only when it is on its CRAVES_NOTIFICATION_TEAM_EMAIL_ADDRESSES list; it never falls
+     * back to the applicant's own email. EMAIL rows never reach the applicant's in-app list; applicantId and the CHEF role tie
+     * the row to them for account erasure. Same direct path as kitchenLaunched.
+     */
+    public boolean teamEmail(UUID applicantId, String requestKey, String address, String subject, String body) {
+        return post(
+            new CreateNotificationRequest(
+                requestKey,
+                "user-chef-service",
+                "CHEF_SIGNUP_ALERT",
+                applicantId,
+                "CHEF",
+                "EMAIL",
+                null,
+                address,
+                subject,
+                body,
+                "TEAM_ALERT",
+                applicantId,
+                Map.of(),
+                5
             )
         );
     }

@@ -9,6 +9,17 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 8 * 1024 * 1024;
 const MEDIA_CODES = new Set(["MEDIA_FILE_REQUIRED", "MEDIA_FILE_TOO_LARGE", "MEDIA_CONTENT_TYPE_NOT_ALLOWED", "MEDIA_STORE_NOT_CONFIGURED", "MEDIA_STORE_CONFIGURATION_FAILED", "MEDIA_UPLOAD_FAILED", "MENU_IMAGE_LIMIT_REACHED"]);
+/** The file's first bytes carry the signature of the type it claims to be. */
+async function matchesDeclaredType(file: File): Promise<boolean> {
+  const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const ascii = (from: number, to: number) => String.fromCharCode(...head.subarray(from, to));
+  switch (file.type) {
+    case "image/jpeg": return head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+    case "image/png": return head[0] === 0x89 && ascii(1, 4) === "PNG";
+    case "image/webp": return ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP";
+    default: return false;
+  }
+}
 function apiBaseUrl(): string { const value = process.env.CRAVES_API_BASE_URL?.trim(); if (!value?.startsWith("https://")) throw new Error("CRAVES_API_BASE_URL must use HTTPS"); return value.replace(/\/$/, ""); }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ menuItemId: string }> }) {
@@ -25,6 +36,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ me
   const file = form?.get("file");
   const primary = form?.get("primary") === "true";
   if (!(file instanceof File) || !TYPES.has(file.type) || file.size < 1 || file.size > MAX_BYTES) return NextResponse.json({ code: "INVALID_MENU_IMAGE" }, { status: 400 });
+  // Catalog only re-encodes JPEG and PNG; a "WebP" part is stored and served publicly as sent, so check the bytes
+  // match the declared type here rather than hand out year-long public hosting of arbitrary content.
+  if (!(await matchesDeclaredType(file))) return NextResponse.json({ code: "INVALID_MENU_IMAGE" }, { status: 400 });
   const upstreamForm = new FormData(); upstreamForm.set("file", file, file.name);
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 30_000);
   try {

@@ -121,12 +121,13 @@ public class NotificationDeliveryRepository {
                 SELECT request.id
                   FROM notification_schema.notification_request request
                  WHERE request.channel = ?
-                   AND COALESCE((
+                   -- A TEAM_ALERT goes to a Craves mailbox, so the recipient's own channel preference does not apply.
+                   AND (request.target_type = 'TEAM_ALERT' OR COALESCE((
                        SELECT preference.enabled
                          FROM notification_schema.notification_preference preference
                         WHERE preference.recipient_identity_id = request.recipient_identity_id
                           AND preference.channel = request.channel
-                   ), true) = true
+                   ), true) = true)
                    AND request.attempt_count < ?
                    AND (
                        (request.status IN ('PENDING', 'FAILED')
@@ -196,6 +197,29 @@ public class NotificationDeliveryRepository {
                     created_at = now()
                 """,
             maxAttempts, staleLockMinutes
+        );
+    }
+
+    /** Handbook 082: the event, the payload (JSON text) an SMS fills its DLT template from, and when it was asked for. */
+    public SmsContent smsContent(UUID requestId) {
+        return jdbcTemplate.queryForObject(
+            "SELECT event_type, payload::text AS payload, created_at FROM notification_schema.notification_request WHERE id = ?",
+            (rs, rowNum) -> new SmsContent(rs.getString("event_type"), rs.getString("payload"),
+                rs.getObject("created_at", OffsetDateTime.class)),
+            requestId
+        );
+    }
+
+    public record SmsContent(String eventType, String payloadJson, OffsetDateTime createdAt) {
+        @Override public String toString() { return "SmsContent[" + eventType + "]"; }
+    }
+
+    /** A message that will never be sent (handbook 082): SKIPPED with its reason, like a disabled preference. */
+    public void skip(DeliveryWorkItem item, String reason) {
+        jdbcTemplate.update(
+            "UPDATE notification_schema.notification_request SET status = 'SKIPPED', last_error = ?, next_attempt_at = NULL, " +
+                "lock_token = NULL, locked_at = NULL, updated_at = now() WHERE id = ? AND lock_token = ?",
+            safe(reason, 1000), item.requestId(), item.lockToken()
         );
     }
 

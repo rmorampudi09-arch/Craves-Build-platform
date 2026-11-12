@@ -21,8 +21,6 @@ import {HelpScreen} from './HelpScreen';
 import {PayoutsScreen} from './PayoutsScreen';
 import {NoticeScreen} from './NoticeScreen';
 import {RulesScreen} from './RulesScreen';
-import {SlotNowScreen} from './SlotNowScreen';
-import {SlotsScreen} from './SlotsScreen';
 import {ProfileScreen} from './ProfileScreen';
 import {SosScreen} from './SosScreen';
 import {payLabel, TripDetailScreen} from './TripDetailScreen';
@@ -125,8 +123,8 @@ const offline = () => new AppApiError('NETWORK_ERROR', 'No internet connection.'
 let tree: renderer.ReactTestRenderer;
 
 async function render(node: React.ReactElement, seed: Array<[readonly unknown[], unknown]> = []) {
-  // A test that renders twice unmounts the first tree: a mounted screen keeps its query observers (and the slots
-  // screens' refetch interval) alive after the run, and Jest never exits.
+  // A test that renders twice unmounts the first tree: a mounted screen keeps its query observers (and any
+  // refetch interval) alive after the run, and Jest never exits.
   if (tree) {
     await act(async () => tree.unmount());
   }
@@ -600,107 +598,6 @@ describe('How you get orders (R-06)', () => {
   it('says so when the server has published no rules yet', async () => {
     await render(<RulesScreen />, [[riderKeys.terms, {...terms, offerRules: undefined}]]);
     expect(allText()).toContain('The order rules have not been published yet.');
-  });
-});
-
-describe('Slots (R-08)', () => {
-  // In the phone's time zone, like formatClock: tomorrow's windows on the first chip, the day after on the second.
-  const dayAt = (daysAhead: number, hour: number, minute: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + daysAhead);
-    d.setHours(hour, minute, 0, 0);
-    return d.toISOString();
-  };
-  const chip = (iso: string) => `rider-slot-day-${new Date(iso).toDateString()}`;
-  const open = new Date(Date.now() - 3_600_000).toISOString();
-  const slot = (capacityId: string, clusterName: string, daysAhead: number, h1: number, m1: number, h2: number, m2: number, placesLeft: number) => ({
-    capacityId,
-    clusterId: 'c1',
-    clusterName,
-    startsAt: dayAt(daysAhead, h1, m1),
-    endsAt: dayAt(daysAhead, h2, m2),
-    ratePerHourPaise: 9000,
-    places: 3,
-    placesLeft,
-    opensAt: open,
-    standby: false,
-  });
-  const slots = {
-    clusters: [{clusterId: 'c1', name: 'Madhapur', lat: 17.4483, lng: 78.3915, radiusM: 1500}],
-    slots: [
-      {...slot('k1', 'Madhapur', 1, 19, 0, 21, 30, 1), bookingId: 'b1'},
-      slot('k2', 'Gachibowli', 1, 11, 30, 14, 30, 3),
-      slot('k3', 'Kukatpally', 1, 19, 0, 21, 30, 0),
-      {...slot('k4', 'Madhapur', 2, 19, 0, 21, 30, 2), opensAt: new Date(Date.now() + 86_400_000).toISOString()},
-    ],
-    maxHoursPerDay: 6,
-    earlyWave: true,
-  };
-  const running = {bookingId: 'b1', clusterName: 'Madhapur', startsAt: dayAt(0, 19, 0), endsAt: dayAt(0, 21, 30), ratePerHourPaise: 9000, inZoneMinutes: 102, coveredPaise: 15300};
-
-  it('shows the days as chips and each window as Booked, Book or Full with the standby list', async () => {
-    await render(<SlotsScreen />, [[riderKeys.slots, slots]]);
-    const text = allText();
-    expect(text).toContain('Peak slots');
-    expect(text).toContain('Booked slots pay at least ₹90 an hour while you stay in the zone');
-    expect(a11y(chip(slots.slots[0].startsAt))).toEqual({selected: true});
-    expect(text).toContain('Madhapur · 7:00 pm to 9:30 pm | Booked | Be online by 7:15 pm to keep the guarantee. Cancelling is free until 7:00 pm. | Cancel this slot');
-    expect(text).toContain('Gachibowli · 11:30 am to 2:30 pm | Book | 3 places left · ₹90 an hour guaranteed');
-    expect(text).toContain('Kukatpally · 7:00 pm to 9:30 pm | Full | Join the standby list: if a place frees up before 7:00 pm, it is yours. | Join standby');
-    expect(text).toContain('New slots open every Thursday');
-    expect(has('rider-slot-k4')).toBe(false);
-    // The day after: a window whose wave has not opened for this rider cannot be booked yet.
-    await press(chip(slots.slots[3].startsAt));
-    expect(has('rider-slot-k4')).toBe(true);
-    expect(a11y('rider-slot-book-k4')).toMatchObject({disabled: true});
-    expect(allText()).toContain('Opens ');
-  });
-
-  it('books, joins the standby and cancels through the server, then reads the slots again', async () => {
-    (riderApi.bookSlot as jest.Mock).mockResolvedValueOnce({bookingId: 'b2', capacityId: 'k2', status: 'BOOKED'});
-    (riderApi.standbySlot as jest.Mock).mockResolvedValueOnce({capacityId: 'k3', position: 1});
-    (riderApi.cancelSlotBooking as jest.Mock).mockResolvedValueOnce({bookingId: 'b1', capacityId: 'k1', status: 'CANCELLED'});
-    (riderApi.getSlots as jest.Mock).mockResolvedValue(slots);
-    const client = await render(<SlotsScreen />, [[riderKeys.slots, slots]]);
-    const invalidate = jest.spyOn(client, 'invalidateQueries');
-    await press('rider-slot-book-k2');
-    expect(riderApi.bookSlot).toHaveBeenCalledWith('k2');
-    await press('rider-slot-standby-k3');
-    expect(riderApi.standbySlot).toHaveBeenCalledWith('k3');
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _body, buttons) => buttons?.[1]?.onPress?.());
-    await press('rider-slot-cancel-k1');
-    await settle();
-    expect(riderApi.cancelSlotBooking).toHaveBeenCalledWith('b1');
-    expect(invalidate).toHaveBeenCalledTimes(3);
-    alert.mockRestore();
-  });
-
-  it("shows the server's refusal in the rider's words", async () => {
-    (riderApi.bookSlot as jest.Mock).mockRejectedValueOnce(new AppApiError('SLOT_FULL', 'This slot is full. Join the standby list and you get the next free place.', 409));
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-    await render(<SlotsScreen />, [[riderKeys.slots, slots]]);
-    await press('rider-slot-book-k2');
-    expect(alert).toHaveBeenCalledWith('This slot is full. Join the standby list and you get the next free place.');
-    alert.mockRestore();
-  });
-
-  it('shows the slot running now on top, and its guarantee so far on its own screen', async () => {
-    await render(<SlotsScreen />, [[riderKeys.slots, {...slots, running}]]);
-    expect(allText()).toContain('Your slot now · Madhapur | ₹153 guaranteed so far · 102 min in the zone | View');
-    await press('rider-slot-now');
-    expect(mockNavigation.navigate).toHaveBeenCalledWith('SlotNow');
-    await render(<SlotNowScreen />, [[riderKeys.slots, {...slots, running}]]);
-    const text = allText();
-    expect(text).toContain('Madhapur, 7:00 pm to 9:30 pm | Stay within 1.5 km of Madhapur.');
-    expect(text).toContain('Guaranteed so far | ₹153 | In the zone | 1 h 42 min of 2 h 30 min | Rate for this slot | ₹90 an hour');
-    expect(text).toContain('Settled when the slot ends.');
-    await render(<SlotNowScreen />, [[riderKeys.slots, slots]]);
-    expect(allText()).toContain('No slot running now');
-  });
-
-  it('says when there is nothing to book yet', async () => {
-    await render(<SlotsScreen />, [[riderKeys.slots, {...slots, slots: []}]]);
-    expect(allText()).toContain('No slots to book yet');
   });
 });
 

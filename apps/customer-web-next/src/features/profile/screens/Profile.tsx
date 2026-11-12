@@ -88,7 +88,7 @@ export function chefLink(user: CravesUser, application: ChefApplication | null) 
 
   return {
     to: CHEF_APPLICATION_LINK,
-    title: "Become a home chef",
+    title: "Cook from your home kitchen",
     subtitle: "Apply to cook and sell through Craves",
   };
 }
@@ -166,7 +166,7 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
     void (async () => {
       if (getSession() && !isSessionReady()) {
         setError(
-          "Your account details are temporarily unavailable. Sign-out controls remain available below.",
+          "Your account details are temporarily unavailable. You can still sign out below.",
         );
         setLoading(false);
         return;
@@ -180,7 +180,7 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
           navigate({ to: "/" });
         } else {
           setError(
-            "Your account details are temporarily unavailable. Sign-out controls remain available below.",
+            "Your account details are temporarily unavailable. You can still sign out below.",
           );
           setLoading(false);
         }
@@ -266,7 +266,7 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
       if (!active) return;
       setError(
         getSession()
-          ? "Your account details are temporarily unavailable. Sign-out controls remain available below."
+          ? "Your account details are temporarily unavailable. You can still sign out below."
           : "Your profile could not be loaded.",
       );
       setLoading(false);

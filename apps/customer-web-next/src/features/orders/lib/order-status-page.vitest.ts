@@ -92,9 +92,9 @@ describe("order status after payment", () => {
   it("confirms the order, says what happens next and keeps the paise in the bill", async () => {
     serve(order("CHEF_ACCEPTANCE_PENDING"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    expect(await screen.findByRole("heading", { name: "Waiting for the chef" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Waiting for Ammi to confirm" })).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1, name: "Order details" })).toBeTruthy();
-    expect(screen.getByText("The chef will confirm your order shortly.")).toBeTruthy();
+    expect(screen.getByText("Ammi will confirm your order shortly.")).toBeTruthy();
     // A paid order is the Kitchen Calendar's day sheet: each step by its time, now marked, the rest still to come.
     const steps = screen.getByRole("list", { name: "Order steps" });
     expect(within(steps).getAllByRole("listitem")).toHaveLength(6);
@@ -116,7 +116,7 @@ describe("order status after payment", () => {
     serve(order("PREPARING", { prepTimeMinutes: 25, chefResponseNote: "Preparing fresh" }));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
     const steps = await screen.findByRole("list", { name: "Order steps" });
-    expect(steps.querySelector('[aria-current="step"]')?.textContent).toContain("Cooking now");
+    expect(steps.querySelector('[aria-current="step"]')?.textContent).toContain("Ammi is cooking your order");
     expect(within(steps).getByText("Ready in about 25 min")).toBeTruthy();
     expect(screen.getByText("“Preparing fresh”").closest("figure")?.textContent).toContain("Note from the chef");
   });
@@ -131,7 +131,7 @@ describe("order status after payment", () => {
     cleanup();
     for (const [status, current] of [
       ["CHEF_ACCEPTED", "Ammi accepted"],
-      ["PREPARING", "Cooking now"],
+      ["PREPARING", "Ammi is cooking your order"],
       ["READY_FOR_PICKUP", "Packed"],
     ] as const) {
       serve(order(status));
@@ -152,7 +152,7 @@ describe("order status after payment", () => {
     cleanup();
     serve(order("CHEF_REJECTED"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    expect(await screen.findByRole("heading", { name: "Chef declined" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Kitchen declined" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "How was your order?" })).toBeNull();
     // Whether money moves back shows as the refund's own status; nothing to claim yet.
     expect(screen.queryByRole("heading", { name: "Payment" })).toBeNull();
@@ -192,7 +192,7 @@ describe("order status after payment", () => {
     );
     render(createElement(CustomerOrderStatus, { orderId: fixture.id, paymentStep }));
     expect(await screen.findByRole("heading", { name: "Payment pending" })).toBeTruthy();
-    expect(screen.getByText("Finish the payment to send this order to the chef.")).toBeTruthy();
+    expect(screen.getByText("Finish the payment to send this order to the kitchen.")).toBeTruthy();
     expect(screen.getByText("To pay")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Pay ₹1,125" })).toBeTruthy();
     expect(paymentStep.mock.lastCall?.[0]).toEqual({
@@ -205,7 +205,7 @@ describe("order status after payment", () => {
     serve(order("PAID"));
     const paymentStep = vi.fn(() => createElement("button", { type: "button" }, "Pay"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id, paymentStep }));
-    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    await screen.findByRole("heading", { name: "Waiting for Ammi to confirm" });
     expect(paymentStep).not.toHaveBeenCalled();
   });
 
@@ -224,7 +224,7 @@ describe("order status after payment", () => {
     // A typed, bookmarked or shared ?paid=1 link without a verified payment opens the page as usual.
     serve(order("CHEF_ACCEPTANCE_PENDING"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true }));
-    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    await screen.findByRole("heading", { name: "Waiting for Ammi to confirm" });
     await new Promise((resolve) => setTimeout(resolve, 800));
     expect(screen.queryByText("Paid ₹1,125.30")).toBeNull();
     cleanup();
@@ -232,7 +232,7 @@ describe("order status after payment", () => {
     markPaidParcelDue(fixture.id);
     serve(order("CHEF_ACCEPTANCE_PENDING"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true }));
-    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    await screen.findByRole("heading", { name: "Waiting for Ammi to confirm" });
     // Decorative and hidden from screen readers: the page under it says the same.
     // No dish photos here (the menu read fails), so it starts after its 0.7 s wait for them.
     const paid = await screen.findByText("Paid ₹1,125.30");
@@ -242,13 +242,13 @@ describe("order status after payment", () => {
     // A reload, or Back to this page, shows the page at once.
     serve(order("CHEF_ACCEPTANCE_PENDING"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id, justPaid: true }));
-    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    await screen.findByRole("heading", { name: "Waiting for Ammi to confirm" });
     expect(screen.queryByText("Paid ₹1,125.30")).toBeNull();
     cleanup();
     // Opened later from Your orders, it doesn't play either.
     serve(order("CHEF_ACCEPTANCE_PENDING"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    await screen.findByRole("heading", { name: "Waiting for the chef" });
+    await screen.findByRole("heading", { name: "Waiting for Ammi to confirm" });
     expect(screen.queryByText("Paid ₹1,125.30")).toBeNull();
   });
 
@@ -258,9 +258,9 @@ describe("order status after payment", () => {
       for (const [status, heading, calls] of [
         ["DELIVERED", "Delivered", 1],
         ["REFUNDED", "Refunded", 1],
-        ["PREPARING", "Preparing your food", 2],
+        ["PREPARING", "Ammi is cooking your order", 2],
         // A rejected order still moves on to its refund.
-        ["CHEF_REJECTED", "Chef declined", 2],
+        ["CHEF_REJECTED", "Kitchen declined", 2],
       ] as const) {
         const fetch = serve(order(status));
         render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
@@ -344,7 +344,7 @@ describe("order map, chef and bill", () => {
   it("asks nothing about delivery before the food is ready, and shows no map once the order is closed", async () => {
     const fetch = serve(order("PREPARING"));
     render(createElement(CustomerOrderStatus, { orderId: fixture.id }));
-    await screen.findByRole("heading", { name: "Preparing your food" });
+    await screen.findByRole("heading", { name: "Ammi is cooking your order" });
     expect(fetch.mock.calls.some(([url]) => url.endsWith("/delivery-status"))).toBe(false);
     cleanup();
     serve(order("CANCELLED"));

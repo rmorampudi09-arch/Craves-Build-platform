@@ -30,18 +30,13 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(home, /dishes=\{dietDishes\}/);
   assert.match(chefs, /CustomerPageSkeleton/);
   assert.match(chefs, /discoverDishes\(/);
-  assert.match(chefs, /dishes=\{dishes\}/);
-  // Top kitchens near you (app 1.35): one row of up to eight cards. Each photo fades in over the
-  // last every 4 s, cards 0.8 s apart, only while on screen, held on hover or focus, with a
-  // Pause control (WCAG 2.2.2) and never for reduced motion. No swiping inside the photo.
+  // Veg mode narrows the cards' dishes (pure veg kitchens, or veg dishes from every kitchen).
+  assert.match(chefs, /dishes=\{vegDishes\}/);
+  // Top kitchens near you (app 1.35): one row of up to eight cards. People swipe each card's
+  // photos; nothing moves on its own, so there is no pause or play button (owner, 5 Nov 2026).
   assert.match(kitchens, /function KitchenPhotos/);
-  assert.match(kitchens, /PHOTO_MS = 4_000/);
-  assert.match(kitchens, /PHOTO_STAGGER_MS = 800/);
-  assert.match(kitchens, /transition-opacity duration-\[650ms\]/);
-  assert.match(kitchens, /Pause kitchen photos/);
-  assert.match(kitchens, /useReducedMotion\(\)/);
-  assert.match(kitchens, /intersectionRatio >= 0\.6/);
-  assert.match(kitchens, /:hover, :focus-within/);
+  assert.doesNotMatch(kitchens, /setInterval|setTimeout|Pause kitchen photos|Play kitchen photos/);
+  assert.match(kitchens, /snap-center snap-always object-cover/);
   assert.doesNotMatch(kitchens, /onPointerDown|setPointerCapture|setSwiped/);
   assert.match(home, /limit=\{8\}/);
   // The app's order: banner, top kitchens, the category row, then "Popular near you".
@@ -51,9 +46,10 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(kitchens, /w-\[clamp\(248px,74vw,286px\)\]/);
   assert.match(kitchens, /snap-x snap-mandatory/);
   assert.match(kitchens, /aria-label="Show more kitchens"/);
-  assert.match(kitchens, /See all <span className="sr-only">kitchens near you<\/span>/);
+  assert.match(kitchens, /See all\{totalNearby \? ` \$\{totalNearby\}` : ""\}/);
+  assert.match(kitchens, /max-sm:sr-only" : undefined\}>kitchens<\/span>/);
   assert.match(kitchens, /priority=\{order < 4\}/);
-  assert.match(kitchens, /fetchPriority=\{index === 0 && priority \? "high" : "auto"\}/);
+  assert.match(kitchens, /fetchPriority=\{position === 0 && priority \? "high" : "auto"\}/);
   assert.doesNotMatch(kitchens, /transition-all/);
   assert.doesNotMatch(kitchens, /View chef/);
   assert.match(dishes, /priorityImage=\{index < 4\}/);
@@ -69,9 +65,10 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(cravings, /md:top-\[4\.25rem\] lg:top-\[4\.65rem\]/);
   assert.doesNotMatch(cravings, /md:static/);
   // Chips: a real press state, scroll arrows only for pointers, selection without a tint.
-  assert.match(cravings, /group-active:scale-\[0\.96\]/);
+  assert.match(cravings, /group-active:scale-\[0\.94\]/);
   assert.match(cravings, /duration-\(--dur-component\)/);
-  assert.match(cravings, /ring-2 ring-\[#F62E18\] ring-offset-2/);
+  // The chosen circle's red ring glides from the last choice (shared layout animation).
+  assert.match(cravings, /layoutId="category-ring"[\s\S]*border-2 border-\[#F62E18\]/);
   assert.match(cravings, /md:left-4 md:top-\[2\.875rem\] md:flex/);
   assert.doesNotMatch(cravings, /rgba\(246,46,24,0\.12\)|backdrop-blur/);
   // No chef shortcut in the Home header: Profile is the way into chef mode.
@@ -198,7 +195,7 @@ test("navigation shows page-shaped skeletons the moment a dish, kitchen or cart 
   assert.match(skeleton, /export type CustomerPageSkeletonVariant = "home" \| "dish" \| "kitchen" \| "cart" \| "chefs"/);
   // The dish skeleton reserves the action bar so the tab bar does not flash in and out.
   assert.match(skeleton, /data-craves-action-bar/);
-  assert.match(kitchens, /\$\{skeletonStyles\.block\} aspect-\[100\/63\]/);
+  assert.match(kitchens, /\$\{skeletonStyles\.block\} \$\{wide \? WIDE_PHOTO : PHOTO\}/);
 });
 
 test("every page loads in its own shape under its own header, and quick loads show nothing", () => {

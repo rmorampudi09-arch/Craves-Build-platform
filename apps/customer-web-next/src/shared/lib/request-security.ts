@@ -1,4 +1,23 @@
+import { isIP } from "node:net";
 import type { NextRequest } from "next/server";
+
+/**
+ * The TCP peer Front Door saw, as a key for per-visitor limits: an IPv4 address, or an IPv6 /64 (a phone or a home
+ * gets a whole /64 to pick addresses from). X-Forwarded-For and X-Azure-ClientIP are caller-written, so they never
+ * key a limit; anything but a literal address is null.
+ */
+export function socketPeerKey(request: NextRequest): string | null {
+  const ip = request.headers.get("x-azure-socketip")?.trim() ?? "";
+  const version = isIP(ip);
+  if (version === 4) return ip;
+  if (version !== 6) return null;
+  if (ip.includes(".")) return ip.slice(ip.lastIndexOf(":") + 1); // IPv4-mapped, ::ffff:a.b.c.d
+  const [head, tail = ""] = ip.split("::");
+  const groups = head.split(":").filter(Boolean);
+  const rest = tail.split(":").filter(Boolean);
+  const full = [...groups, ...Array<string>(8 - groups.length - rest.length).fill("0"), ...rest];
+  return `${full.slice(0, 4).map((group) => group.toLowerCase().padStart(4, "0")).join(":")}::/64`;
+}
 
 type OriginCheckInput = {
   origin: string | null;

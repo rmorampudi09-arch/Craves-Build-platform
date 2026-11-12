@@ -50,31 +50,31 @@ export function savedDishAvailability(item: SavedMenuItem): {
     case "KITCHEN_NOT_ACCEPTING":
       return {
         title: "Not taking orders",
-        detail: "We will not guess when this kitchen will reopen.",
+        detail: "The kitchen hasn’t said when it will reopen.",
         tone: "muted",
       };
     case "ITEM_UNAVAILABLE":
       return {
         title: "Not available right now",
-        detail: "The dish is still saved. The catalog does not say why it is unavailable.",
+        detail: "The dish is still saved.",
         tone: "muted",
       };
     case "RETIRED":
       return {
         title: "No longer on the menu",
-        detail: "Kept here so your saved-food history does not disappear silently.",
+        detail: "It stays in your saved list until you remove it.",
         tone: "muted",
       };
     case "KITCHEN_INACTIVE":
       return {
         title: "Kitchen unavailable",
-        detail: "This saved dish remains remembered until you remove it.",
+        detail: "It stays in your saved list until you remove it.",
         tone: "muted",
       };
     case "MISSING":
       return {
         title: "Dish no longer listed",
-        detail: "You can remove this saved item whenever you are ready.",
+        detail: "You can remove it from your saved list.",
         tone: "muted",
       };
   }

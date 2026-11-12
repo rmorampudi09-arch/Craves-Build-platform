@@ -812,7 +812,7 @@ Live before 13 May 2027.
 
 **S3. Offer rules.**
 1. Run the replay twice on the pilot area's recorded orders (`REPLAY.md`, "Comparing offer rules").
-2. Before the first rate card is published, set the rules in shadow (`GO-LIVE.md` §6, step 1.1). Recommended: one rider at a time, 30 s, 3 rounds, 120 s before Borzo, fair band 1.5 km.
+2. Before the first rate card is published, set the rules in shadow (`GO-LIVE.md` §6, step 1.1). The built-in rules (`DISPATCH.md` §7): one rider at a time, 20 s, asked again for 300 s before Borzo, fair band 1.5 km.
 3. After the first rate card, every change to the rules needs a start 14 days away.
 
 **S4. Rider choices.** Once the lawyer has read the wording, set `CRAVES_FLEET_RIDER_CHOICES_ENABLED=true` and run `PHONE-TESTS.md` §6.
@@ -964,7 +964,7 @@ The app had been checked mostly against its own demo server. This pass walked ev
 - **Gates.** An approved rider with no rate card published (`termsVersion` empty, `GET /terms` 503) waits on "Pay rates are on the way" with Check again (`RATES_PENDING`), not on an error. Pending riders get Check again too.
 - **Going online.** The phone is bound (`POST /devices`) before the selfie, so a phone that can't get offers says why first; a selfie over 5 MB is retaken before the upload; the online service's own refusals (location, shift over) show in the rider's language, and its crash text never does.
 - **Money.** The withdrawal key is the IST day and the amount, as `FleetPayouts.withdraw` keeps it: a retry after a lost answer reads "requested", not "once a day".
-- **Home.** "Your slot now" while a slot runs; online before it, the screen says when paid waiting starts instead of promising it; time online today.
+- **Home.** (Slots removed from the app in 1.3.4.) "Your slot now" while a slot runs; online before it, the screen says when paid waiting starts instead of promising it; time online today.
 - **SOS.** Someone without the rider role gets both calls and "Calls work any time…"; the location is never shown as failed for them.
 - **States** (`components/StateCard.tsx`, `domain/problem.ts`, `DESIGN.md` "States"): loading skeletons, empty, offline, Craves not answering, not switched on yet, not allowed and refused, in the rider theme, on every screen. Failed actions say why in one line, in the rider's language (`riderMessage`).
 - **Languages.** Kannada joins English, Telugu and Hindi (`strings/kn.ts`, `res/values-kn`), hidden from riders until a native speaker signs it off like the others. The server stores en, te or hi, so a Kannada reader is English there (`serverLanguage`). Pay lines, refusals and errors are named in the rider's language by code or component. Labels wrap instead of overflowing: choice chips, segments and the check row (`components/Choices.tsx`), buttons, the header's status chip; the two-up trip buttons stack in te, hi and kn.
@@ -1014,7 +1014,7 @@ tapped through, from sign-in to payouts. What a rider would have hit, fixed (`FL
 Gopi: "A clear flow like chef and after accepting the app should directly go to the next step… the admin side also need
 to be sorted… what the hack is demo data, we are about to release the production version of the apk."
 - **Admin side.** The console's Riders & fleet group reads in the order ops works (Riders, Go-online selfies, Rider
-  support, Fleet trips & dispatch, Rider payouts, Rider slots & banner, Rider pilot setup, Rider pilot health), with
+  support, Fleet trips & dispatch, Rider payouts, Rider banner (slots removed in 1.3.4), Rider pilot setup, Rider pilot health), with
   selfies in the sidebar at last; the overview says what riders are waiting for, under the chef box; an active rider's
   single documents use the review's words (Looks good, Needs a fix).
 - **The next step by itself.** Ops's decision reaches the phone at once: the rider's phone is registered when they apply

@@ -199,7 +199,7 @@ describe("Saved screen", () => {
   it("lists a saved kitchen and its saved chef once, with an alert bell and a heart that clears both", async () => {
     const fetch = stub();
     render(createElement(WishlistPage));
-    fireEvent.mouseDown(await screen.findByRole("tab", { name: "Home chefs" }));
+    fireEvent.mouseDown(await screen.findByRole("tab", { name: "Kitchens" }));
     const bell = await screen.findByRole("button", {
       name: "Alert me in the app when Asha's kitchen is cooking",
     });
@@ -225,8 +225,8 @@ describe("Saved screen", () => {
     ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Remove Asha's kitchen from saved" }));
-    expect(await screen.findByText("No saved home chefs yet")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Explore home chefs" }).getAttribute("href")).toBe(
+    expect(await screen.findByText("No saved kitchens yet")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Explore kitchens" }).getAttribute("href")).toBe(
       "/chefs",
     );
     expect(
@@ -276,14 +276,14 @@ describe("Saved screen", () => {
       });
     });
     render(createElement(WishlistPage));
-    fireEvent.mouseDown(await screen.findByRole("tab", { name: "Home chefs" }));
+    fireEvent.mouseDown(await screen.findByRole("tab", { name: "Kitchens" }));
     expect(await screen.findByRole("link", { name: /Asha's kitchen/ })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Ravi's kitchen/ })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Load more saved home chefs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load more saved kitchens" }));
     expect(await screen.findByRole("link", { name: /Ravi's kitchen/ })).toBeTruthy();
     expect(screen.getByRole("link", { name: /Asha's kitchen/ })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Load more saved home chefs" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Load more saved kitchens" })).toBeNull();
     // Only the list with another page is read again.
     expect(
       fetch.mock.calls.filter(([url]) => url.startsWith("/api/customer/favorite-chefs")).length,
@@ -299,7 +299,7 @@ describe("Saved screen", () => {
           : undefined,
       );
       render(createElement(WishlistPage));
-      expect(await screen.findByRole("heading", { name: "Saved home chefs are coming soon" })).toBeTruthy();
+      expect(await screen.findByRole("heading", { name: "Saved kitchens are coming soon" })).toBeTruthy();
       expect(screen.getByTestId("empty-illustration-comingSoon")).toBeTruthy();
     },
   );

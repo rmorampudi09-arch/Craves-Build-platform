@@ -124,10 +124,10 @@ test("welcome banner shows the admin-published promo banners while discovery use
   assert.doesNotMatch(welcome, /craves-home-banner\.webp/);
   assert.match(welcome, /if \(!count\) return null;/);
   assert.match(welcome, /aspect-\[2\/1\]/);
-  assert.match(welcome, /export const BANNER_ADVANCE_MS = 4_000;/);
+  // Banners never move on their own (owner, 5 Nov 2026): swipe or tap a dot, so no pause button.
+  assert.doesNotMatch(welcome, /setInterval|Pause banners|Play banners/);
+  assert.match(welcome, /Show banner \$\{index \+ 1\} of \$\{count\}/);
   assert.match(welcome, /useReducedMotion\(\)/);
-  assert.match(welcome, /visibilitychange/);
-  assert.match(welcome, /Pause banners/);
   assert.match(welcome, /onClick=\{onOpenSearch\}/);
   assert.doesNotMatch(welcome, /Default address/);
   assert.doesNotMatch(welcome, /Choose default address/);

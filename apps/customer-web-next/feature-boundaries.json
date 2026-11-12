@@ -123,6 +123,7 @@
     "chef -> src/features/admin/finance/lib/manual-settlement-contract.ts",
     "chef -> src/features/auth/api/cravesAuth.ts",
     "chef -> src/features/auth/lib/auth-contract.ts",
+    "chef -> src/features/chef-onboarding/components/chef-fssai-popup.tsx",
     "chef -> src/features/chef-onboarding/lib/chef-application-contract.ts",
     "chef -> src/features/chef-onboarding/lib/chef-onboarding-v2-contract.ts",
     "chef -> src/features/chef-onboarding/lib/document-contract.ts",

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Bell, BellPlus, Check, Heart, Loader2 } from "lucide-react";
+import { Bell, BellPlus, Check, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { resolveFavoriteHomes, SavedResolveError } from "@/features/favorites/api/savedResolve";
@@ -26,6 +26,7 @@ import {
 } from "@/shared/lib/favorite-entities-client";
 import type { FavoriteWatch } from "@/shared/lib/favorite-entities-contract";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
+import { SaveHeartButton } from "@/shared/ui/buttons/SaveHeartButton";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 
@@ -47,9 +48,9 @@ function onWatches(watches: FavoriteWatch[]): Set<WatchKey> {
   );
 }
 
-/** The bell and the heart: the web's grey round buttons with a red icon, 48 px to tap. */
+/** The bell, on the same warm round tile as the save heart beside it, 48 px to tap. */
 const ROUND_ACTION =
-  "relative z-10 flex h-12 min-h-12 w-12 min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#F1F3F5] !p-0 !text-[#F62E18] !shadow-none transition-[background-color,color,scale] duration-(--dur-micro) hover:!text-[#C4200F] motion-safe:active:scale-[0.94] disabled:cursor-wait disabled:opacity-50";
+  "relative z-10 flex h-12 min-h-12 w-12 min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#F7F5F3] !p-0 !text-[#F62E18] !shadow-none transition-[background-color,color,scale] duration-(--dur-micro) hover:!bg-[#FDEAE8] hover:!text-[#C4200F] motion-safe:active:scale-[0.94] disabled:cursor-wait disabled:opacity-50";
 
 function SavedHomeRow({
   entry,
@@ -133,20 +134,12 @@ function SavedHomeRow({
           )}
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={busy}
-        aria-label={`Remove ${name} from saved`}
-        className={ROUND_ACTION}
-      >
-        <Heart className="h-[22px] w-[22px] fill-current" aria-hidden="true" />
-      </button>
+      <SaveHeartButton saved disabled={busy} label={`Remove ${name} from saved`} onToggle={onRemove} className="relative z-10 shrink-0" />
     </li>
   );
 }
 
-/** Saved → Home chefs: saved kitchens and chefs, who is cooking today, and an in-app alert bell for each. */
+/** Saved → Kitchens: saved kitchens and chefs, who is cooking today, and an in-app alert bell for each. */
 export function SavedHomes() {
   const [status, setStatus] = useState<Status>("loading");
   const [entries, setEntries] = useState<SavedHomeEntry[]>([]);
@@ -282,14 +275,14 @@ export function SavedHomes() {
   }
 
   if (status === "loading")
-    return <CustomerSectionSkeleton variant="saved" label="Loading saved home chefs" />;
+    return <CustomerSectionSkeleton variant="saved" label="Loading saved kitchens" />;
   if (status === "unavailable") {
     return (
       <EmptyState
         role="status"
         illustration="comingSoon"
-        title="Saved home chefs are coming soon"
-        message="Saving kitchens and home chefs is coming to the website soon."
+        title="Saved kitchens are coming soon"
+        message="Saving kitchens is coming to the website soon."
       />
     );
   }
@@ -298,7 +291,7 @@ export function SavedHomes() {
       <EmptyState
         role="alert"
         illustration="loadError"
-        title="Saved home chefs could not be loaded"
+        title="Saved kitchens could not be loaded"
         message="Check your connection and try again."
       >
         <button type="button" onClick={() => void load()} className="craves-primary-action">
@@ -311,7 +304,7 @@ export function SavedHomes() {
     return (
       <EmptyState
         illustration="saved"
-        title="Your saved home chefs are safe"
+        title="Your saved kitchens are safe"
         message="We could not check who is cooking today. Nothing was removed."
       >
         <button type="button" onClick={() => void load()} className="craves-primary-action">
@@ -325,7 +318,7 @@ export function SavedHomes() {
     return (
       <EmptyState
         illustration="saved"
-        title="No saved home chefs yet"
+        title="No saved kitchens yet"
         message={
           <>
             Tap the heart on any kitchen to keep its home chef here.
@@ -338,7 +331,7 @@ export function SavedHomes() {
         }
       >
         <Link to="/chefs" className="craves-primary-action">
-          Explore home chefs
+          Explore kitchens
         </Link>
       </EmptyState>
     );
@@ -377,7 +370,7 @@ export function SavedHomes() {
           {status === "more" ? (
             <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
           ) : null}
-          Load more saved home chefs
+          Load more saved kitchens
         </button>
       ) : null}
       <p className="mt-3 px-1 text-[0.9375rem] text-[#706864] md:text-center">

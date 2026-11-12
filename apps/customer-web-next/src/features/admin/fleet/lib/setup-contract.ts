@@ -2,7 +2,7 @@ import { z } from "zod";
 import { id, instant, personName, rupeesToPaise, VERSION, type FleetRoute } from "./fleet-common";
 import { formatPaise } from "./payout-contract";
 import { riderStatusSchema } from "./rider-contract";
-import { istInstant } from "./slot-contract";
+import { istInstant } from "./banner-contract";
 
 // Rider pilot setup: rate card, dispatch policy and the test-mode allow-lists. Money is paise, distances metres.
 export const DISPATCH_MODES = ["off", "shadow", "live"] as const;
@@ -39,7 +39,8 @@ const note = z.string().max(200).nullish();
 const lines = z.array(z.string().max(200)).max(10);
 
 const atOnce = z.number().int().min(1).max(3);
-const rounds = z.number().int().min(1).max(5);
+// 0: no limit. Riders are asked one after another, again once all nearby have been, until the time before Borzo is up.
+const rounds = z.number().int().min(0).max(5);
 const band = z.number().int().min(0).max(5000);
 export const dispatchPolicySchema = z.object({
   // withdrawnAt: an immediate off withdrew this scheduled version before it started; it never comes into force.
@@ -165,9 +166,12 @@ const firstText = (rules: { fairBandM: number; rankByTravelTime?: boolean }) => 
   ? rules.fairBandM > 0 ? `fair band ${bandMinutes(rules.fairBandM)} min by travel time` : "soonest first by travel time"
   : rules.fairBandM > 0 ? `fair band ${toUnitText("km", rules.fairBandM)} km` : "nearest first";
 
+/** "3 rounds"; for 0 (no limit), that riders are asked again until the time before Borzo is up. */
+const roundsText = (rounds: number, upTo = "") => rounds === 0 ? "asked again until the time is up" : `${upTo}${rounds} ${rounds === 1 ? "round" : "rounds"}`;
+
 /** The rules in a few words for ops: "3 at once, 1 round, nearest first". */
 export function rulesText(rules: Record<RuleField, number> & { rankByTravelTime?: boolean }): string {
-  return `${rules.offersAtOnce} at once, ${rules.offerRounds} ${rules.offerRounds === 1 ? "round" : "rounds"}, ${firstText(rules)}`;
+  return `${rules.offersAtOnce} at once, ${roundsText(rules.offerRounds)}, ${firstText(rules)}`;
 }
 
 /** The built-in values in one line for ops: "1 rider at a time · 30 s to accept · up to 3 rounds · fair band 1.5 km · …". */
@@ -175,9 +179,10 @@ export function builtInText(values: BuiltInDispatch): string {
   const rupees = (paise: number) => formatPaise(paise).replace(/\.00$/, "");
   return [
     `${values.offersAtOnce} ${values.offersAtOnce === 1 ? "rider" : "riders"} at a time`, `${values.offerSeconds} s to accept`,
-    `up to ${values.offerRounds} ${values.offerRounds === 1 ? "round" : "rounds"}`, firstText(values), `within ${toUnitText("km", values.radiusM)} km`,
+    roundsText(values.offerRounds, "up to "), firstText(values), `within ${toUnitText("km", values.radiusM)} km`,
     `${values.fleetStageSeconds} s before Borzo`, `Pidge ${values.pidgeStageSeconds} s`, `pickup detour ${values.pickupDetourPercent}%`,
-    `cost guard ${rupees(values.perOrderOverheadPaise)} overhead, ${rupees(values.costGuardPremiumPaise)} premium`,
+    // With no limit on rounds every order stays with riders for the whole time, whatever a courier would charge.
+    values.offerRounds === 0 ? "no cost guard" : `cost guard ${rupees(values.perOrderOverheadPaise)} overhead, ${rupees(values.costGuardPremiumPaise)} premium`,
   ].join(" · ");
 }
 

@@ -87,13 +87,12 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
   const approvedCount = REQUIREMENTS.filter(([type]) => documentByType.get(type)?.status === "APPROVED").length;
   const canReviewDocuments = item?.status === "PENDING" || item?.status === "APPROVED" && Boolean(onboarding && !onboarding.legacy && onboarding.submitted);
   const allApproved = documentsAvailable && (!onboardingV2Enabled || Boolean(onboarding)) &&
-    (!onboarding || onboarding.legacy || onboarding.submitted && onboarding.progress?.fssaiVerified) && REQUIREMENTS.length > 0 && approvedCount === REQUIREMENTS.length;
+    (!onboarding || onboarding.legacy || onboarding.submitted) && REQUIREMENTS.length > 0 && approvedCount === REQUIREMENTS.length;
 
   const v2 = Boolean(onboarding && !onboarding.legacy);
   const checklist: [boolean, string][] = [
     ...(v2 ? [[Boolean(onboarding?.submitted), "Chef has submitted the application"] as [boolean, string]] : []),
     [documentsAvailable && approvedCount === REQUIREMENTS.length && REQUIREMENTS.length > 0, `Every required document approved (${approvedCount}/${REQUIREMENTS.length})`],
-    ...(v2 ? [[Boolean(onboarding?.progress?.fssaiVerified), "FSSAI number checked and recorded with “Record verified FSSAI number”"] as [boolean, string]] : []),
   ];
   async function onboardingAction(action:"START_REVIEW"|"REQUEST_INFORMATION"|"VERIFY_FSSAI") {
     if(!onboarding || busy) return;
@@ -187,15 +186,15 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
     {onboarding && !onboarding.legacy && onboarding.details ? <section className="rounded-[30px] bg-white p-6 text-slate-950 sm:p-8">
       <h2 className="text-xl font-bold">Saved kitchen and onboarding details</h2>
       <p className="mt-3 text-sm">{onboarding.details.kitchenName} · Date of birth: {onboarding.details.dateOfBirth}</p>
-      <p className="mt-2 text-sm">FSSAI number: {onboarding.details.fssaiNumber} · Preferred language: {onboarding.details.language}</p>
+      <p className="mt-2 text-sm">FSSAI number: {onboarding.details.fssaiNumber || "Not added yet (the Chef adds it before a dish goes live)"} · Preferred language: {onboarding.details.language}</p>
       <p className="mt-2 whitespace-pre-wrap text-sm">{onboarding.details.kitchenDescription}</p>
-      <p className="mt-3 text-sm">Review status: {onboarding.progress?.status} · FSSAI: {onboarding.progress?.fssaiVerified ? "Verified by reviewer" : "Verification required"}</p>
+      <p className="mt-3 text-sm">Review status: {onboarding.progress?.status} · FSSAI: {onboarding.progress?.fssaiVerified ? "Verified by reviewer" : onboarding.details.fssaiNumber ? "Verification required" : "Not added yet"}</p>
       {onboarding.progress?.sections?.length ? <p className="mt-2 text-sm">Sections the Chef must update: {onboarding.progress.sections.map(section => CHEF_SECTION_LABELS[section as keyof typeof CHEF_SECTION_LABELS] ?? section).join(", ")}</p> : null}
       {onboarding.callbackRequest ? <p className="mt-2 text-sm">FSSAI callback: {onboarding.callbackRequest.caseNumber} · {onboarding.callbackRequest.status}</p> : null}
       {onboarding.submitted && !onboarding.legacy ? <div className="mt-4 space-y-3">
         <label className="block text-sm">Correction reason or FSSAI verification evidence<textarea aria-label="Onboarding review evidence" className="mt-2 w-full rounded-xl border p-3" value={reviewNote} maxLength={2000} onChange={event=>setReviewNote(event.target.value)} /></label>
         {item.status!=="APPROVED" ? <fieldset className="text-sm"><legend className="font-bold">Sections the Chef must update (needed to request information)</legend><div className="mt-2 flex flex-wrap gap-4">{CORRECTION_SECTIONS.filter(section => section !== "bank" || onboarding.bankEnrollmentRequired).map(section => <label key={section} className="inline-flex items-center gap-2"><input type="checkbox" checked={correctionSections.includes(section)} onChange={event => setCorrectionSections(current => event.target.checked ? [...current, section] : current.filter(value => value !== section))} />{CHEF_SECTION_LABELS[section]}</label>)}</div></fieldset> : null}
-        <div className="flex flex-wrap gap-3">{item.status!=="APPROVED" ? <><button disabled={busy} className="rounded-xl border border-[#d9cfdf] bg-white px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>void onboardingAction("START_REVIEW")}>Start review</button><button disabled={busy || reviewNote.trim().length<3 || correctionSections.length===0} className="rounded-xl border border-[#d9cfdf] bg-white px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>void onboardingAction("REQUEST_INFORMATION")}>Request information</button></> : null}<button disabled={busy || reviewNote.trim().length<3 || onboarding.progress?.fssaiVerified} className="rounded-xl border border-[#d9cfdf] bg-white px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>void onboardingAction("VERIFY_FSSAI")}>Record verified FSSAI number</button></div>
+        <div className="flex flex-wrap gap-3">{item.status!=="APPROVED" ? <><button disabled={busy} className="rounded-xl border border-[#d9cfdf] bg-white px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>void onboardingAction("START_REVIEW")}>Start review</button><button disabled={busy || reviewNote.trim().length<3 || correctionSections.length===0} className="rounded-xl border border-[#d9cfdf] bg-white px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>void onboardingAction("REQUEST_INFORMATION")}>Request information</button></> : null}<button disabled={busy || reviewNote.trim().length<3 || onboarding.progress?.fssaiVerified || !onboarding.details.fssaiNumber} className="rounded-xl border border-[#d9cfdf] bg-white px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40" onClick={()=>void onboardingAction("VERIFY_FSSAI")}>Record verified FSSAI number</button></div>
       </div> : null}
     </section> : null}
 

@@ -87,13 +87,16 @@ test("mobile browse keeps dish proportions and cart glass, with the app's catego
   const nav = source("../../customer-shell/components/BottomNav.tsx");
   const homeStyles = source("../screens/HomeReference.module.css");
 
-  assert.match(card, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
-  assert.doesNotMatch(card, /aspect-\[4\/3\]/);
-  assert.match(grid, /aspect-\[16\/9\] sm:aspect-\[16\/10\]/);
-  assert.doesNotMatch(grid, /aspect-\[4\/3\]/);
+  // Compact cards, two across on phones; the photo keeps to about half (phones) to 60% (wide
+  // screens) of the card so it never dwarfs the words (owner, 5 Nov 2026); skeletons keep the shape.
+  assert.match(card, /DISH_PHOTO = "aspect-\[4\/3\] sm:aspect-\[3\/2\] lg:aspect-\[16\/10\]"/);
+  assert.match(grid, /DISH_GRID = "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:gap-5 xl:grid-cols-4"/);
+  assert.match(grid, /\$\{skeletonStyles\.block\} \$\{DISH_PHOTO\}/);
   // The app's 128 px category photos, shown at the app's 64 px (72 px from md) so they stay sharp.
   assert.match(cravings, /h-16 w-16 [^"]*md:h-\[4\.5rem\] md:w-\[4\.5rem\]/);
-  assert.match(cravings, /image: "\/home\/categories\/all\.webp"/);
+  // No "All" circle (owner, 5 Nov 2026): nothing chosen shows every dish; one red ring glides to the choice.
+  assert.doesNotMatch(cravings, /label: "All"/);
+  assert.match(cravings, /layoutId="category-ring"/);
   // Tabs and the cart bar share one floating glass bar (the desktop cart bar's glass);
   // only View cart is coloured (leaf green, AA).
   assert.match(nav, /\$\{glass\.glassDock\} pointer-events-auto relative isolate/);
@@ -265,5 +268,5 @@ test("the Home header has no chef button; Profile is the one way into chef mode 
   assert.doesNotMatch(header, /to="\/chef|to=\{chefDestination\}|ArrowLeftRight|chef mode|chef application/i);
   // Profile covers every case: chefs switch to chef mode, everyone else becomes a home chef.
   assert.match(profile, /title: "Switch to Chef mode"/);
-  assert.match(profile, /title: "Become a home chef"/);
+  assert.match(profile, /title: "Cook from your home kitchen"/);
 });

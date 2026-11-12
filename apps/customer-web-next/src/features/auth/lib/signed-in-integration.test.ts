@@ -90,7 +90,7 @@ test("profile exposes backend chef application status", () => {
   const contents = source("../../profile/screens/Profile.tsx");
   assert.match(contents, /fetch\("\/api\/chef\/application"/);
   assert.match(contents, /Chef application pending/);
-  assert.match(contents, /Become a home chef/);
+  assert.match(contents, /Cook from your home kitchen/);
 });
 
 test("production catalogue has no demo dish fallback", () => {

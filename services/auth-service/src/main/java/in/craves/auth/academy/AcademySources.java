@@ -24,7 +24,7 @@ public class AcademySources {
         .followRedirects(HttpClient.Redirect.NEVER).build();
     private static final Pattern SECRET = Pattern.compile("(?s)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|(?:AKIA|ASIA)[A-Z0-9]{16}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|(?i:AccountKey|client_secret|password|api_key)\\s*[:=]\\s*[\"'][A-Za-z0-9+/=_-]{24,}[\"']");
     private static final Pattern REVIEWED_PATH = Pattern.compile(
-        "(?:(?:services|apps)/[A-Za-z0-9_./-]+\\.(?:java|ts|tsx|md)|\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml|scripts/academy/[A-Za-z0-9_.-]+\\.py)"
+        "(?:(?:services|apps)/[A-Za-z0-9_./-]+\\.(?:java|ts|tsx|md|py)|\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml|scripts/academy/[A-Za-z0-9_.-]+\\.py)"
     );
 
     public AcademySources(AcademyCatalog catalog) { this.catalog = catalog; }
@@ -35,11 +35,12 @@ public class AcademySources {
 
     public Map<String, String> read(String courseId, int index) {
         String path = catalog.sourcePath(courseId, index);
-        if (cache.containsKey(path)) return cache.get(path);
+        String revision = catalog.sourceRevision(courseId);
+        String key = revision + ":" + path; // two courses may show one path at different pinned revisions
+        if (cache.containsKey(key)) return cache.get(key);
         if (!isReviewedPath(path)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Source is outside the reviewed allowlist");
         }
-        String revision = catalog.sourceRevision();
         if (!revision.matches("[a-f0-9]{40}")) throw new IllegalStateException("Source revision must be pinned");
         try {
             URI uri = URI.create("https://raw.githubusercontent.com/rmorampudi09-arch/Craves-Build-platform/" + revision + "/" + path);
@@ -54,7 +55,7 @@ public class AcademySources {
             if (SECRET.matcher(code).find()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Source requires security review; no content was disclosed");
             Map<String, String> result = Map.of("path", path, "revision", revision, "code", code,
                 "sha256", HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)));
-            cache.put(path, result);
+            cache.put(key, result);
             return result;
         } catch (ResponseStatusException e) { throw e;
         } catch (InterruptedException e) {

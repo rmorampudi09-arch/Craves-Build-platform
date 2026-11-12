@@ -177,7 +177,7 @@ export function ChefApplicationEvidenceUploader({
       if (xhr.status >= 200 && xhr.status < 300) {
         const uploaded = parseChefEvidenceMetadata(xhr.response);
         if (!uploaded) {
-          setTypeProgress(type, { progress: 100, phase: "ERROR", message: "Upload completed but the response could not be verified." });
+          setTypeProgress(type, { progress: 100, phase: "ERROR", message: "Your file was uploaded, but we couldn’t confirm it. Refresh your document history to check." });
           return;
         }
         setDocuments(current => [
@@ -233,7 +233,7 @@ export function ChefApplicationEvidenceUploader({
       {!applicationReady && (
         <div className="mt-5 flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
           <CircleAlert className="mt-0.5 h-5 w-5 shrink-0" />
-          <div><strong>Submit your Chef details first.</strong><p className="mt-1">After the application record is created, all four document upload controls become available.</p></div>
+          <div><strong>Submit your Chef details first.</strong><p className="mt-1">After you submit them, you can upload all four documents here.</p></div>
         </div>
       )}
 
@@ -290,7 +290,7 @@ export function ChefApplicationEvidenceUploader({
               {approved ? (
                 <div className="mt-4 flex items-start gap-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-900">
                   <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
-                  <div><strong>Accepted by Craves.</strong><p className="mt-1">No action is required for this document, and normal replacement is disabled.</p></div>
+                  <div><strong>Accepted by Craves.</strong><p className="mt-1">Nothing more is needed for this document, and it can’t be replaced here.</p></div>
                 </div>
               ) : !locked ? (
                 <div className="mt-4 grid gap-3 items-end">

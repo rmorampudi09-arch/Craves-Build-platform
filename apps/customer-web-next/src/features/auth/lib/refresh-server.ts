@@ -3,7 +3,7 @@ import { parseSessionExchange, type CravesSessionExchange } from "./auth-contrac
 import { refreshFailure, type RefreshFailure } from "./refresh-policy";
 
 type Result = { session: CravesSessionExchange } | { failure: RefreshFailure };
-const pending = new Map<string, { expires: number; result: Promise<Result> }>();
+const pending = new Map<string, { expires: number; settled: boolean; result: Promise<Result> }>();
 
 // Bounded server memory only. Cookie hashes are keys; credentials are never logged or persisted.
 // Coalesces copies of the same receipt and old cookie; different receipts still reach replay detection.
@@ -13,7 +13,13 @@ export async function renewServerSession(base: string, token: string, requestId:
   const key = createHash("sha256").update(token).digest("hex") + ":" + requestId;
   const existing = pending.get(key);
   if (existing) return existing.result;
-  if (pending.size >= 256) return { failure: refreshFailure(503) };
+  if (pending.size >= 256) {
+    // A settled entry only saves a duplicate round trip. Drop the oldest one rather than refuse every
+    // renewal: anyone can fill the map with made-up cookies and request ids, so only in-flight calls count.
+    const oldest = [...pending].find(([, value]) => value.settled)?.[0];
+    if (oldest === undefined) return { failure: refreshFailure(503) };
+    pending.delete(oldest);
+  }
   const result = (async (): Promise<Result> => {
     try {
       const upstream = await fetch(`${base}/auth/refresh`, {
@@ -28,8 +34,10 @@ export async function renewServerSession(base: string, token: string, requestId:
       return session ? { session } : { failure: refreshFailure(502) };
     } catch { return { failure: refreshFailure(503) }; }
   })();
-  pending.set(key, { expires: now + 20_000, result });
+  const entry = { expires: now + 20_000, settled: false, result };
+  pending.set(key, entry);
   const value = await result;
+  entry.settled = true;
   if ("failure" in value && !value.failure.terminal) pending.delete(key);
   return value;
 }

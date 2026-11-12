@@ -10,7 +10,7 @@ import {BottomAction} from '../components/BottomAction';
 import {ChoiceChip, ChoiceRow, Segmented} from '../components/Choices';
 import {StatusBadge} from '../components/StatusBadge';
 import {Card} from '../components/ui';
-import {vehicleModel} from '../domain/application';
+import {knownKind, VEHICLE_KINDS, vehicleModel} from '../domain/application';
 import {riderMessage} from '../domain/problem';
 import {riderKeys} from '../state/riderQueries';
 import {RIDER_LANGUAGES, serverLanguage, useStrings} from '../strings/StringsProvider';
@@ -19,14 +19,13 @@ import {RIDER_LANGUAGES, serverLanguage, useStrings} from '../strings/StringsPro
 const PLATE = /^([A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}|[0-9]{2}BH[0-9]{4}[A-Z]{1,2})$/;
 const UPI = /^[a-zA-Z0-9._-]{2,64}@[a-zA-Z]{2,32}$/;
 const IFSC = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-const VEHICLES: VehicleKind[] = ['PETROL', 'ELECTRIC', 'BICYCLE'];
 
 /** The words of a name in any order or case: "Gopi K" is still "K Gopi" (the server's FleetRules.sameName). */
 export const nameWords = (name: string) => name.toLowerCase().split(/[\s.,'-]+/).filter(Boolean).sort().join(' ');
 /** "  Ravi   Kumar " is "Ravi Kumar". */
 export const cleanName = (name: string) => name.trim().replace(/\s+/g, ' ');
 
-/** What the rider rides: the kind and, for a motor vehicle, the plate and the make and model as typed. */
+/** What the rider rides: the kind, the plate and the make and model as typed. */
 export interface VehicleDraft {
   kind: VehicleKind;
   plate: string;
@@ -38,9 +37,6 @@ export interface VehicleDraft {
  * is on file) an empty plate keeps it. An empty make and model is left out, which keeps the one on file.
  */
 export function vehicleFields(draft: VehicleDraft, keepPlate: boolean): Pick<RiderSignUp, 'vehicleKind' | 'vehicleRegNumber' | 'vehicleModel'> | null {
-  if (draft.kind === 'BICYCLE') {
-    return {vehicleKind: 'BICYCLE'};
-  }
   const plate = draft.plate.replace(/[\s-]/g, '').toUpperCase();
   if (!PLATE.test(plate) && !(plate === '' && keepPlate)) {
     return null;
@@ -74,7 +70,7 @@ export function LanguageField() {
   );
 }
 
-/** What will you ride, then the plate and the make and model for anything with an engine. */
+/** What will you ride, then the plate and the make and model. */
 export function VehicleFields({
   draft,
   onChange,
@@ -94,7 +90,7 @@ export function VehicleFields({
     <>
       <Text style={styles.label}>{j.vehicle}</Text>
       <ChoiceRow label={j.vehicle}>
-        {VEHICLES.map(kind => (
+        {VEHICLE_KINDS.map(kind => (
           <ChoiceChip
             key={kind}
             label={j.vehicles[kind]}
@@ -104,31 +100,27 @@ export function VehicleFields({
           />
         ))}
       </ChoiceRow>
-      {draft.kind === 'BICYCLE' ? null : (
-        <>
-          <InputField
-            label={j.plate}
-            placeholder="TS09EA1234"
-            value={draft.plate}
-            onChangeText={plate => onChange({...draft, plate})}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            maxLength={14}
-            error={plateError}
-            helperText={keepPlate ? strings.account.details.keepPlate(keepPlate) : undefined}
-            testID="rider-join-plate"
-          />
-          <InputField
-            label={ap.model}
-            placeholder="Honda Activa 6G"
-            value={draft.model}
-            onChangeText={model => onChange({...draft, model})}
-            maxLength={40}
-            helperText={ap.modelHint}
-            testID="rider-join-model"
-          />
-        </>
-      )}
+      <InputField
+        label={j.plate}
+        placeholder="TS09EA1234"
+        value={draft.plate}
+        onChangeText={plate => onChange({...draft, plate})}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        maxLength={14}
+        error={plateError}
+        helperText={keepPlate ? strings.account.details.keepPlate(keepPlate) : undefined}
+        testID="rider-join-plate"
+      />
+      <InputField
+        label={ap.model}
+        placeholder="Honda Activa 6G"
+        value={draft.model}
+        onChangeText={model => onChange({...draft, model})}
+        maxLength={40}
+        helperText={ap.modelHint}
+        testID="rider-join-model"
+      />
     </>
   );
 }
@@ -208,13 +200,14 @@ export function DetailsCard({me, profile}: {me: RiderMe; profile: RiderProfile})
   const [saved, setSaved] = useState(false);
   const {vehicle} = profile;
   const model = vehicleModel(vehicle.label);
+  const kind = knownKind(vehicle.kind);
 
   if (editing) {
     return (
       <DetailsForm
         edit={{
           name: me.name,
-          vehicle: vehicle.kind,
+          vehicle: kind,
           model,
           plateMasked: vehicle.regNumberMasked,
           payoutSent: Boolean(profile.payoutAccountSubmitted),
@@ -231,7 +224,7 @@ export function DetailsCard({me, profile}: {me: RiderMe; profile: RiderProfile})
     // The language the app shows; the server keeps English for a Kannada reader (serverLanguage).
     [d.language, strings.languages[language]],
     // The make and model when the rider gave one; else the kind they ride.
-    [d.vehicle, model ?? (vehicle.kind ? strings.account.join.vehicles[vehicle.kind] : vehicle.label)],
+    [d.vehicle, model ?? (kind ? strings.account.join.vehicles[kind] : vehicle.label)],
   ];
   if (vehicle.regNumberMasked) {
     rows.push([d.plate, vehicle.regNumberMasked]);

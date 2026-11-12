@@ -9,7 +9,7 @@ export type DeliveryStatusPresentation = { label: string; description: string; s
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATUS_SET = new Set<string>(DELIVERY_STATUSES);
 const PRESENTATION: Record<DeliveryStatus, DeliveryStatusPresentation> = {
-  PENDING: { label: "Delivery is being prepared", description: "We are preparing the delivery request for your chef-specific order.", stage: 0, terminal: false, attention: false },
+  PENDING: { label: "Delivery is being prepared", description: "We are arranging delivery for your order.", stage: 0, terminal: false, attention: false },
   SEARCHING: { label: "Finding a delivery partner", description: "Craves is searching for an available delivery partner.", stage: 1, terminal: false, attention: false },
   COURIER_ASSIGNED: { label: "Delivery partner assigned", description: "A delivery partner has accepted the delivery.", stage: 2, terminal: false, attention: false },
   COURIER_TO_PICKUP: { label: "Heading to the chef", description: "Your delivery partner is travelling to the pickup location.", stage: 3, terminal: false, attention: false },
@@ -26,7 +26,7 @@ const PRESENTATION: Record<DeliveryStatus, DeliveryStatusPresentation> = {
 };
 export function isUuid(value: string): boolean { return UUID.test(value.trim()); }
 export function isDeliveryStatus(value: unknown): value is DeliveryStatus { return typeof value === "string" && STATUS_SET.has(value); }
-export function presentationFor(status: DeliveryStatus | null): DeliveryStatusPresentation { return status ? PRESENTATION[status] : { label: "Waiting for delivery updates", description: "Tracking appears after a delivery job is created.", stage: 0, terminal: false, attention: false }; }
+export function presentationFor(status: DeliveryStatus | null): DeliveryStatusPresentation { return status ? PRESENTATION[status] : { label: "Waiting for delivery updates", description: "Tracking appears once delivery is booked.", stage: 0, terminal: false, attention: false }; }
 export function shouldAutoRefresh(status: DeliveryStatus | null): boolean { return status === null || !PRESENTATION[status].terminal; }
 export function safeTrackingUrl(value: unknown): string | null { if (typeof value !== "string" || value.length > 2048) return null; try { const url = new URL(value); return url.protocol === "https:" ? url.toString() : null; } catch { return null; } }
 function nullableString(value: unknown, max: number): string | null { return value == null ? null : typeof value === "string" && value.length <= max ? value : null; }

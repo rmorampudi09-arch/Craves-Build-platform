@@ -215,13 +215,12 @@ public class FleetSetupService {
             args.addAll(given);
             args.addAll(rules);
             args.add(byTravelTime);
-            // The 2026-11-v2 rule lines stay as riders see them. shortcut: ops cannot set them from this API, add them to
-            // DispatchPolicyInput when the dispatcher acts on them.
-            // From the latest published version (one scheduled ahead included), so a version set during the 14 days before
-            // 2026-11-v2 starts does not drop its lines; before any is published, from the draft riders see.
-            DispatchRules shown = jdbc.query("SELECT joint_matching, next_order_offers FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED' "
-                + "AND withdrawn_at IS NULL ORDER BY effective_from DESC, created_at DESC LIMIT 1", (row, n) -> new DispatchRules(0, 0, 0, false,
-                row.getBoolean("joint_matching"), row.getBoolean("next_order_offers"))).stream().findFirst().orElseGet(() -> policies.dispatchRules(null));
+            // The 2026-11-v2 rule lines (joint matching, next-order offers) stay exactly as riders see them now: the dispatcher
+            // does not act on them yet, so a version must neither add nor drop them. Taking them from a version scheduled
+            // later made every save, the emergency stop included, "a change to how orders are offered" needing 14 days'
+            // notice (6 Nov 2026). shortcut: ops cannot set them from this API; add them to DispatchPolicyInput, with
+            // notice, when the dispatcher acts on them.
+            DispatchRules shown = policies.dispatchRules(null);
             args.add(shown.jointMatching());
             args.add(shown.nextOrderOffers());
             args.add(admin.write(ranges));
@@ -248,8 +247,8 @@ public class FleetSetupService {
         if (atOnce < 1 || atOnce > 3) {
             throw FleetApiException.invalid("Offer each order to 1, 2 or 3 riders at a time.");
         }
-        if (rounds < 1 || rounds > 5) {
-            throw FleetApiException.invalid("Run 1 to 5 rounds of offers.");
+        if (rounds < 0 || rounds > 5) {
+            throw FleetApiException.invalid("Run 1 to 5 rounds of offers, or 0 for no limit.");
         }
         if (band < 0 || band > 5000) {
             throw FleetApiException.invalid("Set the fair band from 0 (nearest first) to 5 km.");

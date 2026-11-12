@@ -32,7 +32,7 @@ public class CheckoutOperationService {
         if (operation.checkoutId() != null) return new Response(operationId, "SUCCEEDED", operation.checkoutId());
         orders.requireUnchangedCart(principal, request.expectedCart());
         // Reuse proxied checkout: existing pricing, launch policy, active owned address and immutable snapshots.
-        var checkout = orders.checkout(principal, new CheckoutRequest(request.deliveryAddressId(), request.note(), null, request.batchHolds(), request.promotion()));
+        var checkout = orders.checkout(principal, new CheckoutRequest(request.deliveryAddressId(), request.note(), null, request.batchHolds(), request.promotion(), request.menuOptions()));
         jdbc.update("UPDATE order_schema.checkout_operation SET checkout_id = ?, completed_at = now() "
             + "WHERE customer_identity_id = ? AND operation_id = ?", checkout.id(), principal.identityId(), operationId);
         return new Response(operationId, "SUCCEEDED", checkout.id());

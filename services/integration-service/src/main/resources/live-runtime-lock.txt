@@ -45,6 +45,7 @@ in.craves.integration.web.ChefTaxProfileController
 in.craves.integration.web.DeliveryIntelligenceController
 in.craves.integration.web.DeliveryOrchestrationInternalController
 in.craves.integration.web.DeliveryProviderReadinessController
+in.craves.integration.web.FinanceInsightsController
 in.craves.integration.web.FinancePayoutReconciliationController
 in.craves.integration.web.FinancePolicyController
 in.craves.integration.web.FinanceSourceOperationsController

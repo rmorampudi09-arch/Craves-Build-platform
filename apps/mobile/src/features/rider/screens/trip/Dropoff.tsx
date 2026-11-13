@@ -1,12 +1,14 @@
 // Steps 3 and 4 of the trip: ride to the customer, then hand over (docs/riders/SCREENS.md 11 and 12).
 import React, {type PropsWithChildren, useState} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Text, View} from 'react-native';
 import {Icon} from '../../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, radius, spacing, typography} from '../../../../design/tokens';
+import {borderWidth, colors, font, iconSize, radius, spacing, themedStyles, typography} from '../../theme';
 import {DEMO_OTP} from '../../api/riderApi.mock';
 import {BottomAction} from '../../components/BottomAction';
 import {CodeBoxes} from '../../components/CodeBoxes';
+import {PhasePanel} from '../../components/PhasePanel';
 import {RefusalNotices} from '../../components/RefusalNotices';
+import {SlideToConfirm} from '../../components/SlideToConfirm';
 import {Card, RiderScreen} from '../../components/ui';
 import {distanceMeters, formatClock, formatKm, formatRupees} from '../../domain/format';
 import {riderOnlineService} from '../../native/riderOnlineService';
@@ -28,7 +30,6 @@ export function ToCustomer({trip, run, syncing}: StepProps) {
   const maskedCalls = useRiderMe().data?.features.maskedCalls === true;
   const distance = distanceLine(trip.dropDistanceM, trip.customer, t);
   const rows: [string, string][] = [
-    ...(distance ? [[t.distance, distance] as [string, string]] : []),
     [t.handOver, t.codeFromCustomer],
     [t.payForTrip, t.payPlusWait(formatRupees(trip.payPaise))],
   ];
@@ -38,7 +39,7 @@ export function ToCustomer({trip, run, syncing}: StepProps) {
       testID="rider-to-customer"
       footer={
         <View style={styles.tight}>
-          <BottomAction label={t.atDoor} onPress={() => run('arrived-drop')} testID="rider-reached-customer" />
+          <SlideToConfirm label={t.atDoor} onConfirm={() => run('arrived-drop')} testID="rider-reached-customer" />
           <Text style={[text.small, text.center]} testID="rider-no-deadline">
             {t.noDeadline}
           </Text>
@@ -49,7 +50,7 @@ export function ToCustomer({trip, run, syncing}: StepProps) {
       </Text>
       <SyncNote show={syncing} />
       <RefusalNotices tripId={trip.tripId} />
-      <PlaceCard label={t.deliverTo} name={trip.customer.firstName} place={trip.customer} />
+      <PlaceCard label={t.deliverTo} name={trip.customer.firstName} place={trip.customer} phase="customer" distance={distance} />
       <TripRows rows={rows} />
       <View style={styles.tight}>
         <TwoUp
@@ -124,17 +125,13 @@ export function Deliver({
       <SyncNote show={syncing} />
       <RefusalNotices tripId={trip.tripId} />
       <Text style={text.small}>{t.lockedWith(formatRupees(trip.payPaise), t.orderTitle(trip.orderCode))}</Text>
-      <View style={styles.who}>
-        <View style={styles.whoText}>
-          <Text accessibilityRole="header" style={text.heading}>
-            {name}
-          </Text>
-          <Text style={[text.body, text.secondary]}>{`${trip.customer.address}, ${trip.customer.area}`}</Text>
-        </View>
+      <PhasePanel phase="customer" verb={t.handOver} name={name} lines={[`${trip.customer.address}, ${trip.customer.area}`]}>
         {distance !== null ? (
-          <DropChip near={distance <= NEAR_DROP_M} label={distance <= NEAR_DROP_M ? t.nearDrop : t.farDrop(formatKm(distance))} />
+          <View style={styles.chipRow}>
+            <DropChip near={distance <= NEAR_DROP_M} label={distance <= NEAR_DROP_M ? t.nearDrop : t.farDrop(formatKm(distance))} />
+          </View>
         ) : null}
-      </View>
+      </PhasePanel>
       <Text style={[text.body, text.secondary]}>{t.handoverNote}</Text>
       <Fieldset legend={t.otpTitle(name)}>
         <CodeBoxes
@@ -189,10 +186,8 @@ function Fieldset({legend, children}: PropsWithChildren<{legend: string}>) {
   );
 }
 
-const styles = StyleSheet.create({
-  // The chip moves under the name when both no longer fit on one line (long distance text, large font).
-  who: {flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm},
-  whoText: {flexGrow: 1, flexShrink: 1, flexBasis: 140},
+const styles = themedStyles(c => ({
+  chipRow: {flexDirection: 'row', marginTop: spacing.xs},
   chip: {
     minHeight: 24,
     flexDirection: 'row',
@@ -202,17 +197,17 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: radius.pill,
   },
-  chipText: {fontSize: typography.small, fontWeight: fontWeight.bold},
+  chipText: {fontSize: typography.small, fontFamily: font.bold},
   // The legend's white backing hides the line behind it; 6 dp either side, text in line with the card text.
   legendRow: {position: 'absolute', top: 0, left: spacing.md + borderWidth.standard - 6, right: spacing.md - 6, zIndex: 1, flexDirection: 'row'},
-  legend: {flexShrink: 1, paddingHorizontal: 6, backgroundColor: colors.white},
+  legend: {flexShrink: 1, paddingHorizontal: 6, backgroundColor: c.surface},
   fieldset: {
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radius.md,
     borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
+    borderColor: c.border,
+    backgroundColor: c.surface,
   },
   tight: {gap: spacing.xs},
-});
+}));

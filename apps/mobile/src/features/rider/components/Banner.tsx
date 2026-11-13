@@ -1,16 +1,17 @@
 import React from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Text, View} from 'react-native';
 import {Icon, type IconName} from '../../../shared/components';
-import {colors, fontWeight, iconSize, radius, spacing, typography} from '../../../design/tokens';
+import {colors, font, iconSize, radius, spacing, themedStyles, typography} from '../theme';
 
 export type BannerTone = 'info' | 'warning' | 'success';
 
 // info is the designs' neutral banner (muted fill): the info blue is kept for the "Checking" badge only.
-const TONES: Record<BannerTone, {fill: string; text: string; icon: IconName}> = {
+// A function, not a constant: the colours follow the rider's Day/Night choice.
+const tones = (): Record<BannerTone, {fill: string; text: string; icon: IconName}> => ({
   info: {fill: colors.muted, text: colors.textPrimary, icon: 'alert'},
   warning: {fill: colors.warningSoft, text: colors.warningText, icon: 'alert'},
   success: {fill: colors.successSoft, text: colors.successText, icon: 'shield-check-outline'},
-};
+});
 
 /**
  * A soft-filled note with no border (docs/riders/SCREENS.md 0.8): a server banner, a reassurance, a hold reason.
@@ -33,7 +34,7 @@ export function Banner({
   inset?: boolean;
   testID?: string;
 }) {
-  const look = TONES[tone];
+  const look = tones()[tone];
   const glyph = icon === undefined ? look.icon : icon;
   const textStyle = [styles.text, {color: look.text}];
   return (
@@ -48,11 +49,11 @@ export function Banner({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   // Text starts 50 dp in (16 + icon 24 + 10); inside a card 42 dp (12 + 24 + 6).
   banner: {flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: spacing.md, borderRadius: radius.md},
   inset: {gap: 6, padding: spacing.sm},
   lines: {flex: 1, gap: spacing.xxs},
-  text: {fontSize: typography.body},
-  bold: {fontWeight: fontWeight.bold},
-});
+  text: {fontFamily: font.regular, fontSize: typography.body},
+  bold: {fontFamily: font.bold},
+}));

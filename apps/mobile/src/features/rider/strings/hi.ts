@@ -6,6 +6,9 @@ import type {RiderStrings} from './en';
 // show it for that review.
 export const hi: RiderStrings = {
   common: {
+    // SlideToConfirm: a slide, or a tap and a second tap, so a bump never sends a trip step.
+    slideHint: 'पक्का करने के लिए खिसकाएँ, या दो बार टैप करें',
+    tapAgain: 'पक्का करने के लिए फिर टैप करें',
     retry: 'फिर से कोशिश करें',
     loading: 'लोड हो रहा है…',
     offline: 'कनेक्शन नहीं है। फिर से कोशिश कर रहे हैं।',
@@ -76,6 +79,8 @@ export const hi: RiderStrings = {
   } as Record<string, string>,
   tabs: {home: 'होम', earnings: 'कमाई', profile: 'प्रोफ़ाइल'},
   status: {
+    // The route strip's four stops (StepBar).
+    route: ['किचन की ओर', 'किचन पर', 'ग्राहक की ओर', 'सौंपें'],
     offline: 'ऑफ़लाइन',
     waiting: 'ऑनलाइन · ऑर्डर का इंतज़ार',
     trip: (step: number) => `ट्रिप · 4 में से स्टेप ${step}`,
@@ -459,6 +464,10 @@ export const hi: RiderStrings = {
     whyHome: (km: string) => `आपके घर के रास्ते में: इस ड्रॉप के बाद आप घर से ${km} कि.मी. और पास होंगे।`,
   },
   trip: {
+    // The kitchen's code board and the hand-over keypad (redesign R1).
+    showChef: 'शेफ़ को दिखाएँ',
+    showChefNote: 'फ़ोन शेफ़ की ओर दिखाएँ। बंद करने के लिए कहीं भी टैप करें।',
+    deleteDigit: 'एक अंक मिटाएँ',
     titles: {
       TO_KITCHEN: 'किचन जाएँ',
       AT_KITCHEN: 'किचन पर',
@@ -688,6 +697,11 @@ export const hi: RiderStrings = {
     failedNote: 'जो पेआउट विफल हो (गलत खाता, बैंक बंद) वह अगले कार्यदिवस फिर भेजा जाता है और बैंक के कारण के साथ यहाँ दिखता है। बैंक खाता बदलना आपकी सुरक्षा के लिए ऑप्स के साथ आमने-सामने होता है।',
   },
   profile: {
+    // Day or Night (theme.ts); the rider's choice stays on the phone.
+    screenTitle: 'स्क्रीन',
+    day: 'दिन',
+    night: 'रात',
+    screenNote: 'रात वाली स्क्रीन गहरी है, सूरज ढलने के बाद चलाने के लिए। कभी भी बदलें।',
     title: 'प्रोफ़ाइल',
     ordersTitle: 'आपको मिलने वाले ऑर्डर',
     ordersBody:

@@ -1,7 +1,7 @@
 import React, {type ReactNode} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Text, View} from 'react-native';
 import {Icon} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, radius, spacing, typography} from '../../../design/tokens';
+import {borderWidth, colors, font, iconSize, radius, spacing, themedStyles, typography} from '../theme';
 import {useStrings} from '../strings/StringsProvider';
 
 export type TimelineState = 'done' | 'current' | 'todo';
@@ -31,7 +31,7 @@ export function Timeline({items}: {items: TimelineItem[]}) {
           <View key={item.title} style={styles.row}>
             <View style={styles.rail}>
               <View style={[styles.circle, done && styles.circleDone, item.state === 'current' && styles.circleCurrent]}>
-                {done ? <Icon name="check" size={iconSize.xs} color={colors.white} surface={false} /> : null}
+                {done ? <Icon name="check" size={iconSize.xs} color={colors.onSuccess} surface={false} /> : null}
                 {item.state === 'current' ? <Text style={styles.number}>{index + 1}</Text> : null}
               </View>
               {last ? null : <View style={[styles.line, done && styles.lineDone]} />}
@@ -55,7 +55,7 @@ export function Timeline({items}: {items: TimelineItem[]}) {
 
 const CIRCLE = 28;
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   row: {flexDirection: 'row', gap: spacing.sm},
   rail: {width: CIRCLE, alignItems: 'center'},
   circle: {
@@ -65,18 +65,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radius.pill,
     borderWidth: borderWidth.strong,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.white,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surface,
   },
-  circleDone: {borderColor: colors.success, backgroundColor: colors.success},
-  circleCurrent: {borderColor: colors.textPrimary},
-  number: {fontSize: 13, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  line: {flex: 1, width: 2, minHeight: spacing.md, marginVertical: spacing.xxs, backgroundColor: colors.border},
-  lineDone: {backgroundColor: colors.success},
+  circleDone: {borderColor: c.success, backgroundColor: c.success},
+  circleCurrent: {borderColor: c.textPrimary},
+  number: {fontSize: 13, fontFamily: font.bold, color: c.textPrimary},
+  line: {flex: 1, width: 2, minHeight: spacing.md, marginVertical: spacing.xxs, backgroundColor: c.border},
+  lineDone: {backgroundColor: c.success},
   // The first line of text sits level with the middle of its circle.
   text: {flex: 1, gap: spacing.xs, paddingTop: 3},
   space: {paddingBottom: spacing.md},
-  title: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  later: {color: colors.textSecondary},
-  body: {fontSize: typography.body, color: colors.textSecondary},
-});
+  title: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
+  later: {color: c.textSecondary},
+  body: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
+}));

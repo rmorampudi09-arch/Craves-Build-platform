@@ -1,7 +1,7 @@
 import React from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Text, View} from 'react-native';
 import {Icon} from '../../../shared/components';
-import {colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
+import {colors, font, iconSize, spacing, themedStyles, typography} from '../theme';
 import {useRiderShell} from '../navigation';
 import {useUnreachable} from '../state/connection';
 import {usePendingActions} from '../state/tripQueue';
@@ -27,14 +27,14 @@ function OfflineStrip() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   strip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    backgroundColor: colors.muted,
+    backgroundColor: c.muted,
   },
-  text: {flex: 1, fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.textPrimary},
-});
+  text: {flex: 1, fontSize: typography.small, fontFamily: font.bold, color: c.textPrimary},
+}));

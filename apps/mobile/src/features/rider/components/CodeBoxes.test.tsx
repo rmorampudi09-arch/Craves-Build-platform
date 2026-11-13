@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
 import {StyleSheet, Text, TextInput} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
-import {borderWidth, colors} from '../../../design/tokens';
+import {colors} from '../theme';
 import {CodeBoxes} from './CodeBoxes';
 
 let tree: renderer.ReactTestRenderer;
@@ -67,13 +67,23 @@ describe('CodeBoxes', () => {
     expect(hidden.length).toBeGreaterThan(0);
   });
 
-  it('marks the next box while the field has focus', () => {
+  it('marks the next box, and keeps the system keyboard down for its own number pad', () => {
     render({initial: '47'});
-    expect(boxStyle(2).borderWidth).toBe(borderWidth.standard);
-    act(() => input().props.onFocus());
-    expect(boxStyle(2).borderWidth).toBe(borderWidth.strong);
-    act(() => input().props.onBlur());
-    expect(boxStyle(2).borderWidth).toBe(borderWidth.standard);
+    expect(boxStyle(2).borderColor).toBe(colors.textPrimary);
+    expect(boxStyle(3).borderColor).toBe(colors.borderStrong);
+    expect(input().props.showSoftInputOnFocus).toBe(false);
+  });
+
+  it('types and deletes with the number pad', () => {
+    render({initial: '47'});
+    const key = (k: string) => tree.root.find(node => node.props.testID === `otp-key-${k}` && typeof node.props.onPress === 'function');
+    act(() => key('1').props.onPress());
+    expect(digits()).toEqual(['4', '7', '1', '']);
+    act(() => key('9').props.onPress());
+    act(() => key('5').props.onPress());
+    expect(onChange).toHaveBeenLastCalledWith('4719');
+    act(() => key('back').props.onPress());
+    expect(digits()).toEqual(['4', '7', '1', '']);
   });
 
   it('says how many tries are left after a wrong code', () => {
@@ -89,5 +99,6 @@ describe('CodeBoxes', () => {
     expect(input().props.editable).toBe(false);
     expect(input().props.accessibilityState).toEqual({disabled: true});
     expect(boxStyle(0).backgroundColor).toBe(colors.muted);
+    expect(tree.root.find(node => node.props.testID === 'otp-key-1' && typeof node.props.onPress === 'function').props.disabled).toBe(true);
   });
 });

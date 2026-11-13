@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
-import {Linking, StyleSheet, Text, View} from 'react-native';
-import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
+import {Linking, Text, View} from 'react-native';
+import {font, spacing, themedStyles, typography} from '../theme';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, ProblemCard} from '../components/StateCard';
@@ -138,11 +138,11 @@ export function AccountStatusScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   intro: {gap: spacing.xs},
   timeline: {gap: spacing.md},
-  body: {fontSize: typography.body, color: colors.textPrimary},
-  secondary: {fontSize: typography.body, color: colors.textSecondary},
-  strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  label: {fontSize: typography.small, color: colors.textSecondary},
-});
+  body: {fontFamily: font.regular, fontSize: typography.body, color: c.textPrimary},
+  secondary: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
+  strong: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
+  label: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
+}));

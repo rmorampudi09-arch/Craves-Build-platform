@@ -1,7 +1,7 @@
 // How the trip ended (docs/riders/SCREENS.md 14): delivered, or failed / cancelled in the same layout.
 import React, {useState} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
-import {colors, fontWeight, radius, spacing} from '../../../../design/tokens';
+import {Text, View} from 'react-native';
+import {font, radius, spacing, themedStyles, typography} from '../../theme';
 import type {Trip, TripStep} from '../../api/contract';
 import {BottomAction} from '../../components/BottomAction';
 import {RefusalNotices} from '../../components/RefusalNotices';
@@ -98,17 +98,17 @@ export function TripEnd({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   todayLeft: {flex: 1, gap: spacing.xxs},
-  // The header block as drawn: green for a delivery, warm grey for a trip that didn't end with one.
+  // The header block: deep green with white words for a delivery, Day or Night; warm grey for a trip that didn't end with one.
   top: {gap: spacing.xxs, padding: spacing.md, borderRadius: radius.lg},
-  done: {backgroundColor: colors.success},
-  notDone: {backgroundColor: colors.surfaceMuted},
-  onGreen: {color: colors.successSoft},
-  onGreenStrong: {color: colors.white},
-  pay: {fontSize: 44, lineHeight: 48, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
+  done: {backgroundColor: c.doneHead},
+  notDone: {backgroundColor: c.surfaceMuted},
+  onGreen: {color: c.onDoneHeadSoft},
+  onGreenStrong: {color: c.white},
+  pay: {fontSize: typography.money, fontFamily: font.display, color: c.textPrimary, fontVariant: ['tabular-nums']},
   lines: {gap: spacing.xs},
   today: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   tabular: {fontVariant: ['tabular-nums']},
   footer: {gap: spacing.xs},
-});
+}));

@@ -1,88 +1,108 @@
 ---
 version: alpha
 name: Craves Riders
-description: "The Craves delivery-partner app for Android riders in Hyderabad: flat white surfaces, 1 dp warm-grey borders, espresso text, one flame-red action per screen and a red SOS on every working screen. Built for a phone held one-handed on a scooter in sun or rain, where pay, codes and timers must read at a glance and nothing ever pressures the rider on time."
+description: "The Craves delivery-partner app for Android riders in Hyderabad: surface cards on a warm ground, Barlow signage type, peach kitchen and mint customer panels, one flame-red action per screen, a red SOS on every working screen, Day by default and Night by choice. Built for a phone held one-handed on a scooter in sun or rain, where pay, codes and timers must read at a glance and nothing ever pressures the rider on time."
 
 colors:
   flameRed: "#F62E18"
   textPrimary: "#261A15"
   espresso: "#261A15"
-  textSecondary: "#706864"
+  textSecondary: "#5E524C"
   placeholder: "#7D7570"
   border: "#E3DDD8"
-  borderStrong: "#D5CEC8"
+  borderStrong: "#CDC4BE"
   white: "#FFFFFF"
-  muted: "#F7F5F3"
+  muted: "#F7F4F1"
   cream: "#FFF5E9"
-  success: "#29B47B"
+  success: "#1E8A5E"
   successText: "#166B49"
-  successSoft: "#E8F7F1"
+  successSoft: "#E2F3EA"
   warning: "#D98C16"
   warningText: "#7A4A00"
-  warningSoft: "#FFF4DF"
+  warningSoft: "#FFF0D2"
   error: "#C72C21"
   errorSoft: "#FDEAE8"
   info: "#2F6FED"
   infoText: "#1F4FAF"
   infoSoft: "#EAF0FF"
+  # Redesign R1 (Nov 2026). Day values; Night values live beside them in theme.ts.
+  ground: "#F2EFEC"
+  surface: "#FFFFFF"
+  redText: "#C4230F"
+  inverse: "#261A15"
+  onInverse: "#FFFFFF"
+  kitchen: "#FFE4CC"
+  kitchenInk: "#261A15"
+  kitchenSub: "#7A3A10"
+  kitchenMark: "#C2510C"
+  drop: "#D8F1E5"
+  dropInk: "#261A15"
+  dropSub: "#0B5A40"
+  dropMark: "#0B6B4D"
+  sos: "#C72C21"
+  doneHead: "#0B6B4D"
 
 typography:
   offerPay:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 72px
-    fontWeight: 900
+    fontFamily: Barlow Condensed
+    fontSize: 84px
+    fontWeight: 800
   orderCode:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 60px
-    fontWeight: 900
-    letterSpacing: 2px
+    fontFamily: Barlow Condensed
+    fontSize: 56px
+    fontWeight: 800
+    letterSpacing: 3px
   otpDigit:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 36px
-    fontWeight: 700
+    fontFamily: Barlow Condensed
+    fontSize: 40px
+    fontWeight: 800
+  money:
+    fontFamily: Barlow Condensed
+    fontSize: 48px
+    fontWeight: 800
   title:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 30px
+    fontFamily: Barlow
+    fontSize: 32px
     fontWeight: 700
   hero:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 24px
+    fontFamily: Barlow
+    fontSize: 26px
+    fontWeight: 700
+  headerTitle:
+    fontFamily: Barlow
+    fontSize: 22px
     fontWeight: 700
   heading:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 19px
+    fontFamily: Barlow
+    fontSize: 20px
     fontWeight: 700
-  headingMedium:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 19px
-    fontWeight: 500
   button:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 16px
+    fontFamily: Barlow
+    fontSize: 19px
     fontWeight: 700
   sosLabel:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 16px
+    fontFamily: Barlow Condensed
+    fontSize: 19px
     fontWeight: 800
   bodyStrong:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 15px
+    fontFamily: Barlow
+    fontSize: 16px
     fontWeight: 700
   body:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 15px
+    fontFamily: Barlow
+    fontSize: 16px
     fontWeight: 400
   smallStrong:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 13px
-    fontWeight: 700
+    fontFamily: Barlow
+    fontSize: 14px
+    fontWeight: 600
   small:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 13px
+    fontFamily: Barlow
+    fontSize: 14px
     fontWeight: 400
   badgeCompact:
-    fontFamily: Roboto, system-ui, sans-serif
-    fontSize: 12px
+    fontFamily: Barlow
+    fontSize: 13px
     fontWeight: 700
 
 rounded:
@@ -105,11 +125,11 @@ spacing:
 
 components:
   rider-header:
-    backgroundColor: "{colors.white}"
+    backgroundColor: "{colors.ground}"
     textColor: "{colors.textPrimary}"
-    typography: "{typography.heading}"
+    typography: "{typography.headerTitle}"
     padding: "{spacing.xs} {spacing.md}"
-    height: 68px
+    height: 64px
   rider-header-back:
     backgroundColor: "{colors.white}"
     textColor: "{colors.textPrimary}"
@@ -138,10 +158,10 @@ components:
     width: 56px
     height: 48px
   card:
-    backgroundColor: "{colors.white}"
+    backgroundColor: "{colors.surface}"
     textColor: "{colors.textPrimary}"
     typography: "{typography.body}"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.lg}"
     padding: "{spacing.md}"
   hero-card:
     backgroundColor: "{colors.white}"
@@ -218,15 +238,45 @@ components:
     backgroundColor: "{colors.flameRed}"
     textColor: "{colors.white}"
     typography: "{typography.button}"
-    rounded: "{rounded.md}"
+    rounded: 18px
     padding: "0px {spacing.lg}"
-    height: 56px
+    height: 64px
   button-primary-offer:
     backgroundColor: "{colors.flameRed}"
     textColor: "{colors.white}"
-    typography: "{typography.heading}"
-    rounded: "{rounded.md}"
-    height: 64px
+    typography: "{typography.headerTitle}"
+    rounded: 18px
+    height: 72px
+  slide-to-confirm:
+    backgroundColor: "{colors.flameRed}"
+    textColor: "{colors.white}"
+    typography: "{typography.button}"
+    rounded: "{rounded.pill}"
+    height: 68px
+  phase-panel-kitchen:
+    backgroundColor: "{colors.kitchen}"
+    textColor: "{colors.kitchenInk}"
+    typography: "{typography.hero}"
+    rounded: 24px
+    padding: "{spacing.md}"
+  phase-panel-customer:
+    backgroundColor: "{colors.drop}"
+    textColor: "{colors.dropInk}"
+    typography: "{typography.hero}"
+    rounded: 24px
+    padding: "{spacing.md}"
+  code-board:
+    backgroundColor: "{colors.kitchen}"
+    textColor: "{colors.kitchenInk}"
+    typography: "{typography.orderCode}"
+    rounded: 24px
+    padding: "{spacing.md}"
+  keypad-key:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.textPrimary}"
+    typography: "{typography.title}"
+    rounded: 16px
+    height: 60px
   button-sos-call:
     backgroundColor: "{colors.error}"
     textColor: "{colors.white}"
@@ -234,10 +284,10 @@ components:
     rounded: "{rounded.md}"
     height: 72px
   button-outline:
-    backgroundColor: "{colors.white}"
+    backgroundColor: "transparent"
     textColor: "{colors.textPrimary}"
     typography: "{typography.button}"
-    rounded: "{rounded.md}"
+    rounded: 18px
     padding: "0px {spacing.lg}"
     height: 56px
   button-outline-compact:
@@ -301,11 +351,11 @@ components:
     rounded: "{rounded.lg}"
     padding: "{spacing.lg} {spacing.md}"
   otp-box:
-    backgroundColor: "{colors.white}"
+    backgroundColor: "{colors.surface}"
     textColor: "{colors.textPrimary}"
     typography: "{typography.otpDigit}"
-    rounded: "{rounded.md}"
-    size: 72px
+    rounded: 18px
+    height: 76px
   rate-card-row:
     textColor: "{colors.textSecondary}"
     typography: "{typography.body}"
@@ -368,6 +418,38 @@ components:
     height: 48px
 ---
 
+## Redesign R1 (Nov 2026): what changed
+
+Built from the clickable prototype (project doc `rider-app/REDESIGN-2026-11-13.md`, research R17). Where an older line
+below disagrees, this section and `theme.ts` win.
+
+- **One rider theme, `features/rider/theme.ts`.** The rider app no longer reads colours from `design/tokens.ts` (the
+  customer and chef apps keep it). Styles are made with `themedStyles(c => …)`, once per theme; inline colours read the
+  live `colors` while rendering. `useStrings()` subscribes to the theme, so every screen repaints on a switch.
+- **Day by default, Night by choice** (Profile → Screen). Night: ground #0F0D0C, surface #1A1716, text #F6F1EE; the
+  kitchen panel stays dark brown #3A2B23 with white words and the customer panel deep green #0A5C43, as Gopi asked.
+  Nothing is smaller than 15 sp at night. `theme.test.ts` holds every text pair to 4.5:1 (marks 3:1) in both themes.
+- **Surfaces.** Cards are surface-coloured, radius 20, no line, on a warm ground (#F2EFEC). The header sits on the
+  ground with no line. Hero cards keep a 2 dp dark line, radius 24.
+- **Type.** Barlow (400, 600, 700) for reading and Barlow Condensed (700, 800) for the numbers read at arm's length:
+  pay 84, order code 56, OTP digits 40, money 48. One font file per weight, so Android never fakes a bold; Telugu,
+  Hindi and Kannada fall back to the phone's Noto. Fonts live in `android/app/src/rider/assets/fonts` (OFL).
+- **Phase panels** (`PhasePanel`): peach for the kitchen, mint for the customer, each with a chef or house mark so the
+  phase never rests on colour alone. Used on the offer (the two legs) and on every trip step. The status chip takes the
+  phase colour on a trip.
+- **Route strip** (`StepBar`): four named stops (To kitchen, At kitchen, To customer, Hand over); done stops dark, the
+  current one flame red. Unnamed when it counts something else (the application).
+- **Slide to confirm** (`SlideToConfirm`) for I've reached the kitchen, Picked up and I'm at the door: slide the knob,
+  or tap and tap again within 3 s; TalkBack's double tap confirms at once (WCAG 2.5.7).
+- **Code board** at the kitchen: the order number on a tile on the kitchen panel, with "Show to chef" for a
+  full-screen copy. **Keypad** at the door: the app's own 60 dp number pad under the OTP boxes; the system keyboard
+  stays down.
+- **Buttons.** Primary 64 dp, radius 18, white 19 sp bold on flame red (passes as large text, 3.9:1); Accept 72 dp;
+  outline 56 dp with a 2 dp line. Red text uses `redText` (#C4230F day, #FF7B66 night), never flame red.
+- **Light selfie screen** (the camera window on the ground, a red "Take selfie" button); **SOS screen** on fixed alarm
+  red #C72C21 in both themes; **Trip complete** header on fixed deep green #0B6B4D with white words.
+- **Home** shows what is ready to pay out and the next weekly payout under Today (the server's figures only).
+
 ## Overview
 
 Craves Riders is the Android app delivery partners use to go online, take an offer, carry one order from a home kitchen to a customer, and see what they earned. The rider holds the phone one-handed, often on a moving scooter in Hyderabad sun or rain, wearing a helmet, on a mid-range Xiaomi, Oppo, Vivo, Realme or Samsung phone. The design answers that scene with a quiet, high-contrast working surface.
@@ -384,7 +466,7 @@ Craves Riders is the Android app delivery partners use to go online, take an off
 - **A status chip and SOS in the header** of every working screen, so the rider always knows whether they are offline, waiting, or on which step of a trip.
 - **Big numbers only where they carry the decision:** pay on the offer, the code at the kitchen, the OTP at the door.
 - **Roboto, the system face,** in three weights: 400, 700 and 900.
-- **Light theme only for now.** Dark mode is not designed.
+- **Day by default, Night by choice** (R1 above).
 
 ## Colors
 
@@ -732,7 +814,8 @@ There is no tablet layout; the rider app is phone-only.
 
 ## Known Gaps
 
-- **Dark mode** is not designed. Ship light only and hold the theme fixed.
+- **Night** is designed (R1). Shared components the rider app still uses keep their light look by night: the `InputField` box (its label, error and helper are drawn by `RiderField`), `Icon` glyphs take a colour, and `LoadingIndicator` takes a colour.
+- **How it adds up** (the earnings breakdown in the prototype) waits for the server to send the breakdown: the app never adds money up.
 - **States now built from "States" above,** not from a PNG: app update required, suspended account, selfie refused or too large, permission denied on going online, offer taken or expired, wrong OTP and lockout, the "This week" earnings tab, empty earnings and payouts, offline and server-down on every screen. Still without a design: decline reasons, the photo-taken confirmation and mark-failed reasons (built from SCREENS.md prose).
 - **Telugu, Hindi and Kannada** are translated but hidden from riders until a native speaker signs each off (`REVIEWED_LANGUAGES` in `strings/StringsProvider.tsx`); demo builds show all four. The server stores only en, te or hi, so a Kannada reader is English there (`serverLanguage`): its own messages (terms summary, refusals the app has no words for) arrive in English.
 - **Some values are estimates.** The OTP digit size (36) and the SOS label weight (800) were read from pixels, not from a source file.

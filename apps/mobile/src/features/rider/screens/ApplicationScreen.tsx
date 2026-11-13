@@ -1,9 +1,9 @@
 import React, {useEffect, useRef, useState, type PropsWithChildren, type ReactNode} from 'react';
-import {BackHandler, Linking, StyleSheet, Text, View} from 'react-native';
+import {BackHandler, Linking, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useQueryClient, type UseQueryResult} from '@tanstack/react-query';
-import {InputField} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {RiderField} from '../components/RiderField';
+import {borderWidth, font, radius, spacing, themedStyles, typography} from '../theme';
 import type {RiderMe, RiderProfile} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {riderDevice} from '../native/riderDevice';
@@ -182,7 +182,7 @@ function AboutStep({me, draft, payoutSent, onNext}: {me: RiderMe; draft: AboutDr
     <StepScreen me={me} step="about" footer={<StepFooter label={ap.toVehicle} onNext={next} />}>
       <Text style={styles.body}>{ap.aboutBody}</Text>
       <Card style={styles.form}>
-        <InputField
+        <RiderField
           label={ap.name}
           value={name}
           onChangeText={setName}
@@ -640,7 +640,7 @@ export function ApplicationScreen({me}: {me: RiderMe}) {
   }
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   flex: {flex: 1},
   intro: {gap: spacing.xs},
   center: {textAlign: 'center'},
@@ -650,14 +650,14 @@ const styles = StyleSheet.create({
   quietAction: {alignSelf: 'flex-start', marginLeft: -spacing.xs},
   timeline: {gap: spacing.md},
   document: {gap: spacing.xs, paddingVertical: spacing.sm},
-  divider: {borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
+  divider: {borderTopWidth: borderWidth.standard, borderTopColor: c.border},
   documentRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   progress: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
-  track: {flex: 1, height: 8, borderRadius: radius.pill, backgroundColor: colors.muted, overflow: 'hidden'},
-  fill: {height: '100%', width: '100%', backgroundColor: colors.success, transformOrigin: 'left'},
-  count: {fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  small: {fontSize: typography.small, color: colors.textSecondary},
-  body: {fontSize: typography.body, color: colors.textPrimary},
-  secondary: {fontSize: typography.body, color: colors.textSecondary},
-  strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
-});
+  track: {flex: 1, height: 8, borderRadius: radius.pill, backgroundColor: c.muted, overflow: 'hidden'},
+  fill: {height: '100%', width: '100%', backgroundColor: c.success, transformOrigin: 'left'},
+  count: {fontSize: typography.small, fontFamily: font.bold, color: c.textPrimary},
+  small: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
+  body: {fontFamily: font.regular, fontSize: typography.body, color: c.textPrimary},
+  secondary: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
+  strong: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
+}));

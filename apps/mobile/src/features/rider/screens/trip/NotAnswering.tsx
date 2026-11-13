@@ -1,9 +1,9 @@
 // The customer-not-answering steps (docs/riders/SCREENS.md 13): two calls, a wait at the door, then a photo.
 import React, {useEffect, useState} from 'react';
-import {Alert, BackHandler, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Alert, BackHandler, Linking, Pressable, Text, View} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import {Chip, Icon} from '../../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, radius, spacing, typography} from '../../../../design/tokens';
+import {Icon} from '../../../../shared/components';
+import {borderWidth, colors, font, iconSize, radius, spacing, themedStyles, typography} from '../../theme';
 import {Banner} from '../../components/Banner';
 import {BottomAction} from '../../components/BottomAction';
 import {RefusalNotices} from '../../components/RefusalNotices';
@@ -13,6 +13,7 @@ import {riderDevice} from '../../native/riderDevice';
 import {riderOnlineService} from '../../native/riderOnlineService';
 import {useStrings} from '../../strings/StringsProvider';
 import {call, SyncNote, text, TripHeader, type StepProps} from './parts';
+import {ChoiceChip} from '../../components/Choices';
 
 const FAIL_REASONS = ['CUSTOMER_UNREACHABLE', 'WRONG_ADDRESS', 'CUSTOMER_REFUSED', 'UNSAFE'] as const;
 type FailReason = (typeof FAIL_REASONS)[number];
@@ -180,12 +181,11 @@ export function NotAnswering({
           </Text>
           <View style={styles.chips}>
             {FAIL_REASONS.map(reason => (
-              <Chip
+              <ChoiceChip
                 key={reason}
                 label={t.failReasons[reason]}
                 selected={failReason === reason}
                 onPress={() => setFailReason(reason)}
-                style={failReason === reason ? styles.chipSelected : undefined}
                 testID={`rider-fail-${reason}`}
               />
             ))}
@@ -232,7 +232,7 @@ function StepRow({
       <View style={styles.rowLine}>
         <View style={[styles.circle, circleStyle[state]]}>
           {state === 'done' ? (
-            <Icon name="check" size={iconSize.xs} color={colors.white} surface={false} />
+            <Icon name="check" size={iconSize.xs} color={colors.onSuccess} surface={false} />
           ) : (
             <Text style={[styles.numeral, state === 'locked' && text.secondary]}>{n}</Text>
           )}
@@ -284,22 +284,21 @@ function useHasPassed(at: number | null): boolean {
   return passed;
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   flex: {flex: 1},
   tight: {gap: spacing.xs},
   steps: {padding: 0, gap: 0},
   row: {padding: spacing.md, gap: 10},
-  divider: {borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
-  pressed: {backgroundColor: colors.muted},
+  divider: {borderTopWidth: borderWidth.standard, borderTopColor: c.border},
+  pressed: {backgroundColor: c.muted},
   rowLine: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   circle: {width: 28, height: 28, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center'},
-  numeral: {fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  numeral: {fontSize: typography.small, fontFamily: font.bold, color: c.textPrimary},
   chips: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs},
-  chipSelected: {backgroundColor: colors.textPrimary, borderColor: colors.textPrimary},
-});
+}));
 
-const circleStyle = StyleSheet.create({
-  done: {backgroundColor: colors.success},
-  current: {borderWidth: borderWidth.strong, borderColor: colors.textPrimary},
-  locked: {borderWidth: borderWidth.strong, borderColor: colors.borderStrong},
-});
+const circleStyle = themedStyles(c => ({
+  done: {backgroundColor: c.success},
+  current: {borderWidth: borderWidth.strong, borderColor: c.textPrimary},
+  locked: {borderWidth: borderWidth.strong, borderColor: c.borderStrong},
+}));

@@ -1,9 +1,9 @@
 import React from 'react';
-import {Alert, Linking, StyleSheet, Text, View} from 'react-native';
+import {Alert, Linking, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import {Badge} from '../../../shared/components';
-import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
+import {font, spacing, themedStyles, typography} from '../theme';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -198,13 +198,13 @@ export function TermsScreen({route}: RiderScreenProps<'Terms'>) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   meta: {gap: spacing.xs, alignItems: 'flex-start'},
   badge: {minHeight: 24, paddingHorizontal: 10, paddingVertical: 2},
-  cardTitle: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  body: {fontSize: typography.body, color: colors.textPrimary},
-  small: {fontSize: typography.small, color: colors.textSecondary},
+  cardTitle: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary},
+  body: {fontFamily: font.regular, fontSize: typography.body, color: c.textPrimary},
+  small: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
   footnote: {marginTop: spacing.xs},
   rulesThen: {gap: spacing.xs, marginTop: spacing.sm},
-  subTitle: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
-});
+  subTitle: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
+}));

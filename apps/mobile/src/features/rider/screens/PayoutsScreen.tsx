@@ -1,8 +1,8 @@
 import React, {useState} from 'react';
-import {Alert, StyleSheet, Text, View} from 'react-native';
+import {Alert, Text, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
 import {Icon} from '../../../shared/components';
-import {colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
+import {colors, font, iconSize, spacing, themedStyles, typography} from '../theme';
 import type {Payout} from '../api/contract';
 import {idempotencyKey, riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
@@ -120,17 +120,17 @@ export function PayoutsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  meta: {fontSize: typography.small, color: colors.textSecondary},
-  note: {fontSize: typography.body, color: colors.textSecondary},
+const styles = themedStyles(c => ({
+  meta: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
+  note: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
   centred: {textAlign: 'center'},
   withdraw: {marginTop: spacing.xs},
   iconCard: {flexDirection: 'row', alignItems: 'flex-start', gap: 10},
   iconText: {flex: 1, gap: spacing.xxs},
-  heading: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary, marginTop: spacing.xs},
+  heading: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary, marginTop: spacing.xs},
   titleRow: {flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm},
-  strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  strong: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
   grow: {flex: 1},
-  amount: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
+  amount: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary, fontVariant: ['tabular-nums']},
   statusRow: {flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm},
-});
+}));

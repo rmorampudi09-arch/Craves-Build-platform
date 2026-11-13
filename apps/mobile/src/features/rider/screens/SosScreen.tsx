@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useState} from 'react';
-import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Linking, Pressable, Text, View} from 'react-native';
 import {Icon} from '../../../shared/components';
-import {colors, fontWeight, iconSize, radius, spacing, typography} from '../../../design/tokens';
+import {colors, font, iconSize, radius, spacing, themedStyles, typography} from '../theme';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -102,12 +102,12 @@ export function SosScreen({route, navigation}: RiderScreenProps<'Sos'>) {
   );
 }
 
-const styles = StyleSheet.create({
-  // The whole screen is flame red (REDESIGN.md, Sos): the one place the colour fills the ground.
-  red: {backgroundColor: colors.flameRed},
+const styles = themedStyles(c => ({
+  // The whole screen is alarm red, the same Day or Night: white words on it pass 4.5:1, which flame red does not.
+  red: {backgroundColor: c.sos},
   intro: {gap: spacing.xs, marginTop: spacing.md},
-  title: {fontSize: typography.title, fontWeight: fontWeight.bold, color: colors.white},
-  note: {fontSize: typography.heading, fontWeight: fontWeight.medium, color: colors.white},
+  title: {fontSize: typography.title, fontFamily: font.bold, color: c.white},
+  note: {fontSize: typography.heading, fontFamily: font.semibold, color: c.white},
   status: {gap: spacing.xxs, marginTop: spacing.xs},
   again: {alignSelf: 'flex-start', marginLeft: -spacing.xs},
   big: {
@@ -120,15 +120,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
   },
-  callOps: {backgroundColor: colors.white},
-  call112: {backgroundColor: colors.espresso},
+  callOps: {backgroundColor: c.white},
+  call112: {backgroundColor: c.onWhite},
   pressed: {opacity: 0.9},
   lines: {alignItems: 'center', gap: 2},
-  bigLabel: {flexShrink: 1, fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.white, textAlign: 'center'},
-  white: {color: colors.flameRedAccessible},
-  sub: {fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.surfaceMuted, textAlign: 'center'},
+  bigLabel: {flexShrink: 1, fontSize: typography.heading, fontFamily: font.bold, color: c.white, textAlign: 'center'},
+  white: {color: c.flameRedAccessible},
+  sub: {fontSize: typography.small, fontFamily: font.bold, color: c.white, textAlign: 'center'},
   accident: {backgroundColor: 'rgba(255, 255, 255, 0.14)', borderRadius: radius.lg, padding: spacing.md, gap: spacing.xs},
-  cardTitle: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.white},
-  cardBody: {fontSize: typography.body, lineHeight: 20, color: colors.white},
-  foot: {fontSize: typography.small, lineHeight: 19, color: colors.surfaceMuted},
-});
+  cardTitle: {fontSize: typography.body, fontFamily: font.bold, color: c.white},
+  cardBody: {fontFamily: font.regular, fontSize: typography.body, color: c.white},
+  foot: {fontFamily: font.regular, fontSize: typography.small, color: c.white},
+}));

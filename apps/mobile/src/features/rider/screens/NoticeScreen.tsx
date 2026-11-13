@@ -1,8 +1,8 @@
 import React, {useState} from 'react';
-import {Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Linking, Pressable, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {InputField} from '../../../shared/components';
-import {colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {RiderField} from '../components/RiderField';
+import {font, radius, spacing, themedStyles, typography} from '../theme';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
 import {BottomAction} from '../components/BottomAction';
@@ -126,7 +126,7 @@ export function NoticeScreen() {
           {result === 'sent' ? <Banner tone="success" text={n.sideSent} testID="rider-notice-sent" /> : null}
           {writing ? (
             <Card>
-              <InputField
+              <RiderField
                 label={n.sideLabel}
                 placeholder={n.sidePlaceholder}
                 value={side}
@@ -146,22 +146,22 @@ export function NoticeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   intro: {gap: spacing.xxs},
   // The review card as drawn: warm amber, dark amber words.
-  amber: {backgroundColor: colors.warningSoft, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xxs},
-  amberTitle: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.warningText},
-  amberBody: {fontSize: typography.body, lineHeight: 22, color: colors.warningText},
+  amber: {backgroundColor: c.warningSoft, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xxs},
+  amberTitle: {fontSize: typography.heading, fontFamily: font.bold, color: c.warningText},
+  amberBody: {fontFamily: font.regular, fontSize: typography.body, lineHeight: 22, color: c.warningText},
   rows: {gap: spacing.sm},
   row: {flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm},
-  rowLabel: {fontSize: typography.body, flexShrink: 0},
-  rowValue: {flex: 1, textAlign: 'right', fontSize: typography.body, fontWeight: fontWeight.medium, color: colors.textPrimary},
-  body: {fontSize: typography.body, lineHeight: 20, color: colors.textSecondary},
+  rowLabel: {fontFamily: font.regular, fontSize: typography.body, flexShrink: 0},
+  rowValue: {flex: 1, textAlign: 'right', fontSize: typography.body, fontFamily: font.semibold, color: c.textPrimary},
+  body: {fontFamily: font.regular, fontSize: typography.body, lineHeight: 20, color: c.textSecondary},
   link: {minHeight: 44, justifyContent: 'center', alignItems: 'center'},
-  linkText: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.flameRedAccessible},
-  meta: {fontSize: typography.small, color: colors.textSecondary},
-  heading: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  linkText: {fontSize: typography.body, fontFamily: font.bold, color: c.redText},
+  meta: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
+  heading: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
   next: {marginTop: spacing.xs},
   steps: {gap: spacing.sm},
   input: {minHeight: 96, paddingVertical: spacing.sm, textAlignVertical: 'top'},
-});
+}));

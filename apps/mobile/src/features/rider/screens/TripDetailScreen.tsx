@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
-import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
+import {Text, View} from 'react-native';
+import {font, spacing, themedStyles, typography} from '../theme';
 import type {PayLine, SupportCategory, SupportIssue} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
@@ -159,13 +159,13 @@ export function TripDetailScreen({route}: RiderScreenProps<'TripDetail'>) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   summary: {gap: spacing.xxs},
-  route: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  meta: {fontSize: typography.small, color: colors.textSecondary},
+  route: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary},
+  meta: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
   centred: {textAlign: 'center'},
   amountRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs},
-  formTitle: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  formTitle: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
   // Text links line up with the card text: the 8 dp ghost padding hangs outside it.
   link: {alignSelf: 'flex-start', marginLeft: -spacing.xs},
-});
+}));

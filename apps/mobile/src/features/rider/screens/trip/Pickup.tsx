@@ -1,19 +1,18 @@
 // Steps 1 and 2 of the trip: ride to the kitchen, then collect the bag (docs/riders/SCREENS.md 9 and 10).
 import React, {memo, useEffect, useState} from 'react';
-import {Modal, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Modal, Pressable, Text, View} from 'react-native';
 import {Icon} from '../../../../shared/components';
-import {colors, iconSize, radius, spacing} from '../../../../design/tokens';
+import {colors, font, iconSize, radius, spacing, themedStyles, typography} from '../../theme';
+import type {Trip} from '../../api/contract';
 import {BottomAction} from '../../components/BottomAction';
 import {CountdownBar} from '../../components/CountdownBar';
 import {RefusalNotices} from '../../components/RefusalNotices';
+import {SlideToConfirm} from '../../components/SlideToConfirm';
 import {Card, RiderScreen} from '../../components/ui';
 import {formatClock, formatOrderCode, formatRupees, formatTimer} from '../../domain/format';
 import type {ReachedPrompt} from '../../native/riderOnlineService';
 import {useStrings} from '../../strings/StringsProvider';
 import {call, distanceLine, navigateTo, PlaceCard, SyncNote, text, TripHeader, TripRows, TwoUp, type StepProps} from './parts';
-
-// Rider-only type size (DESIGN.md typography.orderCode).
-const ORDER_CODE_SIZE = 60;
 
 export function ToKitchen({trip, run, syncing, reached, onNotYet}: StepProps & {reached?: ReachedPrompt | null; onNotYet?: () => void}) {
   const t = useStrings().strings.trip;
@@ -24,17 +23,14 @@ export function ToKitchen({trip, run, syncing, reached, onNotYet}: StepProps & {
     }
   }, [reached, run]);
   const distance = distanceLine(trip.pickupDistanceM, trip.kitchen, t);
-  const rows: [string, string][] = [
-    ...(distance ? [[t.distance, distance] as [string, string]] : []),
-    [t.foodReady, trip.chefReadyAt ? t.aboutClock(formatClock(trip.chefReadyAt)) : t.foodReadyUnknown],
-  ];
+  const rows: [string, string][] = [[t.foodReady, trip.chefReadyAt ? t.aboutClock(formatClock(trip.chefReadyAt)) : t.foodReadyUnknown]];
   return (
     <RiderScreen
       header={<TripHeader title={t.orderTitle(trip.orderCode)} trip={trip} step={1} />}
       testID="rider-to-kitchen"
       footer={
         <View style={styles.tight}>
-          <BottomAction label={t.reachedKitchen} onPress={() => run('arrived-pickup')} testID="rider-reached-kitchen" />
+          <SlideToConfirm label={t.reachedKitchen} onConfirm={() => run('arrived-pickup')} testID="rider-reached-kitchen" />
           <Text style={[text.small, text.center]}>{t.askNote}</Text>
         </View>
       }>
@@ -61,7 +57,7 @@ export function ToKitchen({trip, run, syncing, reached, onNotYet}: StepProps & {
       <Text style={text.small}>{t.lockedWith(formatRupees(trip.payPaise), trip.kitchen.kitchenName)}</Text>
       <SyncNote show={syncing} />
       <RefusalNotices tripId={trip.tripId} />
-      <PlaceCard label={t.rideTo} name={trip.kitchen.kitchenName} place={trip.kitchen} />
+      <PlaceCard label={t.rideTo} name={trip.kitchen.kitchenName} place={trip.kitchen} phase="kitchen" distance={distance} />
       <TripRows rows={rows} />
       <View style={styles.tight}>
         <TwoUp
@@ -96,7 +92,7 @@ function Check({label, checked, onToggle, testID}: {label: string; checked: bool
   return (
     <Pressable accessibilityRole="checkbox" accessibilityState={{checked}} onPress={onToggle} style={styles.check} testID={testID}>
       <View style={[styles.box, checked && styles.boxOn]}>
-        {checked ? <Icon name="check" size={iconSize.xs} color={colors.white} surface={false} /> : null}
+        {checked ? <Icon name="check" size={iconSize.xs} color={colors.onInverse} surface={false} /> : null}
       </View>
       <Text style={[text.body, styles.flex]}>{label}</Text>
     </Pressable>
@@ -119,26 +115,14 @@ export function AtKitchen({trip, run, syncing}: StepProps) {
       testID="rider-pickup-check"
       footer={
         <View style={styles.tight}>
-          <BottomAction label={t.pickedUp} onPress={() => run('picked-up')} testID="rider-picked-up" />
+          <SlideToConfirm label={t.pickedUp} onConfirm={() => run('picked-up')} testID="rider-picked-up" />
           <Text style={[text.small, text.center]}>{t.worksOffline}</Text>
         </View>
       }>
       <Text style={text.small}>{t.lockedPay(formatRupees(trip.payPaise))}</Text>
       <SyncNote show={syncing} />
       <RefusalNotices tripId={trip.tripId} />
-      <View style={styles.codeCard}>
-        <Text style={[text.body, styles.onInk]}>{t.tellChef}</Text>
-        <Text
-          accessibilityLabel={t.codeA11y(trip.orderCode.replace(/^#/, '').split('').join(' '))}
-          adjustsFontSizeToFit
-          minimumFontScale={0.5}
-          numberOfLines={1}
-          style={styles.code}
-          testID="rider-order-code">
-          {formatOrderCode(trip.orderCode)}
-        </Text>
-        <Text style={[text.body, styles.onInk]}>{t.itemsFor(trip.itemsCount, trip.customer.firstName, trip.customer.area)}</Text>
-      </View>
+      <CodeBoard trip={trip} />
       <FreeWait
         since={trip.arrivedKitchenAt ? formatClock(trip.arrivedKitchenAt) : null}
         startMs={ready === null ? null : Math.max(arrival, ready)}
@@ -149,7 +133,7 @@ export function AtKitchen({trip, run, syncing}: StepProps) {
       {trip.sealed ? (
         <View accessible style={styles.sealed} testID="rider-sealed">
           <View style={styles.tick}>
-            <Icon name="check" size={iconSize.xs} color={colors.white} surface={false} />
+            <Icon name="check" size={iconSize.xs} color={colors.onSuccess} surface={false} />
           </View>
           <View style={styles.flex}>
             <Text style={[text.body, text.bold]}>{t.sealedTitle}</Text>
@@ -185,6 +169,48 @@ export function AtKitchen({trip, run, syncing}: StepProps) {
         {lateSent ? <Text style={text.small}>{t.foodNotReadySent}</Text> : null}
       </View>
     </RiderScreen>
+  );
+}
+
+/**
+ * The kitchen's code board: the order number on the kitchen panel, as the chef's screen shows it, and "Show to chef"
+ * for a full-screen copy the chef can read across the counter (tap anywhere to close).
+ */
+function CodeBoard({trip}: {trip: Trip}) {
+  const t = useStrings().strings.trip;
+  const [shown, setShown] = useState(false);
+  const code = formatOrderCode(trip.orderCode);
+  const spelled = t.codeA11y(trip.orderCode.replace(/^#/, '').split('').join(' '));
+  const items = t.itemsFor(trip.itemsCount, trip.customer.firstName, trip.customer.area);
+  return (
+    <View style={styles.board} testID="rider-code-board">
+      <Text style={styles.boardAsk}>{t.tellChef}</Text>
+      <View style={styles.tile}>
+        <Text accessibilityLabel={spelled} adjustsFontSizeToFit minimumFontScale={0.5} numberOfLines={1} style={styles.code} testID="rider-order-code">
+          {code}
+        </Text>
+      </View>
+      <Text style={styles.boardItems}>{items}</Text>
+      <Pressable accessibilityRole="button" onPress={() => setShown(true)} style={styles.show} testID="rider-show-chef">
+        <Icon name="eye" size={iconSize.sm} color={colors.kitchenInk} surface={false} />
+        <Text style={styles.showText}>{t.showChef}</Text>
+      </Pressable>
+      <Modal visible={shown} animationType="none" statusBarTranslucent onRequestClose={() => setShown(false)}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={spelled}
+          accessibilityHint={t.showChefNote}
+          onPress={() => setShown(false)}
+          style={styles.full}
+          testID="rider-show-chef-full">
+          <Text adjustsFontSizeToFit minimumFontScale={0.3} numberOfLines={1} style={styles.fullCode}>
+            {code}
+          </Text>
+          <Text style={styles.boardItems}>{items}</Text>
+          <Text style={styles.fullNote}>{t.showChefNote}</Text>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }
 
@@ -245,29 +271,39 @@ const FreeWait = memo(function FreeWaitView({
   );
 });
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   // The reached sheet, as drawn: white, 28 dp top corners, over a dimmed trip screen.
   sheetBack: {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(38, 26, 21, 0.5)'},
-  sheet: {backgroundColor: colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: spacing.md, paddingBottom: spacing.lg, gap: spacing.sm},
-  grip: {width: 44, height: 5, borderRadius: 3, backgroundColor: colors.border, alignSelf: 'center'},
-  sheetTitle: {fontSize: 28, lineHeight: 34, fontWeight: '700', color: colors.textPrimary},
+  sheet: {backgroundColor: c.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: spacing.md, paddingBottom: spacing.lg, gap: spacing.sm},
+  grip: {width: 44, height: 5, borderRadius: 3, backgroundColor: c.border, alignSelf: 'center'},
+  sheetTitle: {fontSize: 28, lineHeight: 34, fontFamily: font.bold, color: c.textPrimary},
   center: {textAlign: 'center'},
   tight: {gap: spacing.xs},
   flex: {flex: 1},
-  // The order number as drawn: espresso card, light words, the one 60 sp number.
-  codeCard: {backgroundColor: colors.espresso, borderRadius: radius.lg, paddingVertical: spacing.lg, paddingHorizontal: spacing.md, gap: spacing.xxs},
-  onInk: {color: colors.surfaceMuted},
-  code: {
-    fontSize: ORDER_CODE_SIZE,
-    fontWeight: '900',
-    letterSpacing: 2,
-    color: colors.white,
-    fontVariant: ['tabular-nums'],
+  // The code board: the kitchen's panel colour, the number on a tile, Barlow Condensed so 8 characters fit at 56.
+  board: {alignItems: 'center', gap: 10, padding: spacing.md, borderRadius: 24, backgroundColor: c.kitchen},
+  boardAsk: {fontFamily: font.semibold, fontSize: typography.body, color: c.kitchenSub, textAlign: 'center'},
+  tile: {alignSelf: 'stretch', paddingHorizontal: spacing.md, paddingVertical: spacing.xxs, borderRadius: 14, backgroundColor: c.tile},
+  code: {fontFamily: font.display, fontSize: typography.code, letterSpacing: 3, color: c.kitchenInk, textAlign: 'center', fontVariant: ['tabular-nums']},
+  boardItems: {fontFamily: font.regular, fontSize: typography.body, color: c.kitchenInk, textAlign: 'center'},
+  show: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: 18,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    borderColor: c.kitchenInk,
   },
+  showText: {fontFamily: font.bold, fontSize: typography.body, color: c.kitchenInk},
+  full: {flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl, backgroundColor: c.kitchen},
+  fullCode: {alignSelf: 'stretch', fontFamily: font.display, fontSize: 132, letterSpacing: 4, color: c.kitchenInk, textAlign: 'center', fontVariant: ['tabular-nums']},
+  fullNote: {fontFamily: font.semibold, fontSize: typography.body, color: c.kitchenSub, textAlign: 'center'},
   checks: {gap: spacing.sm},
   check: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, minHeight: 24},
-  box: {width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center'},
-  boxOn: {backgroundColor: colors.espresso, borderColor: colors.espresso},
+  box: {width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: c.border, alignItems: 'center', justifyContent: 'center'},
+  boxOn: {backgroundColor: c.inverse, borderColor: c.inverse},
   sealed: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingHorizontal: spacing.xxs},
   tick: {
     width: iconSize.lg,
@@ -275,8 +311,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.success,
+    backgroundColor: c.success,
   },
   timerRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
   tabular: {fontVariant: ['tabular-nums']},
-});
+}));

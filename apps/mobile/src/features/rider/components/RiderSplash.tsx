@@ -1,8 +1,8 @@
 import React, {useEffect, useRef} from 'react';
-import {AccessibilityInfo, Animated, Easing, StatusBar, StyleSheet, Text, View} from 'react-native';
+import {AccessibilityInfo, Animated, Easing, StatusBar, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Svg, {Circle, G, Path, Rect} from 'react-native-svg';
-import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
+import {colors, font, spacing, themedStyles, typography} from '../theme';
 import {useStrings} from '../strings/StringsProvider';
 
 // The art is drawn on a 160 × 110 grid and shown at SCALE; the wheels turn on their own, so they are drawn apart.
@@ -113,13 +113,13 @@ export function RiderSplash() {
   );
 }
 
-const styles = StyleSheet.create({
-  splash: {flex: 1, backgroundColor: colors.flameRed},
+const styles = themedStyles(c => ({
+  splash: {flex: 1, backgroundColor: c.flameRed},
   centre: {flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl},
   stage: {width: WIDTH, alignItems: 'center'},
   wheel: {position: 'absolute', width: WHEEL, height: WHEEL},
   road: {width: WIDTH, height: 6, marginTop: spacing.xs, overflow: 'hidden'},
   dashes: {flexDirection: 'row', gap: PERIOD - DASH},
-  dash: {width: DASH, height: 6, borderRadius: 3, backgroundColor: colors.white},
-  brand: {marginTop: spacing.xl, fontSize: typography.title, fontWeight: fontWeight.bold, color: colors.white},
-});
+  dash: {width: DASH, height: 6, borderRadius: 3, backgroundColor: c.white},
+  brand: {marginTop: spacing.xl, fontSize: typography.title, fontFamily: font.bold, color: c.white},
+}));

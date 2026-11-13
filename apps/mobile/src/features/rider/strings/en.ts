@@ -3,6 +3,9 @@
 
 export const en = {
   common: {
+    // SlideToConfirm: a slide, or a tap and a second tap, so a bump never sends a trip step.
+    slideHint: 'Slide, or tap twice, to confirm',
+    tapAgain: 'Tap again to confirm',
     retry: 'Try again',
     loading: 'Loading…',
     // A slim strip on every working screen while the phone can't reach Craves (OfflineBanner).
@@ -76,6 +79,8 @@ export const en = {
   } as Record<string, string>,
   tabs: {home: 'Home', earnings: 'Earnings', profile: 'Profile'},
   status: {
+    // The route strip's four stops (StepBar).
+    route: ['To kitchen', 'At kitchen', 'To customer', 'Hand over'],
     offline: 'Offline',
     waiting: 'Online · waiting for orders',
     trip: (step: number) => `Trip · step ${step} of 4`,
@@ -456,6 +461,10 @@ export const en = {
     whyHome: (km: string) => `On your way home: the drop leaves you ${km} km nearer home.`,
   },
   trip: {
+    // The kitchen's code board and the hand-over keypad (redesign R1).
+    showChef: 'Show to chef',
+    showChefNote: 'Hold the phone up for the chef. Tap anywhere to close.',
+    deleteDigit: 'Delete a digit',
     titles: {
       TO_KITCHEN: 'Go to the kitchen',
       AT_KITCHEN: 'At the kitchen',
@@ -688,6 +697,11 @@ export const en = {
     failedNote: 'A payout that fails (wrong account, bank down) is retried the next working day and shown here with the bank\'s reason. Changing the bank account is done in person with ops, for your safety.',
   },
   profile: {
+    // Day or Night (theme.ts); the rider's choice stays on the phone.
+    screenTitle: 'Screen',
+    day: 'Day',
+    night: 'Night',
+    screenNote: 'Night is darker, for riding after sunset. Change it any time.',
     title: 'Profile',
     // Order preferences (Phase 4).
     ordersTitle: 'Orders you hear of',

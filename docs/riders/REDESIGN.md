@@ -94,3 +94,15 @@ R-02 to R-09 are added to this table as they land.
   every fleet database test does; Testcontainers is not a dependency here and was not added for this.
 - **R-01 was written from the canvas, not from the `rider-redesign-R01.patch` file**, which was not available where this
   branch was built.
+
+## R1 redesign (app 1.4.0, Nov 2026)
+
+The rider app moved to its own look, built from the clickable prototype (project docs `rider-app/REDESIGN-2026-11-13.md`
+and `rider-app/research/R17-ui-ux-redesign.md`); `apps/mobile/src/features/rider/DESIGN.md` "Redesign R1" has the
+detail. In short: a rider-only theme (`features/rider/theme.ts`) with Day by default and Night by choice, Barlow and
+Barlow Condensed (bundled in the rider flavor only), surface cards on a warm ground, peach kitchen and mint customer
+panels, a named route strip, slide-to-confirm for the three trip steps, a code board with "Show to chef", the app's own
+OTP keypad, a light selfie screen, and a payout row on Home. The customer and chef apps are untouched
+(`design/tokens.ts` is unchanged). Not built yet: the earnings "How it adds up" breakdown, which needs the server to
+send it.
+

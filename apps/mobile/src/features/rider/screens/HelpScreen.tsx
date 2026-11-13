@@ -1,8 +1,8 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Animated, Easing, Linking, Pressable, StyleSheet, Text, View} from 'react-native';
+import {Animated, Easing, Linking, Pressable, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {Icon} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
+import {borderWidth, colors, font, iconSize, spacing, themedStyles, typography} from '../theme';
 import {motionDuration} from '../../../design/motion';
 import {useReducedMotionPreference} from '../../../design/reducedMotion';
 import {BottomAction} from '../components/BottomAction';
@@ -152,23 +152,23 @@ export function HelpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   talk: {gap: spacing.sm},
-  heading: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  heading: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary},
   section: {marginTop: spacing.xs},
-  note: {fontSize: typography.body, color: colors.textSecondary},
+  note: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
   center: {textAlign: 'center'},
-  strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  strong: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
   call: {marginTop: spacing.xxs},
   list: {padding: 0, gap: 0, overflow: 'hidden'},
-  divider: {borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
-  pressed: {backgroundColor: colors.muted},
+  divider: {borderTopWidth: borderWidth.standard, borderTopColor: c.border},
+  pressed: {backgroundColor: c.muted},
   question: {minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.xxs, paddingHorizontal: spacing.md, paddingVertical: spacing.sm},
   // The glyph's own padding hangs into the card padding, so the triangle sits on the text edge.
   caret: {marginLeft: -spacing.xs},
-  questionText: {flex: 1, fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  answer: {paddingHorizontal: spacing.md, paddingBottom: spacing.md, fontSize: typography.body, color: colors.textSecondary},
+  questionText: {flex: 1, fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
+  answer: {fontFamily: font.regular, paddingHorizontal: spacing.md, paddingBottom: spacing.md, fontSize: typography.body, color: c.textSecondary},
   trip: {minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingLeft: spacing.md, paddingRight: spacing.sm},
-  tripText: {flex: 1, fontSize: typography.body, color: colors.textPrimary},
-  amount: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
-});
+  tripText: {fontFamily: font.regular, flex: 1, fontSize: typography.body, color: c.textPrimary},
+  amount: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary, fontVariant: ['tabular-nums']},
+}));

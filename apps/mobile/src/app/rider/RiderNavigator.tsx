@@ -1,12 +1,12 @@
 import React, {useCallback, useEffect, useMemo} from 'react';
 import {Alert} from 'react-native';
-import {createNavigationContainerRef, NavigationContainer} from '@react-navigation/native';
+import {createNavigationContainerRef, DarkTheme, DefaultTheme, NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {useQueryClient} from '@tanstack/react-query';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Icon} from '../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, typography} from '../../design/tokens';
+import {borderWidth, colors, font, iconSize, typography, useRiderTheme} from '../../features/rider/theme';
 import {BottomAction} from '../../features/rider/components/BottomAction';
 import {RiderRuntime} from '../../features/rider/components/RiderRuntime';
 import {riderOnlineService, type NotificationTap} from '../../features/rider/native/riderOnlineService';
@@ -62,12 +62,12 @@ function RiderTabs() {
     <Tabs.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.flameRed,
+        tabBarActiveTintColor: colors.redText,
         tabBarInactiveTintColor: colors.textSecondary,
-        tabBarLabelStyle: {fontSize: typography.small, fontWeight: fontWeight.bold},
+        tabBarLabelStyle: {fontSize: typography.small, fontFamily: font.bold},
         tabBarStyle: {
           height: 64 + bottom,
-          backgroundColor: colors.white,
+          backgroundColor: colors.surface,
           borderTopWidth: borderWidth.standard,
           borderTopColor: colors.border,
           elevation: 0,
@@ -211,9 +211,15 @@ function SignedIn() {
 export function RiderNavigator() {
   const session = useRiderSession();
   const {strings} = useStrings();
+  const theme = useRiderTheme();
+  // Screens sit on the rider ground colour, Day or Night, never React Navigation's grey.
+  const navTheme = useMemo(() => {
+    const base = theme === 'night' ? DarkTheme : DefaultTheme;
+    return {...base, colors: {...base.colors, background: colors.ground, card: colors.surface, text: colors.textPrimary, border: colors.border, primary: colors.flameRed}};
+  }, [theme]);
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
       {session.status === 'restoring' ? (
         <RiderSplash />
       ) : session.status === 'authenticated' ? (

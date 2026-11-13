@@ -10,7 +10,7 @@ related_targets: ["screens/AccountStatusScreen.tsx","screens/EarningsScreen.tsx"
 - **Surface:** the Craves Riders app's 21 screens (`screens/*`) and their shared parts (`components/*`), from joining Craves, through going online and the trip, to getting paid, safety and account. The source is `docs/riders/designs/*.png`, and the build spec is `docs/riders/SCREENS.md`.
 - **Mode: Operate.** The rider is in a task: accept an offer, collect, hand over, get paid. Familiar Android patterns and precision beat expression.
 - **Platform:** native Android (React Native rider flavor). Material 3 behaviour applies: system Back, insets, 48 dp targets, font scale and TalkBack.
-- **Visual authority is pinned by the supplied designs.** Build them. Do not explore new directions or add world material.
+- **Visual authority is the R1 redesign** (Nov 2026: the clickable prototype, DESIGN.md "Redesign R1", `theme.ts`). The older PNGs in `docs/riders/designs/` still pin layout and copy where R1 did not change them.
 
 ## Audience, job, task
 
@@ -33,7 +33,7 @@ related_targets: ["screens/AccountStatusScreen.tsx","screens/EarningsScreen.tsx"
 
 ## Constraints
 
-- **Flat surfaces.** White, 1 dp `border` lines, no shadows (`elevation.none`).
+- **Flat surfaces.** Surface cards on the warm ground, no lines on cards, no shadows (`elevation.none`). Day by default, Night by choice.
 - **Actions.** One `flameRed` (#F62E18, the Craves brand red, as in the Craves app) primary action per screen, with a white bold label, in the pinned bottom bar. Secondary actions are outline buttons with a `borderStrong` line.
 - **Header.** Status chip plus a red SOS (`error`) on every working screen. The exceptions are sign-in, offer, selfie and the SOS screen itself.
 - **No time pressure.** No customer ETA, delivery deadline, lateness warning or speed score.
@@ -48,12 +48,12 @@ related_targets: ["screens/AccountStatusScreen.tsx","screens/EarningsScreen.tsx"
 THESIS: A working tool that keeps its promises visibly. Pay is first and locked, declining is free, there is no clock on the rider, and a person decides. It refuses the category default of urgency red, ETA pressure and gamified streaks.
 
 OWN-WORLD:
-- **Surfaces and lines:** white surfaces, 1 dp #E3DDD8 lines, espresso #261A15 text, radius 14 (hero cards 20), no shadows.
+- **Surfaces and lines:** surface cards (radius 20) on a #F2EFEC ground by day, #1A1716 on #0F0D0C by night; espresso #261A15 text by day; peach kitchen and mint customer panels (dark brown and deep green with white words by night); no shadows.
 - **Colour roles:**
   - flame red #F62E18 (the Craves brand red, as in the Craves app) only for the one primary action, red text links, the active tab and the countdown;
   - alarm red #C72C21 only for SOS;
   - soft success, warning and info fills for status and reassurance.
-- **Type:** Roboto 400/700, with 900 reserved for offer pay (72) and the order code (60).
+- **Type:** Barlow 400/600/700 for reading; Barlow Condensed 700/800 for pay (84), the order code (56), OTP digits (40) and money (48).
 
 STORY: The rider sees what they will earn before committing, follows one obvious next step per screen, is reassured exactly where doubt arises ("Declining is free…", "You can keep working…"), and can always reach a human or SOS.
 

@@ -1,10 +1,10 @@
 import React, {useState} from 'react';
-import {Alert, Image, Linking, Pressable, Share, StyleSheet, Text, View} from 'react-native';
+import {Alert, Image, Linking, Pressable, Share, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import {Icon} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, spacing, touchTarget, typography} from '../../../design/tokens';
+import {borderWidth, chooseRiderTheme, colors, font, iconSize, spacing, themedStyles, touchTarget, typography, useRiderTheme} from '../theme';
 import type {OrderPreferences, RiderProfile} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
@@ -151,6 +151,7 @@ function HomeSpotCard({savedAt, choices, onChange}: {savedAt?: string; choices: 
 
 export function ProfileScreen() {
   const {strings, language, setLanguage} = useStrings();
+  const theme = useRiderTheme();
   const p = strings.profile;
   const navigation = useNavigation<RiderNav>();
   const shell = useRiderShell();
@@ -370,6 +371,21 @@ export function ProfileScreen() {
           </ChoiceRow>
         </View>
       ) : null}
+      <View style={styles.language}>
+        <Label>{p.screenTitle}</Label>
+        <ChoiceRow label={p.screenTitle}>
+          {(['day', 'night'] as const).map(name => (
+            <ChoiceChip
+              key={name}
+              label={p[name]}
+              selected={theme === name}
+              onPress={() => chooseRiderTheme(name)}
+              testID={`rider-theme-${name}`}
+            />
+          ))}
+        </ChoiceRow>
+        <Label>{p.screenNote}</Label>
+      </View>
       <Card style={styles.links}>
         {links.map(([label, id, open], index) => (
           <Pressable
@@ -390,7 +406,7 @@ export function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   grow: {flex: 1},
   person: {flexDirection: 'row', alignItems: 'center', gap: spacing.md},
   avatar: {
@@ -400,14 +416,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.cream,
+    borderColor: c.border,
+    backgroundColor: c.cream,
   },
-  initials: {fontSize: typography.hero, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  reg: {fontSize: typography.small, color: colors.textPrimary},
+  initials: {fontSize: typography.hero, fontFamily: font.bold, color: c.textPrimary},
+  reg: {fontFamily: font.regular, fontSize: typography.small, color: c.textPrimary},
   docs: {gap: 0},
   doc: {gap: spacing.xs, paddingVertical: spacing.sm},
-  divider: {borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
+  divider: {borderTopWidth: borderWidth.standard, borderTopColor: c.border},
   docTop: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   upload: {marginTop: spacing.xxs},
   problem: {gap: spacing.xxs},
@@ -415,8 +431,8 @@ const styles = StyleSheet.create({
   language: {gap: spacing.xs},
   links: {padding: 0, gap: 0, overflow: 'hidden'},
   linkRow: {minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md},
-  linkText: {flex: 1, fontSize: typography.body, color: colors.textPrimary},
-  pressed: {backgroundColor: colors.muted},
+  linkText: {fontFamily: font.regular, flex: 1, fontSize: typography.body, color: c.textPrimary},
+  pressed: {backgroundColor: c.muted},
   signOut: {minHeight: touchTarget.minimum, alignItems: 'center', justifyContent: 'center'},
-  signOutText: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textSecondary},
-});
+  signOutText: {fontSize: typography.body, fontFamily: font.bold, color: c.textSecondary},
+}));

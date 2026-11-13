@@ -7,6 +7,7 @@ import {en, type RiderStrings} from './en';
 import {hi} from './hi';
 import {kn} from './kn';
 import {te} from './te';
+import {useRiderTheme} from '../theme';
 
 /**
  * The app's languages: the server's three, and Kannada. The server keeps en, te or hi for each rider (its messages,
@@ -95,4 +96,8 @@ export function RiderStringsProvider({children}: PropsWithChildren) {
   return <StringsContext.Provider value={value}>{children}</StringsContext.Provider>;
 }
 
-export const useStrings = () => useContext(StringsContext);
+export const useStrings = () => {
+  // Every rider screen reads its words here, so this one subscription re-renders each of them on a Day/Night switch.
+  useRiderTheme();
+  return useContext(StringsContext);
+};

@@ -1,8 +1,8 @@
 import React, {PropsWithChildren, ReactNode, useState} from 'react';
-import {ScrollView, StyleSheet, Text, TextInput, TextInputProps, View} from 'react-native';
+import {ScrollView, Text, TextInput, TextInputProps, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {Icon} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, radius, spacing, typography} from '../../../design/tokens';
+import {borderWidth, colors, font, iconSize, radius, spacing, themedStyles, typography} from '../../../features/rider/theme';
 import {Banner} from '../../../features/rider/components/Banner';
 import {useStrings} from '../../../features/rider/strings/StringsProvider';
 
@@ -62,12 +62,12 @@ export function SignInField({
   );
 }
 
-export const signInStyles = StyleSheet.create({
-  line: {marginTop: -spacing.xs, fontSize: typography.body, color: colors.textSecondary},
-});
+export const signInStyles = themedStyles(c => ({
+  line: {fontFamily: font.regular, marginTop: -spacing.xs, fontSize: typography.body, color: c.textSecondary},
+}));
 
-const styles = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: colors.white},
+const styles = themedStyles(c => ({
+  screen: {flex: 1, backgroundColor: c.surface},
   content: {flexGrow: 1, gap: spacing.md, padding: spacing.md, paddingTop: spacing.xxl},
   brand: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs},
   logo: {
@@ -77,15 +77,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.flameRed,
+    backgroundColor: c.flameRed,
   },
-  brandName: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  brandName: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary},
   label: {
     marginTop: spacing.xs,
     marginBottom: spacing.xs,
     fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-    color: colors.textSecondary,
+    fontFamily: font.bold,
+    color: c.textSecondary,
   },
   box: {
     minHeight: 56,
@@ -95,19 +95,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     borderWidth: borderWidth.standard,
-    borderColor: colors.borderStrong,
+    borderColor: c.borderStrong,
   },
-  boxFocused: {borderColor: colors.textPrimary},
-  value: {fontSize: typography.hero, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
-  prefix: {color: colors.textSecondary},
+  boxFocused: {borderColor: c.textPrimary},
+  value: {fontSize: typography.hero, fontFamily: font.bold, color: c.textPrimary, fontVariant: ['tabular-nums']},
+  prefix: {color: c.textSecondary},
   input: {flex: 1, paddingVertical: spacing.xs},
-  error: {marginTop: spacing.xs, fontSize: typography.body, color: colors.warningText},
+  error: {fontFamily: font.regular, marginTop: spacing.xs, fontSize: typography.body, color: c.warningText},
   push: {flexGrow: 1},
   footer: {
     padding: spacing.md,
     gap: spacing.xs,
     borderTopWidth: borderWidth.standard,
-    borderTopColor: colors.border,
-    backgroundColor: colors.white,
+    borderTopColor: c.border,
+    backgroundColor: c.surface,
   },
-});
+}));

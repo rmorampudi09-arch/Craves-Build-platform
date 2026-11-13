@@ -54,6 +54,42 @@ class FleetClientsTest {
     }
 
     @Test
+    void roadPathReturnsPolyline() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://user-chef.internal");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("http://user-chef.internal/internal/v1/maps/road-path")).andExpect(method(HttpMethod.POST))
+            .andExpect(header("X-Craves-Internal-Secret", "secret"))
+            .andExpect(content().json("{\"from\":{\"lat\":17.4483,\"lng\":78.3915},\"to\":{\"lat\":17.4374,\"lng\":78.3897}}"))
+            .andRespond(withSuccess("{\"polyline\":\"abc123\"}", MediaType.APPLICATION_JSON));
+
+        assertThat(new RoadDistanceClient(builder.build(), "secret").path(17.4483, 78.3915, 17.4374, 78.3897)).isEqualTo("abc123");
+        server.verify();
+    }
+
+    @Test
+    void roadPathIsNullWhenServerFails() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://user-chef.internal");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(ExpectedCount.once(), requestTo("http://user-chef.internal/internal/v1/maps/road-path"))
+            .andRespond(withServerError());
+        server.expect(ExpectedCount.once(), requestTo("http://user-chef.internal/internal/v1/maps/road-path"))
+            .andRespond(withSuccess("{\"polyline\":null}", MediaType.APPLICATION_JSON));
+        server.expect(ExpectedCount.once(), requestTo("http://user-chef.internal/internal/v1/maps/road-path"))
+            .andRespond(withSuccess("{\"polyline\":\"  \"}", MediaType.APPLICATION_JSON));
+        RoadDistanceClient client = new RoadDistanceClient(builder.build(), "secret");
+
+        assertThat(client.path(17.4483, 78.3915, 17.4374, 78.3897)).isNull();
+        assertThat(client.path(17.4483, 78.3915, 17.4374, 78.3897)).as("null polyline").isNull();
+        assertThat(client.path(17.4483, 78.3915, 17.4374, 78.3897)).as("blank polyline").isNull();
+        server.verify();
+    }
+
+    @Test
+    void roadPathIsNullWhenNotConfigured() {
+        assertThat(new RoadDistanceClient(null, null).path(17.4483, 78.3915, 17.4374, 78.3897)).isNull();
+    }
+
+    @Test
     void deliveryCodeMapsEveryOrderServiceAnswerAndNeverRetries() {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://order.internal");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();

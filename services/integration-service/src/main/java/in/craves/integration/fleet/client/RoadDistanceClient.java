@@ -68,6 +68,25 @@ public class RoadDistanceClient {
         return (int) Math.round(straightLineMetres(fromLat, fromLng, toLat, toLng) * FALLBACK_FACTOR);
     }
 
+    /** Road path from the rider to the customer as an encoded polyline, or null when it is not available. Never throws. */
+    public String path(double fromLat, double fromLng, double toLat, double toLng) {
+        if (client == null) {
+            return null;
+        }
+        try {
+            JsonNode reply = client.post().uri("/internal/v1/maps/road-path")
+                .header("X-Craves-Internal-Secret", secret)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("from", Map.of("lat", fromLat, "lng", fromLng), "to", Map.of("lat", toLat, "lng", toLng)))
+                .retrieve().body(JsonNode.class);
+            String polyline = reply == null ? null : reply.path("polyline").asText(null);
+            return StringUtils.hasText(polyline) ? polyline : null;
+        } catch (RestClientException exception) {
+            LOGGER.warn("FLEET_ROAD_PATH_UNAVAILABLE reason={}", exception.getClass().getSimpleName());
+            return null;
+        }
+    }
+
     /** Haversine metres. */
     public static double straightLineMetres(double lat1, double lng1, double lat2, double lng2) {
         double dLat = Math.toRadians(lat2 - lat1);

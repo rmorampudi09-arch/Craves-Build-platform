@@ -248,6 +248,21 @@ class OlaMapsClientTest {
         assertNull(OlaMapsClient.parseDirections(null));
     }
 
+    @Test
+    void parsePathReadsOverviewPolyline() throws Exception {
+        assertEquals("_p~iF~ps|U_ulLnnqC",
+            OlaMapsClient.parsePath(objectMapper.readTree("{\"routes\":[{\"overview_polyline\":\"_p~iF~ps|U_ulLnnqC\"}]}")));
+    }
+
+    @Test
+    void parsePathIsNullWithoutRoute() throws Exception {
+        for (String json : List.of("{}", "{\"routes\":[]}", "{\"routes\":[{\"overview_polyline\":\" \"}]}",
+            "{\"routes\":[{\"overview_polyline\":5}]}")) {
+            assertNull(OlaMapsClient.parsePath(objectMapper.readTree(json)), json);
+        }
+        assertNull(OlaMapsClient.parsePath(null));
+    }
+
     private record Recorded(String method, String path, Map<String, String> query, String origin, String contentLength) {
     }
 

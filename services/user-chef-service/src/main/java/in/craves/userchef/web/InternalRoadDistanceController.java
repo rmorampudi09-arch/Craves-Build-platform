@@ -41,6 +41,21 @@ public class InternalRoadDistanceController {
         );
     }
 
+    @PostMapping("/road-path")
+    public RoadPath roadPath(
+        @RequestHeader(name = INTERNAL_HEADER, required = false) String suppliedSecret,
+        @Valid @RequestBody RoadDistanceRequest request
+    ) {
+        authorizer.requireValid(suppliedSecret);
+        return new RoadPath(service.path(
+            request.from().lat(), request.from().lng(), request.to().lat(), request.to().lng()
+        ));
+    }
+
+    /** polyline is null when no route is available; it is always serialized. */
+    public record RoadPath(String polyline) {
+    }
+
     public record RoadDistanceRequest(UUID kitchenId, UUID addressId, @NotNull @Valid Point from, @NotNull @Valid Point to) {
     }
 

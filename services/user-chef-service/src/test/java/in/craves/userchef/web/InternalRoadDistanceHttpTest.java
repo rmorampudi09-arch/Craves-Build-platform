@@ -1,6 +1,7 @@
 package in.craves.userchef.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
@@ -45,6 +46,7 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 class InternalRoadDistanceHttpTest {
     private static final String SECRET = "synthetic-internal-secret";
     private static final String PATH = "/internal/v1/maps/road-distance";
+    private static final String PATH_ROUTE = "/internal/v1/maps/road-path";
     @Autowired WebApplicationContext context;
     @Autowired RoadDistanceService distances;
     MockMvc mvc;
@@ -91,8 +93,34 @@ class InternalRoadDistanceHttpTest {
         verifyNoInteractions(distances);
     }
 
+    @Test void roadPathAnswersPolyline() throws Exception {
+        when(distances.path(new BigDecimal("17.4483"), new BigDecimal("78.3915"),
+            new BigDecimal("17.4374"), new BigDecimal("78.3897"))).thenReturn("_p~iF~ps|U");
+
+        mvc.perform(request(PATH_ROUTE, body(kitchenId, "17.4483")).header("X-Craves-Internal-Secret", SECRET))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.polyline").value("_p~iF~ps|U"));
+    }
+
+    @Test void roadPathAnswersNullWhenOlaFails() throws Exception {
+        when(distances.path(any(), any(), any(), any())).thenReturn(null);
+
+        mvc.perform(request(PATH_ROUTE, body(kitchenId, "17.4483")).header("X-Craves-Internal-Secret", SECRET))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.polyline").value(nullValue()));
+    }
+
+    @Test void roadPathRejectsMissingSecret() throws Exception {
+        mvc.perform(request(PATH_ROUTE, body(kitchenId, "17.4483"))).andExpect(status().isUnauthorized());
+        verifyNoInteractions(distances);
+    }
+
     private static MockHttpServletRequestBuilder request(String json) {
-        return post(PATH).contentType(MediaType.APPLICATION_JSON).accept(MediaType.APPLICATION_JSON).content(json);
+        return request(PATH, json);
+    }
+
+    private static MockHttpServletRequestBuilder request(String path, String json) {
+        return post(path).contentType(MediaType.APPLICATION_JSON).accept(MediaType.APPLICATION_JSON).content(json);
     }
 
     private String body(UUID kitchen, String fromLat) {

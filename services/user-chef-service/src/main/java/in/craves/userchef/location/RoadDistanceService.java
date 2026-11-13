@@ -75,6 +75,15 @@ public class RoadDistanceService {
         return road;
     }
 
+    /** Road polyline for the customer's tracking map; not cached. Null when Ola has no route. */
+    public String path(BigDecimal fromLat, BigDecimal fromLng, BigDecimal toLat, BigDecimal toLng) {
+        try {
+            return maps.roadPath(fromLat, fromLng, toLat, toLng);
+        } catch (ApiException unavailable) {
+            return null;
+        }
+    }
+
     /** Haversine great-circle metres x 1.3. */
     static long fallbackMeters(BigDecimal fromLat, BigDecimal fromLng, BigDecimal toLat, BigDecimal toLng) {
         double lat1 = Math.toRadians(fromLat.doubleValue());

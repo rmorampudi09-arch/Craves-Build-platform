@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The rider app's icon: the approved Craves logo with RIDERS under it, on the logo's red.
+  From Android 8.1 (v27), not 8.0: RiderOffers and RiderOnlineService use the app icon as their notifications' small
+  icon, and on Android 8.0 an adaptive icon there crashes the phone's system UI.
+  shortcut: Android 8.0 and older keep the PNG icons beside this folder (the art before the approved logo); replace
+  those PNGs with this art, or drop them once the app needs Android 8.1.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/rider_logo_red" />
+    <foreground android:drawable="@drawable/rider_logo_foreground" />
+</adaptive-icon>

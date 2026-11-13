@@ -106,3 +106,16 @@ OTP keypad, a light selfie screen, and a payout row on Home. The customer and ch
 (`design/tokens.ts` is unchanged). Not built yet: the earnings "How it adds up" breakdown, which needs the server to
 send it.
 
+### App 1.4.1 (Nov 2026): readable terms rows, the approved logo
+
+- **Rows a phone squeezed.** `RateRow` gave its value the whole width it asked for and the label only what was left, so a
+  long value (on Terms: "₹25 plus the ride to the kitchen", "Link added when the state portal opens") left the label a
+  sliver, one letter a line. The value now takes at most 60% of the row. The sign-up "Your details" rows had the same
+  fault for a long name or vehicle: there the label keeps its own width and the value wraps in the rest. Jest does not
+  lay screens out, so no test saw it: check a long value on a phone (or with Yoga) when a row gets one.
+- **The logo.** The approved Craves lettering (traced from the website's wordmark) with RIDERS under it in Barlow
+  Condensed is `RiderLogo`: on its red tile at sign-in, white on the in-app splash, and the same paths in
+  `android/app/src/rider/res/drawable/rider_logo_foreground.xml` for the Android 12+ launch screen and the launcher icon.
+  The launcher icon is adaptive from Android 8.1 (`mipmap-anydpi-v27`); Android 8.0 and older keep the PNG icons, with
+  the art from before the approved logo, because the notifications use the app icon as their small icon and Android 8.0
+  crashes on an adaptive one there.

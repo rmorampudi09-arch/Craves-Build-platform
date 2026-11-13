@@ -86,7 +86,11 @@ export function Money({paise, testID}: {paise: number; testID?: string}) {
   );
 }
 
-/** Label on the left, bold value on the right (may wrap). `divider` draws a line above it; `total` is the closing bold row. */
+/**
+ * Label on the left, bold value on the right; both may wrap. `divider` draws a line above it; `total` is the closing
+ * bold row. The value takes at most 60% of the row: the label gets only what the value leaves, and a long value (the
+ * terms have some) left it a sliver, one letter a line.
+ */
 export function RateRow({label, value, divider, total}: {label: string; value: string; divider?: boolean; total?: boolean}) {
   return (
     <View style={[styles.row, (divider || total) && styles.rowDivider]}>
@@ -130,5 +134,5 @@ const styles = themedStyles(c => ({
   rowDivider: {paddingTop: spacing.xs, borderTopWidth: borderWidth.standard, borderTopColor: c.border},
   rowLabel: {flex: 1, color: c.textSecondary},
   rowTotal: {color: c.textPrimary, fontFamily: font.bold},
-  rowValue: {flexShrink: 1, fontFamily: font.bold, textAlign: 'right', fontVariant: ['tabular-nums']},
+  rowValue: {flexShrink: 1, maxWidth: '60%', fontFamily: font.bold, textAlign: 'right', fontVariant: ['tabular-nums']},
 }));

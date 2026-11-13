@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The same icon for launchers that ask for a round one (see craves_launcher.xml). -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/rider_logo_red" />
+    <foreground android:drawable="@drawable/rider_logo_foreground" />
+</adaptive-icon>

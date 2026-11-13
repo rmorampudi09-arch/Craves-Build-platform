@@ -727,7 +727,7 @@ Every screen that loads something shows one of these, never a blank screen, a sp
 | Refused (the server said no, with a code) | alert | "This didn't load", then the server's own words in English, the app's words for the code in Telugu, Hindi and Kannada | Try again |
 
 - **Failed actions** (accept, withdraw, report, send your side) say the same thing in one line, in a warning banner by the button or an alert, from `riderMessage`. The rider's words stay in the field.
-- **The start of the app** shows the name "Craves Riders" in white on flame red, with a rider riding along (`RiderSplash`, still with Reduce motion on), while it checks the sign-in; when that fails, the offline state with "You stay signed in" and Sign out as a `button-ghost-neutral` below, never a forced sign-out (unsynced trip steps stay on the phone).
+- **The start of the app** shows the Craves Riders logo (`RiderLogo`: the approved Craves lettering with RIDERS under it) in white on flame red, under a rider riding along (`RiderSplash`, still with Reduce motion on), while it checks the sign-in; when that fails, the offline state with "You stay signed in" and Sign out as a `button-ghost-neutral` below, never a forced sign-out (unsynced trip steps stay on the phone).
 - **SOS without the rider role** (signing up, closed) shows "Calls work any time…" instead of a failure: both calls always work, and the location goes to ops only for a rider the server knows.
 - **Waiting for the rate card** (`RATES_PENDING`): an approved rider whose city has no published rate card yet sees why they can't accept terms, with "Check again", instead of an error.
 

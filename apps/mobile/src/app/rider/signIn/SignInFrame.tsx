@@ -1,13 +1,13 @@
 import React, {PropsWithChildren, ReactNode, useState} from 'react';
 import {ScrollView, Text, TextInput, TextInputProps, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {Icon} from '../../../shared/components';
-import {borderWidth, colors, font, iconSize, radius, spacing, themedStyles, typography} from '../../../features/rider/theme';
+import {borderWidth, colors, font, radius, spacing, themedStyles, typography} from '../../../features/rider/theme';
 import {Banner} from '../../../features/rider/components/Banner';
+import {RiderLogo} from '../../../features/rider/components/RiderLogo';
 import {useStrings} from '../../../features/rider/strings/StringsProvider';
 
 /**
- * Both sign-in steps (docs/riders/SCREENS.md 1): no rider header, the brand row on top,
+ * Both sign-in steps (docs/riders/SCREENS.md 1): no rider header, the Craves Riders logo on top,
  * and the no-fee warning pushed down to sit just above the pinned action.
  */
 export function SignInFrame({footer, testID, children}: PropsWithChildren<{footer: ReactNode; testID: string}>) {
@@ -16,10 +16,7 @@ export function SignInFrame({footer, testID, children}: PropsWithChildren<{foote
     <SafeAreaView edges={['top', 'bottom']} style={styles.screen} testID={testID}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.brand}>
-          <View style={styles.logo}>
-            <Icon name="moped" size={iconSize.lg} color={colors.white} surface={false} />
-          </View>
-          <Text style={styles.brandName}>{strings.signIn.brand}</Text>
+          <RiderLogo tile width={72} label={strings.signIn.brand} />
         </View>
         {children}
         <View style={styles.push} />
@@ -69,17 +66,7 @@ export const signInStyles = themedStyles(c => ({
 const styles = themedStyles(c => ({
   screen: {flex: 1, backgroundColor: c.surface},
   content: {flexGrow: 1, gap: spacing.md, padding: spacing.md, paddingTop: spacing.xxl},
-  brand: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs},
-  logo: {
-    width: 40,
-    height: 40,
-    // ≈12 in 01-SignIn.png, between radius.sm and radius.md.
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: c.flameRed,
-  },
-  brandName: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary},
+  brand: {alignItems: 'flex-start', marginBottom: spacing.xs},
   label: {
     marginTop: spacing.xs,
     marginBottom: spacing.xs,

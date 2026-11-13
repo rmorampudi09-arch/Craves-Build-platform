@@ -1,9 +1,10 @@
 import React, {useEffect, useRef} from 'react';
-import {AccessibilityInfo, Animated, Easing, StatusBar, Text, View} from 'react-native';
+import {AccessibilityInfo, Animated, Easing, StatusBar, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Svg, {Circle, G, Path, Rect} from 'react-native-svg';
-import {colors, font, spacing, themedStyles, typography} from '../theme';
+import {colors, spacing, themedStyles} from '../theme';
 import {useStrings} from '../strings/StringsProvider';
+import {RiderLogo} from './RiderLogo';
 
 // The art is drawn on a 160 × 110 grid and shown at SCALE; the wheels turn on their own, so they are drawn apart.
 const SCALE = 1.4;
@@ -52,8 +53,8 @@ function Wheel() {
 
 /**
  * The rider app while it finds out who is signed in (RiderNavigator): a Craves rider riding along on the brand red, the
- * wheels turning and the road passing. Native-driven loops, so a busy JS thread doesn't stutter them; still with Reduce
- * motion on. TalkBack reads it as loading.
+ * wheels turning and the road passing, over the Craves Riders logo. Native-driven loops, so a busy JS thread doesn't
+ * stutter them; still with Reduce motion on. TalkBack reads it as loading.
  */
 export function RiderSplash() {
   const {strings} = useStrings();
@@ -107,7 +108,9 @@ export function RiderSplash() {
             </Animated.View>
           </View>
         </View>
-        <Text style={styles.brand}>{strings.signIn.brand}</Text>
+        <View style={styles.brand}>
+          <RiderLogo width={176} />
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -121,5 +124,5 @@ const styles = themedStyles(c => ({
   road: {width: WIDTH, height: 6, marginTop: spacing.xs, overflow: 'hidden'},
   dashes: {flexDirection: 'row', gap: PERIOD - DASH},
   dash: {width: DASH, height: 6, borderRadius: 3, backgroundColor: c.white},
-  brand: {marginTop: spacing.xl, fontSize: typography.title, fontFamily: font.bold, color: c.white},
+  brand: {marginTop: spacing.xl},
 }));

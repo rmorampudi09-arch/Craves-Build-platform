@@ -1,6 +1,7 @@
 import React from 'react';
 import {AccessibilityInfo, Animated, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
+import {Rect} from 'react-native-svg';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
 import {Icon} from '../../../shared/components';
 import {colors, font, setRiderTheme} from '../theme';
@@ -13,6 +14,7 @@ import {CountdownBar} from './CountdownBar';
 import {Keypad} from './Keypad';
 import {PhasePanel} from './PhasePanel';
 import {RiderHeader} from './RiderHeader';
+import {RiderLogo} from './RiderLogo';
 import {RiderSplash} from './RiderSplash';
 import {SlideToConfirm} from './SlideToConfirm';
 import {STATUS_TONE, StatusBadge} from './StatusBadge';
@@ -295,7 +297,25 @@ describe('cards and rows', () => {
     await render(<RateRow label="Base pay, first 2 km" value="₹40" total />);
     const [label, value] = tree.root.findAllByType(Text).map(n => StyleSheet.flatten(n.props.style));
     expect(label).toMatchObject({flex: 1, color: colors.textPrimary, fontFamily: font.bold});
-    expect(value).toMatchObject({textAlign: 'right', fontFamily: font.bold});
+    // Never more than 60% of the row: a long value used to leave the label a sliver, one letter a line (the terms).
+    expect(value).toMatchObject({textAlign: 'right', fontFamily: font.bold, maxWidth: '60%'});
+  });
+});
+
+describe('RiderLogo', () => {
+  const logo = () => tree.root.findAll(node => node.props.testID === 'rider-logo')[0].props;
+
+  it('is the red tile, named for TalkBack, at sign-in; and the white art alone, silent, on a red ground', async () => {
+    await render(<RiderLogo tile width={72} label="Craves Riders" />);
+    expect(logo()).toMatchObject({width: 72, height: 72, accessible: true, accessibilityLabel: 'Craves Riders'});
+    expect(tree.root.findAllByType(Rect)).toHaveLength(1);
+
+    act(() => tree.unmount());
+    await render(<RiderLogo width={200} />);
+    expect(logo()).toMatchObject({width: 200, accessible: false});
+    // The art is 100 by 44.91: as wide as asked, never stretched.
+    expect(logo().height).toBeCloseTo(89.82);
+    expect(tree.root.findAllByType(Rect)).toHaveLength(0);
   });
 });
 
@@ -391,7 +411,8 @@ describe('RiderSplash', () => {
     jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValueOnce(false);
     await render(<RiderSplash />);
     expect(tree.root.find(node => node.props.accessibilityRole === 'progressbar').props.accessibilityLabel).toBe('Loading…');
-    expect(tree.root.findAllByType(Text).map(node => node.props.children)).toContain('Craves Riders');
+    // The name is the Craves Riders logo, drawn: the words around it already tell TalkBack it is loading.
+    expect(tree.root.findAll(node => node.props.testID === 'rider-logo')[0].props.accessible).toBe(false);
     expect(StyleSheet.flatten(tree.root.find(node => node.props.testID === 'rider-splash').props.style)).toMatchObject({
       backgroundColor: colors.flameRed,
     });

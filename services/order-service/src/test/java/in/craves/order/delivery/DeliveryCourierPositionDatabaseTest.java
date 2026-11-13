@@ -162,6 +162,24 @@ class DeliveryCourierPositionDatabaseTest {
     }
 
     @Test
+    void positionEventOnOrderWithoutDeliveryStatus() {
+        jdbc.update("UPDATE order_schema.customer_order SET delivery_status = NULL, delivery_status_observed_at = NULL WHERE id = ?", orderId);
+
+        var result = send("IN_TRANSIT", T0.plusSeconds(30), "17.4", "78.4", T0.plusSeconds(30), "abc");
+
+        assertEquals(false, result.applied());
+        var row = jdbc.queryForMap("""
+            SELECT delivery_status, delivery_courier_latitude, delivery_courier_longitude,
+                   delivery_courier_location_observed_at
+            FROM order_schema.customer_order WHERE id = ?
+            """, orderId);
+        assertNull(row.get("delivery_status"));
+        assertNotNull(row.get("delivery_courier_latitude"));
+        assertNotNull(row.get("delivery_courier_longitude"));
+        assertNotNull(row.get("delivery_courier_location_observed_at"));
+    }
+
+    @Test
     void deliveredEventClearsPositionAndPath() {
         send("PICKED_UP", T0.plusSeconds(30), "17.4", "78.4", T0.plusSeconds(30), "abc");
         send("DELIVERED", T0.plusSeconds(60), null, null, null, null);

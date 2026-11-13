@@ -300,7 +300,7 @@ public class DeliveryStatusUpdateService {
 
     /** Only a newer position replaces the stored one; a path without a position, or a position without a path, keeps the other. */
     private void storeRoute(DeliveryStatusChangedData data, String statusAfter) {
-        if (TERMINAL_STATUSES.contains(statusAfter)) {
+        if (statusAfter != null && TERMINAL_STATUSES.contains(statusAfter)) {
             return;
         }
         if (data.courierLatitude() != null) {

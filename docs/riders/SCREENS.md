@@ -181,7 +181,7 @@ Used on 09–12, not on 13.
 - Money and timers use tabular numerals (`fontVariant: ['tabular-nums']`).
 
 ### 0.14 Icons (outline style, one stroke weight, 24 unless noted)
-- Glyphs used: moped/scooter (logo, ride-along), shield-alert-outline, shield-check-outline, weather-pouring, clock-outline, phone-outline, map-marker-outline, navigation-variant-outline, arrow-right (20), check, alert-circle-outline, camera-outline, lock-outline (20), calendar-blank-outline, chevron-left, chevron-right, close, menu-down and menu-right (FAQ carets), home-outline, wallet-outline, account-outline.
+- Glyphs used: moped/scooter (ride-along), shield-alert-outline, shield-check-outline, weather-pouring, clock-outline, phone-outline, map-marker-outline, navigation-variant-outline, arrow-right (20), check, alert-circle-outline, camera-outline, lock-outline (20), calendar-blank-outline, chevron-left, chevron-right, close, menu-down and menu-right (FAQ carets), home-outline, wallet-outline, account-outline.
 - `Icon.tsx` maps several names to filled MDI glyphs (`phone`, `clock`, `map-marker`, `home`, `account`). Add outline names rather than reusing the filled ones.
 - Never use unicode triangles or emoji as icons.
 
@@ -191,9 +191,8 @@ Used on 09–12, not on 13.
 
 No header, no SOS, no tab bar. The design shows the **code step** only; the phone-number step is not designed.
 
-1. **Brand row**, top 32:
-   - Logo tile 40 × 40, `colors.flameRedAccessible`, radius ≈ 12, white moped glyph 24.
-   - Gap 8, then "Craves Rider" 19/700 `colors.textPrimary`, vertically centred on the tile.
+1. **Logo**, top 32: the approved Craves logo with RIDERS under it, on its own red tile, 72 × 72 (`RiderLogo`, app 1.4.1).
+   The design shows what it replaced: a 40 × 40 tile with a moped glyph and the name "Craves Rider" beside it.
 2. **H1** "Enter the code", 24/700 `colors.textPrimary`, top ≈ 96.
 3. **Line, top ≈ 133:** "Sent by SMS to +91 98480 12345." 15/400 `colors.textSecondary`, followed inline by the link "Change number" 15/400 `colors.flameRedAccessible`, underlined.
 4. **Field label** "6-digit code", 13/700 `colors.textSecondary`, top ≈ 175.

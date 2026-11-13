@@ -11,22 +11,30 @@ const settings = {ledgerStartDate: "2026-09-14", ledgerEnabled: false, automatic
 const view = {settings, revision: 0, policyId: null, activationBlockers: ["AUTHORITATIVE_ORDER_SNAPSHOT_AND_CAPTURE_WIRING_NOT_CERTIFIED"], releaseStatus: "NOT_ACTIVATED", maximumManualRequestsPerIstDay: 1};
 afterEach(() => {cleanup();vi.unstubAllGlobals();});
 describe("admin finance interactions", () => {
-  it("keeps settings editable when payouts fail, without presenting the failure as no payouts", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => url.endsWith("/settings") ? Response.json(view) : Response.json({}, {status: 503})));
+  it("says in plain words what is in use and what is not ready, and asks for nothing but the settings", async () => {
+    const fetcher=vi.fn(async (url: string) => url.endsWith("/settings") ? Response.json(view) : Response.json({}, {status: 503}));vi.stubGlobal("fetch", fetcher);
     render(createElement(FinanceControlCenter));
-    await screen.findByText(/Payout instructions could not be loaded/);
-    expect(screen.getByLabelText("Chef service fee, percent")).toBeTruthy();
-    expect(screen.queryByText("No new-engine payout instructions returned.")).toBeNull();
-    expect(screen.getByText(/total chef service-fee deduction is 7%/)).toBeTruthy();
+    expect(await screen.findByLabelText("Chef service fee, percent")).toBeTruthy();
+    expect(screen.getByText(/Recording of order money and chef earnings is switched off/)).toBeTruthy();
+    expect(screen.getByText(/Order money is not yet recorded from confirmed payments/)).toBeTruthy();
+    expect(screen.getByText(/Chefs are charged 7% in all, with GST inside it/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/NOT_ACTIVATED|NOT CERTIFIED|immutable/i);
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual(["/api/admin/finance/settings"]);
+  });
+  it("shows a failed load as a failure with a way to retry, never as empty settings", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({}, {status: 503})));
+    render(createElement(FinanceControlCenter));
+    expect(await screen.findByRole("button", {name: "Load the settings again"})).toBeTruthy();
+    expect(screen.queryByLabelText("Chef service fee, percent")).toBeNull();
   });
   it("does not invent tariff values and refuses to save an incomplete tariff", async () => {
     const fetcher=vi.fn(async (url: string) => Response.json(url.endsWith("/settings") ? view : []));vi.stubGlobal("fetch", fetcher);
     render(createElement(FinanceControlCenter));await screen.findByLabelText("Chef service fee, percent");
-    fireEvent.click(screen.getByLabelText("Configure a distance tariff for this policy"));
-    expect((screen.getByLabelText("Base delivery charge, INR") as HTMLInputElement).value).toBe("");
-    fireEvent.change(screen.getByLabelText("Reason and approval evidence"), {target: {value: "Test owner choice"}});
-    fireEvent.click(screen.getByRole("button", {name: "Save immutable draft"}));
-    await screen.findByText(/Complete all rates/);expect(fetcher.mock.calls.some(call=>call[0].endsWith("/policies"))).toBe(false);
+    fireEvent.click(screen.getByLabelText("Set a delivery price by distance"));
+    expect((screen.getByLabelText("Starting delivery charge, in rupees") as HTMLInputElement).value).toBe("");
+    fireEvent.change(screen.getByLabelText("Why this change is being made, and who approved it"), {target: {value: "Test owner choice"}});
+    fireEvent.click(screen.getByRole("button", {name: "Save as a draft"}));
+    await screen.findByText(/Fill in every rate/);expect(fetcher.mock.calls.some(call=>call[0].endsWith("/policies"))).toBe(false);
   });
   it("blocks activation when the backend silently changes reviewed fee treatment", async () => {
     const fetcher=vi.fn(async (url: string) => {
@@ -34,8 +42,8 @@ describe("admin finance interactions", () => {
       if(url.endsWith("/policies"))return Response.json({id:"00112233-4455-4677-8899-aabbccddeeff",contentHash:"a".repeat(64),settings:{...settings,chefFeeTaxTreatment:"EXCLUSIVE"}});
       return Response.json([]);
     });vi.stubGlobal("fetch", fetcher);render(createElement(FinanceControlCenter));await screen.findByLabelText("Chef service fee, percent");
-    fireEvent.change(screen.getByLabelText("Reason and approval evidence"), {target: {value: "Test inclusive choice"}});
-    fireEvent.click(screen.getByRole("button", {name: "Save immutable draft"}));await screen.findByText(/saved policy differs/);
-    await waitFor(()=>expect((screen.getByRole("button", {name: "Activate reviewed version"}) as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.change(screen.getByLabelText("Why this change is being made, and who approved it"), {target: {value: "Test inclusive choice"}});
+    fireEvent.click(screen.getByRole("button", {name: "Save as a draft"}));await screen.findByText(/does not match what you entered/);
+    await waitFor(()=>expect((screen.getByRole("button", {name: "Switch these settings on"}) as HTMLButtonElement).disabled).toBe(true));
   });
 });

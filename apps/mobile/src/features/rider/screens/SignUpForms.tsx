@@ -237,7 +237,7 @@ export function DetailsCard({me, profile}: {me: RiderMe; profile: RiderProfile})
       <View>
         {rows.map(([label, value], index) => (
           <View key={label} style={[styles.row, styles.detail, index > 0 && styles.divider]}>
-            <Text style={[styles.secondary, styles.flex]}>{label}</Text>
+            <Text style={[styles.secondary, styles.detailLabel]}>{label}</Text>
             <Text style={[styles.strong, styles.value]}>{value}</Text>
           </View>
         ))}
@@ -436,7 +436,10 @@ const styles = themedStyles(c => ({
   detail: {paddingVertical: spacing.xs},
   divider: {borderTopWidth: borderWidth.standard, borderTopColor: c.border},
   flex: {flex: 1},
-  value: {flexShrink: 1, textAlign: 'right'},
+  // The label keeps its own width (at most half the row) and the value wraps in the rest. With the label on flex: 1 it got
+  // only what the value left: a long name or vehicle squeezed it to a sliver, one letter a line.
+  detailLabel: {maxWidth: '50%'},
+  value: {flex: 1, textAlign: 'right'},
   // Names a group of choices as InputField names a field (shared/components/InputField.tsx), so the form reads as one.
   label: {fontSize: typography.small, fontFamily: font.semibold, color: c.textPrimary},
   body: {fontFamily: font.regular, fontSize: typography.body, color: c.textPrimary},

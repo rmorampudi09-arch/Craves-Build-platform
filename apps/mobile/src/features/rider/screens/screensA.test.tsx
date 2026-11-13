@@ -531,6 +531,13 @@ describe('Account status and the application', () => {
       expect(text).toContain('While you wait: read the rate card, so you can go online the moment you are approved. | Read the rate card');
       expect(text).toContain('Bank proof | Name matches');
       expect(text).toContain('Your details | Name | Ravi Kumar');
+      // The label keeps its own width and the value wraps in the rest, so a long name never squeezes "Name" to a sliver.
+      const [label, value] = ['Name', 'Ravi Kumar'].map(words =>
+        StyleSheet.flatten(tree.root.findAllByType(Text).find(node => node.props.children === words)?.props.style),
+      );
+      expect(label).toMatchObject({maxWidth: '50%'});
+      expect(label.flex).toBeUndefined();
+      expect(value).toMatchObject({flex: 1, textAlign: 'right'});
       expect(tree.root.findAll(node => String(node.props.testID).startsWith('rider-upload-'))).toHaveLength(0);
 
       const refetch = jest.spyOn(client, 'invalidateQueries');

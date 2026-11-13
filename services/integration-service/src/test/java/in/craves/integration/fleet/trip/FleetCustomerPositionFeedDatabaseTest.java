@@ -62,6 +62,7 @@ class FleetCustomerPositionFeedDatabaseTest {
         assertThat(data.has("trackingUrl")).isFalse();
         assertThat(data.has("courierName")).isFalse();
         assertThat(data.has("handoffFromProviderId")).isFalse();
+        verify(roads).path(17.44, 78.39, 17.46, 78.36);
     }
 
     @Test
@@ -101,6 +102,29 @@ class FleetCustomerPositionFeedDatabaseTest {
             assertThat(event.path("data").has("routePolyline")).isFalse();
         });
         verify(roads, times(1)).path(anyDouble(), anyDouble(), anyDouble(), anyDouble());
+    }
+
+    @Test
+    void tooLongPathIsNotSent() {
+        when(roads.path(anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn("a".repeat(20_001));
+        Case c = onTheWay("PICKED_UP", "PICKED_UP", "craves_fleet");
+        feed.tick();
+        List<JsonNode> events = events(c.job);
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0).path("data").path("courierLatitude").asDouble()).isEqualTo(17.45);
+        assertThat(events.get(0).path("data").has("routePolyline")).isFalse();
+    }
+
+    @Test
+    void skipsTripALaterStageTookOver() {
+        Case c = onTheWay("PICKED_UP", "PICKED_UP", "craves_fleet");
+        fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, deadline_at) VALUES (?, ?, 1, 'CRAVES_FLEET', "
+            + "now() + INTERVAL '10 minutes')", UUID.randomUUID(), c.trip);
+        fleet.db.update("UPDATE fleet_schema.trip_stage SET state = 'CLOSED', closed_at = now() WHERE trip_id = ?", c.trip);
+        fleet.db.update("INSERT INTO fleet_schema.trip_stage (id, trip_id, seq, provider, deadline_at) VALUES (?, ?, 2, 'BORZO', "
+            + "now() + INTERVAL '10 minutes')", UUID.randomUUID(), c.trip);
+        feed.tick();
+        assertThat(events(c.job)).isEmpty();
     }
 
     @Test

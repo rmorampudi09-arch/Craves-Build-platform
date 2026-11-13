@@ -5,6 +5,9 @@ import type {RiderStrings} from './en';
 // it off (REVIEWED_LANGUAGES in StringsProvider); demo builds show it for that review.
 export const te: RiderStrings = {
   common: {
+    // SlideToConfirm: a slide, or a tap and a second tap, so a bump never sends a trip step.
+    slideHint: 'నిర్ధారించడానికి జారించండి, లేదా రెండుసార్లు నొక్కండి',
+    tapAgain: 'నిర్ధారించడానికి మళ్లీ నొక్కండి',
     retry: 'మళ్లీ ప్రయత్నించండి',
     loading: 'లోడ్ అవుతోంది…',
     offline: 'కనెక్షన్ లేదు. మళ్లీ ప్రయత్నిస్తున్నాం.',
@@ -75,6 +78,8 @@ export const te: RiderStrings = {
   } as Record<string, string>,
   tabs: {home: 'హోమ్', earnings: 'సంపాదన', profile: 'ప్రొఫైల్'},
   status: {
+    // The route strip's four stops (StepBar).
+    route: ['కిచెన్‌కు', 'కిచెన్ వద్ద', 'కస్టమర్‌కు', 'అందించండి'],
     offline: 'ఆఫ్‌లైన్',
     waiting: 'ఆన్‌లైన్ · ఆర్డర్ల కోసం ఎదురుచూస్తున్నారు',
     trip: (step: number) => `ట్రిప్ · 4లో ${step}వ దశ`,
@@ -460,6 +465,10 @@ export const te: RiderStrings = {
     whyHome: (km: string) => `మీ ఇంటి దారిలో: ఈ డ్రాప్ తర్వాత మీరు ఇంటికి ${km} కి.మీ దగ్గరవుతారు.`,
   },
   trip: {
+    // The kitchen's code board and the hand-over keypad (redesign R1).
+    showChef: 'చెఫ్‌కు చూపించండి',
+    showChefNote: 'ఫోన్‌ను చెఫ్ వైపు పట్టుకోండి. మూసేందుకు ఎక్కడైనా నొక్కండి.',
+    deleteDigit: 'ఒక అంకె తొలగించండి',
     titles: {
       TO_KITCHEN: 'కిచెన్‌కి వెళ్లండి',
       AT_KITCHEN: 'కిచెన్ దగ్గర',
@@ -691,6 +700,11 @@ export const te: RiderStrings = {
     failedNote: 'విఫలమైన పేఅవుట్ (తప్పు అకౌంట్, బ్యాంక్ డౌన్) తదుపరి పని రోజున మళ్ళీ ప్రయత్నిస్తాం, బ్యాంక్ కారణంతో ఇక్కడ చూపిస్తాం. మీ భద్రత కోసం బ్యాంక్ అకౌంట్ మార్పు ఆప్స్‌తో నేరుగా జరుగుతుంది.',
   },
   profile: {
+    // Day or Night (theme.ts); the rider's choice stays on the phone.
+    screenTitle: 'స్క్రీన్',
+    day: 'పగలు',
+    night: 'రాత్రి',
+    screenNote: 'రాత్రి స్క్రీన్ ముదురుగా ఉంటుంది, సూర్యాస్తమయం తర్వాత నడపడానికి. ఎప్పుడైనా మార్చుకోవచ్చు.',
     title: 'ప్రొఫైల్',
     ordersTitle: 'మీకు వచ్చే ఆర్డర్లు',
     ordersBody:

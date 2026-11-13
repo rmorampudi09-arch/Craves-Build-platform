@@ -1,8 +1,8 @@
 import React, {ReactNode, useCallback, useEffect, useState} from 'react';
-import {Alert, AppState, StyleSheet, Text, View} from 'react-native';
+import {Alert, AppState, Text, View} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Icon} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, radius, spacing, typography} from '../../../design/tokens';
+import {borderWidth, colors, font, iconSize, radius, spacing, themedStyles, typography} from '../theme';
 import {BottomAction} from '../components/BottomAction';
 import {RiderHeader} from '../components/RiderHeader';
 import {Card, RiderScreen} from '../components/ui';
@@ -108,7 +108,7 @@ function SetupCheck({
           style={styles.rowText}
           testID={testID}>
           <View style={[styles.circle, done && styles.circleDone]}>
-            {done ? <Icon name="check" size={iconSize.xs} color={colors.white} surface={false} /> : null}
+            {done ? <Icon name="check" size={iconSize.xs} color={colors.onSuccess} surface={false} /> : null}
           </View>
           <View style={styles.flex}>
             <Text style={styles.title}>{title}</Text>
@@ -254,18 +254,18 @@ function Fix({label, onPress}: {label: string; onPress: () => Promise<unknown> |
   return <BottomAction label={label} variant="outline" size="compact" onPress={onPress} />;
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   flex: {flex: 1},
   footer: {gap: spacing.xs},
   center: {textAlign: 'center'},
-  heading: {fontSize: typography.title, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  heading: {fontSize: typography.title, fontFamily: font.bold, color: c.textPrimary},
   progress: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
-  track: {flex: 1, height: 8, borderRadius: radius.pill, backgroundColor: colors.muted, overflow: 'hidden'},
-  fill: {height: '100%', width: '100%', backgroundColor: colors.success, transformOrigin: 'left'},
-  count: {fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  track: {flex: 1, height: 8, borderRadius: radius.pill, backgroundColor: c.muted, overflow: 'hidden'},
+  fill: {height: '100%', width: '100%', backgroundColor: c.success, transformOrigin: 'left'},
+  count: {fontSize: typography.small, fontFamily: font.bold, color: c.textPrimary},
   checks: {gap: spacing.sm},
   check: {gap: spacing.sm},
-  attention: {borderColor: colors.textPrimary},
+  attention: {borderColor: c.textPrimary},
   row: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs},
   rowText: {flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   circle: {
@@ -273,12 +273,12 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: radius.pill,
     borderWidth: borderWidth.strong,
-    borderColor: colors.borderStrong,
+    borderColor: c.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  circleDone: {borderColor: colors.success, backgroundColor: colors.success},
-  title: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  sub: {fontSize: typography.small, color: colors.textSecondary},
-  steps: {fontSize: typography.body, color: colors.textPrimary},
-});
+  circleDone: {borderColor: c.success, backgroundColor: c.success},
+  title: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
+  sub: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
+  steps: {fontFamily: font.regular, fontSize: typography.body, color: c.textPrimary},
+}));

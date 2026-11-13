@@ -1,11 +1,11 @@
 // Loading, empty and problem states in the rider theme (DESIGN.md "States"): flat white card, 1 dp line, a bare 24 dp
 // outline glyph with the words beside it, and at most one action. Nothing here pulses, glows or shouts.
 import React, {useEffect, type ReactNode} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Text, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
 import {refreshAccessToken} from '../../../core/http/apiClient';
 import {Icon, SkeletonBlock, type IconName} from '../../../shared/components';
-import {colors, fontWeight, iconSize, spacing, typography} from '../../../design/tokens';
+import {colors, font, iconSize, spacing, themedStyles, typography} from '../theme';
 import {problemOf, riderMessage, type Problem} from '../domain/problem';
 import {riderKeys} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
@@ -130,21 +130,23 @@ export function CardsSkeleton({cards = 2, testID}: {cards?: number; testID?: str
     <View accessible accessibilityRole="progressbar" accessibilityLabel={strings.states.loading} style={styles.stack} testID={testID}>
       {Array.from({length: cards}, (_, index) => (
         <Card key={index} style={styles.skeleton}>
-          <SkeletonBlock width="32%" height={13} />
-          <SkeletonBlock width={index === 0 ? '46%' : '64%'} height={index === 0 ? 30 : 18} />
-          <SkeletonBlock width="78%" height={13} />
+          <SkeletonBlock width="32%" height={13} style={styles.bone} />
+          <SkeletonBlock width={index === 0 ? '46%' : '64%'} height={index === 0 ? 30 : 18} style={styles.bone} />
+          <SkeletonBlock width="78%" height={13} style={styles.bone} />
         </Card>
       ))}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
+  // The shared skeleton's grey is the customer app's; the rider's muted works on both grounds.
+  bone: {backgroundColor: c.muted},
   card: {gap: spacing.sm},
   row: {flexDirection: 'row', alignItems: 'flex-start', gap: 10},
   lines: {flex: 1, gap: spacing.xxs},
-  title: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  body: {fontSize: typography.body, color: colors.textSecondary},
+  title: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
+  body: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
   stack: {gap: spacing.md},
   skeleton: {gap: spacing.sm},
-});
+}));

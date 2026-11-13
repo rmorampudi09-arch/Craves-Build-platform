@@ -1,8 +1,9 @@
 import React, {memo, useEffect, useState} from 'react';
-import {Alert, StyleSheet, Text, View} from 'react-native';
+import {Alert, Pressable, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {useQueryClient} from '@tanstack/react-query';
-import {colors, fontWeight, spacing, typography} from '../../../design/tokens';
+import {Icon} from '../../../shared/components';
+import {colors, font, iconSize, radius, spacing, themedStyles, typography} from '../theme';
 import type {HomeSummary} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
@@ -12,11 +13,11 @@ import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, ProblemCard} from '../components/StateCard';
 import {Timeline} from '../components/Timeline';
 import {Card, RateRow, RiderScreen} from '../components/ui';
-import {formatClock, formatRupees} from '../domain/format';
+import {formatClock, formatDay, formatRupees} from '../domain/format';
 import {riderMessage} from '../domain/problem';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {takeAfterGate, type RiderNav} from '../navigation';
-import {riderKeys, useActiveTrip, useRiderHome, useRiderMe} from '../state/riderQueries';
+import {riderKeys, useActiveTrip, usePayouts, useRiderHome, useRiderMe} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {usePhoneReadiness} from './PhoneSetupScreen';
 
@@ -66,19 +67,49 @@ function PerHour({home}: {home: HomeSummary}) {
   );
 }
 
-/** Today, as drawn: the total beside the label, then the rows. */
+/** Today, as drawn: the total beside the label, then the rows; under it, the money ready to pay out. */
 function TodayCard({home}: {home: HomeSummary}) {
   const h = useStrings().strings.home;
   return (
-    <Card style={styles.tight}>
-      <View style={styles.spread}>
-        <Text style={styles.strong}>{h.today}</Text>
-        <Text style={styles.hero} testID="rider-today-earnings">
-          {formatRupees(home.todayEarningsPaise)}
-        </Text>
+    <>
+      <Card style={styles.tight}>
+        <View style={styles.spread}>
+          <Text style={styles.strong}>{h.today}</Text>
+          <Text style={styles.hero} testID="rider-today-earnings">
+            {formatRupees(home.todayEarningsPaise)}
+          </Text>
+        </View>
+        <PerHour home={home} />
+      </Card>
+      <PayoutRow />
+    </>
+  );
+}
+
+/** What is ready to pay out and when the next weekly payout goes, one tap from Payouts: the server's figures only. */
+function PayoutRow() {
+  const {strings} = useStrings();
+  const p = strings.payouts;
+  const navigation = useNavigation<RiderNav>();
+  const payouts = usePayouts();
+  if (!payouts.data) {
+    return null;
+  }
+  const next = payouts.data.nextPayoutOn;
+  const day = next ? `${strings.earnings.weekdays[new Date(next).getDay()]} ${formatDay(next)}` : null;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => navigation.navigate('Payouts')}
+      style={({pressed}) => [styles.payout, pressed && styles.pressed]}
+      testID="rider-home-payout">
+      <View style={styles.grow}>
+        <Text style={styles.small}>{p.canWithdraw}</Text>
+        <Text style={styles.hero}>{formatRupees(payouts.data.withdrawablePaise)}</Text>
+        {day ? <Text style={styles.small}>{p.next(day)}</Text> : null}
       </View>
-      <PerHour home={home} />
-    </Card>
+      <Icon name="chevron-right" size={iconSize.lg} color={colors.textSecondary} surface={false} />
+    </Pressable>
   );
 }
 
@@ -373,18 +404,21 @@ export function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   flex: {flex: 1},
   tight: {gap: spacing.xxs},
   card: {gap: spacing.md},
+  payout: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: c.surface},
+  pressed: {opacity: 0.8},
+  grow: {flex: 1, gap: 2},
   spread: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm},
   choices: {flexDirection: 'row', gap: spacing.xs},
   center: {textAlign: 'center'},
-  small: {fontSize: typography.small, color: colors.textSecondary},
-  body: {fontSize: typography.body, color: colors.textPrimary},
-  secondary: {fontSize: typography.body, color: colors.textSecondary},
-  strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  heading: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  hero: {fontSize: typography.hero, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
-  timer: {fontSize: typography.title, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
-});
+  small: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
+  body: {fontFamily: font.regular, fontSize: typography.body, color: c.textPrimary},
+  secondary: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
+  strong: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
+  heading: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary},
+  hero: {fontSize: typography.hero, fontFamily: font.bold, color: c.textPrimary, fontVariant: ['tabular-nums']},
+  timer: {fontSize: typography.title, fontFamily: font.bold, color: c.textPrimary, fontVariant: ['tabular-nums']},
+}));

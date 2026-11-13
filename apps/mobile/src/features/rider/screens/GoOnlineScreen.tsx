@@ -1,11 +1,11 @@
 import React, {useRef, useState} from 'react';
-import {Linking, Pressable, StatusBar, StyleSheet, Text, View} from 'react-native';
+import {Linking, Pressable, StatusBar, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import Svg, {Circle, ClipPath, Defs, Ellipse, G} from 'react-native-svg';
 import {useQueryClient} from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
 import {Icon, LoadingIndicator} from '../../../shared/components';
-import {colors, fontWeight, iconSize, spacing, touchTarget, typography} from '../../../design/tokens';
+import {colors, font, iconSize, spacing, themedStyles, touchTarget, typography, useRiderTheme} from '../theme';
 import {AppApiError} from '../../../core/http/apiError';
 import type {HomeSummary} from '../api/contract';
 import {riderApi} from '../api/riderApi';
@@ -24,7 +24,7 @@ import {useStrings} from '../strings/StringsProvider';
 /** The server takes a selfie of at most 5 MB (FleetShiftService); a bigger one would only be refused after the upload. */
 const SELFIE_MAX_BYTES = 5_000_000;
 
-/** Where to put your face: a dashed oval with a head-and-shoulders shape (white tints of the espresso ground). */
+/** Where to put your face: the camera window, an oval with a head-and-shoulders shape and a dashed edge. */
 function FaceGuide() {
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.guide}>
@@ -34,8 +34,8 @@ function FaceGuide() {
             <Ellipse cx="123" cy="155.5" rx="121.5" ry="154" />
           </ClipPath>
         </Defs>
-        <Ellipse cx="123" cy="155.5" rx="121.5" ry="154" fill={colors.white} fillOpacity={0.09} />
-        <G clipPath="url(#face)" fill={colors.white} fillOpacity={0.17}>
+        <Ellipse cx="123" cy="155.5" rx="121.5" ry="154" fill={colors.camera} />
+        <G clipPath="url(#face)" fill={colors.textPrimary} fillOpacity={0.12}>
           <Circle cx="123" cy="177" r="52" />
           <Circle cx="123" cy="330" r="101" />
         </G>
@@ -45,7 +45,7 @@ function FaceGuide() {
           rx="121.5"
           ry="154"
           fill="none"
-          stroke={colors.white}
+          stroke={colors.textSecondary}
           strokeWidth={3}
           strokeDasharray="8 5"
         />
@@ -60,6 +60,7 @@ function FaceGuide() {
  */
 export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
   const {strings, language} = useStrings();
+  const theme = useRiderTheme();
   const g = strings.goOnline;
   const queryClient = useQueryClient();
   const supportPhone = useRiderMe().data?.supportPhone;
@@ -125,7 +126,7 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={styles.screen} testID="rider-go-online-screen">
-      <StatusBar barStyle="light-content" backgroundColor={colors.espresso} />
+      <StatusBar barStyle={theme === 'night' ? 'light-content' : 'dark-content'} backgroundColor={colors.ground} />
       <View style={styles.top}>
         <Pressable
           accessibilityRole="button"
@@ -133,7 +134,7 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
           onPress={() => navigation.goBack()}
           style={styles.close}
           testID="rider-go-online-close">
-          <Icon name="close" size={iconSize.lg} color={colors.white} surface={false} />
+          <Icon name="close" size={iconSize.lg} color={colors.textPrimary} surface={false} />
         </Pressable>
         <Text accessibilityRole="header" style={styles.title}>
           {g.title}
@@ -179,22 +180,13 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
       <View style={styles.bottom}>
         {busy ? (
           <View accessibilityLiveRegion="polite" style={styles.busy}>
-            <LoadingIndicator accessible={false} color={colors.white} />
+            <LoadingIndicator accessible={false} color={colors.textPrimary} />
             <Text style={styles.why}>{g.goingOnline}</Text>
           </View>
         ) : (
           <>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={g.shutter}
-              onPress={takeSelfie}
-              style={({pressed}) => [styles.shutter, pressed && styles.pressed]}
-              testID="rider-selfie-shutter">
-              <View style={styles.shutterDisc} />
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.notNow} testID="rider-go-online-not-now">
-              <Text style={styles.why}>{g.notNow}</Text>
-            </Pressable>
+            <BottomAction label={g.shutter} leftIcon="camera-outline" onPress={takeSelfie} style={styles.wide} testID="rider-selfie-shutter" />
+            <BottomAction label={g.notNow} variant="neutral" onPress={() => navigation.goBack()} testID="rider-go-online-not-now" />
           </>
         )}
       </View>
@@ -202,30 +194,20 @@ export function GoOnlineScreen({navigation}: RiderScreenProps<'GoOnline'>) {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: colors.espresso},
+// Light by day, like every other screen: the old espresso camera screen read as a dead end in the sun.
+const styles = themedStyles(c => ({
+  screen: {flex: 1, backgroundColor: c.ground},
   top: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xxs, paddingTop: spacing.xs},
   close: {width: touchTarget.minimum, height: touchTarget.minimum, alignItems: 'center', justifyContent: 'center'},
-  title: {flex: 1, fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.white},
+  title: {flex: 1, fontSize: typography.headerTitle, fontFamily: font.bold, color: c.textPrimary},
   // The oval keeps its 246 × 311 shape and shrinks on short screens and at large font sizes.
   middle: {flex: 1, minHeight: 120, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md},
   guide: {height: '100%', maxHeight: 311, aspectRatio: 246 / 311},
   copy: {gap: spacing.xs, paddingHorizontal: spacing.xl},
-  heading: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.white, textAlign: 'center'},
-  why: {fontSize: typography.body, color: colors.border, textAlign: 'center'},
+  heading: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary, textAlign: 'center'},
+  why: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary, textAlign: 'center'},
   problem: {gap: spacing.xs, marginTop: spacing.xs},
-  bottom: {minHeight: 112, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md, gap: spacing.xs},
-  notNow: {minHeight: touchTarget.minimum, justifyContent: 'center', paddingHorizontal: spacing.md},
-  busy: {alignItems: 'center', gap: spacing.xs},
-  shutter: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    borderColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shutterDisc: {width: 64, height: 64, borderRadius: 32, backgroundColor: colors.white},
-  pressed: {opacity: 0.8},
-});
+  bottom: {alignItems: 'center', justifyContent: 'center', padding: spacing.md, gap: spacing.xxs},
+  wide: {alignSelf: 'stretch'},
+  busy: {minHeight: 112, alignItems: 'center', justifyContent: 'center', gap: spacing.xs},
+}));

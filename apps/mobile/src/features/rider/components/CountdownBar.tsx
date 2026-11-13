@@ -1,6 +1,6 @@
 import React, {memo, useEffect, useRef} from 'react';
-import {Animated, Easing, StyleSheet, View} from 'react-native';
-import {colors, radius} from '../../../design/tokens';
+import {Animated, Easing, View} from 'react-native';
+import {radius, themedStyles, useRiderTheme} from '../theme';
 import {useReducedMotionPreference} from '../../../design/reducedMotion';
 
 /**
@@ -21,6 +21,7 @@ export const CountdownBar = memo(function CountdownBarView({
   variant?: 'countdown' | 'wait';
   testID?: string;
 }) {
+  useRiderTheme(); // memo: re-render on a Day/Night switch, not only on new props
   const reduceMotion = useReducedMotionPreference();
   const progress = useRef(new Animated.Value(variant === 'countdown' ? 1 : 0)).current;
 
@@ -55,14 +56,14 @@ export const CountdownBar = memo(function CountdownBarView({
   );
 });
 
-const styles = StyleSheet.create({
-  track: {height: 8, borderRadius: radius.pill, backgroundColor: colors.muted, overflow: 'hidden'},
+const styles = themedStyles(c => ({
+  track: {height: 8, borderRadius: radius.pill, backgroundColor: c.border, overflow: 'hidden'},
   trackWait: {height: 6},
   fill: {
     height: '100%',
     width: '100%',
-    backgroundColor: colors.flameRed,
+    backgroundColor: c.flameRed,
     transformOrigin: 'left',
   },
-  fillWait: {backgroundColor: colors.textPrimary},
-});
+  fillWait: {backgroundColor: c.textPrimary},
+}));

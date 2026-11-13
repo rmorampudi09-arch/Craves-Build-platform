@@ -182,9 +182,10 @@ const allText = () =>
     .map(node => [node.props.children].flat().join(''))
     .join(' | ');
 const has = (testID: string) => tree.root.findAll(node => node.props.testID === testID).length > 0;
+// A button answers onPress; a slide step (SlideToConfirm) answers onConfirm, which skips the gesture as onPress skips the tap.
 const byId = (testID: string) =>
-  tree.root.findAll(node => node.props.testID === testID && typeof node.props.onPress === 'function')[0];
-const press = (testID: string) => act(async () => byId(testID).props.onPress());
+  tree.root.findAll(node => node.props.testID === testID && (typeof node.props.onConfirm === 'function' || typeof node.props.onPress === 'function'))[0];
+const press = (testID: string) => act(async () => (byId(testID).props.onConfirm ?? byId(testID).props.onPress)());
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -271,7 +272,7 @@ describe('Trip: loading, error and ended', () => {
     (tripQueue.enqueue as jest.Mock).mockImplementationOnce(() => new Promise(resolve => (answer = resolve)));
     await render(trip);
     await act(async () => {
-      byId('rider-reached-kitchen').props.onPress();
+      byId('rider-reached-kitchen').props.onConfirm();
       client.setQueryData(riderKeys.activeTrip, null);
     });
     await settle();
@@ -309,7 +310,7 @@ describe('Trip: to the kitchen (step 1)', () => {
 
   it("shows the offer's distance and the chef's ready time when the server sends them", async () => {
     await render({...trip, pickupDistanceM: 600, chefReadyAt: new Date(2026, 10, 3, 20, 12).toISOString()});
-    expect(allText()).toContain('Distance | 0.6 km, about 2 min | Food ready | about 8:12 pm');
+    expect(allText()).toContain('Landmark: near Image Gardens | 0.6 km, about 2 min | Food ready | about 8:12 pm');
   });
 
   it('calls the chef and opens Google Maps in two-wheeler mode', async () => {
@@ -581,7 +582,7 @@ describe('Trip: deliver with the OTP (step 4)', () => {
     await render(atDrop);
     const text = allText();
     expect(text).toContain('Anil | Trip · step 4 of 4');
-    expect(text).toContain('₹67 locked · Order #CR-4107 | Anil | Flat 302, Sai Residency, Kothaguda, Kondapur');
+    expect(text).toContain('₹67 locked · Order #CR-4107 | Hand over | Anil | Flat 302, Sai Residency, Kothaguda, Kondapur');
     expect(text).toContain('Near drop point');
     expect(text).toContain("It is on the customer's order screen. Type it here, then hand over the bag. | Ask Anil for the 4-digit code");
     expect(text).toContain("If Anil isn't answering | Call twice through the app. After 8 minutes at the door you are paid in full for this trip either way, and a photo of the bag at the door completes it. | Customer not answering?");

@@ -1,6 +1,6 @@
 import React, {memo, useCallback, useEffect, useRef, useState} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
-import {colors, spacing, typography} from '../../../design/tokens';
+import {Pressable, Text, View} from 'react-native';
+import {font, spacing, themedStyles, typography} from '../../../features/rider/theme';
 import {AppApiError} from '../../../core/http/apiError';
 import {BottomAction} from '../../../features/rider/components/BottomAction';
 import {Label, Title} from '../../../features/rider/components/ui';
@@ -152,8 +152,8 @@ export function RiderOtpScreen({route, navigation}: RiderScreenProps<'Otp'>) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   sentTo: {marginTop: -spacing.xs, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: spacing.xxs},
-  sentText: {fontSize: typography.body, color: colors.textSecondary},
-  link: {color: colors.flameRed, textDecorationLine: 'underline'},
-});
+  sentText: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
+  link: {color: c.redText, textDecorationLine: 'underline'},
+}));

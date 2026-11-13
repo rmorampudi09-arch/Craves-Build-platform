@@ -1,10 +1,11 @@
 // Pieces shared by the trip steps (docs/riders/SCREENS.md 9–14).
 import React, {type ReactNode} from 'react';
-import {Linking, StyleSheet, Text, useWindowDimensions, View} from 'react-native';
-import {Badge} from '../../../../shared/components';
-import {colors, fontWeight, spacing, typography} from '../../../../design/tokens';
+import {Linking, useWindowDimensions, View} from 'react-native';
+import {font, spacing, themedStyles, typography} from '../../theme';
 import type {DeliverBody, FailBody, Place, Trip, TripAction} from '../../api/contract';
+import {PanelText, PhasePanel, type Phase} from '../../components/PhasePanel';
 import {RiderHeader} from '../../components/RiderHeader';
+import {RiderBadge} from '../../components/StatusBadge';
 import {StepBar} from '../../components/StepBar';
 import {Card, RateRow} from '../../components/ui';
 import {distanceMeters, formatKm, formatRupees, minutesFor} from '../../domain/format';
@@ -47,7 +48,7 @@ export function TripHeader({title, trip, step}: {title?: string; trip: Trip; ste
 /** "Saved · will sync" while steps wait in the offline queue. */
 export function SyncNote({show}: {show: boolean}) {
   const {strings} = useStrings();
-  return show ? <Badge label={strings.common.savedWillSync} tone="info" testID="rider-sync-note" /> : null;
+  return show ? <RiderBadge label={strings.common.savedWillSync} tone="info" testID="rider-sync-note" /> : null;
 }
 
 /**
@@ -67,18 +68,19 @@ export function TwoUp({left, right}: {left: ReactNode; right: ReactNode}) {
   );
 }
 
-/** Where to go: "Pick up from" / "Deliver to", the name, the address and the landmark. */
-export function PlaceCard({label, name, place}: {label: string; name: string; place: Place}) {
+/** Where to go, on the phase's panel: "Ride to" / "Deliver to", the name, the address, the landmark and the distance. */
+export function PlaceCard({label, name, place, phase, distance}: {label: string; name: string; place: Place; phase: Phase; distance?: string | null}) {
   const t = useStrings().strings.trip;
   return (
-    <Card>
-      <Text style={text.small}>{label}</Text>
-      <Text accessibilityRole="header" style={text.name}>
-        {name}
-      </Text>
-      <Text style={text.body}>{`${place.address}, ${place.area}`}</Text>
-      {place.landmark ? <Text style={[text.body, text.secondary]}>{t.landmark(place.landmark)}</Text> : null}
-    </Card>
+    <PhasePanel phase={phase} verb={label} name={name} lines={[`${place.address}, ${place.area}`]} note={place.landmark ? t.landmark(place.landmark) : null}>
+      {distance ? (
+        <View style={styles.distance}>
+          <PanelText phase={phase} strong>
+            {distance}
+          </PanelText>
+        </View>
+      ) : null}
+    </PhasePanel>
   );
 }
 
@@ -112,18 +114,19 @@ export function OrderCard({trip, withPay}: {trip: Trip; withPay?: boolean}) {
   );
 }
 
-export const text = StyleSheet.create({
-  small: {fontSize: typography.small, color: colors.textSecondary},
-  body: {fontSize: typography.body, color: colors.textPrimary},
-  bold: {fontWeight: fontWeight.bold},
-  secondary: {color: colors.textSecondary},
+export const text = themedStyles(c => ({
+  small: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
+  body: {fontFamily: font.regular, fontSize: typography.body, color: c.textPrimary},
+  bold: {fontFamily: font.bold},
+  secondary: {color: c.textSecondary},
   center: {textAlign: 'center'},
-  name: {fontSize: typography.hero, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  heading: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
-});
+  name: {fontSize: typography.hero, fontFamily: font.bold, color: c.textPrimary},
+  heading: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary},
+}));
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   twoUp: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm},
   // Key–value rows sit on a 28 dp pitch.
   rows: {gap: 10},
-});
+  distance: {marginTop: spacing.sm},
+}));

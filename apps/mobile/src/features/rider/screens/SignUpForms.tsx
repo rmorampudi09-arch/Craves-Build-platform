@@ -1,8 +1,8 @@
 import React, {useState} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Text, View} from 'react-native';
 import {useQueryClient} from '@tanstack/react-query';
-import {InputField} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, spacing, typography} from '../../../design/tokens';
+import {RiderField} from '../components/RiderField';
+import {borderWidth, font, spacing, themedStyles, typography} from '../theme';
 import type {PayoutAccountInput, RiderMe, RiderProfile, RiderSignUp, VehicleKind} from '../api/contract';
 import {riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
@@ -100,7 +100,7 @@ export function VehicleFields({
           />
         ))}
       </ChoiceRow>
-      <InputField
+      <RiderField
         label={j.plate}
         placeholder="TS09EA1234"
         value={draft.plate}
@@ -112,7 +112,7 @@ export function VehicleFields({
         helperText={keepPlate ? strings.account.details.keepPlate(keepPlate) : undefined}
         testID="rider-join-plate"
       />
-      <InputField
+      <RiderField
         label={ap.model}
         placeholder="Honda Activa 6G"
         value={draft.model}
@@ -172,7 +172,7 @@ function DetailsForm({edit}: {edit: Correction}) {
       <Text accessibilityRole="header" style={styles.strong}>
         {d.title}
       </Text>
-      <InputField
+      <RiderField
         label={ap.name}
         value={name}
         onChangeText={setName}
@@ -312,7 +312,7 @@ export function PayoutFields({form, kycName}: {form: PayoutForm; kycName: string
         testID="rider-payout-method"
       />
       {form.method === 'UPI' ? (
-        <InputField
+        <RiderField
           label={p.upiId}
           placeholder="name@okaxis"
           value={form.upiId}
@@ -326,7 +326,7 @@ export function PayoutFields({form, kycName}: {form: PayoutForm; kycName: string
         />
       ) : (
         <>
-          <InputField
+          <RiderField
             label={p.accountNumber}
             value={form.accountNumber}
             onChangeText={form.setAccountNumber}
@@ -334,7 +334,7 @@ export function PayoutFields({form, kycName}: {form: PayoutForm; kycName: string
             maxLength={22}
             testID="rider-payout-account-number"
           />
-          <InputField
+          <RiderField
             label={p.ifsc}
             placeholder="SBIN0001234"
             value={form.ifsc}
@@ -346,7 +346,7 @@ export function PayoutFields({form, kycName}: {form: PayoutForm; kycName: string
           />
         </>
       )}
-      <InputField
+      <RiderField
         label={p.holder}
         value={form.holder}
         onChangeText={form.setHolder}
@@ -430,16 +430,16 @@ export function PayoutAccountCard({profile, kycName, onSent}: {profile: RiderPro
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   form: {gap: spacing.sm},
   row: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   detail: {paddingVertical: spacing.xs},
-  divider: {borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
+  divider: {borderTopWidth: borderWidth.standard, borderTopColor: c.border},
   flex: {flex: 1},
   value: {flexShrink: 1, textAlign: 'right'},
   // Names a group of choices as InputField names a field (shared/components/InputField.tsx), so the form reads as one.
-  label: {fontSize: typography.small, fontWeight: fontWeight.semibold, color: colors.textPrimary},
-  body: {fontSize: typography.body, color: colors.textPrimary},
-  secondary: {fontSize: typography.body, color: colors.textSecondary},
-  strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
-});
+  label: {fontSize: typography.small, fontFamily: font.semibold, color: c.textPrimary},
+  body: {fontFamily: font.regular, fontSize: typography.body, color: c.textPrimary},
+  secondary: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
+  strong: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
+}));

@@ -6,6 +6,9 @@ import type {RiderStrings} from './en';
 // (REVIEWED_LANGUAGES in StringsProvider); demo builds show it for that review.
 export const kn: RiderStrings = {
   common: {
+    // SlideToConfirm: a slide, or a tap and a second tap, so a bump never sends a trip step.
+    slideHint: 'ಖಚಿತಪಡಿಸಲು ಸರಿಸಿ, ಅಥವಾ ಎರಡು ಬಾರಿ ಟ್ಯಾಪ್ ಮಾಡಿ',
+    tapAgain: 'ಖಚಿತಪಡಿಸಲು ಮತ್ತೆ ಟ್ಯಾಪ್ ಮಾಡಿ',
     retry: 'ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ',
     loading: 'ಲೋಡ್ ಆಗುತ್ತಿದೆ…',
     offline: 'ಸಂಪರ್ಕ ಇಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸುತ್ತಿದ್ದೇವೆ.',
@@ -76,6 +79,8 @@ export const kn: RiderStrings = {
   } as Record<string, string>,
   tabs: {home: 'ಹೋಮ್', earnings: 'ಗಳಿಕೆ', profile: 'ಪ್ರೊಫೈಲ್'},
   status: {
+    // The route strip's four stops (StepBar).
+    route: ['ಕಿಚನ್‌ಗೆ', 'ಕಿಚನ್‌ನಲ್ಲಿ', 'ಗ್ರಾಹಕರಿಗೆ', 'ಹಸ್ತಾಂತರ'],
     offline: 'ಆಫ್‌ಲೈನ್',
     waiting: 'ಆನ್‌ಲೈನ್ · ಆರ್ಡರ್‌ಗಾಗಿ ಕಾಯುತ್ತಿದ್ದೀರಿ',
     trip: (step: number) => `ಟ್ರಿಪ್ · 4ರಲ್ಲಿ ${step}ನೇ ಹಂತ`,
@@ -463,6 +468,10 @@ export const kn: RiderStrings = {
     whyHome: (km: string) => `ನಿಮ್ಮ ಮನೆ ದಾರಿಯಲ್ಲಿ: ಈ ಡ್ರಾಪ್ ನಂತರ ನೀವು ಮನೆಗೆ ${km} ಕಿ.ಮೀ ಹತ್ತಿರ ಇರುತ್ತೀರಿ.`,
   },
   trip: {
+    // The kitchen's code board and the hand-over keypad (redesign R1).
+    showChef: 'ಶೆಫ್‌ಗೆ ತೋರಿಸಿ',
+    showChefNote: 'ಫೋನ್ ಅನ್ನು ಶೆಫ್ ಕಡೆ ಹಿಡಿಯಿರಿ. ಮುಚ್ಚಲು ಎಲ್ಲಿಯಾದರೂ ಟ್ಯಾಪ್ ಮಾಡಿ.',
+    deleteDigit: 'ಒಂದು ಅಂಕಿ ಅಳಿಸಿ',
     titles: {
       TO_KITCHEN: 'ಕಿಚನ್‌ಗೆ ಹೋಗಿ',
       AT_KITCHEN: 'ಕಿಚನ್‌ನಲ್ಲಿ',
@@ -696,6 +705,11 @@ export const kn: RiderStrings = {
     failedNote: 'ವಿಫಲವಾದ ಪೇಔಟ್ (ತಪ್ಪು ಖಾತೆ, ಬ್ಯಾಂಕ್ ಡೌನ್) ಮುಂದಿನ ಕೆಲಸದ ದಿನ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಲಾಗುತ್ತದೆ, ಬ್ಯಾಂಕ್‌ನ ಕಾರಣದೊಂದಿಗೆ ಇಲ್ಲಿ ಕಾಣುತ್ತದೆ. ನಿಮ್ಮ ಸುರಕ್ಷತೆಗಾಗಿ ಬ್ಯಾಂಕ್ ಖಾತೆ ಬದಲಾವಣೆ ಆಪ್ಸ್ ಜೊತೆ ನೇರವಾಗಿ ಆಗುತ್ತದೆ.',
   },
   profile: {
+    // Day or Night (theme.ts); the rider's choice stays on the phone.
+    screenTitle: 'ಪರದೆ',
+    day: 'ಹಗಲು',
+    night: 'ರಾತ್ರಿ',
+    screenNote: 'ರಾತ್ರಿ ಪರದೆ ಗಾಢವಾಗಿರುತ್ತದೆ, ಸೂರ್ಯಾಸ್ತದ ನಂತರ ಸವಾರಿಗೆ. ಯಾವಾಗ ಬೇಕಾದರೂ ಬದಲಿಸಿ.',
     title: 'ಪ್ರೊಫೈಲ್',
     ordersTitle: 'ನಿಮಗೆ ಬರುವ ಆರ್ಡರ್‌ಗಳು',
     ordersBody:

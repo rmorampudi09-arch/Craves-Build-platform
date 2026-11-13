@@ -126,7 +126,8 @@ async function settle() {
 }
 
 /** The Pressable with this testID, whose onPress runs the component's own guards. */
-const press = (id: string) => tree.root.findAll(node => node.props.testID === id && typeof node.props.onPress === 'function')[0];
+const press = (id: string) =>
+  tree.root.findAll(node => node.props.testID === id && (typeof node.props.onConfirm === 'function' || typeof node.props.onPress === 'function'))[0];
 const input = (id: string) => tree.root.findAll(node => node.props.testID === id && typeof node.props.onChangeText === 'function')[0];
 const has = (id: string) => tree.root.findAll(node => node.props.testID === id).length > 0;
 const texts = () =>
@@ -193,7 +194,7 @@ describe('rider app in live mode', () => {
     const accept = calls.find(c => c.url === '/api/v1/rider/terms/accept');
     expect(JSON.parse(accept?.data)).toEqual({version: 'v2'});
     const device = calls.find(c => c.url === '/api/v1/rider/devices');
-    expect(JSON.parse(device?.data)).toMatchObject({installationId: 'android-id-1', appVersion: '1.3.4'});
+    expect(JSON.parse(device?.data)).toMatchObject({installationId: 'android-id-1', appVersion: '1.4.0'});
     expect(calls.every(c => c.baseURL === 'https://api.example.invalid')).toBe(true);
   });
 
@@ -296,7 +297,8 @@ describe('rider app in live mode', () => {
 
       // No signal at the kitchen: "Picked up" waits in the queue and shows at once.
       signal = false;
-      await act(async () => press('rider-picked-up').props.onPress());
+      // Picked up is a slide step: onConfirm skips the gesture, as onPress skips a button's tap.
+      await act(async () => press('rider-picked-up').props.onConfirm());
       await settle();
       expect(has('rider-to-customer')).toBe(true);
 

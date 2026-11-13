@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
 import {StyleSheet, View} from 'react-native';
 import {Camera, GeoJSONSource, Layer, Map as MapLibreMap, Marker, TransformRequestManager} from '@maplibre/maplibre-react-native';
-import {colors, radius} from '../../../design/tokens';
+import {colors, radius, themedStyles} from '../theme';
 import {mapTilesBaseUrl, mapTilesReferer, mapTilesRequestMatch, olaMapStyleUrl} from '../../maps/olaMapTiles';
 import {riderOnlineService} from '../native/riderOnlineService';
 
@@ -87,9 +87,9 @@ export function OfferMap({kitchen, customerArea, label}: {kitchen?: Point; custo
   );
 }
 
-const styles = StyleSheet.create({
-  frame: {height: 190, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceMuted},
+const styles = themedStyles(c => ({
+  frame: {height: 190, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: c.surfaceMuted},
   // The kitchen as a flame-red pin, the rider as an espresso dot: the two things the rider looks for, no labels.
-  pin: {width: 18, height: 18, borderRadius: 9, borderBottomRightRadius: 2, transform: [{rotate: '45deg'}], backgroundColor: colors.flameRed, borderWidth: 2, borderColor: colors.white},
-  dot: {width: 14, height: 14, borderRadius: 7, backgroundColor: colors.textPrimary, borderWidth: 2, borderColor: colors.white},
-});
+  pin: {width: 18, height: 18, borderRadius: 9, borderBottomRightRadius: 2, transform: [{rotate: '45deg'}], backgroundColor: c.flameRed, borderWidth: 2, borderColor: c.white},
+  dot: {width: 14, height: 14, borderRadius: 7, backgroundColor: c.textPrimary, borderWidth: 2, borderColor: c.white},
+}));

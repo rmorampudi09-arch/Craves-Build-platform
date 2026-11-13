@@ -1,14 +1,15 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {Badge, Icon} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, iconSize, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {Icon} from '../../../shared/components';
+import {borderWidth, colors, font, iconSize, radius, spacing, themedStyles, touchTarget, typography} from '../theme';
 import type {TripStep} from '../api/contract';
 import type {RiderNav} from '../navigation';
 import {isDemo} from '../riderConfig';
 import {useActiveTrip, useRiderHome} from '../state/riderQueries';
 import {useStrings} from '../strings/StringsProvider';
 import {OfflineBanner} from './OfflineBanner';
+import {RiderBadge} from './StatusBadge';
 
 const STEP_NUMBER: Partial<Record<TripStep, number>> = {TO_KITCHEN: 1, AT_KITCHEN: 2, PICKED_UP: 3, AT_DROP: 4};
 
@@ -37,6 +38,8 @@ export function RiderHeader({
   const step = useActiveTrip().data?.step;
   const stepNumber = step ? STEP_NUMBER[step] : undefined;
   const live = !inactive && (online || stepNumber !== undefined);
+  // On a trip the chip takes the phase colour: peach while the kitchen is next, mint once the food is on board.
+  const phase = inactive || !stepNumber ? null : stepNumber <= 2 ? styles.chipKitchen : styles.chipDrop;
   const chip = inactive
     ? strings.status.notActive
     : stepNumber
@@ -71,12 +74,12 @@ export function RiderHeader({
                 accessibilityLabel={chip}
                 delayLongPress={600}
                 onLongPress={isDemo || __DEV__ ? () => navigation.navigate('DevPanel') : undefined}
-                style={[styles.chip, live && styles.chipLive]}
+                style={[styles.chip, live && styles.chipLive, phase]}
                 testID="rider-status-chip">
-                <View style={[styles.dot, live && styles.dotLive]} />
-                <Text style={styles.chipText}>{chip}</Text>
+                <View style={[styles.dot, live && styles.dotLive, phase && styles.dotPhase]} />
+                <Text style={[styles.chipText, phase && styles.chipTextPhase]}>{chip}</Text>
               </Pressable>
-              {isDemo ? <Badge label={strings.common.demoData} tone="warning" /> : null}
+              {isDemo ? <RiderBadge label={strings.common.demoData} tone="warning" /> : null}
             </View>
           )}
         </View>
@@ -96,19 +99,19 @@ export function RiderHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
+  // The header sits on the ground colour with no line: the cards below make the edge.
   header: {
-    minHeight: 68,
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
     paddingVertical: spacing.xs,
-    borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.white,
+    backgroundColor: c.ground,
   },
-  short: {minHeight: 64},
+  short: {minHeight: 60},
   // The 48 dp target hangs 8 dp into the padding, so the title starts at 56 dp.
   back: {
     width: touchTarget.minimum,
@@ -118,34 +121,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  left: {flex: 1, gap: spacing.xxs},
-  title: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  left: {flex: 1, gap: 6},
+  title: {fontSize: typography.headerTitle, fontFamily: font.bold, color: c.textPrimary},
   chips: {flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs},
   // Long statuses (Telugu, Kannada) wrap inside the chip instead of running past the header.
   chip: {
-    minHeight: 24,
+    minHeight: 32,
     maxWidth: '100%',
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: radius.pill,
     borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
+    borderColor: c.border,
+    backgroundColor: c.surface,
   },
-  chipLive: {borderColor: colors.success, backgroundColor: colors.successSoft},
-  dot: {width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textSecondary},
-  dotLive: {backgroundColor: colors.success},
-  chipText: {flexShrink: 1, fontSize: typography.small, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  chipLive: {borderColor: c.successSoft, backgroundColor: c.successSoft},
+  chipKitchen: {borderColor: c.kitchen, backgroundColor: c.kitchen},
+  chipDrop: {borderColor: c.drop, backgroundColor: c.drop},
+  dot: {width: 8, height: 8, borderRadius: 4, backgroundColor: c.textSecondary},
+  dotLive: {backgroundColor: c.success},
+  dotPhase: {backgroundColor: c.kitchenInk},
+  chipText: {flexShrink: 1, fontSize: typography.small, fontFamily: font.semibold, color: c.textPrimary},
+  chipTextPhase: {color: c.kitchenInk},
   sos: {
-    width: 56,
+    minWidth: 60,
     height: touchTarget.minimum,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: colors.error,
+    backgroundColor: c.error,
   },
-  sosText: {color: colors.white, fontWeight: fontWeight.extrabold, fontSize: typography.button},
-});
+  sosText: {color: c.white, fontFamily: font.display, fontSize: typography.button, letterSpacing: 0.5},
+}));

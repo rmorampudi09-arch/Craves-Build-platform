@@ -12,7 +12,7 @@ export const isDemo = riderApiMode === 'mock';
  * Keep in step with the rider flavor's versionName in android/app/build.gradle (rider-apk.yml checks); compared with
  * RiderMe.minAppVersion, and sent as appVersion with the phone's FCM token.
  */
-export const RIDER_APP_VERSION = '1.3.4';
+export const RIDER_APP_VERSION = '1.4.0';
 
 /**
  * The newest live build (craves.in/rider, the flyer's QR) and its version, which ship-rider-app writes beside the APK;

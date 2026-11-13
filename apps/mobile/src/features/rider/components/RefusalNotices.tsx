@@ -1,6 +1,6 @@
 import React from 'react';
-import {Linking, StyleSheet} from 'react-native';
-import {spacing} from '../../../design/tokens';
+import {Linking} from 'react-native';
+import {spacing, themedStyles} from '../theme';
 import type {Refusal} from '../domain/offlineQueue';
 import {useRiderShell} from '../navigation';
 import {useRiderMe} from '../state/riderQueries';
@@ -54,6 +54,6 @@ export function RefusalNotices({tripId}: {tripId?: string}) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   card: {gap: spacing.xs},
-});
+}));

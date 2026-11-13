@@ -1,10 +1,10 @@
 import React, {memo, useCallback, useState} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {FlashList} from '@shopify/flash-list';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {LoadingIndicator, SkeletonBlock} from '../../../shared/components';
-import {borderWidth, colors, fontWeight, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {borderWidth, colors, font, radius, spacing, themedStyles, touchTarget, typography, useRiderTheme} from '../theme';
 import type {EarningsRange, TripEarning} from '../api/contract';
 import {BottomAction} from '../components/BottomAction';
 import {Segmented} from '../components/Choices';
@@ -39,6 +39,7 @@ const TripRow = memo(function TripRowView({
   e: EarningsStrings;
   onOpen: (tripId: string) => void;
 }) {
+  useRiderTheme(); // memo: re-render on a Day/Night switch
   const route = e.route(item.kitchenArea, item.customerLocality);
   const time = formatClock(item.completedAt);
   const when = withDay ? `${e.weekdays[new Date(item.completedAt).getDay()]} ${formatDay(item.completedAt)}, ${time}` : time;
@@ -215,25 +216,25 @@ export function EarningsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: colors.white},
+const styles = themedStyles(c => ({
+  screen: {flex: 1, backgroundColor: c.surface},
   top: {
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs,
     borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
+    borderBottomColor: c.border,
   },
   summary: {gap: spacing.xxs},
-  trips: {fontSize: typography.body, color: colors.textSecondary},
+  trips: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
   spread: {flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm},
   // The hold card as drawn: warm amber, dark amber words, the link in deep red.
-  hold: {backgroundColor: colors.warningSoft, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xxs},
-  holdTitle: {fontSize: typography.body, fontWeight: fontWeight.medium, color: colors.textPrimary},
-  holdBody: {fontSize: typography.body, lineHeight: 20, color: colors.warningText},
+  hold: {backgroundColor: c.warningSoft, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xxs},
+  holdTitle: {fontSize: typography.body, fontFamily: font.semibold, color: c.textPrimary},
+  holdBody: {fontFamily: font.regular, fontSize: typography.body, lineHeight: 20, color: c.warningText},
   holdLink: {minHeight: touchTarget.minimum, justifyContent: 'center'},
-  linkText: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.flameRedAccessible},
+  linkText: {fontSize: typography.body, fontFamily: font.bold, color: c.redText},
   tabular: {fontVariant: ['tabular-nums']},
   row: {
     minHeight: 69,
@@ -243,14 +244,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: borderWidth.standard,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.white,
+    borderBottomColor: c.border,
+    backgroundColor: c.surface,
   },
-  pressed: {backgroundColor: colors.muted},
+  pressed: {backgroundColor: c.muted},
   rowText: {flex: 1, gap: spacing.xxs},
-  rowTitle: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  meta: {fontSize: typography.small, color: colors.textSecondary},
+  rowTitle: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
+  meta: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
   rowEnd: {alignItems: 'flex-end', gap: spacing.xxs},
-  amount: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
+  amount: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary, fontVariant: ['tabular-nums']},
   pad: {padding: spacing.md, gap: spacing.xxs},
-});
+}));

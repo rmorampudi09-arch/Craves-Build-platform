@@ -1,7 +1,7 @@
 import React from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {Pressable, Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {colors, fontWeight, radius, spacing, touchTarget, typography} from '../../../design/tokens';
+import {font, radius, spacing, themedStyles, touchTarget, typography} from '../theme';
 import {RiderHeader} from '../components/RiderHeader';
 import {CardsSkeleton, ProblemCard} from '../components/StateCard';
 import {Card, RiderScreen} from '../components/ui';
@@ -78,15 +78,15 @@ export function RulesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(c => ({
   flex: {flex: 1},
   rule: {flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm},
-  dot: {width: 8, height: 8, borderRadius: radius.pill, marginTop: 7, backgroundColor: colors.espresso},
-  body: {fontSize: typography.body, lineHeight: 22, color: colors.textPrimary},
-  secondary: {fontSize: typography.body, lineHeight: 20, color: colors.textSecondary},
-  strong: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.textPrimary},
+  dot: {width: 8, height: 8, borderRadius: radius.pill, marginTop: 7, backgroundColor: c.inverse},
+  body: {fontFamily: font.regular, fontSize: typography.body, lineHeight: 22, color: c.textPrimary},
+  secondary: {fontFamily: font.regular, fontSize: typography.body, lineHeight: 20, color: c.textSecondary},
+  strong: {fontSize: typography.body, fontFamily: font.bold, color: c.textPrimary},
   changes: {gap: spacing.xs},
   links: {flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm},
   link: {minHeight: touchTarget.minimum, justifyContent: 'center'},
-  linkText: {fontSize: typography.body, fontWeight: fontWeight.bold, color: colors.flameRedAccessible},
-});
+  linkText: {fontSize: typography.body, fontFamily: font.bold, color: c.redText},
+}));

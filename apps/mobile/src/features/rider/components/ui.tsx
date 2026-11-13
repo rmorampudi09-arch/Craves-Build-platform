@@ -1,8 +1,9 @@
-// Small flat building blocks for rider screens: white surfaces, 1 px borders, no shadows.
+// Small flat building blocks for rider screens: surface cards on the ground colour, no shadows (DESIGN.md).
 import React, {PropsWithChildren, ReactNode, useEffect, useState} from 'react';
-import {Keyboard, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle} from 'react-native';
+import {Keyboard, ScrollView, StyleProp, Text, View, ViewStyle} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {borderWidth, colors, elevation, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {borderWidth, font, radius, spacing, themedStyles, typography} from '../theme';
+import {elevation} from '../../../design/tokens';
 import {formatRupees} from '../domain/format';
 
 /** True while the soft keyboard is up; always false unless `enabled`. */
@@ -47,7 +48,7 @@ export function RiderScreen({
   );
 }
 
-/** White, 1 dp border, radius 14, no shadow. Never put a card inside a card. */
+/** A surface card, radius 20, no line, no shadow. Never put a card inside a card. */
 export function Card({children, style}: PropsWithChildren<{style?: StyleProp<ViewStyle>}>) {
   return <View style={[styles.card, style]}>{children}</View>;
 }
@@ -95,40 +96,39 @@ export function RateRow({label, value, divider, total}: {label: string; value: s
   );
 }
 
-export const riderStyles = StyleSheet.create({
+export const riderStyles = themedStyles(() => ({
   gap: {gap: spacing.sm},
   rowGap: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs},
   half: {flex: 1},
-});
+}));
 
-const styles = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: colors.surfaceBase},
+const styles = themedStyles(c => ({
+  // Surface cards on a warm ground, no lines and no shadow: the card itself is the edge.
+  screen: {flex: 1, backgroundColor: c.ground},
   content: {padding: spacing.md, gap: spacing.md, paddingBottom: spacing.xl},
   footer: {
     padding: spacing.md,
     gap: spacing.xs,
     borderTopWidth: borderWidth.standard,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surfaceBase,
+    borderTopColor: c.border,
+    backgroundColor: c.surface,
   },
   card: {
     padding: spacing.md,
     gap: spacing.xs,
-    borderRadius: radius.md,
-    borderWidth: borderWidth.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceBase,
+    borderRadius: radius.lg,
+    backgroundColor: c.surface,
     ...elevation.none,
   },
-  hero: {borderRadius: radius.lg, borderColor: colors.textPrimary},
-  title: {fontSize: typography.hero, fontWeight: fontWeight.bold, color: colors.textPrimary},
-  label: {fontSize: typography.small, color: colors.textSecondary},
-  value: {fontSize: typography.heading, fontWeight: fontWeight.semibold, color: colors.textPrimary},
-  body: {fontSize: typography.body, color: colors.textPrimary},
-  money: {fontSize: typography.title, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
+  hero: {borderRadius: 24, borderWidth: borderWidth.strong, borderColor: c.textPrimary},
+  title: {fontSize: typography.hero, fontFamily: font.bold, color: c.textPrimary},
+  label: {fontFamily: font.semibold, fontSize: typography.small, color: c.textSecondary},
+  value: {fontSize: typography.heading, fontFamily: font.semibold, color: c.textPrimary},
+  body: {fontFamily: font.regular, fontSize: typography.body, color: c.textPrimary},
+  money: {fontSize: typography.money, fontFamily: font.display, color: c.textPrimary, fontVariant: ['tabular-nums']},
   row: {flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm},
-  rowDivider: {paddingTop: spacing.xs, borderTopWidth: borderWidth.standard, borderTopColor: colors.border},
-  rowLabel: {flex: 1, color: colors.textSecondary},
-  rowTotal: {color: colors.textPrimary, fontWeight: fontWeight.bold},
-  rowValue: {flexShrink: 1, fontWeight: fontWeight.bold, textAlign: 'right'},
-});
+  rowDivider: {paddingTop: spacing.xs, borderTopWidth: borderWidth.standard, borderTopColor: c.border},
+  rowLabel: {flex: 1, color: c.textSecondary},
+  rowTotal: {color: c.textPrimary, fontFamily: font.bold},
+  rowValue: {flexShrink: 1, fontFamily: font.bold, textAlign: 'right', fontVariant: ['tabular-nums']},
+}));

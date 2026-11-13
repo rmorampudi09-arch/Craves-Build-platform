@@ -1429,7 +1429,7 @@ describe('Offer', () => {
     expect(text).toContain('₹40 base + ₹18 drop distance + ₹9 ride to the kitchen | To the kitchen | 2.0 km | Kitchen to customer | 4.0 km · Kondapur | Whole trip | about 28 min | Accept | Not this one');
     expect(text).toContain('Saying no is free. Nothing is counted.');
     const pay = tree.root.findByProps({testID: 'rider-offer-pay'});
-    expect(StyleSheet.flatten(pay.props.style)).toMatchObject({fontSize: 72, fontWeight: '900'});
+    expect(StyleSheet.flatten(pay.props.style)).toMatchObject({fontSize: 84, fontFamily: 'BarlowCondensed-ExtraBold'});
     expect(pay.props.adjustsFontSizeToFit).toBe(true);
   });
 

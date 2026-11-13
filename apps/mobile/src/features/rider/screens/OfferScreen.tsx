@@ -1,8 +1,8 @@
 import React, {memo, useEffect, useRef, useState} from 'react';
-import {AccessibilityInfo, BackHandler, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {AccessibilityInfo, BackHandler, ScrollView, Text, View} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useQueryClient} from '@tanstack/react-query';
-import {borderWidth, colors, fontWeight, radius, spacing, typography} from '../../../design/tokens';
+import {borderWidth, font, radius, spacing, themedStyles, typography} from '../theme';
 import {AppApiError} from '../../../core/http/apiError';
 import {idempotencyKey, riderApi} from '../api/riderApi';
 import {Banner} from '../components/Banner';
@@ -10,6 +10,7 @@ import {BottomAction} from '../components/BottomAction';
 import {CountdownBar} from '../components/CountdownBar';
 import {OfferMap} from '../components/OfferMap';
 import {OfflineBanner} from '../components/OfflineBanner';
+import {PhasePanel} from '../components/PhasePanel';
 import {RateRow} from '../components/ui';
 import {formatClock, formatKm, formatRupees} from '../domain/format';
 import {whyHome, whyOffer} from '../domain/offerRules';
@@ -23,8 +24,6 @@ import {useStrings} from '../strings/StringsProvider';
 
 const CLOSE_AFTER_MS = 2000;
 const ANNOUNCE_AT = [30, 20, 10, 5];
-/** The one 72 sp, weight 900 number in the app: the locked pay (DESIGN.md offerPay). */
-const OFFER_PAY = {fontSize: 72, fontWeight: '900'} as const;
 
 /** Only this leaf re-renders each second. TalkBack hears it at 30, 20, 10 and 5 s, not every tick. */
 const SecondsLeft = memo(function SecondsLeftView({deadline, label}: {deadline: number; label: (s: number) => string}) {
@@ -147,15 +146,14 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
   // The reason, as drawn: the rule in one line, plus "only you" when nobody else is asked, or the next-order wording.
   const why = next ? o.whyNext : [whyOffer(offer.reason, o), offer.reason?.atOnce === 1 ? o.onlyYou : null].filter(Boolean).join(' ');
   const home = whyHome(offer.reason, o);
+  // The two legs on their phase panels (peach to the kitchen, mint to the customer), then the times in rows.
+  const toKitchen = offer.pickupMinutes == null ? pickupKm : o.kmMinutes(pickupKm, offer.pickupMinutes);
+  const toCustomer = `${formatKm(offer.dropDistanceM)} · ${offer.customerLocality}`;
   const rows: [string, string][] = next
-    ? [
-        [o.fromDropToKitchen, offer.pickupMinutes == null ? pickupKm : o.kmMinutes(pickupKm, offer.pickupMinutes)],
-        [o.toCustomer, `${formatKm(offer.dropDistanceM)} · ${offer.customerLocality}`],
-        ...(next.foodReadyAt ? [[o.foodReadyAt, o.readyWhenArrive(formatClock(next.foodReadyAt))] as [string, string]] : []),
-      ]
+    ? next.foodReadyAt
+      ? [[o.foodReadyAt, o.readyWhenArrive(formatClock(next.foodReadyAt))]]
+      : []
     : [
-        [o.toKitchen, offer.pickupMinutes == null ? pickupKm : o.kmMinutes(pickupKm, offer.pickupMinutes)],
-        [o.toCustomer, `${formatKm(offer.dropDistanceM)} · ${offer.customerLocality}`],
         ...(offer.foodReadyInMinutes == null ? [] : [[o.foodReadyIn, o.aboutMinutes(offer.foodReadyInMinutes)] as [string, string]]),
         [o.wholeTrip, o.aboutMinutes(offer.estMinutes)],
       ];
@@ -185,12 +183,18 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
           <Text style={styles.secondary}>{next ? o.fromDrop(kitchen, pickupKm) : o.locked}</Text>
           {parts ? <Text style={styles.small}>{parts}</Text> : null}
         </View>
-        <OfferMap key={offer.offerId} kitchen={offer.kitchenAt} customerArea={offer.customerAreaAt} label={o.mapLabel} />
-        <View style={styles.rows}>
-          {rows.map(([label, value]) => (
-            <RateRow key={label} label={label} value={value} />
-          ))}
+        <View style={styles.legs}>
+          <PhasePanel phase="kitchen" verb={next ? o.fromDropToKitchen : o.toKitchen} name={toKitchen} testID="rider-offer-kitchen" />
+          <PhasePanel phase="customer" verb={o.toCustomer} name={toCustomer} testID="rider-offer-customer" />
         </View>
+        <OfferMap key={offer.offerId} kitchen={offer.kitchenAt} customerArea={offer.customerAreaAt} label={o.mapLabel} />
+        {rows.length ? (
+          <View style={styles.rows}>
+            {rows.map(([label, value]) => (
+              <RateRow key={label} label={label} value={value} />
+            ))}
+          </View>
+        ) : null}
         {why ? (
           <View style={styles.whyCard}>
             <Text style={styles.why} testID="rider-offer-why">
@@ -229,30 +233,32 @@ export function OfferScreen({route, navigation}: RiderScreenProps<'Offer'>) {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {flex: 1, backgroundColor: colors.white},
+const styles = themedStyles(c => ({
+  screen: {flex: 1, backgroundColor: c.ground},
   content: {flexGrow: 1, gap: spacing.md, padding: spacing.md},
   flex: {flex: 1},
   titleRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   pay: {marginTop: spacing.xs, gap: spacing.xxs},
-  payHero: {...OFFER_PAY, color: colors.textPrimary, fontVariant: ['tabular-nums']},
-  rows: {gap: spacing.xs},
-  // The reason card and the current-trip strip, as drawn: warm grey, and espresso with light text.
-  whyCard: {backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, padding: spacing.md},
-  why: {fontSize: typography.body, color: colors.textSecondary},
-  currentTrip: {backgroundColor: colors.espresso, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.xxs},
-  currentTripLabel: {fontSize: typography.small, color: colors.surfaceMuted},
-  currentTripValue: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.white},
+  // The one 84 sp number in the app: the locked pay, in Barlow Condensed so ₹1,240 still fits a 360 dp phone.
+  payHero: {fontFamily: font.display, fontSize: typography.pay, color: c.textPrimary, fontVariant: ['tabular-nums']},
+  legs: {gap: spacing.xs},
+  rows: {gap: spacing.xs, padding: spacing.md, borderRadius: radius.lg, backgroundColor: c.surface},
+  whyCard: {backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md},
+  why: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
+  // The trip still under way, above a next-order offer: the inverse strip, dark by day and light by night.
+  currentTrip: {backgroundColor: c.inverse, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.xxs},
+  currentTripLabel: {fontFamily: font.regular, fontSize: typography.small, color: c.onInverse},
+  currentTripValue: {fontSize: typography.heading, fontFamily: font.bold, color: c.onInverse},
   push: {flexGrow: 1},
-  heading: {fontSize: typography.heading, fontWeight: fontWeight.bold, color: colors.textPrimary, fontVariant: ['tabular-nums']},
-  secondary: {fontSize: typography.body, color: colors.textSecondary},
-  small: {fontSize: typography.small, color: colors.textSecondary},
-  note: {fontSize: typography.small, color: colors.textSecondary, textAlign: 'center'},
+  heading: {fontSize: typography.heading, fontFamily: font.bold, color: c.textPrimary, fontVariant: ['tabular-nums']},
+  secondary: {fontFamily: font.regular, fontSize: typography.body, color: c.textSecondary},
+  small: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary},
+  note: {fontFamily: font.regular, fontSize: typography.small, color: c.textSecondary, textAlign: 'center'},
   footer: {
     padding: spacing.md,
     gap: spacing.xs,
     borderTopWidth: borderWidth.standard,
-    borderTopColor: colors.border,
-    backgroundColor: colors.white,
+    borderTopColor: c.border,
+    backgroundColor: c.surface,
   },
-});
+}));

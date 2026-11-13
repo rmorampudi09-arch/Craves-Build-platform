@@ -2,16 +2,19 @@ import React from 'react';
 import {AccessibilityInfo, Animated, StyleSheet, Text} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query';
-import {Badge, Icon} from '../../../shared/components';
-import {colors, radius} from '../../../design/tokens';
+import {Icon} from '../../../shared/components';
+import {colors, font, setRiderTheme} from '../theme';
 import type {HomeSummary, Trip} from '../api/contract';
 import {connection} from '../state/connection';
 import {riderKeys} from '../state/riderQueries';
 import {Banner} from './Banner';
 import {BottomAction} from './BottomAction';
 import {CountdownBar} from './CountdownBar';
+import {Keypad} from './Keypad';
+import {PhasePanel} from './PhasePanel';
 import {RiderHeader} from './RiderHeader';
 import {RiderSplash} from './RiderSplash';
+import {SlideToConfirm} from './SlideToConfirm';
 import {STATUS_TONE, StatusBadge} from './StatusBadge';
 import {StepBar} from './StepBar';
 import {Card, HeroCard, RateRow} from './ui';
@@ -62,7 +65,7 @@ describe('RiderHeader', () => {
   it('says Offline in a neutral chip, with the title and SOS', async () => {
     await render(<RiderHeader title="Hi, Ravi" />, [[riderKeys.home, offline], [riderKeys.activeTrip, null]]);
     expect(chip().props.accessibilityLabel).toBe('Offline');
-    expect(StyleSheet.flatten(chip().props.style).backgroundColor).toBe(colors.white);
+    expect(StyleSheet.flatten(chip().props.style).backgroundColor).toBe(colors.surface);
     expect(texts()).toContain('Hi, Ravi');
     // Jest runs mock mode; live mode leaves the tag off (src/app/rider/RiderApp.live.test.tsx).
     expect(texts()).toContain('Demo data');
@@ -74,7 +77,7 @@ describe('RiderHeader', () => {
   it('turns green while waiting for orders', async () => {
     await render(<RiderHeader title="Hi, Ravi" />, [[riderKeys.home, {...offline, online: true}], [riderKeys.activeTrip, null]]);
     expect(chip().props.accessibilityLabel).toBe('Online · waiting for orders');
-    expect(StyleSheet.flatten(chip().props.style)).toMatchObject({backgroundColor: colors.successSoft, borderColor: colors.success});
+    expect(StyleSheet.flatten(chip().props.style)).toMatchObject({backgroundColor: colors.successSoft, borderColor: colors.successSoft});
   });
 
   it('shows the trip step and passes the trip to SOS', async () => {
@@ -83,6 +86,8 @@ describe('RiderHeader', () => {
       [riderKeys.activeTrip, {step: 'AT_KITCHEN'} as Trip],
     ]);
     expect(chip().props.accessibilityLabel).toBe('Trip · step 2 of 4');
+    // Steps 1 and 2 take the kitchen's peach, 3 and 4 the customer's mint.
+    expect(StyleSheet.flatten(chip().props.style).backgroundColor).toBe(colors.kitchen);
     act(() => pressable('rider-sos').props.onPress());
     expect(mockNavigation.navigate).toHaveBeenCalledWith('Sos', {tripId: 't1'});
   });
@@ -90,7 +95,7 @@ describe('RiderHeader', () => {
   it('says Not active yet for an account that cannot work', async () => {
     await render(<RiderHeader title="Your sign-up" inactive />, [[riderKeys.home, {...offline, online: true}], [riderKeys.activeTrip, null]]);
     expect(chip().props.accessibilityLabel).toBe('Not active yet');
-    expect(StyleSheet.flatten(chip().props.style).backgroundColor).toBe(colors.white);
+    expect(StyleSheet.flatten(chip().props.style).backgroundColor).toBe(colors.surface);
   });
 
   it('has a back variant with a title and SOS but no chip', async () => {
@@ -100,7 +105,7 @@ describe('RiderHeader', () => {
     expect(byId('rider-back').props.accessibilityLabel).toBe('Back');
     act(() => pressable('rider-back').props.onPress());
     expect(mockNavigation.goBack).toHaveBeenCalled();
-    expect(style('rider-header').minHeight).toBe(64);
+    expect(style('rider-header').minHeight).toBe(60);
   });
 
   it('shows only the chip when there is no title', async () => {
@@ -126,11 +131,18 @@ describe('RiderHeader', () => {
 });
 
 describe('StepBar', () => {
-  it('darkens the done and current steps and reads as one element', async () => {
+  it('names the four stops, darkens the done ones, marks the current one red, and reads as one element', async () => {
     await render(<StepBar step={2} />);
     const fills = [1, 2, 3, 4].map(n => style(`rider-step-${n}`).backgroundColor);
-    expect(fills).toEqual([colors.textPrimary, colors.textPrimary, colors.border, colors.border]);
+    expect(fills).toEqual([colors.textPrimary, colors.flameRed, colors.surface, colors.surface]);
+    expect(texts()).toEqual(['To kitchen', 'At kitchen', 'To customer', 'Hand over']);
     expect(byId('rider-step-bar').props.accessibilityLabel).toBe('Trip step 2 of 4');
+  });
+
+  it('leaves the stops unnamed when it counts something else', async () => {
+    await render(<StepBar step={1} label="Step 1 of 4: About you" />);
+    expect(texts()).toEqual([]);
+    expect(byId('rider-step-bar').props.accessibilityLabel).toBe('Step 1 of 4: About you');
   });
 });
 
@@ -211,27 +223,29 @@ describe('StatusBadge', () => {
     });
   });
 
-  it('renders the tone with a 24 dp or compact 20 dp pill', async () => {
-    await render(<StatusBadge status="REJECTED" label="Not accepted" />);
-    expect(tree.root.findByType(Badge).props).toMatchObject({label: 'Not accepted', tone: 'error'});
-    expect(StyleSheet.flatten(tree.root.findByType(Badge).props.style).minHeight).toBe(24);
-    await render(<StatusBadge status="HELD" label="On hold" compact />);
-    expect(StyleSheet.flatten(tree.root.findByType(Badge).props.style).minHeight).toBe(20);
+  it('renders the tone in a pill that grows with its text, and a compact one under amounts', async () => {
+    await render(<StatusBadge status="REJECTED" label="Not accepted" testID="badge" />);
+    expect(style('badge')).toMatchObject({minHeight: 26, backgroundColor: colors.errorSoft});
+    expect(StyleSheet.flatten(tree.root.findByType(Text).props.style).color).toBe(colors.redText);
+    expect(texts()).toEqual(['Not accepted']);
+    await render(<StatusBadge status="HELD" label="On hold" compact testID="badge" />);
+    expect(style('badge')).toMatchObject({minHeight: 22, backgroundColor: colors.warningSoft});
   });
 });
 
 describe('BottomAction', () => {
-  it('is 56 dp with no shadow, and 64 dp when tall', async () => {
+  it('is 64 dp flame red with a white 19 sp bold label and no shadow, and 72 dp when tall', async () => {
     await render(<BottomAction label="Go online" onPress={jest.fn()} testID="go" />);
-    expect(style('go')).toMatchObject({minHeight: 56, borderRadius: radius.md, backgroundColor: colors.flameRed});
+    expect(style('go')).toMatchObject({minHeight: 64, borderRadius: 18, backgroundColor: colors.flameRed});
     expect(style('go').elevation).toBeUndefined();
+    expect(StyleSheet.flatten(tree.root.findByType(Text).props.style)).toMatchObject({color: colors.white, fontSize: 19, fontFamily: font.bold});
     await render(<BottomAction label="Accept" size="tall" onPress={jest.fn()} testID="go" />);
-    expect(style('go').minHeight).toBe(64);
+    expect(style('go').minHeight).toBe(72);
   });
 
-  it('draws the outline with a grey line and a dark label', async () => {
+  it('draws the outline with a 2 dp grey line and a dark label', async () => {
     await render(<BottomAction label="Go offline" variant="outline" onPress={jest.fn()} testID="go" />);
-    expect(style('go')).toMatchObject({borderColor: colors.borderStrong, backgroundColor: colors.white});
+    expect(style('go')).toMatchObject({borderColor: colors.borderStrong, borderWidth: 2, backgroundColor: 'transparent'});
     expect(StyleSheet.flatten(tree.root.findByType(Text).props.style).color).toBe(colors.textPrimary);
   });
 
@@ -260,7 +274,7 @@ describe('BottomAction', () => {
 });
 
 describe('cards and rows', () => {
-  it('keeps cards flat: radius 14 with a 1 dp line; the hero card is radius 20 with a dark line', async () => {
+  it('keeps cards flat: a radius 20 surface with no line; the hero card is radius 24 with a 2 dp dark line', async () => {
     await render(
       <>
         <Card style={{}}>
@@ -272,15 +286,102 @@ describe('cards and rows', () => {
       </>,
     );
     const [card, hero] = tree.root.findAll(node => typeof node.type === 'string' && node.props.style).map(n => StyleSheet.flatten(n.props.style));
-    expect(card).toMatchObject({borderRadius: 14, borderWidth: 1, borderColor: colors.border, elevation: 0});
-    expect(hero).toMatchObject({borderRadius: 20, borderColor: colors.textPrimary});
+    expect(card).toMatchObject({borderRadius: 20, backgroundColor: colors.surface, elevation: 0});
+    expect(card.borderWidth).toBeUndefined();
+    expect(hero).toMatchObject({borderRadius: 24, borderWidth: 2, borderColor: colors.textPrimary});
   });
 
   it('puts the label left and the bold value right', async () => {
     await render(<RateRow label="Base pay, first 2 km" value="₹40" total />);
     const [label, value] = tree.root.findAllByType(Text).map(n => StyleSheet.flatten(n.props.style));
-    expect(label).toMatchObject({flex: 1, color: colors.textPrimary, fontWeight: '700'});
-    expect(value).toMatchObject({textAlign: 'right', fontWeight: '700'});
+    expect(label).toMatchObject({flex: 1, color: colors.textPrimary, fontFamily: font.bold});
+    expect(value).toMatchObject({textAlign: 'right', fontFamily: font.bold});
+  });
+});
+
+describe('SlideToConfirm', () => {
+  it('arms on the first tap and confirms on the second, so a bump never sends a step', async () => {
+    const onConfirm = jest.fn();
+    await render(<SlideToConfirm label="Picked up" onConfirm={onConfirm} testID="slide" />);
+    act(() => pressable('slide').props.onPress());
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(texts()).toContain('Tap again to confirm');
+    act(() => pressable('slide').props.onPress());
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(texts()).toContain('Picked up');
+  });
+
+  it('lets a drag start on the knob itself, and never on a disabled slide', async () => {
+    // The knob holds the drag handlers (a Pressable that already owns a touch is never asked to hand it over).
+    const knob = () => tree.root.find(node => node.props.testID === 'slide-knob' && typeof node.props.onStartShouldSetResponder === 'function');
+    await render(<SlideToConfirm label="Picked up" onConfirm={jest.fn()} testID="slide" />);
+    expect(knob().props.onStartShouldSetResponder({})).toBe(true);
+    await render(<SlideToConfirm label="Picked up" onConfirm={jest.fn()} disabled testID="slide" />);
+    expect(knob().props.onStartShouldSetResponder({})).toBe(false);
+  });
+
+  it('forgets the first tap after 3 s', async () => {
+    jest.useFakeTimers();
+    const onConfirm = jest.fn();
+    await render(<SlideToConfirm label="Picked up" onConfirm={onConfirm} testID="slide" />);
+    act(() => pressable('slide').props.onPress());
+    act(() => {
+      jest.advanceTimersByTime(3000);
+    });
+    act(() => pressable('slide').props.onPress());
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("confirms at once on TalkBack's double tap, never while disabled, and says how to use it", async () => {
+    const onConfirm = jest.fn();
+    await render(<SlideToConfirm label="Picked up" onConfirm={onConfirm} testID="slide" />);
+    expect(pressable('slide').props.accessibilityHint).toBe('Slide, or tap twice, to confirm');
+    act(() => pressable('slide').props.onAccessibilityAction({nativeEvent: {actionName: 'activate'}}));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    await render(<SlideToConfirm label="Picked up" onConfirm={onConfirm} disabled testID="slide" />);
+    act(() => pressable('slide').props.onAccessibilityAction({nativeEvent: {actionName: 'activate'}}));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(style('slide').backgroundColor).toBe(colors.muted);
+  });
+});
+
+describe('Keypad', () => {
+  it('sends each digit and a delete, with 60 dp keys TalkBack can read', async () => {
+    const onDigit = jest.fn();
+    const onDelete = jest.fn();
+    await render(<Keypad onDigit={onDigit} onDelete={onDelete} testID="key" />);
+    act(() => pressable('key-7').props.onPress());
+    act(() => pressable('key-back').props.onPress());
+    expect(onDigit).toHaveBeenCalledWith('7');
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(byId('key-back').props.accessibilityLabel).toBe('Delete a digit');
+    expect(style('key-0').minHeight).toBe(60);
+  });
+});
+
+describe('Day and Night', () => {
+  afterEach(() => act(() => setRiderTheme('day')));
+  const panel = <PhasePanel phase="kitchen" verb="Ride to" name="Lakshmi's Kitchen" testID="panel" />;
+  const nameColor = () => StyleSheet.flatten(tree.root.findAllByType(Text).find(node => node.props.children === "Lakshmi's Kitchen")?.props.style).color;
+
+  it('draws the kitchen panel peach by day and, as before, dark brown with white words by night', async () => {
+    await render(panel);
+    expect(style('panel').backgroundColor).toBe('#FFE4CC');
+    expect(nameColor()).toBe('#261A15');
+    act(() => setRiderTheme('night'));
+    await render(panel);
+    expect(style('panel').backgroundColor).toBe('#3A2B23');
+    expect(nameColor()).toBe('#FFFFFF');
+    await render(<PhasePanel phase="customer" verb="Deliver to" name="Anil" testID="panel" />);
+    expect(style('panel').backgroundColor).toBe('#0A5C43');
+  });
+
+  it('repaints a screen that is already open when the rider switches', async () => {
+    await render(<RiderHeader title="Hi, Ravi" />, [[riderKeys.home, offline], [riderKeys.activeTrip, null]]);
+    expect(StyleSheet.flatten(byId('rider-status-chip').props.style).backgroundColor).toBe('#FFFFFF');
+    act(() => setRiderTheme('night'));
+    expect(StyleSheet.flatten(byId('rider-status-chip').props.style).backgroundColor).toBe('#1A1716');
+    expect(StyleSheet.flatten(byId('rider-header').props.style).backgroundColor).toBe('#0F0D0C');
   });
 });
 

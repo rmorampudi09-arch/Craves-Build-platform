@@ -149,6 +149,43 @@ class DeliveryStatusEventValidatorTest {
         assertThat(decoded.providerId()).isEqualTo("borzo");
     }
 
+    @Test
+    void acceptsCourierPosition() {
+        assertThatCode(() -> validator.validate(withPosition("17.4", "78.4", POSITION_AT, "x".repeat(20_000))))
+            .doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate(withPosition(null, null, null, "path")))
+            .doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate(event("IN_TRANSIT", null))).doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsBadCourierPositionOrPath() {
+        for (var bad : java.util.List.of(
+            withPosition("90.1", "78.4", POSITION_AT, null),
+            withPosition("17.4", "-180.1", POSITION_AT, null),
+            withPosition("17.4", null, POSITION_AT, null),
+            withPosition(null, "78.4", POSITION_AT, null),
+            withPosition("17.4", "78.4", null, null),
+            withPosition(null, null, null, "x".repeat(20_001)))) {
+            assertThatThrownBy(() -> validator.validate(bad))
+                .isInstanceOf(DeliveryStatusEventValidator.DeliveryStatusValidationException.class);
+        }
+    }
+
+    private static final Instant POSITION_AT = Instant.parse("2026-07-28T08:30:00Z");
+
+    private static EventEnvelope<DeliveryStatusChangedData> withPosition(
+        String lat, String lng, Instant at, String path
+    ) {
+        var base = event("IN_TRANSIT", null);
+        var d = base.data();
+        return withData(base, new DeliveryStatusChangedData(d.deliveryJobId(), d.orderId(), d.chefSubOrderId(),
+            d.providerId(), d.providerDeliveryId(), d.status(), d.trackingUrl(), d.observedAt(),
+            null, null, null, null, null, null, null,
+            lat == null ? null : new java.math.BigDecimal(lat), lng == null ? null : new java.math.BigDecimal(lng),
+            at, path));
+    }
+
     private static EventEnvelope<DeliveryStatusChangedData> withData(
         EventEnvelope<DeliveryStatusChangedData> event,
         DeliveryStatusChangedData data

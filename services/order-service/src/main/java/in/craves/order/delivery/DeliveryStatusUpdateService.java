@@ -174,7 +174,9 @@ public class DeliveryStatusUpdateService {
                 """
                     UPDATE order_schema.customer_order
                     SET delivery_partner_name = NULL, delivery_partner_phone = NULL,
-                        delivery_partner_photo_url = NULL, delivery_partner_pickup_eta_at = NULL
+                        delivery_partner_photo_url = NULL, delivery_partner_pickup_eta_at = NULL,
+                        delivery_courier_latitude = NULL, delivery_courier_longitude = NULL,
+                        delivery_courier_location_observed_at = NULL, delivery_route_polyline = NULL
                     WHERE id = ?
                     """,
                 data.chefSubOrderId()
@@ -255,6 +257,7 @@ public class DeliveryStatusUpdateService {
 
     /** Fields the event carries replace the stored courier; fields it leaves out (or blank) keep their value. */
     private void storeCourier(DeliveryStatusChangedData data) {
+        storeRoute(data);
         if (data.courierName() == null && data.courierPhone() == null
             && data.courierPhotoUrl() == null && data.pickupEtaAt() == null) {
             return;
@@ -275,6 +278,35 @@ public class DeliveryStatusUpdateService {
             data.pickupEtaAt() == null ? null : Timestamp.from(data.pickupEtaAt()),
             data.chefSubOrderId()
         );
+    }
+
+    /** Only a newer position replaces the stored one; a path without a position, or a position without a path, keeps the other. */
+    private void storeRoute(DeliveryStatusChangedData data) {
+        if (data.courierLatitude() != null) {
+            jdbcTemplate.update(
+                """
+                    UPDATE order_schema.customer_order
+                    SET delivery_courier_latitude = ?, delivery_courier_longitude = ?,
+                        delivery_courier_location_observed_at = ?,
+                        delivery_route_polyline = COALESCE(?, delivery_route_polyline),
+                        updated_at = now()
+                    WHERE id = ?
+                      AND (delivery_courier_location_observed_at IS NULL OR delivery_courier_location_observed_at < ?)
+                    """,
+                data.courierLatitude(),
+                data.courierLongitude(),
+                Timestamp.from(data.courierLocationObservedAt()),
+                data.routePolyline(),
+                data.chefSubOrderId(),
+                Timestamp.from(data.courierLocationObservedAt())
+            );
+        } else if (data.routePolyline() != null) {
+            jdbcTemplate.update(
+                "UPDATE order_schema.customer_order SET delivery_route_polyline = ?, updated_at = now() WHERE id = ?",
+                data.routePolyline(),
+                data.chefSubOrderId()
+            );
+        }
     }
 
     private LockedOrder lockOrder(UUID orderId) {

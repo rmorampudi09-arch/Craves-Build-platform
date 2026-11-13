@@ -2,6 +2,7 @@ package in.craves.order.delivery;
 
 import in.craves.order.delivery.DeliveryStatusModels.DeliveryStatusChangedData;
 import in.craves.order.delivery.DeliveryStatusModels.EventEnvelope;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.util.Set;
 import org.springframework.stereotype.Component;
@@ -9,6 +10,7 @@ import org.springframework.util.StringUtils;
 
 @Component
 public class DeliveryStatusEventValidator {
+    private static final int MAX_ROUTE_POLYLINE_CHARS = 20_000;
     private static final Set<String> STATUSES = Set.of(
         "PENDING",
         "SEARCHING",
@@ -92,6 +94,26 @@ public class DeliveryStatusEventValidator {
             throw new DeliveryStatusValidationException("Delivery status observation timestamp is required");
         }
         validateTrackingUrl(data.trackingUrl());
+        validateCourierPosition(data);
+    }
+
+    private static void validateCourierPosition(DeliveryStatusChangedData data) {
+        BigDecimal lat = data.courierLatitude();
+        BigDecimal lng = data.courierLongitude();
+        if ((lat == null) != (lng == null)) {
+            throw new DeliveryStatusValidationException("Courier latitude and longitude must come together");
+        }
+        if (lat != null) {
+            if (lat.abs().compareTo(BigDecimal.valueOf(90)) > 0 || lng.abs().compareTo(BigDecimal.valueOf(180)) > 0) {
+                throw new DeliveryStatusValidationException("Courier coordinates are out of range");
+            }
+            if (data.courierLocationObservedAt() == null) {
+                throw new DeliveryStatusValidationException("Courier location observation timestamp is required");
+            }
+        }
+        if (data.routePolyline() != null && data.routePolyline().length() > MAX_ROUTE_POLYLINE_CHARS) {
+            throw new DeliveryStatusValidationException("Delivery route path is too long");
+        }
     }
 
     private static void validateTrackingUrl(String trackingUrl) {

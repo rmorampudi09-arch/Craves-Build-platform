@@ -96,7 +96,7 @@ RazorpayX submission, signed callbacks, original-payout GET recovery and linked 
 
 ## Admin and chef surfaces
 
-- `/admin/finance`: existing versioned numbers/switches and payout controls, plus **Chef tax classification and fee terms** and **Order-to-ledger runtime evidence**.
+- `/admin/finance`: four tabs. **Overview** shows money in, money out, what delivered orders earned, what chefs are owed and a chart of money in and out. **Transactions** lists every customer payment, refund, chef earning, chef payout and rider payout, each with its money trail from the customer's payment to the chef's bank. **Payouts** shows what each chef is owed and is where a bank transfer is recorded or a chef is put on hold. **Settings** keeps the versioned numbers and switches, the chef bank checks, the **Is order money being recorded?** check and RazorpayX payout recovery. The first three tabs read `GET /api/v1/admin/finance/insights/*` and change nothing.
 - A chef profile records GST registration/GSTIN where applicable, declared aggregate turnover, dated financial year, supply regime, fee-terms evidence and separate withholding evidence. New quotes require a current-year reviewed profile. Historical order snapshots retain their original version.
 - An unregistered Telangana profile over the general 20-lakh threshold is flagged for review; the system does not invent a GST debit or treat the declaration as government validation.
 - `/chef/finance`: available balance, withdrawal requests and dated earnings/settlement statements.
@@ -112,6 +112,7 @@ Backend/BFF contracts:
 | POST `/internal/v1/finance/events` | Dedicated internal signature; authoritative lifecycle |
 | GET/POST `/api/v1/admin/finance/chefs/{chef}/tax-profile` | Finance role; read or create immutable reviewed version |
 | GET `/api/v1/admin/finance/source-status` | Finance/audit read; actual source counters and recent exceptions |
+| GET `/api/v1/admin/finance/insights/overview`, `/transactions`, `/orders/{checkoutId}`, `/payouts/{payoutId}`, `/chefs` | Finance/audit read only; totals by India day, one list of money movements with keyset paging, an order's and a payout's money trail, and what each chef is owed |
 | GET `/api/v1/document-sources/chef/earnings` | Chef-owned dated source, including new journal earnings |
 | GET `/api/v1/document-sources/chef/settlements` | Chef-owned dated payout source and liability reconciliation |
 | GET `/api/chef/finance/statement` | Same-session web BFF; bounded India-time period, validated source response |
@@ -127,7 +128,8 @@ The older finance policy, payout, beneficiary, hold and recovery APIs remain in 
 | Integration quote, chef tax review, source validation and finalization | `services/integration-service/src/main/java/in/craves/integration/finance/source/` |
 | Integration source/tax/projection/hold migrations | `V129__order_financial_source.sql` and `V130__source_replay_and_payout_holds.sql` under Integration migration resources |
 | Enhanced existing PDF statement source | `services/integration-service/src/main/java/in/craves/integration/web/ChefDocumentSourceController.java` and `LedgerStatementTables.java` |
-| Tax/source admin controls | `apps/customer-web-next/src/components/chef-tax-profile-panel.tsx` |
+| Tax/source admin controls | `apps/customer-web-next/src/features/chef/components/chef-tax-profile-panel.tsx` |
+| Admin Finance screens and their read model | `apps/customer-web-next/src/features/admin/finance/components/finance-workspace.tsx` and `services/integration-service/src/main/java/in/craves/integration/finance/insights/FinanceInsightsService.java` |
 | Chef statement panel | `apps/customer-web-next/src/components/chef-ledger-statement-panel.tsx` |
 | Typed web source contracts and tests | `apps/customer-web-next/src/lib/finance-source-contract.ts` and `finance-source.vitest.ts` |
 | Connected two-service acceptance harness | `tests/finance/FinanceSourceRoundTrip.java` and `scripts/finance/test-source-roundtrip.sh` |

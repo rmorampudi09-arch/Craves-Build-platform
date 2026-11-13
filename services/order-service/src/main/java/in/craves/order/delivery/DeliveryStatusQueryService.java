@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -21,6 +22,9 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class DeliveryStatusQueryService {
     private static final Set<String> RIDER_CARRYING_STATUSES = Set.of("PICKED_UP", "IN_TRANSIT", "AT_DROPOFF");
+
+    // A rider whose phone stopped reporting, or an order that stopped taking delivery events, must not show a pin that looks live.
+    private static final Duration COURIER_LOCATION_MAX_AGE = Duration.ofMinutes(5);
 
     private final JdbcTemplate jdbcTemplate;
     private final DeliveryCodeService deliveryCodes;
@@ -83,7 +87,9 @@ public class DeliveryStatusQueryService {
             && status != null && RIDER_CARRYING_STATUSES.contains(status);
         BigDecimal latitude = resultSet.getBigDecimal("delivery_courier_latitude");
         BigDecimal longitude = resultSet.getBigDecimal("delivery_courier_longitude");
-        boolean showPosition = ridingWithRider && latitude != null && longitude != null;
+        Instant locationAt = instant(resultSet, "delivery_courier_location_observed_at");
+        boolean showPosition = ridingWithRider && latitude != null && longitude != null && locationAt != null
+            && locationAt.isAfter(Instant.now().minus(COURIER_LOCATION_MAX_AGE));
         return new DeliveryStatusResponse(
             orderId,
             resultSet.getObject("delivery_job_id", UUID.class),
@@ -93,8 +99,7 @@ public class DeliveryStatusQueryService {
             instant(resultSet, "delivery_status_observed_at"),
             history,
             deliveryCodes.codeForCustomer(orderId, providerId, status),
-            showPosition ? new CourierLocationResponse(latitude.doubleValue(), longitude.doubleValue(),
-                instant(resultSet, "delivery_courier_location_observed_at")) : null,
+            showPosition ? new CourierLocationResponse(latitude.doubleValue(), longitude.doubleValue(), locationAt) : null,
             showPosition ? resultSet.getString("delivery_route_polyline") : null
         );
     }

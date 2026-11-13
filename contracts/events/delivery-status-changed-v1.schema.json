@@ -106,7 +106,7 @@
           "format": "date-time"
         },
         "routePolyline": {
-          "description": "Road path from the courier to the drop, an encoded polyline; absent keeps what Order Service stored.",
+          "description": "Road path from the kitchen to the drop, an encoded polyline; absent keeps what Order Service stored.",
           "type": ["string", "null"],
           "maxLength": 20000
         }

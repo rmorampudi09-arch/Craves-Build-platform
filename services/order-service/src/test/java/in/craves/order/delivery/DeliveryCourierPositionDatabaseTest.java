@@ -27,7 +27,8 @@ import org.springframework.web.server.ResponseStatusException;
 /** Real PostgreSQL behaviour of the rider position and road path on the customer's delivery status. */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 class DeliveryCourierPositionDatabaseTest {
-    private static final Instant T0 = Instant.parse("2026-11-14T10:00:00Z");
+    // Recent, so positions pass the query service's age gate.
+    private static final Instant T0 = Instant.now().minusSeconds(120).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
 
     private JdbcTemplate jdbc;
     private DeliveryStatusUpdateService updates;
@@ -138,6 +139,64 @@ class DeliveryCourierPositionDatabaseTest {
             FROM order_schema.customer_order WHERE id = ?
             """, orderId);
         row.values().forEach(value -> assertNull(value));
+    }
+
+    @Test
+    void positionEventNeverChangesStatus() {
+        UUID id = order("craves_fleet", "AT_DROPOFF", UUID.randomUUID());
+        UUID job = jdbc.queryForObject("SELECT delivery_job_id FROM order_schema.customer_order WHERE id = ?", UUID.class, id);
+        var data = new DeliveryStatusChangedData(job, id, id, "craves_fleet", "trip-1", "IN_TRANSIT", null,
+            T0.plusSeconds(30), null, null, null, null, null, null, null,
+            new BigDecimal("17.4"), new BigDecimal("78.4"), T0.plusSeconds(30), "abc");
+        var result = updates.accept(new EventEnvelope<>(UUID.randomUUID(), "DELIVERY_STATUS_CHANGED", "1.0", data.observedAt(),
+            id, null, "integration-service", "delivery-job/" + job, data), "{}");
+
+        assertEquals(false, result.applied());
+        assertEquals("AT_DROPOFF", jdbc.queryForObject(
+            "SELECT delivery_status FROM order_schema.customer_order WHERE id = ?", String.class, id));
+        assertEquals(0, jdbc.queryForObject(
+            "SELECT count(*) FROM order_schema.order_delivery_status_history WHERE order_id = ?", Integer.class, id));
+        var response = query.getForCustomer(principal(customer), id);
+        assertEquals(17.4, response.courierLocation().latitude());
+        assertEquals("abc", response.routePath());
+    }
+
+    @Test
+    void deliveredEventClearsPositionAndPath() {
+        send("PICKED_UP", T0.plusSeconds(30), "17.4", "78.4", T0.plusSeconds(30), "abc");
+        send("DELIVERED", T0.plusSeconds(60), null, null, null, null);
+
+        DeliveryStatusResponse response = get();
+        assertEquals("DELIVERED", response.status());
+        assertNull(response.courierLocation());
+        assertNull(response.routePath());
+        assertPositionColumnsNull();
+
+        send("DELIVERED", T0.plusSeconds(70), "17.5", "78.5", T0.plusSeconds(70), "abc");
+        assertPositionColumnsNull();
+    }
+
+    @Test
+    void staleLocationIsHidden() {
+        jdbc.update("""
+            UPDATE order_schema.customer_order SET delivery_courier_latitude = 17.4, delivery_courier_longitude = 78.4,
+                delivery_courier_location_observed_at = ?, delivery_route_polyline = 'abc' WHERE id = ?
+            """, Timestamp.from(Instant.now().minusSeconds(360)), orderId);
+        assertNull(get().courierLocation());
+        assertNull(get().routePath());
+
+        jdbc.update("UPDATE order_schema.customer_order SET delivery_courier_location_observed_at = ? WHERE id = ?",
+            Timestamp.from(Instant.now().minusSeconds(60)), orderId);
+        assertNotNull(get().courierLocation());
+        assertEquals("abc", get().routePath());
+    }
+
+    private void assertPositionColumnsNull() {
+        jdbc.queryForMap("""
+            SELECT delivery_courier_latitude, delivery_courier_longitude,
+                   delivery_courier_location_observed_at, delivery_route_polyline
+            FROM order_schema.customer_order WHERE id = ?
+            """, orderId).values().forEach(value -> assertNull(value));
     }
 
     @Test

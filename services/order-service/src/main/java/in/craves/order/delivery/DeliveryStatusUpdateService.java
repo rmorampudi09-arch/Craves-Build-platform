@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class DeliveryStatusUpdateService {
     private static final Logger LOGGER = LoggerFactory.getLogger(DeliveryStatusUpdateService.class);
+    private static final Set<String> TERMINAL_STATUSES = Set.of("DELIVERED", "CANCELLED", "RETURNED", "FAILED");
     private static final Set<String> INELIGIBLE_ORDER_STATUSES = Set.of(
         "CHEF_REJECTED",
         "CANCELLED",
@@ -167,6 +168,10 @@ public class DeliveryStatusUpdateService {
         if (initialHandoff(data) && decision == Decision.NO_CHANGE) {
             decision = Decision.APPLY;
         }
+        // A position report is not a status report: the feed may read the job status just before a newer one commits.
+        if (data.courierLatitude() != null && decision == Decision.APPLY) {
+            decision = Decision.NO_CHANGE;
+        }
 
         // A new provider's courier is not the previous one's: the chef stops seeing the courier (or Craves rider) handed over.
         if (initialHandoff(data) && decision == Decision.APPLY) {
@@ -184,7 +189,7 @@ public class DeliveryStatusUpdateService {
         }
         // Courier details ride on any report newer than the stored one (a same-status report can still refresh them).
         if (decision == Decision.APPLY || decision == Decision.NO_CHANGE) {
-            storeCourier(data);
+            storeCourier(data, decision == Decision.APPLY ? data.status() : order.deliveryStatus());
         }
 
         if (decision != Decision.APPLY) {
@@ -216,6 +221,19 @@ public class DeliveryStatusUpdateService {
         );
         if (updated != 1) {
             throw new DeliveryStatusRetryableException("Order delivery projection update was not applied");
+        }
+
+        // The rider's position and path do not outlive the delivery.
+        if (TERMINAL_STATUSES.contains(data.status())) {
+            jdbcTemplate.update(
+                """
+                    UPDATE order_schema.customer_order
+                    SET delivery_courier_latitude = NULL, delivery_courier_longitude = NULL,
+                        delivery_courier_location_observed_at = NULL, delivery_route_polyline = NULL
+                    WHERE id = ?
+                    """,
+                data.chefSubOrderId()
+            );
         }
 
         jdbcTemplate.update(
@@ -256,8 +274,8 @@ public class DeliveryStatusUpdateService {
     }
 
     /** Fields the event carries replace the stored courier; fields it leaves out (or blank) keep their value. */
-    private void storeCourier(DeliveryStatusChangedData data) {
-        storeRoute(data);
+    private void storeCourier(DeliveryStatusChangedData data, String statusAfter) {
+        storeRoute(data, statusAfter);
         if (data.courierName() == null && data.courierPhone() == null
             && data.courierPhotoUrl() == null && data.pickupEtaAt() == null) {
             return;
@@ -281,7 +299,10 @@ public class DeliveryStatusUpdateService {
     }
 
     /** Only a newer position replaces the stored one; a path without a position, or a position without a path, keeps the other. */
-    private void storeRoute(DeliveryStatusChangedData data) {
+    private void storeRoute(DeliveryStatusChangedData data, String statusAfter) {
+        if (TERMINAL_STATUSES.contains(statusAfter)) {
+            return;
+        }
         if (data.courierLatitude() != null) {
             jdbcTemplate.update(
                 """

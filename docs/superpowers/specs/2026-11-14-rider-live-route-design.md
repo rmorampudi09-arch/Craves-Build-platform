@@ -73,7 +73,8 @@ New class `FleetCustomerPositionFeed` in `fleet/trip`, on only with `craves.flee
   received after pickup.
 - For each trip whose position is newer than the one it last published (kept in memory), it enqueues a
   `DELIVERY_STATUS_CHANGED` event through the existing outbox: the job's current status, `observedAt` = the position's
-  `received_at`, the rider card as today, plus the new fields below. It does not touch `delivery_job` or call
+  `received_at`, and the new fields below. It carries no rider card (courier name, phone and photo are null, so
+  order-service keeps the stored ones). It does not touch `delivery_job` or call
   `processTracking`, so the status pipeline is unchanged.
 - The road path kitchen → drop is fetched once a trip from user-chef (`RoadDistanceClient.path`) and kept in a small
   in-memory map; it is sent on every position event so a lost first event cannot lose it. A missing path is sent as null.
@@ -90,6 +91,13 @@ New optional fields on `DeliveryStatusChangedData` (both services): `courierLati
 - The event validator rejects a latitude or longitude out of range, half a pair, or a path over 20 000 characters.
 - `DeliveryStatusResponse` gains `courierLocation {latitude, longitude, observedAt}` and `routePath` (string). Both are
   null unless the provider is `craves_fleet` and the status is `PICKED_UP`, `IN_TRANSIT` or `AT_DROPOFF`.
+- A position event never changes the delivery status: when it carries a position and would be applied, it is treated as
+  `NO_CHANGE` (position stored; no status, history or notification), because the feed may read the job status just
+  before a newer one commits.
+- Applying a terminal status (`DELIVERED`, `CANCELLED`, `RETURNED`, `FAILED`) nulls the stored position and path, and
+  no position or path is stored while the order's status is terminal.
+- The response hides position and path when the stored position is older than 5 minutes (application clock), so a
+  frozen pin never looks live.
 
 ### 4. Craves app
 

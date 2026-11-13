@@ -68,7 +68,7 @@ public class RoadDistanceClient {
         return (int) Math.round(straightLineMetres(fromLat, fromLng, toLat, toLng) * FALLBACK_FACTOR);
     }
 
-    /** Road path from the rider to the customer as an encoded polyline, or null when it is not available. Never throws. */
+    /** Road path from the kitchen to the customer as an encoded polyline, or null when it is not available. Never throws. */
     public String path(double fromLat, double fromLng, double toLat, double toLng) {
         if (client == null) {
             return null;

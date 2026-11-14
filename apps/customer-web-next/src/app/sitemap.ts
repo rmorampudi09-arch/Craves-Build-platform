@@ -1,15 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import {
-  cityAreaUrl,
-  cityFoodUrl,
-  cityUrl,
-  foodIntents,
-  foodUrl,
-  launchCities,
-  seoContentUpdated,
-  siteUrl,
-} from "@/features/seo/lib/seo-craves";
+import { cityUrl, launchCities, seoContentUpdated, siteUrl } from "@/features/seo/lib/seo-craves";
 
 const publicRoutes = [
   "",
@@ -24,6 +15,7 @@ const publicRoutes = [
   "/account-deletion",
 ];
 
+// Area and food pages are left out while they are unindexed (templatePageRobots in seo-craves.ts).
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = seoContentUpdated;
   const cityRoutes = launchCities.map((city) => ({
@@ -31,28 +23,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     lastModified: now,
     changeFrequency: "weekly" as const,
     priority: 0.9,
-  }));
-  const cityFoodRoutes = launchCities.flatMap((city) =>
-    foodIntents.map((food) => ({
-      url: cityFoodUrl(city, food),
-      lastModified: now,
-      changeFrequency: "weekly" as const,
-      priority: food.slug === "homemade-food" ? 0.85 : 0.75,
-    })),
-  );
-  const cityAreaRoutes = launchCities.flatMap((city) =>
-    city.neighborhoods.map((area) => ({
-      url: cityAreaUrl(city, area),
-      lastModified: now,
-      changeFrequency: "weekly" as const,
-      priority: 0.8,
-    })),
-  );
-  const foodRoutes = foodIntents.map((food) => ({
-    url: foodUrl(food),
-    lastModified: now,
-    changeFrequency: "weekly" as const,
-    priority: food.slug === "homemade-food" ? 0.8 : 0.65,
   }));
 
   return [
@@ -63,8 +33,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: route === "" ? 1 : 0.7,
     })),
     ...cityRoutes,
-    ...cityFoodRoutes,
-    ...cityAreaRoutes,
-    ...foodRoutes,
   ];
 }

@@ -31,12 +31,12 @@ export function LocalDiscoveryPage({ city, food, area, mode }: LocalDiscoveryPag
         : `Homemade food in ${city?.searchName ?? "your city"}`;
   const intro =
     mode === "city-area" && city && area
-      ? `Craves brings fresh homemade food from trusted home chefs to ${area}, ${city.name}. Browse nearby kitchens, order biryani, tiffin, breakfast, lunch and dinner cooked at home, pay securely, and track your delivery.`
+      ? `Craves brings fresh homemade food from verified home chefs to ${area}, ${city.name}. Browse nearby kitchens, order biryani, tiffin, breakfast, lunch and dinner cooked at home, pay securely, and track your delivery.`
       : mode === "city-food" && city && food
       ? `${food.description} Order from approved home kitchens across ${city.searchName}, from ${city.neighborhoods.slice(0, 3).join(", ")} to ${city.neighborhoods.at(-1)}.`
       : mode === "food" && food
         ? `${food.description} Available from home chefs in ${launchCities.map((item) => item.name).join(" and ")}.`
-        : `Craves is where ${city?.searchName} orders homemade food. Browse trusted home chefs near you, see what they are cooking today, pay securely and track every order to your door.`;
+        : `Craves is a homemade food marketplace for ${city?.searchName}: every dish is cooked by a verified home chef in their own kitchen, never in a cloud kitchen. See what home chefs near you are cooking today, pay securely and track every order to your door.`;
   const faq = city ? localFaq(city, food, area) : [];
   const nearby = city && area ? nearbyAreas(city, area) : [];
 
@@ -80,19 +80,19 @@ export function LocalDiscoveryPage({ city, food, area, mode }: LocalDiscoveryPag
           <article className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
             <h2 className="font-display text-2xl font-bold">Cooked at home</h2>
             <p className="mt-3 text-sm leading-6 text-black/60">
-              Every dish comes from an approved home kitchen, not a cloud kitchen. See the chef, their menu, ratings and reviews before you order.
+              Every dish comes from a verified home kitchen, not a cloud kitchen. Craves checks each chef&apos;s documents and FSSAI registration before their food goes live, and you see ratings and reviews before you order.
             </p>
           </article>
           <article className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
-            <h2 className="font-display text-2xl font-bold">Clear prices</h2>
+            <h2 className="font-display text-2xl font-bold">Clear prices, secure payments</h2>
             <p className="mt-3 text-sm leading-6 text-black/60">
-              See the final total before you pay, then pay securely online.
+              See the final total before you pay. Card and UPI details go into Razorpay&apos;s secure checkout, and Craves runs on Microsoft Azure in India with enterprise-grade security.
             </p>
           </article>
           <article className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
             <h2 className="font-display text-2xl font-bold">Tracked to your door</h2>
             <p className="mt-3 text-sm leading-6 text-black/60">
-              Follow your order from the kitchen to your address, with support if anything goes wrong.
+              Follow your order from the kitchen to your address. The Craves assistant can check an order, open a support ticket or arrange a call back, and the team is on +91 83673 66787.
             </p>
           </article>
         </div>

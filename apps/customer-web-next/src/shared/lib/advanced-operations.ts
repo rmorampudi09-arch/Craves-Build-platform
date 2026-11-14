@@ -9,6 +9,8 @@ export type AdvancedOperation = {
   /** public: sent without the person's token. user: needs a signed-in person. */
   auth: "public" | "user";
   body: "required" | "optional" | "none";
+  /** How long the site waits for the service, when not the usual 10 s. */
+  timeoutMs?: number;
 };
 
 export const ADVANCED_OPERATIONS: readonly AdvancedOperation[] = [
@@ -24,6 +26,20 @@ export const ADVANCED_OPERATIONS: readonly AdvancedOperation[] = [
   { method: "DELETE", pattern: ["food-lists", ":id", "share"], auth: "user", body: "none" },
   { method: "GET", pattern: ["shared-food-lists", ":token"], auth: "public", body: "none" },
   { method: "POST", pattern: ["shared-food-lists", ":token", "copy"], auth: "user", body: "none" },
+  // M02 group orders. Every call needs a signed-in person; If-Match is optional in the service and not sent.
+  { method: "GET", pattern: ["group-orders"], auth: "user", body: "none" },
+  { method: "POST", pattern: ["group-orders"], auth: "user", body: "required" },
+  { method: "POST", pattern: ["group-orders", "join"], auth: "user", body: "required" },
+  { method: "GET", pattern: ["group-orders", ":id"], auth: "user", body: "none" },
+  { method: "PUT", pattern: ["group-orders", ":id", "my-items", ":id"], auth: "user", body: "required" },
+  { method: "DELETE", pattern: ["group-orders", ":id", "my-items", ":id"], auth: "user", body: "none" },
+  { method: "POST", pattern: ["group-orders", ":id", "leave"], auth: "user", body: "none" },
+  { method: "DELETE", pattern: ["group-orders", ":id", "participants", ":id"], auth: "user", body: "none" },
+  { method: "POST", pattern: ["group-orders", ":id", "lock"], auth: "user", body: "none" },
+  { method: "POST", pattern: ["group-orders", ":id", "unlock"], auth: "user", body: "required" },
+  { method: "POST", pattern: ["group-orders", ":id", "cancel"], auth: "user", body: "none" },
+  // Checkout fills the host's cart one dish at a time; wait as long as the gateway does (30 s).
+  { method: "POST", pattern: ["group-orders", ":id", "checkout"], auth: "user", body: "required", timeoutMs: 30_000 },
 ];
 
 const PLACEHOLDERS: Record<string, RegExp> = {

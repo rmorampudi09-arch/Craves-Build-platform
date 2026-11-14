@@ -73,7 +73,7 @@ export async function advancedProxy(request: NextRequest, segments: string[]): P
   const init: RequestInit = { method: request.method, headers, ...(body === undefined ? {} : { body }) };
 
   try {
-    const upstream = operation.auth === "public" ? await publicApiFetch(path, init) : await authenticatedApiFetch(request, path, init);
+    const upstream = operation.auth === "public" ? await publicApiFetch(path, init, operation.timeoutMs) : await authenticatedApiFetch(request, path, init, operation.timeoutMs);
     if (upstream.status === 204) return new NextResponse(null, { status: 204, headers: NO_STORE });
     const payload: unknown = await upstream.json().catch(() => null);
     if (!upstream.ok) {

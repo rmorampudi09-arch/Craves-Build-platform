@@ -5,6 +5,7 @@ import in.craves.integration.delivery.DeliveryIntelligenceModels.AssignmentRespo
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -120,8 +121,28 @@ public final class DeliveryCommandModels {
         String courierName,
         String courierPhone,
         String courierPhotoUrl,
-        Instant pickupEtaAt
+        Instant pickupEtaAt,
+        // Rider position and the road path to the drop; null on every event that does not carry them.
+        BigDecimal courierLatitude,
+        BigDecimal courierLongitude,
+        Instant courierLocationObservedAt,
+        String routePolyline
     ) {
+        public DeliveryStatusChangedData(UUID deliveryJobId, UUID orderId, UUID chefSubOrderId,
+                                         String providerId, String providerDeliveryId, String status,
+                                         String trackingUrl, Instant observedAt,
+                                         String handoffFromProviderId,
+                                         String handoffFromProviderDeliveryId,
+                                         Boolean handoffContinuation,
+                                         String courierName, String courierPhone,
+                                         String courierPhotoUrl, Instant pickupEtaAt) {
+            this(deliveryJobId, orderId, chefSubOrderId, providerId,
+                providerDeliveryId, status, trackingUrl, observedAt,
+                handoffFromProviderId, handoffFromProviderDeliveryId, handoffContinuation,
+                courierName, courierPhone, courierPhotoUrl, pickupEtaAt,
+                null, null, null, null);
+        }
+
         public DeliveryStatusChangedData(UUID deliveryJobId, UUID orderId, UUID chefSubOrderId,
                                          String providerId, String providerDeliveryId, String status,
                                          String trackingUrl, Instant observedAt,

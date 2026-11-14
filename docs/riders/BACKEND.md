@@ -400,6 +400,10 @@ Pay (`FleetPay`): base + drop km after the base km + pickup km after the free km
 
 Ops books a rider into a zone with a guaranteed hourly minimum inside the rate card's declared range; Home shows the next booked slot and its guarantee. Each minute a finished slot settles once: top-up = max(0, guarantee × in-zone hours − trip pay that finished in the slot) into `rider_slot_settlement`, on the slot's own in-zone seconds, so a shift across several slots pays each slot only for its own minutes. Declines never enter it. A break (Phase 4) adds no in-zone seconds to the slot: the guarantee pays for time a rider was available for offers.
 
+### Customer position feed
+
+`FleetCustomerPositionFeed` (fleet flag plus `CRAVES_FLEET_CUSTOMER_POSITION_ENABLED`, off by default; needs `CRAVES_FLEET_LOCATION_INGEST_ENABLED` and an order-service from the same release) shows the customer the rider on the way. Every 20 s on the fleet pool it takes each `craves_fleet` order whose trip is `PICKED_UP` or `AT_DROP` and whose rider's latest position is real (not mock), belongs to that trip and arrived after pickup. For a position not yet sent it enqueues a same-status `DELIVERY_STATUS_CHANGED` event (the job's current status) with `courierLatitude`, `courierLongitude`, `courierLocationObservedAt` (the position's `received_at`) and `routePolyline`, the road path to the drop from `RoadDistanceClient.path`, asked once per trip and left out when unknown. It writes only the outbox: not `delivery_job`, not a fleet table. It runs apart from the `/locations` upload, so a slow road service never delays an upload. Per-instance memory: two instances send each position twice, which order-service stores identically.
+
 ## Jobs and the fleet pool
 
 Fleet jobs run on their own pool, `fleetScheduler` (`FleetConfiguration`, fleet flag), watched by `SchedulerLagWatchdog`, with one thread per job (`FleetConfigurationTest.theFleetPoolHasOneThreadForEachFleetJob`, `ScheduledJobsUseNamedPoolsTest`). A fixed-delay job never overlaps itself.

@@ -16,7 +16,8 @@ class DeliveryStatusResponsePrivacyTest {
 
         assertThat(componentNames)
             // deliveryCode is on purpose: the customer tells it to the Craves rider at the door.
-            .contains("orderId", "deliveryJobId", "providerId", "status", "trackingUrl", "deliveryCode")
+            .contains("orderId", "deliveryJobId", "providerId", "status", "trackingUrl", "deliveryCode",
+                "courierLocation", "routePath")
             .doesNotContain(
                 "providerDeliveryId",
                 "providerOrderId",

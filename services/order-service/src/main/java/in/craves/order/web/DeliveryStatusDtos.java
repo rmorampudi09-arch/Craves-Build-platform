@@ -17,8 +17,14 @@ public final class DeliveryStatusDtos {
         Instant observedAt,
         List<DeliveryStatusHistoryResponse> history,
         // Only while a Craves rider carries the order; customer endpoint only.
-        String deliveryCode
+        String deliveryCode,
+        // Only while a Craves rider carries the order (picked up to drop); customer endpoint only.
+        CourierLocationResponse courierLocation,
+        String routePath
     ) {
+    }
+
+    public record CourierLocationResponse(double latitude, double longitude, Instant observedAt) {
     }
 
     public record DeliveryStatusHistoryResponse(

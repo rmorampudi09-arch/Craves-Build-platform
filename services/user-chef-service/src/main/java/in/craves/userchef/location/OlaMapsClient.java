@@ -140,6 +140,22 @@ public class OlaMapsClient {
         return parsed;
     }
 
+    /** Encoded polyline of the driving route (routes[0].overview_polyline). Throws {@link ApiException} on any failure. */
+    public String roadPath(BigDecimal fromLat, BigDecimal fromLng, BigDecimal toLat, BigDecimal toLng) {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("origin", fromLat.toPlainString() + "," + fromLng.toPlainString());
+        params.put("destination", toLat.toPlainString() + "," + toLng.toPlainString());
+        params.put("alternatives", "false");
+        params.put("steps", "false");
+        params.put("overview", "full");
+        Duration deadline = timeout.compareTo(MAX_DIRECTIONS_TIMEOUT) < 0 ? timeout : MAX_DIRECTIONS_TIMEOUT;
+        String parsed = parsePath(send(DIRECTIONS, "POST", "/routing/v1/directions", params, deadline));
+        if (parsed == null) {
+            throw unavailable(DIRECTIONS, "no route in response", null);
+        }
+        return parsed;
+    }
+
     private JsonNode send(String operation, String method, String path, Map<String, String> params, Duration deadline) {
         if (apiKey == null) {
             throw unavailable(operation, "OLA_MAPS_API_KEY is not configured", null);
@@ -252,6 +268,11 @@ public class OlaMapsClient {
             ? Math.round(duration.asDouble())
             : null;
         return new RoadDistance(Math.round(distance.asDouble()), seconds, "OLA");
+    }
+
+    /** routes[0].overview_polyline when it is non-blank text, else null. */
+    static String parsePath(JsonNode root) {
+        return root == null ? null : text(root.path("routes").path(0).get("overview_polyline"));
     }
 
     static List<LocationSuggestion> parseAutocomplete(JsonNode root) {

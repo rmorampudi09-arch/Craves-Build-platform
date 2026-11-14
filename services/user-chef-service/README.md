@@ -186,6 +186,8 @@ Header: X-Craves-Internal-Secret
 
 Ola Directions (driving; 3 s deadline), cached in `road_distance_cache` per kitchen–address pair (or rounded points when no id is sent) for 30 days while both points, rounded to 4 decimals, stay the same. When Ola has no key, times out, errors or returns no route, the answer is still 200: straight-line (haversine) × 1.3, `seconds: null`, `source: "FALLBACK"`, not cached. Missing or wrong secret: 401; secret not configured: 503.
 
+`POST /internal/v1/maps/road-path` (same header and body; `kitchenId`/`addressId` are ignored) answers `200 {"polyline": "<encoded>"}` from Ola Directions with `overview=full`, or `{"polyline": null}` when Ola has no key, times out, errors or finds no route. Not cached; integration-service asks once per rider trip for the customer's tracking map.
+
 ## Chef APIs
 
 ```text

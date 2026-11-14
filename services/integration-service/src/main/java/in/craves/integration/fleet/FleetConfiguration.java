@@ -28,11 +28,11 @@ public class FleetConfiguration {
 
     // One thread per fleet job: the joins-and-exits export, slot settlement, the dispatch tick, the trip_track partitions,
     // the money job (trip credits handed over after commit queue on it too), photo retention, courier cancels, and the three
-    // slot-booking jobs (cluster rebuild, week plan, no-shows).
+    // slot-booking jobs (cluster rebuild, week plan, no-shows), and the customer position feed.
     @Bean(name = FLEET_SCHEDULER)
     ThreadPoolTaskScheduler fleetScheduler() {
         ThreadPoolTaskScheduler scheduler = new SchedulerLagWatchdog.MonitoredTaskScheduler();
-        scheduler.setPoolSize(10);
+        scheduler.setPoolSize(11);
         scheduler.setThreadNamePrefix("fleet-");
         scheduler.setRemoveOnCancelPolicy(true);
         return scheduler;

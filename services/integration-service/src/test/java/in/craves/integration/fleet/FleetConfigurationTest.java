@@ -119,7 +119,8 @@ class FleetConfigurationTest {
 
     @Test
     void theFleetPoolHasOneThreadForEachFleetJob() {
-        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true", "craves.fleet.location-ingest-enabled=true")
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.rider-api-enabled=true", "craves.fleet.location-ingest-enabled=true",
+                "craves.fleet.customer-position-enabled=true")
             .run(context -> {
                 List<String> jobs = Arrays.stream(context.getBeanDefinitionNames()).map(context::getType)
                     .filter(type -> type != null && type.getPackageName().startsWith("in.craves.integration.fleet"))
@@ -131,7 +132,7 @@ class FleetConfigurationTest {
                 assertThat(jobs).containsExactlyInAnyOrder("RiderJoinsExitsExport#writeYesterday", "FleetSlotService#settleDue",
                     "FleetDispatchJobs#tick", "FleetLocationService#createTrackDays", "FleetEarnings#tick", "FleetPhotoRetention#daily",
                     "FleetCourierCancel#tick", "FleetSlotBookingService#rebuildClustersDaily", "FleetSlotBookingService#planComingWeek",
-                    "FleetSlotBookingService#markNoShowsNow");
+                    "FleetSlotBookingService#markNoShowsNow", "FleetCustomerPositionFeed#tick");
                 assertThat(context.getBean(FleetConfiguration.FLEET_SCHEDULER, ThreadPoolTaskScheduler.class).getPoolSize())
                     .isEqualTo(jobs.size());
             });

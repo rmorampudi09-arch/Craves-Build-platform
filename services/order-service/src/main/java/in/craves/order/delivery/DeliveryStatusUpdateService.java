@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class DeliveryStatusUpdateService {
     private static final Logger LOGGER = LoggerFactory.getLogger(DeliveryStatusUpdateService.class);
+    private static final Set<String> TERMINAL_STATUSES = Set.of("DELIVERED", "CANCELLED", "RETURNED", "FAILED");
     private static final Set<String> INELIGIBLE_ORDER_STATUSES = Set.of(
         "CHEF_REJECTED",
         "CANCELLED",
@@ -167,6 +168,10 @@ public class DeliveryStatusUpdateService {
         if (initialHandoff(data) && decision == Decision.NO_CHANGE) {
             decision = Decision.APPLY;
         }
+        // A position report is not a status report: the feed may read the job status just before a newer one commits.
+        if (data.courierLatitude() != null && decision == Decision.APPLY) {
+            decision = Decision.NO_CHANGE;
+        }
 
         // A new provider's courier is not the previous one's: the chef stops seeing the courier (or Craves rider) handed over.
         if (initialHandoff(data) && decision == Decision.APPLY) {
@@ -174,7 +179,9 @@ public class DeliveryStatusUpdateService {
                 """
                     UPDATE order_schema.customer_order
                     SET delivery_partner_name = NULL, delivery_partner_phone = NULL,
-                        delivery_partner_photo_url = NULL, delivery_partner_pickup_eta_at = NULL
+                        delivery_partner_photo_url = NULL, delivery_partner_pickup_eta_at = NULL,
+                        delivery_courier_latitude = NULL, delivery_courier_longitude = NULL,
+                        delivery_courier_location_observed_at = NULL, delivery_route_polyline = NULL
                     WHERE id = ?
                     """,
                 data.chefSubOrderId()
@@ -182,7 +189,7 @@ public class DeliveryStatusUpdateService {
         }
         // Courier details ride on any report newer than the stored one (a same-status report can still refresh them).
         if (decision == Decision.APPLY || decision == Decision.NO_CHANGE) {
-            storeCourier(data);
+            storeCourier(data, decision == Decision.APPLY ? data.status() : order.deliveryStatus());
         }
 
         if (decision != Decision.APPLY) {
@@ -214,6 +221,19 @@ public class DeliveryStatusUpdateService {
         );
         if (updated != 1) {
             throw new DeliveryStatusRetryableException("Order delivery projection update was not applied");
+        }
+
+        // The rider's position and path do not outlive the delivery.
+        if (TERMINAL_STATUSES.contains(data.status())) {
+            jdbcTemplate.update(
+                """
+                    UPDATE order_schema.customer_order
+                    SET delivery_courier_latitude = NULL, delivery_courier_longitude = NULL,
+                        delivery_courier_location_observed_at = NULL, delivery_route_polyline = NULL
+                    WHERE id = ?
+                    """,
+                data.chefSubOrderId()
+            );
         }
 
         jdbcTemplate.update(
@@ -254,7 +274,8 @@ public class DeliveryStatusUpdateService {
     }
 
     /** Fields the event carries replace the stored courier; fields it leaves out (or blank) keep their value. */
-    private void storeCourier(DeliveryStatusChangedData data) {
+    private void storeCourier(DeliveryStatusChangedData data, String statusAfter) {
+        storeRoute(data, statusAfter);
         if (data.courierName() == null && data.courierPhone() == null
             && data.courierPhotoUrl() == null && data.pickupEtaAt() == null) {
             return;
@@ -275,6 +296,38 @@ public class DeliveryStatusUpdateService {
             data.pickupEtaAt() == null ? null : Timestamp.from(data.pickupEtaAt()),
             data.chefSubOrderId()
         );
+    }
+
+    /** Only a newer position replaces the stored one; a path without a position, or a position without a path, keeps the other. */
+    private void storeRoute(DeliveryStatusChangedData data, String statusAfter) {
+        if (statusAfter != null && TERMINAL_STATUSES.contains(statusAfter)) {
+            return;
+        }
+        if (data.courierLatitude() != null) {
+            jdbcTemplate.update(
+                """
+                    UPDATE order_schema.customer_order
+                    SET delivery_courier_latitude = ?, delivery_courier_longitude = ?,
+                        delivery_courier_location_observed_at = ?,
+                        delivery_route_polyline = COALESCE(?, delivery_route_polyline),
+                        updated_at = now()
+                    WHERE id = ?
+                      AND (delivery_courier_location_observed_at IS NULL OR delivery_courier_location_observed_at < ?)
+                    """,
+                data.courierLatitude(),
+                data.courierLongitude(),
+                Timestamp.from(data.courierLocationObservedAt()),
+                data.routePolyline(),
+                data.chefSubOrderId(),
+                Timestamp.from(data.courierLocationObservedAt())
+            );
+        } else if (data.routePolyline() != null) {
+            jdbcTemplate.update(
+                "UPDATE order_schema.customer_order SET delivery_route_polyline = ?, updated_at = now() WHERE id = ?",
+                data.routePolyline(),
+                data.chefSubOrderId()
+            );
+        }
     }
 
     private LockedOrder lockOrder(UUID orderId) {

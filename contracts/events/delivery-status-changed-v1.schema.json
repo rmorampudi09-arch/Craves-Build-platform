@@ -98,6 +98,17 @@
         "pickupEtaAt": {
           "type": ["string", "null"],
           "format": "date-time"
+        },
+        "courierLatitude": { "type": ["number", "null"], "minimum": -90, "maximum": 90 },
+        "courierLongitude": { "type": ["number", "null"], "minimum": -180, "maximum": 180 },
+        "courierLocationObservedAt": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "routePolyline": {
+          "description": "Road path from the kitchen to the drop, an encoded polyline; absent keeps what Order Service stored.",
+          "type": ["string", "null"],
+          "maxLength": 20000
         }
       }
     }

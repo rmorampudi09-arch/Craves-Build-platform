@@ -296,17 +296,19 @@ class ChefOnboardingDatabaseTest {
         assertEquals("Only",service.mine(user).details().firstName());
         assertThrows(ApiException.class,()->run(()->service.save(user,new SaveRequest(first.version(),partial))));
     }
-    DraftApplicant listed() {
-        return service.drafts(admin).stream().filter(d->d.identityId().equals(user.identityId())).findFirst().orElse(null);
+    AdminDraft row() {
+        return service.drafts(admin).stream().filter(d->d.applicant().identityId().equals(user.identityId())).findFirst().orElse(null);
     }
+    DraftApplicant listed() { AdminDraft row=row(); return row==null ? null : row.applicant(); }
     @Test void adminsSeeEveryoneWhoStartedUntilTheySubmit() {
         service.mine(user); // signed in with the phone OTP, nothing saved yet
         DraftApplicant draft=listed();
+        assertNull(row().details());
         assertEquals("signed-in",draft.step());assertEquals("NOT_STARTED",draft.reviewStatus());
         assertEquals("+919000000000",draft.phoneNumber());assertNull(draft.firstName());assertNull(draft.email());
         Details partial=new Details("Stuck@Example.test","Stuck","Chef",null,null,null,null,null,null,null,null,null,null,null,null,null,null,"en",null);
         run(()->service.saveDraft(user,new SaveRequest(0L,partial)));
-        assertEquals(1,service.drafts(admin).stream().filter(d->d.identityId().equals(user.identityId())).count());
+        assertEquals(1,service.drafts(admin).stream().filter(d->d.applicant().identityId().equals(user.identityId())).count());
         draft=listed();
         assertEquals("Stuck",draft.firstName());assertEquals("Stuck@Example.test",draft.email());assertFalse(draft.emailVerified());
         assertEquals("personal",draft.step());assertEquals("DRAFT",draft.reviewStatus());assertNull(draft.applicationId());
@@ -328,7 +330,7 @@ class ChefOnboardingDatabaseTest {
         jdbc.update("INSERT INTO chef_onboarding_draft(identity_id,details) VALUES (?,?::jsonb)",older,
             "{\"email\":\"\",\"firstName\":\"\",\"lastName\":\"\",\"language\":\"en\"}");
         when(auth.contact(older)).thenReturn(new AuthInternalClient.Contact(older,"+919111111111","Asha"));
-        DraftApplicant draft=service.drafts(admin).stream().filter(d->d.identityId().equals(older)).findFirst().orElseThrow();
+        DraftApplicant draft=service.drafts(admin).stream().map(AdminDraft::applicant).filter(d->d.identityId().equals(older)).findFirst().orElseThrow();
         assertEquals("+919111111111",draft.phoneNumber());assertEquals("Asha",draft.firstName());assertEquals("personal",draft.step());
     }
     DraftApplicant applicant(boolean includeSubmitted) {
@@ -346,6 +348,13 @@ class ChefOnboardingDatabaseTest {
         DraftApplicant a=applicant(false);
         assertEquals("Kitchen",a.kitchenName());assertEquals("Hyderabad",a.city());assertEquals("500001",a.postalCode());
         assertEquals("Kitchen",listed().kitchenName());
+    }
+    @Test void theAdminListCarriesEverythingTheApplicantSaved() {
+        save(ProofKind.OTHER_GOVERNMENT_ID,"12345678901234");
+        Details saved=row().details();
+        assertEquals("Description",saved.kitchenDescription());assertEquals("Test address",saved.addressLine1());
+        assertEquals(java.time.LocalDate.of(1990,1,1),saved.dateOfBirth());assertEquals("Voter ID",saved.otherGovernmentId());
+        assertEquals("12345678901234",saved.fssaiNumber());assertEquals(0,new java.math.BigDecimal("17.4").compareTo(saved.latitude()));
     }
     @Test void signupAlertStoreRoundTrip() {
         var store=new ChefSignupAlertStore(jdbc);UUID id=UUID.randomUUID();

@@ -129,4 +129,38 @@ describe("Admin approval explains what is still needed", () => {
     expect(screen.getByText("Sent back for changes")).toBeTruthy();
     expect(screen.getByRole("link", { name: "+919000000002" }).getAttribute("href")).toBe("tel:+919000000002");
   });
+
+  it("exports everyone in the list, with everything they saved, as a spreadsheet file", async () => {
+    routes.set("/api/admin/chef-reviews?status=PENDING", []);
+    routes.set("/api/admin/chef-onboarding/applications/drafts", [
+      { identityId: "dddd1111-1111-4111-8111-111111111111", firstName: "Asha", lastName: "Rao", email: "asha@example.com", emailVerified: true, phoneNumber: "+919000000001",
+        step: "kitchen-photos", reviewStatus: "DRAFT", applicationId: APP, startedAt: "2026-11-02T06:00:00Z", lastActivityAt: "2026-11-02T07:45:00Z",
+        details: { kitchenName: "Asha’s Kitchen", kitchenDescription: "=HYPERLINK(\"x\")", addressLine1: "1 Road", city: "Hyderabad", state: "Telangana", postalCode: "500001",
+          latitude: 17.4, longitude: 78.4, dateOfBirth: "1990-01-01", proofKind: "OTHER_GOVERNMENT_ID", otherGovernmentId: "Voter ID", fssaiNumber: "12345678901234", language: "en" } },
+      { identityId: "ffff1111-1111-4111-8111-111111111111", firstName: null, lastName: null, email: null, emailVerified: false, phoneNumber: "+919000000003",
+        step: "signed-in", reviewStatus: "NOT_STARTED", applicationId: null, startedAt: "2026-10-31T06:00:00Z", lastActivityAt: "2026-10-31T06:00:00Z", details: null },
+    ]);
+    const files: Blob[] = [], names: string[] = [];
+    vi.stubGlobal("URL", class extends URL { static createObjectURL(file: Blob) { files.push(file); return "blob:export"; } static revokeObjectURL() {} });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { names.push(this.download); });
+    render(createElement(AdminChefReviewList));
+    fireEvent.click(await screen.findByRole("button", { name: "Waiting for the chef" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Export to CSV" }));
+    click.mockRestore();
+    expect(names).toEqual([expect.stringMatching(/^craves-chefs-not-submitted-\d{4}-\d{2}-\d{2}\.csv$/)]);
+    // Starts with the UTF-8 byte-order mark, so Excel keeps Asha’s Kitchen intact.
+    expect([...new Uint8Array(await files[0].arrayBuffer()).slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    const row = (...cells: string[]) => cells.map(cell => `"${cell}"`).join(",");
+    expect((await files[0].text()).split("\r\n")).toEqual([
+      row("First name", "Last name", "Phone", "Email", "Email verified", "Where they stopped", "Started (India time)", "Last active (India time)", "Kitchen name",
+        "About the kitchen", "Address line 1", "Address line 2", "Landmark", "City", "State", "PIN code", "Latitude", "Longitude", "Date of birth", "ID proof",
+        "FSSAI number", "Preferred language", "Application ID", "Account ID"),
+      // A cell that starts like a formula stays text; India time is UTC plus 5:30.
+      row("Asha", "Rao", "'+919000000001", "asha@example.com", "Yes", "Kitchen photos", "2026-11-02 11:30", "2026-11-02 13:15", "Asha’s Kitchen",
+        "'=HYPERLINK(\"\"x\"\")", "1 Road", "", "", "Hyderabad", "Telangana", "500001", "17.4", "78.4", "1990-01-01", "Other government ID: Voter ID",
+        "12345678901234", "English", APP, "dddd1111-1111-4111-8111-111111111111"),
+      row("", "", "'+919000000003", "", "No", "Signed in with OTP, form not started", "2026-10-31 11:30", "2026-10-31 11:30", ...Array<string>(15).fill(""),
+        "ffff1111-1111-4111-8111-111111111111"),
+    ]);
+  });
 });

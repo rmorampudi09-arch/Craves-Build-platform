@@ -42,7 +42,7 @@ public class ChefOnboardingController {
         return content.playback(user,id,false);
     }
     /** A literal path beats {id}, and it reuses the gateway's existing applications/{id} operation. */
-    @GetMapping("/backoffice/chef-onboarding/applications/drafts") List<DraftApplicant> drafts(@AuthenticationPrincipal CurrentUser user) {
+    @GetMapping("/backoffice/chef-onboarding/applications/drafts") List<AdminDraft> drafts(@AuthenticationPrincipal CurrentUser user) {
         return service.drafts(user);
     }
     @GetMapping("/backoffice/chef-onboarding/applications/{id}") State review(@AuthenticationPrincipal CurrentUser user,@PathVariable UUID id) {

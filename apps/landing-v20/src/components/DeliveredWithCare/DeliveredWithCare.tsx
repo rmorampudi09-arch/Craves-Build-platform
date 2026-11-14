@@ -309,7 +309,7 @@ const CalendarIcon = () => (
 const LEFT_FEATURES: Feature[] = [
   {
     icon: <ChefIcon />,
-    title: 'Home Chefs',
+    title: 'Verified Chefs',
   },
   {
     icon: <BowlIcon />,
@@ -317,7 +317,7 @@ const LEFT_FEATURES: Feature[] = [
   },
   {
     icon: <SafeIcon />,
-    title: 'Clean & Safe',
+    title: 'Secure Payments',
   },
 ];
 
@@ -362,8 +362,8 @@ const DeliveredWithCare = () => {
           </h2>
 
           <p className="specials__text">
-            Home chefs, homemade meals and dependable doorstep delivery,
-            all in one place.
+            Verified home chefs, enterprise-grade security and help
+            whenever you need it.
           </p>
 
         </div>

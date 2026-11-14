@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     template: "%s",
   },
   description:
-    "Order homemade food from trusted home chefs in Hyderabad and Bangalore. Biryani, tiffin, lunch, dinner and meal plans, delivered to your door.",
+    "Order homemade food cooked by verified home chefs in their own kitchens in Hyderabad and Bangalore. Biryani, tiffin, daily meals and meal plans, delivered.",
   keywords: seoKeywords(),
   authors: [{ name: "Craves" }],
   robots: { index: true, follow: true },
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     images: [shareImage],
     title: "Craves — Homemade Food from Trusted Home Chefs",
     description:
-      "Discover homemade food, trusted home chefs, live dishes, secure checkout, and delivery-supported ordering with Craves.",
+      "Homemade food from verified home chefs in Hyderabad and Bangalore, with secure payments, order tracking and help from the Craves assistant.",
     url: "./",
     siteName: "Craves",
     locale: "en_IN",
@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     images: [shareImage],
     title: "Craves — Homemade Food from Trusted Home Chefs",
     description:
-      "Homemade food discovery and home-chef ordering for Hyderabad and Bangalore.",
+      "Homemade food from verified home chefs in Hyderabad and Bangalore.",
   },
   icons: {
     icon: canonicalLogo,

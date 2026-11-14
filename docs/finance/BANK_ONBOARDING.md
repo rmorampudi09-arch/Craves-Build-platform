@@ -98,7 +98,7 @@ Encrypted history is retained by the operational application and cannot be arbit
 
 ## Admin control settings
 
-`/admin/finance` now includes Automatic chef bank onboarding. Operators can turn submissions or validation processing on/off and set a rolling 24-hour new-bank-version limit from 1 to 10; default is 3. Control changes require finance permission, current revision and a reason. These controls manage the service, not individual bank approval.
+`/admin/finance`, Settings tab, includes **Checking chefs' bank accounts**. Operators can turn submissions or validation processing on/off and set a rolling 24-hour new-bank-version limit from 1 to 10; default is 3. Control changes require finance permission, current revision and a reason. These controls manage the service, not individual bank approval.
 
 Readiness distinguishes encryption configured, provider adapter configured and worker deployed. None of those labels claims a completed merchant validation. The latest 100 enrollment outcomes are masked and observable. The worker is bounded to ten items per pass, with durable leases and retry delay/jitter. The unknown-response GET search is deliberately bounded to 1,000 provider records; exhaustion remains a visible exception, not permission to send another POST. This is not a tested million-user throughput claim.
 

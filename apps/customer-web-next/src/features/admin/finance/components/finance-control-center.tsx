@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { z } from "zod";
-import { draftSchema, financeSettingsSchema, financeViewSchema, payoutSchema, subscriptionPreviewSchema, type FinanceSettings, type FinanceView } from "@/features/admin/finance/lib/finance-contract";
+import { draftSchema, financeSettingsSchema, financeViewSchema, subscriptionPreviewSchema, type FinanceSettings, type FinanceView } from "@/features/admin/finance/lib/finance-contract";
 import { DeliveryTariffEditor } from "@/features/admin/finance/components/delivery-tariff-editor";
 import { reviewedPolicyMatches } from "@/features/admin/finance/lib/finance-policy-review";
 
@@ -12,38 +12,47 @@ async function api(path: string, body?: unknown): Promise<unknown> {
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const error = z.object({detail: z.string().optional(), code: z.string().optional()}).safeParse(data);
-    throw new Error(error.success ? error.data.detail || error.data.code || "Finance request failed" : "Finance request failed");
+    throw new Error(error.success ? error.data.detail || error.data.code || "That didn’t go through. Try again." : "That didn’t go through. Try again.");
   }
   return data;
 }
 const numericFields: {key: keyof FinanceSettings; label: string; integer?: boolean}[] = [
-  {key: "automaticPayoutDelayHours", label: "Automatic payout delay, hours after delivery", integer: true},
-  {key: "manualAvailabilityDelayHours", label: "Manual availability delay, hours after delivery", integer: true},
-  {key: "customerCancellationSeconds", label: "Customer cancellation window, seconds", integer: true},
+  {key: "automaticPayoutDelayHours", label: "Hours after delivery before an automatic payout", integer: true},
+  {key: "manualAvailabilityDelayHours", label: "Hours after delivery before an earning can be paid on request", integer: true},
+  {key: "customerCancellationSeconds", label: "Seconds a customer has to cancel after ordering", integer: true},
   {key: "chefFeePercent", label: "Chef service fee, percent"},
-  {key: "restaurantGstPercent", label: "Qualifying restaurant food GST, percent"},
-  {key: "deliveryGstPercent", label: "Separately classified delivery GST, percent"},
-  {key: "platformGstPercent", label: "Platform fee GST, percent"},
-  {key: "chefFeeGstPercent", label: "GST on chef service fee, percent"},
-  {key: "platformFee", label: "Platform fee per checkout or subscription purchase, INR"},
+  {key: "restaurantGstPercent", label: "GST on restaurant food, percent"},
+  {key: "deliveryGstPercent", label: "GST on delivery charges, percent"},
+  {key: "platformGstPercent", label: "GST on the platform fee, percent"},
+  {key: "chefFeeGstPercent", label: "GST on the chef service fee, percent"},
+  {key: "platformFee", label: "Platform fee per order or meal-plan purchase, in rupees"},
 ];
 const switches: {key: keyof FinanceSettings; label: string}[] = [
-  {key: "ledgerEnabled", label: "Ledger posting policy"}, {key: "automaticPayoutsEnabled", label: "Automatic payout queue"},
-  {key: "manualWithdrawalsEnabled", label: "Chef withdrawal requests"}, {key: "subscriptionQuotesEnabled", label: "Subscription quote policy"},
+  {key: "ledgerEnabled", label: "Record order money and chef earnings"}, {key: "automaticPayoutsEnabled", label: "Pay chefs automatically through RazorpayX"},
+  {key: "manualWithdrawalsEnabled", label: "Pay chefs on request, including by bank transfer"}, {key: "subscriptionQuotesEnabled", label: "Meal-plan price quotes"},
 ];
+/** The backend's reasons these settings do not fully apply yet, in plain words. An unknown reason is shown as it came. */
+const notReady: Record<string, string> = {
+  AUTHORITATIVE_ORDER_SNAPSHOT_AND_CAPTURE_WIRING_NOT_CERTIFIED: "Order money is not yet recorded from confirmed payments. That is switched on in the Craves technical setup, not on this page.",
+  JOURNAL_POSTING_DISABLED: "Writing to the books is switched off in the Craves technical setup.",
+  DISTANCE_TARIFF_CHECKOUT_WIRING_NOT_CERTIFIED: "Checkout does not use the delivery price by distance yet.",
+  VERIFIED_ROAD_ROUTE_DISTANCE_NOT_CONNECTED: "Road distance is not connected, so a delivery price by road distance cannot be used.",
+  COMMISSION_GST_TREATMENT_AND_TAX_CLASSIFICATION_UNCONFIRMED: "Decide how GST applies to the chef service fee, and write down where that decision is recorded.",
+  RAZORPAYX_ACCOUNT_PAYOUT_PERMISSION_NOT_CERTIFIED: "Automatic payouts through RazorpayX are not set up for the Craves account yet.",
+  MANUAL_SETTLEMENT_RUNTIME_NOT_CERTIFIED: "Paying chefs by bank transfer is not switched on in the Craves technical setup yet.",
+};
+const longDate = (day: string) => new Intl.DateTimeFormat("en-IN", {day: "numeric", month: "long", year: "numeric", timeZone: "UTC"}).format(new Date(`${day}T00:00:00Z`));
 const inputClass = "mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-950";
 const buttonClass = "rounded-xl bg-slate-900 px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40";
 
+/** Fees, taxes and payout rules, on the Finance Settings tab. Paying and holding a chef live on the Payouts tab. */
 export function FinanceControlCenter() {
   const [view, setView] = useState<FinanceView | null>(null);
   const [settings, setSettings] = useState<FinanceSettings | null>(null);
   const [draft, setDraft] = useState<z.infer<typeof draftSchema> | null>(null);
-  const [payouts, setPayouts] = useState<z.infer<typeof payoutSchema>[]>([]);
-  const [payoutError, setPayoutError] = useState("");
   const [reason, setReason] = useState("");
-  const [message, setMessage] = useState("Loading verified finance configuration…");
+  const [message, setMessage] = useState("Loading the finance settings…");
   const [busy, setBusy] = useState(false);
-  const [chefId, setChefId] = useState("");
   const [foodBase, setFoodBase] = useState("369.00");
   const [customerFood, setCustomerFood] = useState("369.00");
   const [delivery, setDelivery] = useState("39.00");
@@ -54,9 +63,7 @@ export function FinanceControlCenter() {
     api("settings").then(raw => {
       const next = financeViewSchema.parse(raw);
       if (active) {setView(next);setSettings(next.settings);setMessage("");}
-    }).catch(error => {if (active) setMessage(error instanceof Error ? error.message : "Finance configuration unavailable");});
-    api("payouts").then(raw => {const items=z.array(payoutSchema).parse(raw);if(active)setPayouts(items);})
-      .catch(() => {if(active)setPayoutError("Payout instructions could not be loaded. Finance settings remain available; this is not a zero balance.");});
+    }).catch(error => {if (active) setMessage(error instanceof Error ? error.message : "The finance settings couldn’t be loaded.");});
     return () => {active = false;};
   }, []);
   function edit(key: keyof FinanceSettings, value: FinanceSettings[keyof FinanceSettings]) {
@@ -64,60 +71,47 @@ export function FinanceControlCenter() {
   }
   async function run(action: () => Promise<void>) {
     setBusy(true);setMessage("");
-    try {await action();} catch (error) {setMessage(error instanceof Error ? error.message : "Finance operation unavailable");}
+    try {await action();} catch (error) {setMessage(error instanceof Error ? error.message : "That didn’t go through. Try again.");}
     finally {setBusy(false);}
   }
   return <div className="space-y-6 text-slate-900">
-    <header><p className="text-xs font-bold uppercase tracking-widest text-slate-500">Craves finance</p><h1 className="mt-2 text-3xl font-bold">Finance control center</h1>
-      <p className="mt-3 max-w-3xl text-sm text-slate-600">Versioned settings, payout controls and tax-inclusive quote previews. Bank verification is automated separately through Razorpay; these controls never replace provider evidence.</p></header>
     {message && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4">{message}</p>}
-    {!settings || !view ? <button type="button" className={buttonClass} onClick={() => window.location.reload()}>Reload finance configuration</button> : <>
-      <section className="rounded-2xl border border-slate-200 bg-white p-6"><h2 className="text-xl font-semibold">Recorded policy status</h2>
-        <p className="mt-2 text-sm">Revision {view.revision} · {view.releaseStatus.replaceAll("_", " ")}</p>
-        <p className="mt-2 text-sm">Requested ledger start: {view.settings.ledgerStartDate}, 00:00 Asia/Kolkata. This date does not prove production posting.</p>
-        <p className="mt-2 text-sm">One accepted manual withdrawal per chef per India calendar day. Submitted or uncertain money remains reserved.</p>
-        {view.activationBlockers.length > 0 && <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm"><h3 className="font-semibold">Release checks</h3>{view.activationBlockers.map(item => <p className="mt-2" key={item}>{item.replaceAll("_", " ")}</p>)}</div>}
+    {!settings || !view ? <button type="button" className={buttonClass} onClick={() => window.location.reload()}>Load the settings again</button> : <>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6"><h2 className="text-xl font-semibold">Settings in use now</h2>
+        <p className="mt-2 text-sm">Version {view.revision}. {view.releaseStatus === "NOT_ACTIVATED" ? "Recording of order money and chef earnings is switched off in these settings."
+          : `Recording is switched on in these settings for orders from ${longDate(view.settings.ledgerStartDate)}, India time. That alone does not prove it is running: the Overview tab shows whether earnings are being recorded.`}</p>
+        <p className="mt-2 text-sm">A chef can have one payout set aside per day, India time. Money that was sent, or whose outcome isn’t known, stays set aside until the bank’s answer is recorded.</p>
+        {view.activationBlockers.length > 0 && <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm"><h3 className="font-semibold">Not ready yet</h3>{view.activationBlockers.map(item => <p className="mt-2" key={item}>{notReady[item] ?? item.replaceAll("_", " ").toLowerCase()}</p>)}</div>}
       </section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-6"><h2 className="text-xl font-semibold">Edit a new policy version</h2>
-        <p className="mt-2 text-sm text-slate-600">Draft values do not rewrite accepted orders or settled earnings. Pausing submissions must not stop reconciliation of transfers already sent.</p>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6"><h2 className="text-xl font-semibold">Change the settings</h2>
+        <p className="mt-2 text-sm text-slate-600">A change applies to new orders only: orders already accepted and earnings already recorded keep their numbers. Switching payouts off never stops the checking of transfers already sent.</p>
         <fieldset disabled={busy} className="m-0 min-w-0 border-0 p-0">
         <div className="mt-5 grid gap-4 md:grid-cols-2">{switches.map(field => <label key={field.key} className="flex items-center justify-between gap-4 rounded-xl border p-4"><span>{field.label}</span><input aria-label={field.label} type="checkbox" checked={settings[field.key] === true} onChange={event => edit(field.key, event.target.checked)} className="h-5 w-5" /></label>)}</div>
         <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          <label className="text-sm font-medium">Ledger start date, India time<input className={inputClass} type="date" value={settings.ledgerStartDate} onChange={event => edit("ledgerStartDate", event.target.value)} /></label>
+          <label className="text-sm font-medium">Record earnings for orders from, India date<input className={inputClass} type="date" value={settings.ledgerStartDate} onChange={event => edit("ledgerStartDate", event.target.value)} /></label>
           {numericFields.map(field => <label className="text-sm font-medium" key={field.key}>{field.label}<input className={inputClass} type="number" min="0" step={field.integer ? "1" : "0.01"} value={String(settings[field.key])} onChange={event => edit(field.key, field.integer ? event.target.valueAsNumber : event.target.value)} /></label>)}
-          <label className="text-sm font-medium">GST treatment of chef fee<select className={inputClass} value={settings.chefFeeTaxTreatment} onChange={event => edit("chefFeeTaxTreatment", event.target.value as FinanceSettings["chefFeeTaxTreatment"])}><option value="UNCONFIRMED">Unconfirmed — block activation</option><option value="INCLUSIVE">GST within advertised fee</option><option value="EXCLUSIVE">GST added to advertised fee</option></select></label>
-          <label className="text-sm font-medium">Finance tax classification reference<input className={inputClass} maxLength={240} value={settings.taxApprovalReference || ""} onChange={event => edit("taxApprovalReference", event.target.value.trim() || null)} /></label>
+          <label className="text-sm font-medium">How GST applies to the chef service fee<select className={inputClass} value={settings.chefFeeTaxTreatment} onChange={event => edit("chefFeeTaxTreatment", event.target.value as FinanceSettings["chefFeeTaxTreatment"])}><option value="UNCONFIRMED">Not decided yet (these settings can’t be switched on)</option><option value="INCLUSIVE">GST is inside the service fee</option><option value="EXCLUSIVE">GST is added on top of the service fee</option></select></label>
+          <label className="text-sm font-medium">Where the tax decision is written down<input className={inputClass} maxLength={240} value={settings.taxApprovalReference || ""} onChange={event => edit("taxApprovalReference", event.target.value.trim() || null)} /></label>
         </div>
-        <p className="mt-4 text-sm">{settings.chefFeeTaxTreatment === "INCLUSIVE" ? `The total chef service-fee deduction is ${settings.chefFeePercent}%, including its GST. GST is not added above this percentage. Separately applicable withholding is not part of this service fee.` : "Select GST within advertised fee to keep the total service-fee deduction within the advertised percentage."}</p>
+        <p className="mt-4 text-sm">{settings.chefFeeTaxTreatment === "INCLUSIVE" ? `Chefs are charged ${settings.chefFeePercent}% in all, with GST inside it. Nothing is added on top. Tax held back from a chef (TDS) is separate from this fee.` : `Choose “GST is inside the service fee” to keep everything a chef is charged within ${settings.chefFeePercent}%.`}</p>
         <DeliveryTariffEditor value={settings.deliveryTariff} gstRate={settings.deliveryGstPercent} disabled={busy} onChange={value => edit("deliveryTariff", value)} />
-        <label className="mt-5 block text-sm font-medium">Reason and approval evidence<textarea className={inputClass} maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></label>
+        <label className="mt-5 block text-sm font-medium">Why this change is being made, and who approved it<textarea className={inputClass} maxLength={1000} value={reason} onChange={event => setReason(event.target.value)} /></label>
         <div className="mt-5 flex flex-wrap gap-3"><button type="button" className={buttonClass} disabled={busy || !reason.trim()} onClick={() => void run(async () => {
           setDraft(null);
           const checked=financeSettingsSchema.safeParse(settings);
-          if(!checked.success)throw new Error("Complete all rates, exact-paise charges and delivery tariff choices before saving.");
+          if(!checked.success)throw new Error("Fill in every rate, charge and delivery price before saving. Charges need two decimals, like 21.21.");
           const saved=draftSchema.parse(await api("policies", {settings: checked.data, reason}));
-          if(!reviewedPolicyMatches(checked.data,saved.settings))throw new Error("The saved policy differs from your reviewed values. Activation is blocked; reload and check the deployed finance version.");
-          setDraft(saved);setMessage("Draft saved. Review values before activation.");
-        })}>Save immutable draft</button>
-          <button type="button" className={buttonClass} disabled={busy || !draft || !reason.trim()} onClick={() => void run(async () => {if (!draft) return;const next = financeViewSchema.parse(await api(`policies/${draft.id}/activate`, {expectedRevision: view.revision, expectedHash: draft.contentHash, reason}));setView(next);setSettings(next.settings);setDraft(null);setMessage("Policy version recorded. Runtime release checks still apply.");})}>Activate reviewed version</button>
-        </div>{draft && <p className="mt-3 break-all font-mono text-xs">Content hash: {draft.contentHash}</p>}
+          if(!reviewedPolicyMatches(checked.data,saved.settings))throw new Error("What was saved does not match what you entered, so it can’t be switched on. Load this page again and check the values.");
+          setDraft(saved);setMessage("Draft saved. Check the values, then switch them on.");
+        })}>Save as a draft</button>
+          <button type="button" className={buttonClass} disabled={busy || !draft || !reason.trim()} onClick={() => void run(async () => {if (!draft) return;const next = financeViewSchema.parse(await api(`policies/${draft.id}/activate`, {expectedRevision: view.revision, expectedHash: draft.contentHash, reason}));setView(next);setSettings(next.settings);setDraft(null);setMessage("The new settings are recorded. Anything listed under “Not ready yet” still has to be done before they fully apply.");})}>Switch these settings on</button>
+        </div>{draft && <p className="mt-3 break-all font-mono text-xs">Draft reference: {draft.contentHash}</p>}
         </fieldset>
       </section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-6"><h2 className="text-xl font-semibold">Subscription price simulation</h2><p className="mt-2 text-sm text-slate-600">Use a chef quote per occurrence and delivery estimate before GST. Platform fee is collected once and allocated exactly. This does not purchase meals or create payable earnings.</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-4"><label>Chef food base<input className={inputClass} value={foodBase} onChange={event => setFoodBase(event.target.value)} inputMode="decimal" /></label><label>Customer food price<input className={inputClass} value={customerFood} onChange={event => setCustomerFood(event.target.value)} inputMode="decimal" /></label><label>Delivery before GST<input className={inputClass} value={delivery} onChange={event => setDelivery(event.target.value)} inputMode="decimal" /></label><label>Explicit meal count<input className={inputClass} type="number" min="1" max="60" value={mealCount} onChange={event => setMealCount(event.target.valueAsNumber)} /></label></div>
-        <button type="button" className={`${buttonClass} mt-4`} disabled={busy || !Number.isInteger(mealCount) || mealCount < 1 || mealCount > 60} onClick={() => void run(async () => {setPreview(subscriptionPreviewSchema.parse(await api("subscription-preview", {settings, occurrences: Array.from({length: mealCount}, (_, i) => ({occurrenceId: `preview-meal-${i + 1}`, chefFoodBase: foodBase, customerFoodPrice: customerFood, deliveryEstimate: delivery}))})));})}>Calculate total including taxes</button>
-        {preview && <div className="mt-5 rounded-xl bg-slate-50 p-5"><p className="text-2xl font-bold">₹{preview.total} total</p><p className="mt-2 text-sm">{preview.notice}</p><details className="mt-3"><summary className="cursor-pointer font-semibold">Component and occurrence breakdown</summary><pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-xs">{JSON.stringify(preview.occurrences, null, 2)}</pre></details></div>}
-      </section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-6"><h2 className="text-xl font-semibold">Operational payout holds</h2>
-        <p className="mt-2 text-sm text-slate-600">Bank enrollment and recipient creation are automatic. Use these controls only for an independent financial or operational hold. Releasing one cannot bypass bank validation, unresolved refunds or source conflicts.</p>
-        <label className="mt-4 block text-sm">Chef identity UUID<input className={inputClass} value={chefId} onChange={event => setChefId(event.target.value)} /></label>
-        <p className="mt-3 text-sm">The reason above is recorded for every action.</p><div className="mt-4 flex flex-wrap gap-3">
-          {[true, false].map(onHold => <button type="button" key={String(onHold)} className={buttonClass} disabled={busy || !reason.trim() || !z.string().uuid().safeParse(chefId).success} onClick={() => void run(async () => {await api(`chefs/${chefId}/hold`, {onHold, reason});setMessage(onHold ? "Operational payout hold applied." : "Operational hold released; independent bank and financial checks still apply.");})}>{onHold ? "Hold payouts" : "Release operational hold"}</button>)}</div>
-      </section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-6"><div className="flex items-center justify-between"><h2 className="text-xl font-semibold">Recent payout instructions</h2><button type="button" className="rounded-lg border px-3 py-2" disabled={busy} onClick={() => void run(async () => {setPayouts(z.array(payoutSchema).parse(await api("payouts")));setPayoutError("");})}>Refresh</button></div>
-        {payoutError && <p role="alert" className="mt-3 text-sm">{payoutError}</p>}
-        <p className="mt-2 text-sm text-slate-600">Latest 100. Reserved or processing is not confirmed bank payment. Unknown outcomes must not be bypassed with a fresh transfer.</p>
-        <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-2">Instruction</th><th className="p-2">Amount</th><th className="p-2">Mode</th><th className="p-2">State</th><th className="p-2">Transfer evidence</th></tr></thead><tbody>{payouts.map(row => <tr key={row.id} className="border-t"><td className="p-2 font-mono text-xs">{row.id}</td><td className="p-2">₹{row.amount}</td><td className="p-2">{row.mode}</td><td className="p-2">{row.status}</td><td className="p-2">{row.transferReference || "Not confirmed"}</td></tr>)}</tbody></table>{!payoutError && payouts.length === 0 && <p className="py-4 text-sm">No new-engine payout instructions returned.</p>}</div>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6"><h2 className="text-xl font-semibold">Try a meal-plan price</h2><p className="mt-2 text-sm text-slate-600">Enter a chef’s price per meal and the delivery charge before GST to see what a customer would pay in total. The platform fee is charged once per purchase. Nothing is bought and no earning is created.</p>
+        <div className="mt-4 grid gap-4 md:grid-cols-4"><label>Chef’s price per meal<input className={inputClass} value={foodBase} onChange={event => setFoodBase(event.target.value)} inputMode="decimal" /></label><label>Menu price per meal<input className={inputClass} value={customerFood} onChange={event => setCustomerFood(event.target.value)} inputMode="decimal" /></label><label>Delivery per meal, before GST<input className={inputClass} value={delivery} onChange={event => setDelivery(event.target.value)} inputMode="decimal" /></label><label>Number of meals<input className={inputClass} type="number" min="1" max="60" value={mealCount} onChange={event => setMealCount(event.target.valueAsNumber)} /></label></div>
+        <button type="button" className={`${buttonClass} mt-4`} disabled={busy || !Number.isInteger(mealCount) || mealCount < 1 || mealCount > 60} onClick={() => void run(async () => {setPreview(subscriptionPreviewSchema.parse(await api("subscription-preview", {settings, occurrences: Array.from({length: mealCount}, (_, i) => ({occurrenceId: `preview-meal-${i + 1}`, chefFoodBase: foodBase, customerFoodPrice: customerFood, deliveryEstimate: delivery}))})));})}>Work out the total, taxes included</button>
+        {preview && <div className="mt-5 rounded-xl bg-slate-50 p-5"><p className="text-2xl font-bold">₹{preview.total} in total</p><p className="mt-2 text-sm">{preview.notice}</p><details className="mt-3"><summary className="cursor-pointer font-semibold">Meal-by-meal working</summary><pre className="mt-3 overflow-x-auto whitespace-pre-wrap text-xs">{JSON.stringify(preview.occurrences, null, 2)}</pre></details></div>}
       </section>
     </>}
   </div>;

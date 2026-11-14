@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { LocalDiscoveryPage } from "@/features/seo/components/LocalDiscoveryPage";
-import { foodBySlug, foodIntents, foodUrl, launchCities, seoKeywords, shareImage, templatePageRobots } from "@/features/seo/lib/seo-craves";
+import { foodBySlug, foodIntents, foodUrl, launchCities, seoKeywords, shareImage } from "@/features/seo/lib/seo-craves";
 
 type FoodPageProps = {
   params: Promise<{ food: string }>;
@@ -21,7 +21,6 @@ export async function generateMetadata({ params }: FoodPageProps): Promise<Metad
     title: `${food.name} from home chefs | Craves`,
     description: `${food.description} Browse Craves across ${launchCities.map((city) => city.searchName).join(" and ")}.`,
     keywords: seoKeywords(undefined, food),
-    robots: templatePageRobots,
     alternates: { canonical: foodUrl(food) },
     openGraph: {
       images: [shareImage],

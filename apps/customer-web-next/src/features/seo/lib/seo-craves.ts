@@ -8,10 +8,6 @@ export const socialProfiles = [
 ];
 // Bump when SEO page copy changes; a lastmod that changes on every request is ignored by search engines.
 export const seoContentUpdated = new Date("2026-11-14");
-// shortcut: area and food pages share one template and list no live kitchens yet, so Google could treat
-// them as doorway pages; they stay crawlable but unindexed. Remove this (and re-add them to sitemap.ts)
-// once each page shows the real kitchens cooking there.
-export const templatePageRobots = { index: false, follow: true };
 // Served by app/opengraph-image.tsx; child pages that set openGraph must list it or they lose the preview image.
 export const shareImage = {
   url: `${siteUrl}/opengraph-image`,

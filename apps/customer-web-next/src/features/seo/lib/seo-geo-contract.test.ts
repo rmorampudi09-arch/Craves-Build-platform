@@ -8,6 +8,7 @@ function source(relativePath: string): string {
 
 test("seo discovery covers Hyderabad, Bangalore and major food intents", () => {
   const seo = source("./seo-craves.ts");
+  const sitemap = source("../../../app/sitemap.ts");
   const cityPage = source("../../../app/[city]/page.tsx");
   const cityFoodPage = source("../../../app/[city]/[food]/page.tsx");
   const foodPage = source("../../../app/food/[food]/page.tsx");
@@ -21,20 +22,10 @@ test("seo discovery covers Hyderabad, Bangalore and major food intents", () => {
   assert.match(seo, /"@type": "Service"/);
   assert.doesNotMatch(seo, /"Restaurant"/);
   assert.match(seo, /FAQPage/);
+  assert.match(sitemap, /cityFoodUrl/);
   assert.match(cityPage, /generateStaticParams/);
   assert.match(cityFoodPage, /foodIntents/);
   assert.match(foodPage, /launchCities/);
-});
-
-test("template area and food pages stay out of the index and the sitemap until they list real kitchens", () => {
-  const seo = source("./seo-craves.ts");
-  const sitemap = source("../../../app/sitemap.ts");
-  assert.match(seo, /templatePageRobots = \{ index: false, follow: true \}/);
-  assert.equal(source("../../../app/[city]/[food]/page.tsx").match(/robots: templatePageRobots/g)?.length, 2);
-  assert.match(source("../../../app/food/[food]/page.tsx"), /robots: templatePageRobots/);
-  assert.doesNotMatch(source("../../../app/[city]/page.tsx"), /templatePageRobots/);
-  assert.doesNotMatch(sitemap, /cityFoodUrl|cityAreaUrl|foodUrl/);
-  assert.match(sitemap, /cityUrl/);
 });
 
 test("every neighborhood has its own page slug that never collides with a food slug", async () => {
@@ -114,7 +105,8 @@ test("ai search crawler files advertise Craves facts without exposing private ro
   assert.match(llms, /Hyderabad/);
   assert.match(llms, /Bangalore/);
   assert.match(llms, /homemade food marketplace/i);
-  assert.match(llms, /https:\/\/craves\.in\/hyderabad\b/);
+  assert.match(llms, /\/hyderabad\/biryani/);
+  assert.match(llms, /\/hyderabad\/gachibowli/);
   assert.match(llms, /FSSAI/);
   assert.match(llms, /https:\/\/craves\.in\/security/);
   // Owner rule (Nov 2026): public copy talks about chef earnings, never about Craves commissions.

@@ -1,0 +1,34 @@
+name: SEO copy apply (temporary)
+# One-off for branch feat/seo-ai-search-craves-copy. The session that made these changes has no GitHub
+# token, so the owner's browser commits .github/seo-copy/apply.py; this runs it, rebuilds the landing
+# bundle from source and commits the result. This file is deleted before merge.
+on:
+  push:
+    branches: ['feat/seo-ai-search-craves-copy']
+    paths: ['.github/seo-copy/**']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Apply the changes
+        run: python3 .github/seo-copy/apply.py
+      - name: Rebuild the landing bundle from source
+        working-directory: apps/landing-v20
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run lint
+          npm run build
+      - name: Commit and push
+        run: |
+          git rm -rq .github/seo-copy
+          git add -A -- apps/customer-web-next/src apps/customer-web-next/public/llms.txt apps/customer-web-next/public/landing-v20 apps/landing-v20/index.html apps/landing-v20/src
+          git -c user.name="craves-seo-copy" -c user.email="seo-copy@users.noreply.github.com" \
+            commit -q -m "Apply SEO and copy changes and rebuild the landing bundle"
+          git push -q origin "HEAD:${GITHUB_REF_NAME}"

@@ -121,6 +121,16 @@ test("accepts nullable legacy snapshot labels from the Order Service schema", ()
   assert.equal(parsed?.items[0]?.foodType, null);
 });
 
+test("keeps the menu options a line was cooked with (M24c), and adds nothing to lines without them", () => {
+  const withOptions = {
+    ...order,
+    items: [{ ...order.items[0], chosenOptions: [{ group: "Spice", choice: "Hot", price: 0 }, { group: "Extras", choice: "Raita", price: 20 }] }],
+  };
+  assert.deepEqual(parseChefOrder(withOptions)?.items[0]?.chosenOptions, [{ group: "Spice", choice: "Hot" }, { group: "Extras", choice: "Raita" }]);
+  assert.equal("chosenOptions" in (parseChefOrder(order)?.items[0] ?? {}), false);
+  assert.equal("chosenOptions" in (parseChefOrder({ ...order, items: [{ ...order.items[0], chosenOptions: [] }] })?.items[0] ?? {}), false);
+});
+
 test("uses createdAt for legacy rows without updatedAt", () => {
   const historical = { ...order, updatedAt: undefined };
   const parsed = parseChefOrder(historical);

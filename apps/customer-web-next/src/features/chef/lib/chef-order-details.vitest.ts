@@ -51,6 +51,12 @@ describe("order details", () => {
     expect(screen.queryByRole("link", { name: /Call|Message customer/ })).toBeNull();
   });
 
+  it("shows a line's menu options under the dish, so the kitchen cooks what was paid for (M24c)", async () => {
+    const paid = order("CHEF_ACCEPTANCE_PENDING");
+    open({ ...paid, items: [{ ...paid.items[0], chosenOptions: [{ group: "Sugar", choice: "Less" }, { group: "Extras", choice: "Dry fruits" }] }] });
+    expect(await screen.findByText("Sugar: Less · Extras: Dry fruits")).toBeTruthy();
+  });
+
   it("shows the steps with their times and opens the customer's pin in Google Maps", async () => {
     const cooking = order("PREPARING");
     open({

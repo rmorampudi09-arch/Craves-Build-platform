@@ -59,3 +59,9 @@ test("accepts a meal-plan order, which order-service creates without a checkout"
   assert.equal(parseCustomerOrder({ ...order, checkoutId: "bad" }), null);
   assert.equal(parseCustomerOrder({ ...order, checkoutId: undefined }), null);
 });
+
+test("keeps the menu options a line was priced with (M24c), and adds nothing to lines without them", () => {
+  const withOptions = { ...order, items: [{ ...order.items[0], chosenOptions: [{ group: "Spice", choice: "Hot", price: 0 }, { group: "Extras", choice: "Raita", price: 20 }] }] };
+  assert.deepEqual(parseCustomerOrder(withOptions)?.items[0]?.chosenOptions, [{ group: "Spice", choice: "Hot" }, { group: "Extras", choice: "Raita" }]);
+  assert.equal("chosenOptions" in (parseCustomerOrder(order)?.items[0] ?? {}), false);
+});

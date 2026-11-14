@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 import { adminFetch } from "@/features/admin/shell/lib/admin-renewal";
-import { LOADING, type AttentionData, type Source } from "@/features/admin/shell/lib/admin-attention";
+import { hidesRow, LOADING, type AttentionData, type Source } from "@/features/admin/shell/lib/admin-attention";
 import { parseAdminDashboardSummary } from "@/features/admin/dashboard/lib/admin-dashboard-contract";
 import { pageSchema as caseSchema } from "@/features/admin/delivery-exceptions/delivery-exception-contract";
 import { overviewSchema } from "@/features/admin/finance/lib/insights-contract";
@@ -16,9 +16,9 @@ class Hidden extends Error {}
 
 async function readJson(path: string): Promise<unknown> {
   const response = await adminFetch(path, { cache: "no-store" });
-  // A role this owner doesn't hold hides the row instead of calling it a failure. So does the rider fleet before its
-  // trial (its service answers 404); anywhere else a 404 is a fault and shows as "couldn't check".
-  if (response.status === 403 || (response.status === 404 && path.startsWith("/api/admin/fleet/"))) throw new Hidden();
+  // Not for this owner, or switched off: leave the row out. Any other failure shows as "couldn't check".
+  const code = response.status === 404 ? await response.clone().json().then((body: { code?: unknown } | null) => body?.code, () => undefined) : undefined;
+  if (hidesRow(path, response.status, code)) throw new Hidden();
   if (!response.ok) throw new Error(String(response.status));
   return response.json();
 }

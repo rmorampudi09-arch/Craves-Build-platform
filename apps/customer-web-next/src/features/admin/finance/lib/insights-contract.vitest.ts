@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bucketDays, compactRupees, flowSign, fromPaise, initialView, insightsRequest, isZero, movementPageSchema, movementsCsv, niceCeiling, orderNumber,
-  overviewSchema, paise, rupees, statusOf, type Movement, type Overview } from "./insights-contract";
+import { bucketDays, chefNames, compactRupees, flowSign, fromPaise, initialView, insightsRequest, isZero, KINDS, movementPageSchema, movementsCsv, niceCeiling, orderNumber,
+  overviewSchema, paise, rupees, statusesOf, statusOf, type Movement, type Overview } from "./insights-contract";
 import { orderStops, payoutStops } from "./trail-stops";
 
 const ID = "0bde0000-1111-4222-8333-444455556666", OTHER = "1bde0000-1111-4222-8333-444455556666";
@@ -72,6 +72,14 @@ describe("finance insights: how money is written", () => {
     expect(statusOf("CHEF_PAYOUT", "UNKNOWN")).toEqual({ label: "Outcome not known", tone: "danger" });
     expect(statusOf("REFUND", "SUCCESS")).toEqual({ label: "Refunded", tone: "success" });
     expect(statusOf("RIDER_PAYOUT", "SOMETHING_NEW")).toEqual({ label: "Something new", tone: "neutral" });
+    // The status filter lists these words, so two statuses of one kind must never read the same.
+    for (const kind of KINDS) { const labels = statusesOf(kind).map(status => statusOf(kind, status).label); expect(new Set(labels).size, kind).toBe(labels.length); }
+  });
+  it("tells chefs who share a name apart by their short ID, and leaves every other name as it is", () => {
+    const names = chefNames([{ identityId: ID, displayName: "Asha R" }, { identityId: OTHER, displayName: "asha r" }, { identityId: "2bde0000-1111-4222-8333-444455556666", displayName: "Lakshmi’s Kitchen" },
+      { identityId: 7, displayName: "No ID" }, null]);
+    expect([...names]).toEqual([[ID, "Asha R · 0BDE0000"], [OTHER, "asha r · 1BDE0000"], ["2bde0000-1111-4222-8333-444455556666", "Lakshmi’s Kitchen"]]);
+    expect(chefNames({ code: "SESSION_EXPIRED" }).size).toBe(0);
   });
   it("writes the order number the way the rest of Craves does", () => {
     expect(orderNumber(ID)).toBe("#0BDE0000");

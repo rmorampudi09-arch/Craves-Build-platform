@@ -122,7 +122,7 @@ export function todayRows(data: AttentionData, now = Date.now()): { rows: TodayR
     label: plural(n, "rider pay file needs a second approval", "rider pay files need a second approval"), note: "Made by one owner. The other owner approves before it goes to the bank." }),
   "rider pay to approve", "Rider pay", "/admin/fleet-payouts");
   add(data.payouts, value => value.failed + value.toConfirm + value.onHold, value => ({ key: "payouts", href: "/admin/finance?tab=payouts", action: "Open", urgent: value.failed > 0, lead: "the failed kitchen payouts",
-    label: "kitchen payouts need a look",
+    label: plural(value.failed + value.toConfirm + value.onHold, "kitchen payout needs a look", "kitchen payouts need a look"),
     note: [value.failed && `${value.failed} ${plural(value.failed, "payout failed", "payouts failed")}`,
       value.toConfirm && `${value.toConfirm} waiting for the bank`,
       value.onHold && `${value.onHold} ${plural(value.onHold, "kitchen", "kitchens")} on hold`].filter(Boolean).join(" · ") }),
@@ -153,6 +153,15 @@ export function todayRows(data: AttentionData, now = Date.now()): { rows: TodayR
     label: "Riders' delivery mode: couldn't check", note: "Practice run, rain mode or off may be on. Open Live, practice & rain to see." });
   // Failed sources sit after waiting work, so a "couldn't check" row never pushes an urgent one down.
   return { rows: [...rows.filter(row => !row.failed), ...rows.filter(row => row.failed)], nothing };
+}
+
+/**
+ * Whether a failed read means "not for this owner" or "switched off" (leave the row out) rather than a fault.
+ * The rider fleet answers 404 before its trial; delivery problems answer 404 DELIVERY_EXCEPTIONS_DISABLED while off.
+ */
+export function hidesRow(path: string, status: number, code: unknown): boolean {
+  if (status === 403) return true;
+  return status === 404 && (path.startsWith("/api/admin/fleet/") || (typeof code === "string" && code.endsWith("_DISABLED")));
 }
 
 /** The bold line under Today's date. A check that failed is never summed up as "nothing waiting". */

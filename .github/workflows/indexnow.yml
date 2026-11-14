@@ -1,0 +1,49 @@
+name: IndexNow
+# Tells Bing (and the AI answers built on its index) that craves.in's public pages changed.
+# release-web runs in Azure DevOps, outside this repo, so this waits until craves.in serves the
+# pushed commit and then submits the live sitemap. Run it by hand to submit right away.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/customer-web-next/src/app/sitemap.ts'
+      - 'apps/customer-web-next/src/app/security/**'
+      - 'apps/customer-web-next/src/features/seo/**'
+      - 'apps/customer-web-next/public/llms.txt'
+      - 'apps/customer-web-next/public/landing-v20/index.html'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: indexnow
+  cancel-in-progress: true
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: apps/customer-web-next/scripts
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Wait until craves.in serves this commit
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 1 60); do
+            live=$(curl -fsS https://craves.in/api/version | jq -r .commitSha || true)
+            if [[ "$live" =~ ^[0-9a-f]{40}$ ]]; then
+              # "ahead" or "identical": the live commit already contains this one.
+              status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$GITHUB_SHA...$live" --jq .status 2>/dev/null || true)
+              case "$status" in identical|ahead) echo "craves.in serves $live"; exit 0;; esac
+            fi
+            sleep 60
+          done
+          echo "::error::craves.in did not serve $GITHUB_SHA within an hour; run this workflow by hand once it does."
+          exit 1
+      - name: Submit the live sitemap
+        run: node apps/customer-web-next/scripts/indexnow-submit.mjs

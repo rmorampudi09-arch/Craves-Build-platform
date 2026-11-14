@@ -94,6 +94,11 @@ export function CustomerOrderTrackingScreen() {
     return () => subscription.remove();
   }, []);
 
+  const routePath = useMemo(
+    () => (projection?.routePath ? decodePolyline(projection.routePath) : null),
+    [projection?.routePath],
+  );
+
   const deliveryStatus = projection?.status;
   useEffect(() => {
     if (deliveryStatus) void appSounds.orderStatusSeen(`delivery:${route.params.orderId}`, deliveryStatus);
@@ -166,11 +171,6 @@ export function CustomerOrderTrackingScreen() {
       </ScreenShell>
     );
   }
-
-  const routePath = useMemo(
-    () => (projection?.routePath ? decodePolyline(projection.routePath) : null),
-    [projection?.routePath],
-  );
 
   if (tracking.isPending && !projection) {
     return (

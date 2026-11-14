@@ -128,7 +128,8 @@ export function OrderMap({
                   paint={{
                     'line-color': colors.espressoBrown,
                     'line-width': 3.5,
-                    ...(road ? {} : {'line-dasharray': [0.1, 2]}),
+                    // Explicit in both states so the style never relies on a paint key disappearing.
+                    'line-dasharray': road ? [1, 0] : [0.1, 2],
                   }}
                 />
               </GeoJSONSource>

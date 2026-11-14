@@ -20,10 +20,14 @@ function Line({ label, note, amount, sign, total, onOpen }: { label: string; not
 
 function Attention({ overview, onJump, onPayouts }: { overview: Overview; onJump: (jump: Jump) => void; onPayouts: () => void }) {
   const { attention, recording } = overview;
+  // These counts are as of now and reach back past any period, so opening the last 30 days could list none of the rows counted.
+  // shortcut: the list takes one status and at most a year, so these open the past year with any status: finished rows show too, and a
+  // row open for over a year is counted but not listed. Give /transactions a needs-attention filter when either starts to matter.
+  const year = 366;
   const items: { count: number; what: string; state: string; open?: () => void; href?: string }[] = [
     { count: attention.payoutsToConfirm, what: "chef payout", state: "set aside or waiting for the bank’s answer", open: onPayouts },
-    { count: attention.payoutsFailed, what: "chef payout", state: "failed or came back in the last 30 days", open: () => onJump({ kind: "CHEF_PAYOUT", days: 30 }) },
-    { count: attention.refundsStuck, what: "refund", state: "failed, stuck or open for over a day", open: () => onJump({ kind: "REFUND", days: 30 }) },
+    { count: attention.payoutsFailed, what: "chef payout", state: "failed or came back in the last 30 days", open: () => onJump({ kind: "CHEF_PAYOUT", days: year }) },
+    { count: attention.refundsStuck, what: "refund", state: "failed, stuck or open for over a day", open: () => onJump({ kind: "REFUND", days: year }) },
     { count: attention.ordersToReview, what: "order", state: "with the earning held for a check", href: "/admin/operations" },
     { count: attention.riderPayoutsOpen, what: "rider payout", state: "waiting or failed", href: "/admin/fleet-payouts" },
   ].filter(item => item.count > 0);

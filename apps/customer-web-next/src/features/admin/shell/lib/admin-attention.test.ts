@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { areaCounts, lastWeek, LOADING, riderState, todayFinding, todayRows, type AttentionData } from "./admin-attention.ts";
+import { areaCounts, hidesRow, lastWeek, LOADING, riderState, todayFinding, todayRows, type AttentionData } from "./admin-attention.ts";
 
 const NOW = Date.parse("2026-11-14T07:40:00Z"); // 1:10 pm IST
 const ok = <T,>(value: T, more = false) => ({ state: "ok" as const, value, more });
@@ -98,4 +98,13 @@ test("kitchen payouts on hold count, and rider pay is listed before kitchen payo
   const { rows } = todayRows({ ...quiet, riderPay: ok(1), payouts: ok({ toConfirm: 0, failed: 0, onHold: 2 }) }, NOW);
   assert.deepEqual(rows.map(row => row.key), ["rider-pay", "payouts"]);
   assert.equal(rows[1].note, "2 kitchens on hold");
+  assert.equal(todayRows({ ...quiet, payouts: ok({ toConfirm: 1, failed: 0, onHold: 0 }) }, NOW).rows[0].label, "kitchen payout needs a look");
+});
+
+test("a switched-off feature or a missing role leaves its row out; any other failure is couldn't check", () => {
+  assert.equal(hidesRow("/api/admin/support/cases", 403, undefined), true);
+  assert.equal(hidesRow("/api/admin/fleet/riders", 404, undefined), true);
+  assert.equal(hidesRow("/api/admin/delivery-exceptions", 404, "DELIVERY_EXCEPTIONS_DISABLED"), true);
+  assert.equal(hidesRow("/api/admin/support/cases", 404, "NOT_FOUND"), false);
+  assert.equal(hidesRow("/api/admin/subscription-plans", 502, "INVALID_PLAN_RESPONSE"), false);
 });

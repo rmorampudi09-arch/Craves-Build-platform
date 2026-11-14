@@ -15,7 +15,7 @@ Production moved to a new subscription on 29 Oct 2026 (cut-over about 23:45 UTC)
 | Resource groups | one per feature: `rg-craves-<feature>-prod` (auth, catalog, order, user-chef, notification, subscription, integration, referral, voice, web, admin, delivery-intel), plus `rg-craves-data-business-prod`, `rg-craves-shared-prod`, `rg-craves-ops-prod`, `rg-craves-dns-prod` |
 | Container apps | `ca-craves-<feature>-prod` (referral also `ca-craves-referral-members-prod`) |
 | Container registry | `crcravesprod34eefd` |
-| APIM | `apim-craves-prod-34eefd`, behind Front Door `afd-craves-prod` (api.craves.in) |
+| APIM | `apim-craves-prod-34eefd`, behind Front Door `afd-craves-prod` (api.craves.in). A 401 without a token does not show that a route is published: on `craves-finance-admin-v1` every path answers 401, and a path with no operation of its own falls to the `/*` operations, reaches the service at the wrong path and gives a signed-in admin 403 (14 Nov 2026). Publish each new finance route as its own operation with a rewrite-uri, as `scripts/apim/configure-finance-insights-apim.sh` does, and check it signed in |
 | DNS | zone `craves.in` in `rg-craves-dns-prod` (registrar GoDaddy) |
 | Releases | Azure DevOps org `ravitejamm6`, project `Craves-New-Original`. `ops/mirror-github` copies GitHub `main` every 15 minutes; `release-<feature>` pipelines build and roll out automatically (10 % canary, then 100 %, automatic rollback). No manual approval: **a merge to `main` goes live.** |
 

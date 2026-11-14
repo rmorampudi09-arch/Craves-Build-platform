@@ -10,8 +10,8 @@ export default async function AdminChefReviewDetailsPage({ params }: { params: P
   const { applicationId } = await params;
   // The separate admin portal does not carry the customer-site flag; v2 onboarding is live, so only an explicit "false" hides it.
   return <div className="space-y-7">
-    <AdminPageIntro eyebrow="Chef onboarding" title="Review chef application" description="Open the submitted evidence and record only an approved backend decision.">
-      <Link href="/admin/chef-reviews" className="inline-flex items-center gap-2 rounded-xl border border-[#d9cfdf] px-4 py-2.5 text-sm font-bold text-[#5d4e69]"><ArrowLeft size={16} />Applications</Link>
+    <AdminPageIntro eyebrow="Chef onboarding" title="Kitchen application" description="Open each document, check the FSSAI licence, then approve the kitchen or say what to fix.">
+      <Link href="/admin/chef-reviews" className="inline-flex items-center gap-2 rounded-xl border border-[#d9cfdf] px-4 py-2.5 text-sm font-bold text-[#5d4e69]"><ArrowLeft size={16} aria-hidden="true" />All applications</Link>
     </AdminPageIntro>
     {isUuid(applicationId)
       ? <AdminChefReviewDetails applicationId={applicationId} onboardingV2Enabled={process.env.CRAVES_CHEF_ONBOARDING_V2_ENABLED !== "false"} />

@@ -126,7 +126,7 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
     {!applying && <section className="cr-panel">
       <h2 className="text-lg font-bold">Recent shifts</h2>
       <p className="cr-muted">How the phone kept in touch (app 1.1.0): when it last called, the longest silence between calls, and its own last report. A silent phone on shift has usually been stopped by the phone&apos;s battery settings.</p>
-      {detail.shifts.length === 0 ? <p className="cr-empty">No shifts yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
+      {detail.shifts.length === 0 ? <p className="cr-empty">No shifts yet.</p> : <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
         <thead><tr><th scope="col">Started</th><th scope="col">Ended</th><th scope="col">Selfie</th><th scope="col">Reviewed by</th><th scope="col">Minutes in zone</th><th scope="col">Last heard</th><th scope="col">Longest silence</th><th scope="col">Phone</th></tr></thead>
         <tbody>{detail.shifts.map(shift => <tr key={shift.shiftId}>
           <td>{when(shift.startedAt)}</td><td>{shift.endedAt ? when(shift.endedAt) : onShift(shift, when)}</td>
@@ -140,7 +140,7 @@ export function RiderDetailView({ riderId }: { riderId: string }) {
     {!applying && detail.recentOffers && <section className="cr-panel">
       <h2 className="text-lg font-bold">Recent offers</h2>
       <p className="cr-muted">The last 20 offers, newest first: what the push did and how soon the phone rang. Most should ring by push within 5 seconds; a trip ops gave the rider by hand is accepted at once and never pushed. A pay hold or adjustment asks for the trip ID.</p>
-      {detail.recentOffers.length === 0 ? <p className="cr-empty">No offers yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
+      {detail.recentOffers.length === 0 ? <p className="cr-empty">No offers yet.</p> : <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
         <thead><tr><th scope="col">Offered</th><th scope="col">Order</th><th scope="col">Outcome</th><th scope="col">Why this rider</th><th scope="col">Push</th><th scope="col">Rang</th><th scope="col">Trip ID</th></tr></thead>
         <tbody>{detail.recentOffers.map(offer => <tr key={offer.offerId}>
           <td>{when(offer.offeredAt)}</td><td>{offer.orderCode}</td><td>{readableFleetValue(offer.state)}</td><td>{offerWhy(offer)}</td>

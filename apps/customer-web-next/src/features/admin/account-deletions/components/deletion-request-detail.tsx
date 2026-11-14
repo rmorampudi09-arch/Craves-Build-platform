@@ -42,7 +42,7 @@ function Summary({ detail }: { detail: AdminDeletionDetail }) {
 
 function OpenItems({ detail }: { detail: AdminDeletionDetail }) {
   return <Section title="Open items">
-    {detail.blockers.length === 0 ? <p className="cr-muted">Nothing is open.</p> : <div className="cr-table-scroll"><table className="cr-table !min-w-0">
+    {detail.blockers.length === 0 ? <p className="cr-muted">Nothing is open.</p> : <div className="cr-table-scroll" tabIndex={0}><table className="cr-table !min-w-0">
       <thead><tr>{["Service", "Code", "Detail"].map(name => <th key={name} scope="col">{name}</th>)}</tr></thead>
       <tbody>{detail.blockers.map((item, index) => <tr key={`${item.service}-${item.code}-${index}`}>
         <td>{item.service}</td>
@@ -55,7 +55,7 @@ function OpenItems({ detail }: { detail: AdminDeletionDetail }) {
 
 function Steps({ detail }: { detail: AdminDeletionDetail }) {
   return <Section title="Steps">
-    {detail.steps.length === 0 ? <p className="cr-muted">No erasure steps have started.</p> : <div className="cr-table-scroll"><table className="cr-table !min-w-0">
+    {detail.steps.length === 0 ? <p className="cr-muted">No erasure steps have started.</p> : <div className="cr-table-scroll" tabIndex={0}><table className="cr-table !min-w-0">
       <thead><tr>{["Phase", "Service", "Status", "Attempts", "Last error", "Done"].map(name => <th key={name} scope="col">{name}</th>)}</tr></thead>
       <tbody>{detail.steps.map((step, index) => <tr key={`${step.phase}-${step.service}-${index}`}>
         <td>{step.phase}</td><td>{step.service}</td><td>{step.status}</td><td>{step.attempts}</td>

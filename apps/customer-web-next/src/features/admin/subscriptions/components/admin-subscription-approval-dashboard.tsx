@@ -252,7 +252,7 @@ export function AdminSubscriptionApprovalDashboard({ plan }: { plan: AdminSubscr
         <strong className="text-slate-900">Why all 7 weekdays?</strong> A monthly plan is tied to a date of the month. That date can fall on a different weekday in future months, so each used meal slot needs capacity on Monday through Sunday.
       </p>}
 
-      {requirements.length > 0 && <div className="mt-4 overflow-x-auto">
+      {requirements.length > 0 && <div className="mt-4 overflow-x-auto" tabIndex={0}>
         <table className="min-w-[900px] w-full text-left text-xs">
           <thead><tr className="border-b border-[#eadfd0] text-slate-500"><th className="p-3">Weekday</th><th className="p-3">Meal slot</th><th className="p-3">Plan needs</th><th className="p-3">Configured limit</th><th className="p-3">Reserved</th><th className="p-3">Available</th><th className="p-3">Sales</th><th className="p-3">Result</th></tr></thead>
           <tbody>{requirements.map(item => <tr key={`${item.day}-${item.slot}`} className="border-b border-[#f0e7dc]">

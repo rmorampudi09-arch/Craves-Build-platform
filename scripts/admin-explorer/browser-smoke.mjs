@@ -87,7 +87,7 @@ try{
  await page.evaluate(()=>window.scrollTo(0,0));await ribbon();await page.screenshot({path:`${output}/03-orders-desktop.png`,fullPage:true});
  await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.scrollTo(0,0));await ribbon();await page.screenshot({path:`${output}/04-orders-mobile.png`,fullPage:true});
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'Page must not overflow horizontally');
- await page.getByRole('button',{name:'Open navigation',exact:true}).click();await page.getByRole('dialog',{name:'Admin navigation'}).waitFor();await healthyRecheckPreservesDialog();await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('dialog',{name:'Admin navigation'}).waitFor();await healthyRecheckPreservesDialog();await page.keyboard.press('Escape');
  for(const width of [320,768,1024]){await page.setViewportSize({width,height:900});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`Horizontal overflow at ${width}`);}
  await page.setViewportSize({width:1440,height:1100});
  deny=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByRole('alert').filter({hasText:'Platform or audit'}).waitFor();assert.equal(await page.locator('.ex-table tbody tr').count(),0);

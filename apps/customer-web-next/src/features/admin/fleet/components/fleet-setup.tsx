@@ -17,7 +17,7 @@ import {
 } from "@/features/admin/fleet/lib/setup-contract";
 import { ActionMessage, fieldClass, labelClass, useFleetAction, type FleetAction } from "./fleet-action";
 
-const MODE_LABEL = { off: "Off", shadow: "Shadow — logs only", live: "Live" } as const;
+const MODE_LABEL = { off: "Off", shadow: "Practice run (logs only)", live: "Live" } as const;
 const LIVE_WARNING = "Riders will get real orders now (only the pilot riders while test mode is on). Borzo and Pidge still take any order a rider doesn't accept in time.";
 const STOP_WARNING = "Stop dispatch now? Craves riders get no new offers; Borzo and Pidge take every order.";
 const ALLOW_LIST = "The list applies only while test mode is on; production runs with test mode off, so orders from every kitchen go to every eligible rider.";
@@ -27,7 +27,10 @@ const STEP: Record<Unit, string> = { rupees: "0.01", km: "0.1", minutes: "1", se
 const DAY = 86_400_000;
 const noteBody = (note: string) => note.trim() ? { note: note.trim() } : undefined;
 
-export function FleetSetup() {
+/** One task per Riders tab: live, practice & rain (dispatch), the trial's riders and kitchens, or the pay rates. */
+export type SetupSection = "dispatch" | "trial" | "rates";
+
+export function FleetSetup({ section = "dispatch" }: { section?: SetupSection }) {
   const [setup, setSetup] = useState<Setup | null>(null);
   const [message, setMessage] = useState("Loading the pilot setup…");
 
@@ -44,12 +47,11 @@ export function FleetSetup() {
   return <div className="space-y-6">
     {message && <p className={setup ? "cr-alert" : "cr-empty"} role="status">{message}</p>}
     {setup && <>
-      <SetupStatus setup={setup} />
-      <DispatchPanel setup={setup} onDone={load} />
-      <RainPanel />
-      <RateCards setup={setup} onDone={load} />
-      <PilotRiders riders={setup.pilotRiders} testMode={setup.testMode} onDone={load} />
-      <PilotKitchens kitchens={setup.pilotKitchens} testMode={setup.testMode} onDone={load} />
+      {section !== "trial" && <SetupStatus setup={setup} />}
+      {section === "dispatch" && <><DispatchPanel setup={setup} onDone={load} /><RainPanel /></>}
+      {section === "rates" && <RateCards setup={setup} onDone={load} />}
+      {section === "trial" && <><PilotRiders riders={setup.pilotRiders} testMode={setup.testMode} onDone={load} />
+        <PilotKitchens kitchens={setup.pilotKitchens} testMode={setup.testMode} onDone={load} /></>}
     </>}
   </div>;
 }
@@ -74,7 +76,7 @@ function SetupStatus({ setup }: { setup: Setup }) {
         <span className="cr-metric-label">Test mode</span>
         <strong>{setup.testMode ? "On" : "Off"}</strong>
         <span className="cr-muted">{setup.testMode
-          ? "Test mode is on: only the riders and kitchens listed below get Craves riders."
+          ? "Test mode is on: only the riders and kitchens in Trial setup get Craves riders."
           : "Test mode is off: every active rider and kitchen can get Craves riders."} It is a server setting; this page can&apos;t change it.</span>
       </article>
     </div>
@@ -139,7 +141,7 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
     {/* Outside the box, which goes once dispatch is off. */}
     <ActionMessage state={stop.state} />
     <form noValidate className="space-y-3" onSubmit={event => void submit(event)}>
-      <p className="cr-muted">A new version takes effect at once. Off: Craves riders get nothing. Shadow: dispatch only writes logs. Live: riders get real offers (only the pilot riders while test mode is on); it needs a rate card in force.</p>
+      <p className="cr-muted">A new version takes effect at once. Off: Craves riders get nothing. Practice run: Craves only writes down which rider it would have offered each order to, and riders get nothing. Live: riders get real offers (only the pilot riders while test mode is on); it needs a rate card in force.</p>
       <fieldset>
         <legend className={labelClass}>Mode</legend>
         <div className="mt-1 flex flex-wrap gap-4">{DISPATCH_MODES.map(mode => <label key={mode} className="flex items-center gap-2 text-sm">
@@ -158,7 +160,7 @@ function DispatchPanel({ setup, onDone }: { setup: Setup; onDone: () => Promise<
       <button type="submit" className="cr-button cr-primary" disabled={save.busy}>Save dispatch policy</button>
       <ActionMessage state={save.state} />
     </form>
-    {setup.dispatchPolicies.length > 0 && <div className="cr-table-scroll"><table className="cr-table">
+    {setup.dispatchPolicies.length > 0 && <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
       <caption className="text-left font-bold">Latest versions</caption>
       <thead><tr><th scope="col">Version</th><th scope="col">Mode</th><th scope="col">Offers</th><th scope="col">From</th><th scope="col">Status</th></tr></thead>
       <tbody>{setup.dispatchPolicies.slice(0, 5).map(policy => <tr key={policy.version}>
@@ -224,7 +226,7 @@ function RateCards({ setup, onDone }: { setup: Setup; onDone: () => Promise<void
   return <section className="cr-panel space-y-4" aria-labelledby="setup-rate-title">
     <h2 id="setup-rate-title" className="text-lg font-bold">Rate card</h2>
     <p className="cr-muted">Rider pay terms. The first rate card can take effect at once. Every later one needs 14 days&apos; notice: it must start at least 14 days after you publish it.</p>
-    {setup.rateCards.length === 0 ? <p className="cr-empty">No rate card versions yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
+    {setup.rateCards.length === 0 ? <p className="cr-empty">No rate card versions yet.</p> : <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
       <thead><tr><th scope="col">Version</th><th scope="col">Status</th><th scope="col">Effective from</th><th scope="col">Published</th><th scope="col">Base</th><th scope="col">Base km</th><th scope="col">Each drop km</th><th scope="col">Slot, an hour</th><th scope="col">Action</th></tr></thead>
       <tbody>{setup.rateCards.map(card => <RateCardRow key={card.version} card={card} inForce={setup.rateCard} published={published} onDone={onDone} />)}</tbody>
     </table></div>}
@@ -275,7 +277,7 @@ function NewDraft({ newest, published, onDone }: { newest: RateCard | null; publ
     {!published && <fieldset className="space-y-2">
       <legend className="font-bold">Allowed ranges</legend>
       <p className="cr-muted">The first rate card sets the lowest and highest each value may ever be. Every later card must stay inside them, and they can&apos;t change after the first card is published.</p>
-      <div className="cr-table-scroll"><table className="cr-table">
+      <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
         <thead><tr><th scope="col">Value</th><th scope="col">Lowest</th><th scope="col">Highest</th></tr></thead>
         <tbody>{RATE_CARD_INPUTS.map(({ field, label, unit }) => <tr key={field}>
           <th scope="row">{label}</th>
@@ -305,7 +307,7 @@ function PilotRiders({ riders, testMode, onDone }: { riders: PilotRider[]; testM
   return <section className="cr-panel space-y-3" aria-labelledby="setup-riders-title">
     <h2 id="setup-riders-title" className="text-lg font-bold">Pilot riders</h2>
     <p className="cr-muted">{testMode ? "Test mode is on: only these riders get Craves offers." : "Test mode is off: this list isn't used now."} {ALLOW_LIST}</p>
-    {riders.length === 0 ? <p className="cr-empty">No pilot riders yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
+    {riders.length === 0 ? <p className="cr-empty">No pilot riders yet.</p> : <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
       <thead><tr><th scope="col">Rider</th><th scope="col">Status</th><th scope="col">Note</th><th scope="col">Added</th><th scope="col">Action</th></tr></thead>
       <tbody>{riders.map(rider => <PilotRow key={rider.riderId} path={`pilot/riders/${rider.riderId}`} name={rider.name} addedAt={rider.addedAt} note={rider.note} onDone={onDone}
         confirm={`Remove ${rider.name} from the pilot? While test mode is on, they get no new Craves offers.`}>
@@ -401,7 +403,7 @@ function PilotKitchens({ kitchens, testMode, onDone }: { kitchens: PilotKitchen[
   return <section className="cr-panel space-y-3" aria-labelledby="setup-kitchens-title">
     <h2 id="setup-kitchens-title" className="text-lg font-bold">Pilot kitchens</h2>
     <p className="cr-muted">{testMode ? "Test mode is on: only orders from these kitchens go to Craves riders." : "Test mode is off: this list isn't used now."} {ALLOW_LIST}</p>
-    {kitchens.length === 0 ? <p className="cr-empty">No pilot kitchens yet.</p> : <div className="cr-table-scroll"><table className="cr-table">
+    {kitchens.length === 0 ? <p className="cr-empty">No pilot kitchens yet.</p> : <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
       <thead><tr><th scope="col">Chef ID</th><th scope="col">Note</th><th scope="col">Added</th><th scope="col">Action</th></tr></thead>
       <tbody>{kitchens.map(kitchen => <PilotRow key={kitchen.chefId} path={`pilot/kitchens/${kitchen.chefId}`} name={`kitchen ${kitchen.chefId}`} note={kitchen.note} addedAt={kitchen.addedAt} onDone={onDone}
         confirm={`Remove kitchen ${kitchen.chefId} from the pilot? While test mode is on, its orders go to Borzo and Pidge only.`}>

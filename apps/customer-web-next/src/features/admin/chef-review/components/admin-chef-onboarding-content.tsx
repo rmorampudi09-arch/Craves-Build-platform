@@ -86,7 +86,7 @@ export function AdminChefOnboardingContent() {
         <label className="block text-sm font-bold">Title<input required maxLength={160} disabled={busy} value={title} className={input} onChange={event=>setTitle(event.target.value)} /></label>
         {kind==="ARTICLE"?<div>
           <label className="block text-sm font-bold">Article<textarea required minLength={10} maxLength={20000} disabled={busy} value={body} className={input+" min-h-48"} onChange={event=>setBody(event.target.value)} /></label>
-          <label className="mt-3 block text-sm">Or upload a plain-text article<input type="file" accept="text/plain,.txt" disabled={busy} className="mt-2 block" onChange={event=>{
+          <label className="mt-3 block text-sm">Or upload a plain-text article<input type="file" accept="text/plain,.txt" disabled={busy} className="mt-2 block max-w-full" onChange={event=>{
             const article=event.target.files?.[0];event.target.value="";if(article)void work(async()=>{if(article.size>60000)throw new Error("Choose a text article within 20,000 characters.");const text=await article.text();if(text.length>20000)throw new Error("Article exceeds 20,000 characters.");setBody(text);});
           }} /></label>
         </div>:<label className="block text-sm font-bold">Video file<input type="file" accept="video/mp4,video/webm" required disabled={busy} className="mt-3 block" onChange={event=>setFile(event.target.files?.[0] ?? null)} /></label>}

@@ -61,7 +61,7 @@ export function FlowChart({ buckets, onPick }: { buckets: Bucket[]; onPick: (fro
       </div>}
     </div>
     <details className="fn-tabletoggle"><summary>Show these figures as a table</summary>
-      <div className="cr-table-scroll"><table className="fn-table"><thead><tr><th scope="col">Period</th><th scope="col" className="fn-amount">Customers paid</th>
+      <div className="cr-table-scroll" tabIndex={0}><table className="fn-table"><thead><tr><th scope="col">Period</th><th scope="col" className="fn-amount">Customers paid</th>
         <th scope="col" className="fn-amount">Refunded</th><th scope="col" className="fn-amount">Paid to chefs</th><th scope="col" className="fn-amount">Paid to riders</th></tr></thead>
         <tbody>{buckets.map(bucket => <tr key={bucket.from} onClick={() => onPick(bucket.from, bucket.to)}><td>{period(bucket)}</td>
           {[bucket.moneyIn, bucket.refunded, bucket.chefPaid, bucket.riderPaid].map((value, index) => <td key={index} className="fn-amount fn-num">{money(value)}</td>)}</tr>)}</tbody></table></div>

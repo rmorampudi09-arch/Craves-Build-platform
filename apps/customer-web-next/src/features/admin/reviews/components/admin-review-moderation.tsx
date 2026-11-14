@@ -83,10 +83,10 @@ export function AdminReviewModeration() {
   };
 
   return <section className="space-y-5">
-    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 pb-4" role="tablist" aria-label="Review status">
-      {TABS.map(tab => <button key={tab.status} type="button" role="tab" aria-selected={tab.status === status} disabled={busy}
+    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 pb-4">
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Review status">{TABS.map(tab => <button key={tab.status} type="button" role="tab" aria-selected={tab.status === status} disabled={busy}
         className={`${buttonStyle} rounded-full ${tab.status === status ? "border-zinc-900 bg-zinc-900 text-white" : ""}`}
-        onClick={() => openTab(tab.status)}>{tab.label}</button>)}
+        onClick={() => openTab(tab.status)}>{tab.label}</button>)}</div>
       <button type="button" aria-label="Refresh reviews" title="Refresh reviews" className={`${buttonStyle} ml-auto`} disabled={busy}
         onClick={() => { setMessage(""); show(status); }}><RefreshCw size={18} /></button>
     </div>

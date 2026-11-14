@@ -70,14 +70,14 @@ describe("pilot setup status", () => {
     expect(within(status).getByText("Off")).toBeTruthy();
     expect(within(status).getByText("No dispatch policy is in force, so dispatch is off.")).toBeTruthy();
     expect(within(status).getByText("No rate card published yet")).toBeTruthy();
-    expect(status.textContent).toContain("Test mode is on: only the riders and kitchens listed below get Craves riders.");
+    expect(status.textContent).toContain("Test mode is on: only the riders and kitchens in Trial setup get Craves riders.");
     // Nothing to stop.
     expect(screen.queryByRole("button", { name: "Stop dispatch now" })).toBeNull();
   });
 
   it("shows live dispatch, the rate card in force and test mode off", async () => {
     setup = { ...base, testMode: false, dispatchPolicy: policy, dispatchPolicies: [policy], rateCard: published, rateCards: [published] };
-    render(createElement(FleetSetup));
+    render(createElement(FleetSetup, { section: "rates" }));
     const status = await section("In force now");
     expect(within(status).getByText("Live")).toBeTruthy();
     expect(status.textContent).toContain("Version 2026-10-v2, since 22 Oct 2026, 10:00 am IST");
@@ -179,7 +179,7 @@ describe("dispatch", () => {
     setup = { ...base, dispatchPolicy: { ...policy, mode: "shadow" }, dispatchPolicies: [{ ...policy, mode: "shadow" }] };
     render(createElement(FleetSetup));
     const panel = await section("Dispatch");
-    expect((within(panel).getByLabelText("Shadow — logs only") as HTMLInputElement).checked).toBe(true);
+    expect((within(panel).getByLabelText("Practice run (logs only)") as HTMLInputElement).checked).toBe(true);
     fireEvent.click(within(panel).getByLabelText("Live"));
 
     vi.stubGlobal("confirm", vi.fn(() => false));
@@ -227,7 +227,7 @@ describe("dispatch", () => {
     render(createElement(FleetSetup));
     let panel = await section("Dispatch");
     expect((within(panel).getByLabelText("Off") as HTMLInputElement).checked).toBe(true);
-    fireEvent.click(within(panel).getByLabelText("Shadow — logs only"));
+    fireEvent.click(within(panel).getByLabelText("Practice run (logs only)"));
     expect(within(panel).getByLabelText("New detour starts (IST)")).toBeTruthy();
     expect(within(panel).getByText(/riders get 14 days' notice\. This whole version/).textContent).toContain("Until then riders keep the detour at 120%.");
     cleanup();
@@ -311,7 +311,7 @@ describe("rain mode", () => {
 
 describe("rate card", () => {
   it("publishes the first card at once after a confirmation", async () => {
-    render(createElement(FleetSetup));
+    render(createElement(FleetSetup, { section: "rates" }));
     const panel = await section("Rate card");
     const row = within(panel).getByText("2026-10-v1").closest("tr") as HTMLElement;
     expect(row.textContent).toContain("₹40.00");
@@ -333,7 +333,7 @@ describe("rate card", () => {
 
   it("says a later card needs 14 days' notice and shows the server's refusal", async () => {
     setup = { ...base, rateCard: published, rateCards: [{ ...card, version: "2026-10-v4" }, published] };
-    render(createElement(FleetSetup));
+    render(createElement(FleetSetup, { section: "rates" }));
     const panel = await section("Rate card");
     answer = (method, path) => method === "POST" ? json({ code: "VERSION_REFUSED", message: "It must start 14 days after publishing." }, 422) : reads(method, path);
     fireEvent.click(button("Publish 2026-10-v4", panel));
@@ -350,7 +350,7 @@ describe("rate card", () => {
   });
 
   it("saves a first draft with its ranges in paise and metres", async () => {
-    render(createElement(FleetSetup));
+    render(createElement(FleetSetup, { section: "rates" }));
     const form = (await screen.findByRole("heading", { name: "New draft" })).closest("form") as HTMLElement;
     expect((within(form).getByLabelText("Base pay, ₹") as HTMLInputElement).value).toBe("40.00");
     expect((within(form).getByLabelText("Base pay, ₹: lowest") as HTMLInputElement).value).toBe("30.00");
@@ -381,18 +381,18 @@ describe("rate card", () => {
 describe("pilot zone", () => {
   it("says the lists apply only while test mode is on, and production runs with it off", async () => {
     const rule = "The list applies only while test mode is on; production runs with test mode off, so orders from every kitchen go to every eligible rider.";
-    render(createElement(FleetSetup));
+    render(createElement(FleetSetup, { section: "trial" }));
     expect(within(await section("Pilot riders")).getByText(`Test mode is on: only these riders get Craves offers. ${rule}`)).toBeTruthy();
     expect(within(await section("Pilot kitchens")).getByText(`Test mode is on: only orders from these kitchens go to Craves riders. ${rule}`)).toBeTruthy();
     cleanup();
 
     setup = { ...base, testMode: false };
-    render(createElement(FleetSetup));
+    render(createElement(FleetSetup, { section: "trial" }));
     for (const heading of ["Pilot riders", "Pilot kitchens"]) expect(within(await section(heading)).getByText(`Test mode is off: this list isn't used now. ${rule}`)).toBeTruthy();
   });
 
   it("finds a rider and adds them with a note, then removes a rider after a confirmation", async () => {
-    render(createElement(FleetSetup));
+    render(createElement(FleetSetup, { section: "trial" }));
     const panel = await section("Pilot riders");
     const row = within(panel).getByRole("link", { name: "Ravi Kumar" }).closest("tr") as HTMLElement;
     expect(within(row).getByRole("link").getAttribute("href")).toBe(`/admin/riders/${RIDER}`);
@@ -417,7 +417,7 @@ describe("pilot zone", () => {
   });
 
   it("adds a kitchen by its chef ID without a note and keeps a row whose removal failed", async () => {
-    render(createElement(FleetSetup));
+    render(createElement(FleetSetup, { section: "trial" }));
     const panel = await section("Pilot kitchens");
     expect(within(panel).getByText(/copy their Identity ID/).textContent).toContain("All chef applications");
     type("Chef ID", "chef-42", panel);

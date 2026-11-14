@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
 import {useCallback,useEffect,useRef,useState} from "react";
-import {ArrowLeft,ArrowRight,Copy,Download,Filter,RefreshCw,Search,ShieldCheck,SlidersHorizontal,X} from "lucide-react";
+import {ArrowRight,Copy,Download,Filter,RefreshCw,Search,ShieldCheck,SlidersHorizontal,X} from "lucide-react";
 import {adminFetch,observeAdminSession} from "@/features/admin/shell/lib/admin-renewal";
+import {handedTo} from "@/features/admin/shell/lib/admin-handoff";
 import {DATASETS,EMPTY_FILTERS,META,aggregateCsv,explorerHref,parseExplorerRequest,parseExplorerResult,presetDates,type Dataset,type Filters,type ExplorerResult,type ExplorerRow} from "@/features/admin/explorer/lib/admin-explorer";
 import {formatAdminTimestamp,readableAdminStatus} from "@/features/admin/shell/lib/admin-navigation";
 import {ExplorerPurpose,useExplorerSession} from "@/features/admin/explorer/components/admin-explorer-session";
@@ -11,7 +12,9 @@ import "@/features/admin/styles/admin-explorer.css";
 const money=(amount:string)=>{const [whole,fraction]=amount.split('.');return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g,',')}.${fraction}`;};
 export function AdminRecordExplorer({dataset,initial}:{dataset:Dataset;initial:Filters}){
  const {reason}=useExplorerSession();const initialReason=useRef(reason);
- const [draft,setDraft]=useState<Filters>(initial),[applied,setApplied]=useState<Filters>(initial);
+ // A name typed in the admin search box opens the kitchen list already searched (held in memory, never in the URL).
+ const [start]=useState<Filters>(()=>{const text=dataset==="chefs"?handedTo("kitchens"):"";return text?{...initial,search:text}:initial;});
+ const [draft,setDraft]=useState<Filters>(start),[applied,setApplied]=useState<Filters>(start);
  const [data,setData]=useState<ExplorerResult|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [cursors,setCursors]=useState<(string|undefined)[]>([undefined]);const [selected,setSelected]=useState<ExplorerRow|null>(null);
  const [compact,setCompact]=useState(false),[contacts,setContacts]=useState(true),[dates,setDates]=useState(true),[feedback,setFeedback]=useState("");
@@ -34,7 +37,7 @@ export function AdminRecordExplorer({dataset,initial}:{dataset:Dataset;initial:F
   finally{if(seq===sequence.current)setBusy(false);}
  },[dataset]);
  const cancelPending=useCallback(()=>{sequence.current++;active.current?.abort();},[]);
- useEffect(()=>{void load(initial,initialReason.current);return cancelPending;},[initial,load,cancelPending]);
+ useEffect(()=>{void load(start,initialReason.current);return cancelPending;},[start,load,cancelPending]);
  useEffect(()=>observeAdminSession(state=>{if(state!=="ready"){drawer.current?.close();setSelected(null);}}),[]);
  function apply(f:Filters,scroll=false){
   pendingScroll.current=scroll;setDraft(f);setCursors([undefined]);setFeedback('');void load(f,reason,undefined,scroll?data?.boundary:undefined);
@@ -52,7 +55,7 @@ export function AdminRecordExplorer({dataset,initial}:{dataset:Dataset;initial:F
  }
  function open(row:ExplorerRow){setSelected(row);window.requestAnimationFrame(()=>drawer.current?.showModal());}
  function close(){drawer.current?.close();setSelected(null);}
- return <div className="ex-workspace"><header className="ex-page-heading"><div><Link href="/admin/analytics" className="ex-back"><ArrowLeft size={15}/>Marketplace analytics</Link><h1>{meta.title} explorer</h1><p>{meta.description}</p></div><span className="cr-badge"><ShieldCheck size={14}/>Audited read-only workspace</span></header>
+ return <div className="ex-workspace"><header className="ex-page-heading"><div><h2 className="ex-title">{meta.title} explorer</h2><p>{meta.description}</p></div><span className="cr-badge"><ShieldCheck size={14}/>Audited read-only workspace</span></header>
  <nav className="ex-dataset-tabs" aria-label="Record type">{DATASETS.map(d=><Link key={d} href={explorerHref(d,{fromDate:applied.fromDate,toDate:applied.toDate})} aria-current={dataset===d?'page':undefined}>{META[d].title}<ArrowUp d={dataset===d}/></Link>)}</nav>
  <section className="cr-panel ex-filter-panel"><div className="cr-section-heading"><div><p className="cr-eyebrow">Choose your view</p><h2><Filter size={18}/>Find exactly what you need</h2></div><div className="ex-presets">{[0,7,30,90].map(days=><button type="button" disabled={busy} key={days} onClick={()=>apply({...EMPTY_FILTERS,...presetDates(days)})}>{days===0?'All time':`${days} days`}</button>)}</div></div>
  <form onSubmit={e=>{e.preventDefault();apply(draft);}}><div className="ex-filter-grid">

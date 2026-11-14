@@ -119,20 +119,20 @@ export function AdminAccountIntervention() {
     <div className="space-y-6">
       <form onSubmit={loadStatus} className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">Step 1 · Read only</p>
-        <h2 className="mt-3 text-2xl font-bold">Load account status</h2>
+        <h2 className="mt-3 text-2xl font-bold">Find the account</h2>
         <p className="mt-3 text-sm leading-6 text-slate-600">Only an exact backend identity UUID is accepted. Phone and Firebase identifiers are never requested or displayed.</p>
-        <label className="mt-5 block text-sm font-bold">Identity UUID
+        <label className="mt-5 block text-sm font-bold">Account ID
           <input value={identityId} onChange={event => { setIdentityId(event.target.value.trim().toLowerCase()); setStatus(null); }} autoComplete="off" spellCheck={false} maxLength={64} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4 font-mono text-sm" required />
         </label>
-        <label className="mt-5 block text-sm font-bold">Reason for this lookup
+        <label className="mt-5 block text-sm font-bold">Why are you opening this account?
           <textarea value={lookupReason} onChange={event => setLookupReason(event.target.value)} minLength={10} maxLength={500} placeholder="For example: Chef reported they cannot sign in" className="mt-2 min-h-24 w-full rounded-2xl bg-white p-4 text-slate-950" required />
         </label>
         <button disabled={busy} className="mt-5 min-h-12 w-full rounded-2xl bg-[#6930CA] font-bold text-white disabled:opacity-50">{busy ? "Checking…" : "Load audited status"}</button>
       </form>
 
       <form onSubmit={intervene} className="rounded-[30px] border border-amber-200 bg-white p-6 text-slate-950">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#F6B545]">Step 2 · High impact</p>
-        <h2 className="mt-3 text-2xl font-bold">Suspend or reactivate</h2>
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-800">Step 2 · High impact</p>
+        <h2 className="mt-3 text-2xl font-bold">Block or unblock</h2>
         <p className="mt-3 text-sm leading-6 text-slate-600">Suspension revokes active Craves refresh sessions and increments the token version. Firebase disable/enable is completed by the durable worker after activation.</p>
         <label className="mt-5 block text-sm font-bold">Action
           <select value={action} onChange={event => { setAction(event.target.value as AdminAccountAction); setConfirmation(""); }} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4 text-slate-950">
@@ -140,13 +140,13 @@ export function AdminAccountIntervention() {
             <option value="REACTIVATE">Reactivate account</option>
           </select>
         </label>
-        <label className="mt-5 block text-sm font-bold">Mandatory audit reason
+        <label className="mt-5 block text-sm font-bold">Reason, saved with your name
           <textarea value={reason} onChange={event => setReason(event.target.value)} minLength={10} maxLength={500} disabled={!status} className="mt-2 min-h-32 w-full rounded-2xl bg-white p-4 text-slate-950 disabled:opacity-50" required />
         </label>
         <label className="mt-5 block text-sm font-bold">Type {action} to confirm
           <input value={confirmation} onChange={event => setConfirmation(event.target.value.toUpperCase())} disabled={!status} autoComplete="off" maxLength={20} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4 font-mono text-slate-950 disabled:opacity-50" required />
         </label>
-        <button disabled={busy || !status || confirmation !== action} className="mt-5 min-h-12 w-full rounded-2xl bg-[#F6B545] font-bold text-slate-950 disabled:opacity-40">{busy ? "Submitting…" : `Confirm ${action}`}</button>
+        <button disabled={busy || !status || confirmation !== action} className="cr-button cr-primary mt-5 min-h-12 w-full">{busy ? "Submitting…" : `Confirm ${action}`}</button>
       </form>
       <p className="text-sm leading-6 text-slate-600" role="status">{message}</p>
     </div>
@@ -171,7 +171,7 @@ export function AdminAccountIntervention() {
         </dl>
         {status.providerLastError && <div className="mt-5 rounded-2xl border border-amber-300 p-4"><strong>Provider synchronization note</strong><p className="mt-2 text-sm">{status.providerLastError}</p></div>}
         {status.correlationId && <div className="mt-5 rounded-2xl border border-[#6930CA]/20 p-4"><p className="text-xs font-bold uppercase tracking-wide text-[#6930CA]">Audit correlation</p><p className="mt-2 break-all font-mono text-sm">{status.correlationId}</p></div>}
-      </div> : <div className="rounded-[30px] border border-dashed border-[#cfc4d7] bg-white p-8 text-slate-600"><h2 className="text-2xl font-bold text-slate-950">No account loaded</h2><p className="mt-3 leading-7">The backend’s privacy-reduced account state must be loaded before the action form becomes available.</p></div>}
+      </div> : <div className="rounded-[30px] border border-dashed border-[#cfc4d7] bg-white p-8 text-slate-600"><h2 className="text-2xl font-bold text-slate-950">No account open yet</h2><p className="mt-3 leading-7">The backend’s privacy-reduced account state must be loaded before the action form becomes available.</p></div>}
     </section>
   </div>;
 }

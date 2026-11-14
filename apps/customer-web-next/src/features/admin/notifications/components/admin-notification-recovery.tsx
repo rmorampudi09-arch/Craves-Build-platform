@@ -152,6 +152,7 @@ export function AdminNotificationRecovery() {
               <button
                 key={item.requestId}
                 type="button"
+                aria-pressed={selected?.requestId === item.requestId}
                 onClick={() => {
                   setSelected(item);
                   setResult(null);
@@ -159,7 +160,7 @@ export function AdminNotificationRecovery() {
                 }}
                 className={`w-full rounded-[26px] p-5 text-left transition ${
                   selected?.requestId === item.requestId
-                    ? "bg-[#F6B545] text-slate-950"
+                    ? "ad-selected bg-white text-slate-950"
                     : "bg-white text-slate-950 hover:bg-[#FFF8EC]"
                 }`}
               >
@@ -198,7 +199,7 @@ export function AdminNotificationRecovery() {
             ))
           ) : (
             <div className="rounded-[30px] border border-dashed border-[#cfc4d7] bg-white p-8 text-slate-600">
-              <h2 className="text-2xl font-bold text-slate-950">No backlog loaded</h2>
+              <h2 className="text-2xl font-bold text-slate-950">Nothing loaded yet</h2>
               <p className="mt-3">
                 Only bounded operational fields are shown. Recipient identity and provider payloads are
                 intentionally omitted.
@@ -211,7 +212,7 @@ export function AdminNotificationRecovery() {
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">
             Audited requeue
           </p>
-          <h2 className="mt-3 text-2xl font-bold">Retry one request</h2>
+          <h2 className="mt-3 text-2xl font-bold">Send one again</h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">
             Requeue changes only the durable request state to PENDING. It does not call FCM, ACS or any
             provider inside this administrator transaction.

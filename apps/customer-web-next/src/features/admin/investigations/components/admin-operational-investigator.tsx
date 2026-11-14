@@ -11,10 +11,10 @@ import type {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const RESOURCES: Array<{ value: AdminInvestigationResource; label: string; hint: string }> = [
-  { value: "order", label: "Order", hint: "Order UUID" },
-  { value: "payment", label: "Payment", hint: "Payment-order UUID" },
-  { value: "refund", label: "Refund", hint: "Refund UUID" },
-  { value: "delivery-command", label: "Delivery command", hint: "Delivery-command UUID" }
+  { value: "order", label: "Order", hint: "The full order ID" },
+  { value: "payment", label: "Payment", hint: "The full payment ID" },
+  { value: "refund", label: "Refund", hint: "The full refund ID" },
+  { value: "delivery-command", label: "Delivery booking", hint: "The full delivery booking ID" }
 ];
 
 function displayDate(value: string | null): string {
@@ -82,8 +82,8 @@ export function AdminOperationalInvestigator({ initialReference = "" }: { initia
   return <div className="grid gap-7 lg:grid-cols-[0.72fr_1.28fr]">
     <form onSubmit={investigate} className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950">
       <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">Audited read only</p>
-      <h2 className="mt-3 text-2xl font-bold">Investigate an operation</h2>
-      <p className="mt-3 text-sm leading-6 text-slate-600">Every successful lookup is re-authorized and audit-recorded by the owning Spring service. This screen cannot retry, refund, book, cancel, suspend or change any business state.</p>
+      <h2 className="mt-3 text-2xl font-bold">Look up an order, payment, refund or delivery</h2>
+      <p className="mt-3 text-sm leading-6 text-slate-600">Every lookup is checked again and recorded with your reason. This page only shows what happened: it can&apos;t retry, refund, book, cancel or block anything.</p>
       <label className="mt-5 block text-sm font-bold">Resource
         <select value={resource} onChange={event => { setResource(event.target.value as AdminInvestigationResource); setResult(null); }} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4">
           {RESOURCES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -92,10 +92,10 @@ export function AdminOperationalInvestigator({ initialReference = "" }: { initia
       <label className="mt-5 block text-sm font-bold">{selected.hint}
         <input value={resourceId} onChange={event => setResourceId(event.target.value.trim())} maxLength={64} autoComplete="off" spellCheck={false} className="mt-2 min-h-12 w-full rounded-2xl bg-white px-4 font-mono text-sm" required />
       </label>
-      <label className="mt-5 block text-sm font-bold">Operational reason
+      <label className="mt-5 block text-sm font-bold">Why are you looking this up?
         <textarea value={reason} onChange={event => setReason(event.target.value)} minLength={10} maxLength={500} className="mt-2 min-h-32 w-full rounded-2xl bg-white p-4" placeholder="Example: Investigating support case CRV-2026-001 after customer escalation." required />
       </label>
-      <button disabled={busy} className="mt-5 min-h-12 w-full rounded-2xl bg-[#6930CA] font-bold text-white disabled:opacity-50">{busy ? "Loading evidence…" : "Run read-only investigation"}</button>
+      <button disabled={busy} className="mt-5 min-h-12 w-full rounded-2xl bg-[#6930CA] font-bold text-white disabled:opacity-50">{busy ? "Looking it up…" : "Look it up"}</button>
       {message && <p className="mt-4 text-sm leading-6 text-slate-600" role="status">{message}</p>}
     </form>
 
@@ -109,8 +109,8 @@ export function AdminOperationalInvestigator({ initialReference = "" }: { initia
           <dl className="mt-7 grid gap-4 sm:grid-cols-2">{result.summary.map(entry => <div key={`${entry.label}-${entry.value}`} className="rounded-2xl bg-[#FFF8EC] p-4"><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">{entry.label}</dt><dd className="mt-2 break-words text-sm font-semibold">{entry.value}</dd></div>)}</dl>
           <div className="mt-6 rounded-2xl border border-[#6930CA]/20 p-4"><p className="text-xs font-bold uppercase tracking-wide text-[#6930CA]">Audit correlation</p><p className="mt-2 break-all font-mono text-sm">{result.correlationId}</p></div>
         </div>
-        <div className="rounded-[30px] bg-white p-6 text-slate-950"><h3 className="text-2xl font-bold">Operational timeline</h3>{result.timeline.length ? <ol className="mt-5 space-y-4">{result.timeline.map((entry, index) => <li key={`${entry.label}-${entry.occurredAt}-${index}`} className="border-l-4 border-[#F6B545] pl-4"><div className="flex flex-wrap justify-between gap-2"><strong>{entry.label}</strong><time className="text-xs text-slate-500">{displayDate(entry.occurredAt)}</time></div><p className="mt-1 text-sm text-slate-600">{entry.status ?? "No status"}{entry.detail ? ` · ${entry.detail}` : ""}</p></li>)}</ol> : <p className="mt-4 text-sm text-slate-600">No bounded history entries were returned.</p>}</div>
-      </div> : <div className="rounded-[30px] border border-dashed border-[#cfc4d7] bg-white p-8 text-slate-600"><h2 className="text-2xl font-bold text-slate-950">No evidence loaded</h2><p className="mt-3 leading-7">A validated, privacy-reduced backend result will appear here. Raw provider and webhook payloads are never rendered.</p></div>}
+        <div className="rounded-[30px] bg-white p-6 text-slate-950"><h3 className="text-2xl font-bold">What happened</h3>{result.timeline.length ? <ol className="mt-5 space-y-4">{result.timeline.map((entry, index) => <li key={`${entry.label}-${entry.occurredAt}-${index}`} className="border-l-4 border-[#F6B545] pl-4"><div className="flex flex-wrap justify-between gap-2"><strong>{entry.label}</strong><time className="text-xs text-slate-500">{displayDate(entry.occurredAt)}</time></div><p className="mt-1 text-sm text-slate-600">{entry.status ?? "No status"}{entry.detail ? ` · ${entry.detail}` : ""}</p></li>)}</ol> : <p className="mt-4 text-sm text-slate-600">No bounded history entries were returned.</p>}</div>
+      </div> : <div className="rounded-[30px] border border-dashed border-[#cfc4d7] bg-white p-8 text-slate-600"><h2 className="text-2xl font-bold text-slate-950">Nothing looked up yet</h2><p className="mt-3 leading-7">A validated, privacy-reduced backend result will appear here. Raw provider and webhook payloads are never rendered.</p></div>}
     </section>
   </div>;
 }

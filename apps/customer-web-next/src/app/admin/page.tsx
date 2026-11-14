@@ -1,8 +1,7 @@
-import Link from "next/link";
-import {ArrowRight} from "lucide-react";
-import {AdminDashboard} from "@/features/admin/dashboard/components/admin-dashboard";
-import {AdminChefAttention} from "@/features/admin/chef-review/components/admin-chef-attention";
-import {AdminRiderAttention} from "@/features/admin/fleet/components/rider-attention";
-export default function AdminPage(){
- return <><AdminChefAttention/><AdminRiderAttention/><Link href="/admin/analytics" className="cr-panel" style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,marginBottom:24}}><span><strong>Marketplace analytics & all records</strong><span className="cr-muted" style={{display:"block"}}>Users, chefs and orders — click a graph and explore the full filtered list.</span></span><ArrowRight size={22} aria-hidden="true"/></Link><AdminDashboard/></>;
+import { AdminToday } from "@/features/admin/dashboard/components/admin-today";
+
+export const metadata = { title: "Today | Craves Admin", robots: { index: false, follow: false } };
+
+export default function AdminPage() {
+  return <AdminToday />;
 }

@@ -118,7 +118,7 @@ describe("Admin approval explains what is still needed", () => {
         phoneNumber: "+919000000003", step: "signed-in", reviewStatus: "NOT_STARTED", applicationId: null, startedAt: "2026-10-31T06:00:00Z", lastActivityAt: "2026-10-31T06:00:00Z" },
     ]);
     render(createElement(AdminChefReviewList));
-    fireEvent.click(await screen.findByRole("button", { name: "NOT SUBMITTED YET" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Waiting for the chef" }));
     expect(await screen.findByRole("heading", { name: "Stuck Chef" })).toBeTruthy();
     expect(screen.getByText(/3 chefs have started and not submitted yet/)).toBeTruthy();
     expect(screen.getByText(/Stopped at: Signed in with OTP, form not started/)).toBeTruthy();

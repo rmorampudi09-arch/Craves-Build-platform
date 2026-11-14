@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { formatAdminTimestamp } from "@/features/admin/shell/lib/admin-navigation";
+import { handedTo } from "@/features/admin/shell/lib/admin-handoff";
 import { nextStep, STAGE_LABELS } from "@/features/admin/fleet/lib/application-review";
 import { fleetGet } from "@/features/admin/fleet/lib/fleet-client";
 import { createRiderSchema, riderPageSchema, riderSummarySchema, type RiderStage, type RiderSummary } from "@/features/admin/fleet/lib/rider-contract";
@@ -22,9 +23,11 @@ const TABS: { stage: RiderStage | ""; label: string; empty: string }[] = [
 ];
 
 export function RidersList() {
-  const [tab, setTab] = useState<RiderStage | "">("REVIEW");
-  const [search, setSearch] = useState("");
-  const [applied, setApplied] = useState("");
+  // A name typed in the admin search box opens here already searched, across all riders.
+  const [handed] = useState(() => handedTo("riders"));
+  const [tab, setTab] = useState<RiderStage | "">(handed ? "" : "REVIEW");
+  const [search, setSearch] = useState(handed);
+  const [applied, setApplied] = useState(handed);
   const [riders, setRiders] = useState<RiderSummary[]>([]);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -62,7 +65,7 @@ export function RidersList() {
         <Link className="cr-button" href="/admin/riders/selfies">Selfie review queue</Link>
       </form>
       {message && <p className="cr-empty" role="status">{message}</p>}
-      {riders.length > 0 && <div className="cr-table-scroll"><table className="cr-table">
+      {riders.length > 0 && <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
         <thead><tr><th scope="col">Rider</th><th scope="col">Phone</th><th scope="col">Stage</th><th scope="col">Next step</th><th scope="col">Joined</th></tr></thead>
         <tbody>{riders.map(rider => {
           const stage = rider.stage ?? stageOf(rider.status);

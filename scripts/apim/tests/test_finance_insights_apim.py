@@ -15,13 +15,15 @@ CONTROLLER = ROOT / "services/integration-service/src/main/java/in/craves/integr
 FQDN = "ca-craves-integration-prod.example.centralindia.azurecontainerapps.io"
 
 # A stand-in for az that answers the way Cloud Shell's az answered on 14 Nov 2026: a policy read prints the XML itself
-# (CRLF, tabs) with a note on stderr, a missing policy is a non-zero exit, and a policy PUT prints the XML.
+# (a byte-order mark, then CRLF and tabs) with a note on stderr, a missing policy is a non-zero exit, and a policy PUT
+# prints the XML.
 FAKE_AZ = r'''
 import json, os, re, sys
 a = sys.argv[1:]; state_file = os.environ["FAKE_AZ_STATE"]; mode = os.environ.get("FAKE_AZ_MODE", "ok")
 state = json.load(open(state_file))
 def opt(name): return a[a.index(name) + 1]
-def done(text=""): json.dump(state, open(state_file, "w")); sys.stdout.write(text); sys.exit(0)
+def done(text=""): json.dump(state, open(state_file, "w")); sys.stdout.buffer.write(text.encode("utf-8")); sys.exit(0)
+BOM = "\ufeff"  # every policy read starts with one (seen 14 Nov 2026); it is invisible in a terminal
 host = "other.example" if mode == "other-backend" else os.environ["FAKE_FQDN"]
 API = ('<policies>\r\n\t<inbound>\r\n\t\t<base />\r\n\t\t<choose>\r\n\t\t\t<when condition="@(!context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;).StartsWith(&quot;Bearer &quot;))">'
        '\r\n\t\t\t\t<return-response>\r\n\t\t\t\t\t<set-status code="401" reason="Unauthorized" />\r\n\t\t\t\t</return-response>\r\n\t\t\t</when>\r\n\t\t</choose>'
@@ -47,9 +49,9 @@ if a[0] == "rest":
     if opt("--method") == "get":
         assert "format=rawxml" in url, url
         sys.stderr.write('Not a json response, outputting to stdout. For binary data suggest use "--output-file" to write to a file\n')
-        if not found: done(API)
-        if found.group(1) == "source-status-get": done(SOURCE)
-        if found.group(1) in state["policies"]: done(state["policies"][found.group(1)])
+        if not found: done(BOM + API)
+        if found.group(1) == "source-status-get": done(BOM + SOURCE)
+        if found.group(1) in state["policies"]: done(BOM + state["policies"][found.group(1)].replace("><", ">\r\n\t<"))
         sys.stderr.write('Not Found({"error":{"code":"ResourceNotFound","message":"PoliciesConfiguration not found.","details":null}})\n'); sys.exit(3)
     assert opt("--method") == "put" and found, a
     body = json.load(open(opt("--body").lstrip("@")))

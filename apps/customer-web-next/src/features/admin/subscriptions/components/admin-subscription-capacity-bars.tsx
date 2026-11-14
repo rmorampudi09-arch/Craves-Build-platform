@@ -5,6 +5,7 @@ import { adminFetch } from "@/features/admin/shell/lib/admin-renewal";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CircleAlert, RefreshCw } from "lucide-react";
 import type { AdminSubscriptionPlan } from "@/features/admin/subscriptions/lib/admin-subscription-plan-contract";
+import { PLAN_PERIOD_WORDS } from "@/features/admin/subscriptions/lib/admin-subscription-plan-contract";
 import { parseAdminSchedule, type AdminSubscriptionSchedule } from "@/features/admin/subscriptions/lib/admin-subscription-runtime-contract";
 import { parseChefCapacitySummary, type ChefCapacitySummary } from "@/features/chef/lib/chef-subscription-capacity-contract";
 
@@ -76,7 +77,7 @@ export function AdminSubscriptionCapacityBars({plan}:{plan:AdminSubscriptionPlan
     <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6930CA]">Approval comparison</p><h4 className="mt-1 text-xl font-bold">Plan capacity at a glance</h4><p className="mt-1 text-xs text-slate-500">Missing rules preview the automatic server default of 5 subscription units per selected dish. Chef-defined limits still override defaults.</p></div><button type="button" onClick={()=>void load()} className="inline-flex items-center gap-2 rounded-xl border border-[#d9cdbd] px-3 py-2 text-xs font-bold"><RefreshCw className="h-4 w-4"/>Refresh</button></div>
 
     <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <div className="rounded-xl bg-[#FFF8EC] p-4"><p className="text-xs font-bold uppercase text-slate-500">Plan</p><p className="mt-1 font-bold">{plan.name}</p><p className="mt-1 text-xs">{plan.billingPeriod} · ₹{plan.amount} · {plan.status}</p></div>
+      <div className="rounded-xl bg-[#FFF8EC] p-4"><p className="text-xs font-bold uppercase text-slate-500">Plan</p><p className="mt-1 font-bold">{plan.name}</p><p className="mt-1 text-xs">{PLAN_PERIOD_WORDS[plan.billingPeriod]} · ₹{plan.amount} · {plan.status}</p></div>
       <div className="rounded-xl bg-[#FFF8EC] p-4"><p className="text-xs font-bold uppercase text-slate-500">Schedule</p><p className="mt-1 font-bold">{schedule?.items.length??0} meal row(s)</p><p className="mt-1 text-xs">{slots}{schedule?` · ${schedule.generationLeadHours}h lead`:""}</p></div>
       <div className="rounded-xl bg-[#FFF8EC] p-4"><p className="text-xs font-bold uppercase text-slate-500">Checks</p><p className="mt-1 font-bold">{rows.length-blockers.length}/{rows.length} ready</p><p className="mt-1 text-xs">{automatic} server default(s)</p></div>
       <div className={`rounded-xl p-4 ${ready?"bg-emerald-50":"bg-amber-50"}`}>{ready?<CheckCircle2 className="h-5 w-5 text-emerald-700"/>:<CircleAlert className="h-5 w-5 text-amber-700"/>}<p className="mt-2 text-xs font-bold uppercase text-slate-500">Decision</p><p className={`mt-1 font-bold ${ready?"text-emerald-800":"text-amber-800"}`}>{ready?"Ready to approve":"Review required"}</p></div>

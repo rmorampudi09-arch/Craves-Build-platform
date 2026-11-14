@@ -5,6 +5,7 @@ import { adminFetch } from "@/features/admin/shell/lib/admin-renewal";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, CheckCircle2, CircleAlert, Gauge, ShieldCheck } from "lucide-react";
 import type { AdminSubscriptionPlan } from "@/features/admin/subscriptions/lib/admin-subscription-plan-contract";
+import { PLAN_PERIOD_WORDS } from "@/features/admin/subscriptions/lib/admin-subscription-plan-contract";
 import {
   parseAdminSchedule,
   type AdminSubscriptionSchedule,
@@ -225,7 +226,7 @@ export function AdminSubscriptionApprovalDashboard({ plan }: { plan: AdminSubscr
         <div className="rounded-xl bg-[#FFF8EC] p-4">
           <CalendarDays className="h-5 w-5 text-[#6930CA]" />
           <p className="mt-2 text-xs font-bold uppercase text-slate-500">Plan</p>
-          <p className="mt-1 font-bold">{plan.billingPeriod} · {money(plan.amount, plan.currency)}</p>
+          <p className="mt-1 font-bold">{PLAN_PERIOD_WORDS[plan.billingPeriod]} · {money(plan.amount, plan.currency)}</p>
           <p className="mt-1 text-xs text-slate-500">Status: {plan.status}</p>
         </div>
         <div className="rounded-xl bg-[#FFF8EC] p-4">

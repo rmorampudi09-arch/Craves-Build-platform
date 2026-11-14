@@ -34,7 +34,7 @@ describe("advanced API proxy", () => {
     const response = await GET(request("GET", ["shared-food-lists", TOKEN]), at(["shared-food-lists", TOKEN]));
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(publicFetch).toHaveBeenCalledWith(`/advanced/shared-food-lists/${TOKEN}`, { method: "GET", headers: {} });
+    expect(publicFetch).toHaveBeenCalledWith(`/advanced/shared-food-lists/${TOKEN}`, { method: "GET", headers: {} }, undefined);
     expect(userFetch).not.toHaveBeenCalled();
   });
 
@@ -50,6 +50,13 @@ describe("advanced API proxy", () => {
     expect(init).toEqual({ method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": "key-12345678" }, body: '{"name":"Sunday lunch"}' });
   });
 
+  it("waits 30 s for a group checkout, which fills the host's cart one dish at a time", async () => {
+    userFetch.mockResolvedValue(Response.json({ groupOrderId: LIST, lines: [], subtotalPaise: 0, appliedToCart: true, createdAt: "2026-11-15T10:00:00Z" }));
+    const path = ["group-orders", LIST, "checkout"];
+    expect((await POST(request("POST", path, { body: '{"applyToCart":true,"replaceCart":false}' }), at(path))).status).toBe(200);
+    expect(userFetch.mock.calls[0]![3]).toBe(30_000);
+  });
+
   it("keeps 204 and lets an optional body be empty", async () => {
     userFetch.mockResolvedValue(new Response(null, { status: 204 }));
     expect((await DELETE(request("DELETE", ["food-lists", LIST, "share"]), at(["food-lists", LIST, "share"]))).status).toBe(204);
@@ -62,7 +69,7 @@ describe("advanced API proxy", () => {
     const init = { method: "DELETE", headers: { origin: "https://craves.in", host: "craves.in" }, body: new ReadableStream({ start: (controller) => controller.close() }), duplex: "half" };
     const response = await DELETE(new NextRequest(`https://craves.in/api/advanced/food-lists/${LIST}`, init as unknown as ConstructorParameters<typeof NextRequest>[1]), at(["food-lists", LIST]));
     expect(response.status).toBe(204);
-    expect(userFetch).toHaveBeenCalledWith(expect.anything(), `/advanced/food-lists/${LIST}`, { method: "DELETE", headers: {} });
+    expect(userFetch).toHaveBeenCalledWith(expect.anything(), `/advanced/food-lists/${LIST}`, { method: "DELETE", headers: {} }, undefined);
   });
 
   it("lets one visitor read 30 shared lists a minute, then asks them to wait", async () => {
@@ -76,7 +83,7 @@ describe("advanced API proxy", () => {
 
   it.each([
     ["an id that is not a UUID", () => GET(request("GET", ["food-lists", "items"]), at(["food-lists", "items"])), 404, "ADVANCED_OPERATION_NOT_FOUND"],
-    ["an unlisted call", () => GET(request("GET", ["group-orders"]), at(["group-orders"])), 404, "ADVANCED_OPERATION_NOT_FOUND"],
+    ["an unlisted call", () => GET(request("GET", ["taste-memory"]), at(["taste-memory"])), 404, "ADVANCED_OPERATION_NOT_FOUND"],
     ["reordering", () => PUT(request("PUT", ["food-lists", LIST, "items-order"], { body: "{}" }), at(["food-lists", LIST, "items-order"])), 404, "ADVANCED_OPERATION_NOT_FOUND"],
     ["a write from another site", () => POST(request("POST", ["food-lists"], { body: "{}", headers: { origin: "https://evil.example" } }), at(["food-lists"])), 403, "ORIGIN_REJECTED"],
     ["a create without a body", () => POST(request("POST", ["food-lists"]), at(["food-lists"])), 400, "INVALID_REQUEST"],

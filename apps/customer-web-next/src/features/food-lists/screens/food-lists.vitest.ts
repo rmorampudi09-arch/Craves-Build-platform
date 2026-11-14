@@ -17,7 +17,7 @@ import SharedFoodList from "./SharedFoodList";
 import MyFoodLists from "./MyFoodLists";
 import FoodListPage from "./FoodListPage";
 import { SaveToListButton } from "../components/SaveToListButton";
-import { newAttemptKey } from "../api/food-lists";
+import { newAttemptKey } from "@/shared/lib/advanced-client";
 
 const TOKEN = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-AbCde";
 const LIST = "8f0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d";

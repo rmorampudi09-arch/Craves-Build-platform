@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { copySharedList, sharedList } from "../api/food-lists";
-import { DishLine, ListHeader, dishCount, outlineButton, signInPath } from "../components/ListParts";
+import { signInPath, useSignedIn } from "@/features/auth/lib/use-signed-in";
+import { BackHeader } from "@/shared/components/navigation/BackHeader";
+import { outlineButton } from "@/shared/ui/buttons/pill-buttons";
+import { DishLine, dishCount } from "../components/ListParts";
 import { ListPaper } from "../components/ListPaper";
 import { listErrorText, type SharedList } from "../lib/food-list-contract";
-import { useSignedIn } from "../lib/use-signed-in";
 
 type State = { kind: "loading" } | { kind: "ready"; list: SharedList } | { kind: "failed"; code: string; status: number };
 
@@ -38,7 +40,7 @@ export default function SharedFoodList({ token }: { token: string }) {
 
   return (
     <main className="min-h-screen bg-white pb-16">
-      <ListHeader title="Shared list" backTo={signedIn ? "/lists" : "/"} backLabel={signedIn ? "Back to your food lists" : "Back to Craves"} />
+      <BackHeader title="Shared list" backTo={signedIn ? "/lists" : "/"} backLabel={signedIn ? "Back to your food lists" : "Back to Craves"} />
       <div className="mx-auto max-w-2xl px-4 pt-5 md:px-6">
         {state.kind === "loading" ? (
           <p role="status" className="py-16 text-center text-[0.9375rem] text-[#6B6B6B]">

@@ -13,6 +13,7 @@ import {
   FaHeart,
   FaListUl,
   FaKey,
+  FaUserGroup,
   FaRightFromBracket,
 } from "react-icons/fa6";
 import { GiChefToque } from "react-icons/gi";
@@ -397,6 +398,12 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
               icon={FaListUl}
               title="Food lists"
               subtitle="Dishes you keep and share"
+            />
+            <ProfileLinkCard
+              to="/group-orders"
+              icon={FaUserGroup}
+              title="Group orders"
+              subtitle="Order from one kitchen with friends"
             />
             <ProfileLinkCard
               to="/notifications"

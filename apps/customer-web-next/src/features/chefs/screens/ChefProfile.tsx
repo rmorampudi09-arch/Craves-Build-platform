@@ -28,6 +28,7 @@ import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { CustomerReviewsSection } from "@/features/dish/components/CustomerReviewsSection";
+import { StartGroupOrderButton } from "@/features/group-orders/components/StartGroupOrderButton";
 import {
   CustomerFloatingCart,
   useCustomerCartSummary,
@@ -294,6 +295,7 @@ function ChefProfilePage() {
               ) : null}
             </>
           ) : null}
+          {dishes.length > 0 && delivery !== "no" && delivery !== "no-address" ? <StartGroupOrderButton kitchenId={profile.id} kitchenName={name} /> : null}
           {delivery === "no" || delivery === "no-address" ? (
             // Said plainly, and Add stays off while the kitchen is out of reach.
             <div role="status" className="mt-4 flex max-w-3xl items-start gap-3 rounded-2xl bg-[#FDEAE8] p-4">

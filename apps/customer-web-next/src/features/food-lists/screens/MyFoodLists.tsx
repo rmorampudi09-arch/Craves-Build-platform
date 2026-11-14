@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
-import { createList, myLists, newAttemptKey } from "../api/food-lists";
-import { ListHeader, dishCount, outlineButton, signInPath } from "../components/ListParts";
+import { signInPath, useSignedIn } from "@/features/auth/lib/use-signed-in";
+import { newAttemptKey } from "@/shared/lib/advanced-client";
+import { BackHeader } from "@/shared/components/navigation/BackHeader";
+import { outlineButton } from "@/shared/ui/buttons/pill-buttons";
+import { createList, myLists } from "../api/food-lists";
+import { dishCount } from "../components/ListParts";
 import { ListPaper, inkClass, listRowClass } from "../components/ListPaper";
 import { LIST_NAME_MAX, LIST_DESCRIPTION_MAX, listErrorText, type ListSummary } from "../lib/food-list-contract";
-import { useSignedIn } from "../lib/use-signed-in";
 
 type State = { kind: "loading" } | { kind: "ready"; lists: ListSummary[] } | { kind: "failed"; code: string; status: number };
 
@@ -49,7 +52,7 @@ export default function MyFoodLists() {
 
   return (
     <main className="min-h-screen bg-white pb-16">
-      <ListHeader title="Food lists" backTo="/profile" backLabel="Back to profile" />
+      <BackHeader title="Food lists" backTo="/profile" backLabel="Back to profile" />
       <div className="mx-auto max-w-2xl px-4 pt-5 md:px-6">
         {signedIn === false ? (
           <EmptyState illustration="saved" heading="h1" title="Sign in to keep food lists" message="Keep the dishes you love in lists, and share a list with family by link.">

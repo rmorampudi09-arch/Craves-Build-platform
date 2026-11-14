@@ -28,6 +28,7 @@ Inside a feature, use the same sub-folders when you need them: `components/`, `s
 | `profile` | Profile and account details |
 | `favorites` | Favourites (wishlist) |
 | `food-lists` | Food lists: keep dishes in lists, share a list by link (`/lists`, `/l/<token>`) |
+| `group-orders` | Group orders: start one from a kitchen, friends join by link and add their own dishes, the host sends it all to their cart (`/group-orders`, `/g/<code>`) |
 | `notifications` | Notifications inbox |
 | `meal-plans` | Customer meal plans (subscriptions) |
 | `support` | Support chat |

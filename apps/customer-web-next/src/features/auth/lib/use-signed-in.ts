@@ -20,3 +20,8 @@ export function useSignedIn(): boolean | null {
   }, []);
   return session ? true : checked ? false : null;
 }
+
+/** The sign-in page, coming back to `returnTo` (a path on this site) afterwards. */
+export function signInPath(returnTo: string): string {
+  return `/sign-in?returnTo=${encodeURIComponent(returnTo)}`;
+}

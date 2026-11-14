@@ -32,6 +32,7 @@ export function CartStepper({
   canAdd = true,
   disabled = false,
   compact = false,
+  place = "cart",
   className,
 }: {
   /** The dish, for the button labels. */
@@ -44,6 +45,8 @@ export function CartStepper({
   canAdd?: boolean;
   disabled?: boolean;
   compact?: boolean;
+  /** Where the dish goes, for the button labels ("Add Thali to cart"). */
+  place?: string;
   className?: string;
 }) {
   const inCart = quantity > 0;
@@ -78,7 +81,7 @@ export function CartStepper({
       {inCart ? (
         <div
           role="group"
-          aria-label={`${name} in cart`}
+          aria-label={`${name} in ${place}`}
           className={`absolute inset-0 flex items-center justify-between overflow-visible ${fade}`}
         >
           <button
@@ -88,7 +91,7 @@ export function CartStepper({
               onChange(quantity - 1);
             }}
             disabled={disabled}
-            aria-label={quantity <= 1 ? `Remove ${name} from cart` : `Decrease ${name} quantity`}
+            aria-label={quantity <= 1 ? `Remove ${name} from ${place}` : `Decrease ${name} quantity`}
             className={`${STEP} rounded-l-[8.5px]`}
           >
             <Minus className="h-4 w-4" strokeWidth={2.75} aria-hidden="true" />
@@ -117,7 +120,7 @@ export function CartStepper({
             onAdd();
           }}
           disabled={disabled || !canAdd}
-          aria-label={`Add ${name} to cart`}
+          aria-label={`Add ${name} to ${place}`}
           className={`absolute inset-0 flex !min-h-0 !min-w-0 items-center justify-center gap-1 rounded-[8.5px] !border-0 !bg-transparent !p-0 text-[0.9375rem] font-bold !text-[#C92716] !shadow-none ${HIT} transition-[background-color] duration-(--dur-micro) hover:!bg-[#FDEAE8] active:!bg-[#F9D5D1] active:duration-0 disabled:cursor-not-allowed disabled:!bg-transparent disabled:!text-[#6B6B6B] ${fade}`}
         >
           <Plus className="h-4 w-4" strokeWidth={2.75} aria-hidden="true" />

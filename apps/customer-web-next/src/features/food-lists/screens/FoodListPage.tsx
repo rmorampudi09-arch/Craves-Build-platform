@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "@tanstack/react-router";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { deleteList, getList, removeDish, shareList, stopSharing, updateList } from "../api/food-lists";
-import { DishLine, ListHeader, dishCount, outlineButton, quietButton, signInPath } from "../components/ListParts";
+import { signInPath, useSignedIn } from "@/features/auth/lib/use-signed-in";
+import { BackHeader } from "@/shared/components/navigation/BackHeader";
+import { outlineButton, quietButton } from "@/shared/ui/buttons/pill-buttons";
+import { DishLine, dishCount } from "../components/ListParts";
 import { ListPaper } from "../components/ListPaper";
 import { LIST_NAME_MAX, LIST_DESCRIPTION_MAX, listErrorText, type ListDetail } from "../lib/food-list-contract";
-import { useSignedIn } from "../lib/use-signed-in";
 
 type State = { kind: "loading" } | { kind: "ready"; list: ListDetail } | { kind: "failed"; code: string; status: number };
 type Asking = null | "new-link" | "stop-sharing" | "delete";
@@ -139,7 +141,7 @@ export default function FoodListPage({ listId }: { listId: string }) {
 
   return (
     <main ref={mainRef} className="min-h-screen bg-white pb-16">
-      <ListHeader title="Food list" backTo="/lists" backLabel="Back to your food lists" />
+      <BackHeader title="Food list" backTo="/lists" backLabel="Back to your food lists" />
       <div className="mx-auto max-w-2xl px-4 pt-5 md:px-6">
         {state.kind === "loading" ? (
           <p role="status" className="py-16 text-center text-[0.9375rem] text-[#6B6B6B]">

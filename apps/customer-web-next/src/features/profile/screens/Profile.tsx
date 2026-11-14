@@ -11,6 +11,7 @@ import {
   FaGift,
   FaHeadset,
   FaHeart,
+  FaListUl,
   FaKey,
   FaRightFromBracket,
 } from "react-icons/fa6";
@@ -390,6 +391,12 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
                 (favoriteCount === 1 ? "saved dish" : "saved dishes")
               }
               badge={String(favoriteCount)}
+            />
+            <ProfileLinkCard
+              to="/lists"
+              icon={FaListUl}
+              title="Food lists"
+              subtitle="Dishes you keep and share"
             />
             <ProfileLinkCard
               to="/notifications"

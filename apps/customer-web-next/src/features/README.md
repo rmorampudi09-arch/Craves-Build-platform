@@ -27,6 +27,7 @@ Inside a feature, use the same sub-folders when you need them: `components/`, `s
 | `addresses` | Delivery addresses, location search and maps |
 | `profile` | Profile and account details |
 | `favorites` | Favourites (wishlist) |
+| `food-lists` | Food lists: keep dishes in lists, share a list by link (`/lists`, `/l/<token>`) |
 | `notifications` | Notifications inbox |
 | `meal-plans` | Customer meal plans (subscriptions) |
 | `support` | Support chat |

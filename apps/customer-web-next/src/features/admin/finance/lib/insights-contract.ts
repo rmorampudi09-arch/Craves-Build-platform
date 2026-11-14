@@ -124,8 +124,9 @@ export type Tone = "success" | "warning" | "danger" | "neutral";
 const STATUS: Record<Kind, Record<string, [string, Tone]>> = {
   CUSTOMER_PAYMENT: { CREATED: ["Started", "neutral"], PAYMENT_PENDING: ["Waiting for payment", "warning"], PAID: ["Paid", "success"],
     FAILED: ["Failed", "danger"], CANCELLED: ["Cancelled", "neutral"] },
-  REFUND: { REQUESTED: ["Refund in progress", "warning"], PROCESSING: ["Refund in progress", "warning"], RETRY: ["Refund in progress", "warning"],
-    PENDING: ["Refund in progress", "warning"], BENEFITS_PENDING: ["Refund in progress", "warning"], ONHOLD: ["On hold", "warning"],
+  // One wording per status: the status filter lists these, and five refunds "in progress" said nothing about where each one was stuck.
+  REFUND: { REQUESTED: ["Refund not sent yet", "warning"], PROCESSING: ["Refund being sent", "warning"], RETRY: ["Refund being tried again", "warning"],
+    PENDING: ["Refund with the payment company", "warning"], BENEFITS_PENDING: ["Wallet credit being returned", "warning"], ONHOLD: ["On hold", "warning"],
     SUCCESS: ["Refunded", "success"], FAILED: ["Refund failed", "danger"], CANCELLED: ["Cancelled", "neutral"], DEAD_LETTER: ["Stuck, needs a look", "danger"] },
   CHEF_EARNING: { RECORDED: ["Earned", "success"] },
   CHEF_PAYOUT: { RESERVED: ["Set aside, not sent yet", "warning"], SUBMITTING: ["Being sent", "warning"], PROCESSING: ["With the bank", "warning"],
@@ -156,6 +157,15 @@ export function fromPaise(value: bigint): string {
 export const shortId = (value: string) => value.slice(0, 8).toUpperCase();
 /** The order number customers, chefs and riders quote: # and the first 8 characters of the kitchen's order ID (as shortOrderNumber). */
 export const orderNumber = (chefOrderId: string) => `#${shortId(chefOrderId)}`;
+/** Chef names by ID, from the admin chef list. Chefs who share a name get their short ID added, so the wrong one is never paid or held. */
+export function chefNames(rows: unknown): Map<string, string> {
+  const chefs = (Array.isArray(rows) ? rows : []).filter((row): row is { identityId: string; displayName: string } =>
+    typeof row?.identityId === "string" && typeof row?.displayName === "string");
+  const key = (name: string) => name.trim().toLocaleLowerCase("en-IN");
+  const times = new Map<string, number>();
+  for (const chef of chefs) times.set(key(chef.displayName), (times.get(key(chef.displayName)) ?? 0) + 1);
+  return new Map(chefs.map(chef => [chef.identityId, times.get(key(chef.displayName)) === 1 ? chef.displayName : `${chef.displayName} · ${shortId(chef.identityId)}`]));
+}
 
 /** One bar per day up to two months; longer periods are added up by week, then by month, so bars never become slivers. */
 export type Bucket = { from: string; to: string; label: string; moneyIn: bigint; refunded: bigint; chefPaid: bigint; riderPaid: bigint };

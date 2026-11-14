@@ -8,7 +8,7 @@ import { FinanceOverview, type Jump, type Period } from "@/features/admin/financ
 import { FinancePayouts } from "@/features/admin/finance/components/finance-payouts";
 import { FinanceSettings } from "@/features/admin/finance/components/finance-settings";
 import { FinanceTransactions, type Filters } from "@/features/admin/finance/components/finance-transactions";
-import { shortId, TABS, type Tab } from "@/features/admin/finance/lib/insights-contract";
+import { chefNames, shortId, TABS, type Tab } from "@/features/admin/finance/lib/insights-contract";
 import "@/features/admin/styles/admin-finance.css";
 
 const TAB_LABEL: Record<Tab, string> = { overview: "Overview", transactions: "Transactions", payouts: "Payouts", settings: "Settings" };
@@ -33,7 +33,7 @@ export function FinanceWorkspace({ initial, taxProfiles }: { initial: { tab: Tab
     // Names for the chef IDs finance records carry. Without them the screens still work and show short IDs.
     adminFetch("/api/admin/subscription-plans/chefs").then(async response => {
       const rows: unknown = response.ok ? await response.json() : [];
-      if (active && Array.isArray(rows)) setChefs(new Map(rows.flatMap(row => typeof row?.identityId === "string" && typeof row?.displayName === "string" ? [[row.identityId, row.displayName] as const] : [])));
+      if (active) setChefs(chefNames(rows));
     }).catch(() => undefined);
     return () => { active = false; };
   }, []);

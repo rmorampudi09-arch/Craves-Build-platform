@@ -8,10 +8,11 @@ const CHEF = "0c1e0000-1111-4222-8333-444455556666", CHECKOUT = "0bde0000-1111-4
 const id = (n: number) => `0000000${n}-1111-4222-8333-444455556666`;
 const reads: URLSearchParams[] = [];
 let answer: (view: string, query: URLSearchParams) => Response;
+let directory: { identityId: string; displayName: string }[];
 vi.mock("@/features/admin/shell/lib/admin-renewal", () => ({
   adminFetch: async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "https://admin.craves.in");
-    if (url.pathname === "/api/admin/subscription-plans/chefs") return Response.json([{ identityId: CHEF, displayName: "Lakshmi’s Kitchen" }]);
+    if (url.pathname === "/api/admin/subscription-plans/chefs") return Response.json(directory);
     reads.push(url.searchParams);
     return answer(url.searchParams.get("view") ?? "", url.searchParams);
   },
@@ -49,7 +50,7 @@ const show = (initial: Partial<{ tab: "overview" | "transactions" | "payouts" | 
   render(createElement(FinanceWorkspace, { initial: { tab: "overview", from: "", to: "", search: "", ...initial }, taxProfiles: null }));
 const last = (view: string) => reads.filter(query => query.get("view") === view).at(-1);
 
-beforeEach(() => { reads.length = 0; answer = happy; });
+beforeEach(() => { reads.length = 0; answer = happy; directory = [{ identityId: CHEF, displayName: "Lakshmi’s Kitchen" }]; });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("Finance overview", () => {
@@ -62,6 +63,16 @@ describe("Finance overview", () => {
     const todo = screen.getAllByRole("listitem").map(item => item.textContent);
     expect(todo).toEqual(["1 chef payout set aside or waiting for the bank’s answer", "2 refunds failed, stuck or open for over a day"]);
     expect(screen.getByText(/so this is not profit/)).toBeTruthy();
+    // Shares are rounded, not cut off: 5.87% reads 5.9% and 5.78% reads 5.8%, so the four shown add up to 100.0%.
+    expect(["78.0%", "5.9%", "5.8%", "10.3%"].map(share => screen.getAllByText(share).length)).toEqual([1, 1, 1, 1]);
+  });
+  it("opens the whole past year behind a count that needs attention, because that count is not limited to the period", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: /refunds failed, stuck or open for over a day/ }));
+    await screen.findByRole("table");
+    const query = last("transactions");
+    expect(query?.get("kind")).toBe("REFUND"); expect(query?.has("status")).toBe(false);
+    expect((Date.parse(query?.get("to") ?? "") - Date.parse(query?.get("from") ?? "")) / 86_400_000).toBe(365);
   });
   it("shows a failed read as a failure, never as zero rupees", async () => {
     answer = () => Response.json({ code: "FINANCE_UNAVAILABLE" }, { status: 503 });
@@ -172,6 +183,16 @@ describe("Finance payouts", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Chef 00000007/ }));
     expect(await screen.findByText("Hold or release this chef’s payouts")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Lakshmi’s Kitchen/ })).toBeNull();
+  });
+  it("tells two chefs with the same name apart before one of them is paid", async () => {
+    const twin = { ...chefs.chefs[0], chefId: id(7), due: "1.86" };
+    directory = [{ identityId: CHEF, displayName: "Asha R" }, { identityId: twin.chefId, displayName: "Asha R" }];
+    answer = view => view === "chefs" ? Response.json({ ...chefs, chefs: [chefs.chefs[0], twin] }) : happy(view);
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(balance)));
+    show({ tab: "payouts" });
+    fireEvent.click(await screen.findByRole("button", { name: /Asha R · 00000007/ }));
+    expect(await screen.findByRole("complementary", { name: "Payouts for Asha R · 00000007" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Asha R · 0C1E0000/ })).toBeTruthy();
   });
   it("says when the list could not be loaded", async () => {
     answer = () => Response.json({}, { status: 403 });

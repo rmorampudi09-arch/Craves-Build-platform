@@ -73,8 +73,9 @@ export type Share = { name: string; hint: string; amount: string; own?: boolean 
 /** One bar per share on a common start, so close amounts can be compared; the amount and its share are printed beside it. */
 export function ShareBars({ shares, whole }: { shares: Share[]; whole: bigint }) {
   return <div className="fn-shares">{shares.map(share => {
-    const part = BigInt(share.amount.replace(".", ""));
-    const tenths = whole > 0n ? Number(part * 1000n / whole) : 0;
+    const part = BigInt(share.amount.replace(".", "")), size = part < 0n ? -part : part;
+    // Rounded to the nearest tenth, not cut off: cut off, 50.87% read 50.8% and the shares of one total added up to 99.8%.
+    const tenths = whole > 0n ? Number((size * 2000n + whole) / (2n * whole)) * (part < 0n ? -1 : 1) : 0;
     return <div className="fn-share" key={share.name} data-own={share.own ? "true" : undefined}>
       <span><strong>{share.name}</strong><small>{share.hint}</small></span>
       <span className="fn-track" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, tenths / 10))}%` }} /></span>

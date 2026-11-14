@@ -48,6 +48,24 @@ Craves is not a restaurant or cloud-kitchen app. It is built only for home cooki
 - Hyderabad, Telangana: https://craves.in/hyderabad
 - Bangalore (Bengaluru), Karnataka: https://craves.in/bangalore
 
+## Local pages
+
+Craves has a page for each launch area and food type. Pages people use most:
+
+- Homemade food in Hyderabad: https://craves.in/hyderabad/homemade-food
+- Homemade food in Bangalore: https://craves.in/bangalore/homemade-food
+- Meal subscriptions in Hyderabad: https://craves.in/hyderabad/meal-subscriptions
+- Meal subscriptions in Bangalore: https://craves.in/bangalore/meal-subscriptions
+- Biryani in Hyderabad: https://craves.in/hyderabad/biryani
+- Andhra meals in Bangalore: https://craves.in/bangalore/andhra-meals
+- Gachibowli, Hyderabad: https://craves.in/hyderabad/gachibowli
+- Kompally, Hyderabad: https://craves.in/hyderabad/kompally
+- Secunderabad, Hyderabad: https://craves.in/hyderabad/secunderabad
+- Electronic City, Bangalore: https://craves.in/bangalore/electronic-city
+- JP Nagar, Bangalore: https://craves.in/bangalore/jp-nagar
+
+Every area and food page is listed in https://craves.in/sitemap.xml.
+
 ## Key pages
 
 - Order homemade food: https://craves.in/home

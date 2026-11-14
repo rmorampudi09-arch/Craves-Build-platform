@@ -5,9 +5,12 @@ import { ListPlus } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { getSession, loadSession } from "@/features/auth/api/cravesAuth";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/shared/ui/overlays/dialog";
-import { createList, getList, myLists, newAttemptKey, saveDish, type ListResult } from "../api/food-lists";
+import { signInPath } from "@/features/auth/lib/use-signed-in";
+import { newAttemptKey, type AdvancedResult } from "@/shared/lib/advanced-client";
+import { outlineButton } from "@/shared/ui/buttons/pill-buttons";
+import { createList, getList, myLists, saveDish } from "../api/food-lists";
 import { LIST_NAME_MAX, listErrorText, type ListSummary } from "../lib/food-list-contract";
-import { dishCount, outlineButton, signInPath } from "./ListParts";
+import { dishCount } from "./ListParts";
 
 /** "Save to a list" on a dish page. Guests go to sign-in and come back to the dish. */
 export function SaveToListButton({ menuItemId }: { menuItemId: string }) {
@@ -22,7 +25,7 @@ export function SaveToListButton({ menuItemId }: { menuItemId: string }) {
   const opening = useRef(false);
 
   /** A 401 means the sign-in ended: go to sign-in and come back to this dish. */
-  function failed(result: Extract<ListResult<unknown>, { ok: false }>, prefix = "") {
+  function failed(result: Extract<AdvancedResult<unknown>, { ok: false }>, prefix = "") {
     if (result.status === 401) {
       setOpen(false);
       return navigate({ to: signInPath(window.location.pathname) });

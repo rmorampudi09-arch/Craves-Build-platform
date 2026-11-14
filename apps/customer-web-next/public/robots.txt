@@ -18,6 +18,8 @@ Disallow: /tracking
 Disallow: /sign-in
 Disallow: /lists
 Disallow: /l/
+Disallow: /group-orders
+Disallow: /g/
 
 User-agent: OAI-SearchBot
 Allow: /
@@ -39,6 +41,8 @@ Disallow: /tracking
 Disallow: /sign-in
 Disallow: /lists
 Disallow: /l/
+Disallow: /group-orders
+Disallow: /g/
 
 User-agent: ChatGPT-User
 Allow: /
@@ -60,6 +64,8 @@ Disallow: /tracking
 Disallow: /sign-in
 Disallow: /lists
 Disallow: /l/
+Disallow: /group-orders
+Disallow: /g/
 
 User-agent: GPTBot
 Allow: /
@@ -81,6 +87,8 @@ Disallow: /tracking
 Disallow: /sign-in
 Disallow: /lists
 Disallow: /l/
+Disallow: /group-orders
+Disallow: /g/
 
 User-agent: PerplexityBot
 Allow: /
@@ -102,6 +110,8 @@ Disallow: /tracking
 Disallow: /sign-in
 Disallow: /lists
 Disallow: /l/
+Disallow: /group-orders
+Disallow: /g/
 
 User-agent: Google-Extended
 Allow: /
@@ -126,6 +136,8 @@ Disallow: /tracking
 Disallow: /sign-in
 Disallow: /lists
 Disallow: /l/
+Disallow: /group-orders
+Disallow: /g/
 
 User-agent: Claude-SearchBot
 Allow: /
@@ -147,6 +159,8 @@ Disallow: /tracking
 Disallow: /sign-in
 Disallow: /lists
 Disallow: /l/
+Disallow: /group-orders
+Disallow: /g/
 
 User-agent: Applebot-Extended
 Allow: /

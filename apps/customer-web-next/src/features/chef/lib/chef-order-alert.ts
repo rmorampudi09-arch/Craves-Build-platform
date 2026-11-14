@@ -4,6 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { parseChefOrdersResponse, type ChefOrder } from "@/features/chef/lib/chef-order-contract";
 import { loadSession } from "@/features/auth/api/cravesAuth";
 import { sessionFetch } from "@/shared/lib/session-fetch";
+import { chosenOptionsText } from "@/shared/lib/order-options";
 import { LANGUAGE_NAMES, format, messages, savedLanguage, type Language } from "@/shared/i18n/language";
 
 /**
@@ -134,7 +135,10 @@ function spokenName(name: string, language: Language = "en"): string {
 }
 
 export function orderWords(order: ChefOrder, intro: string, language: Language = "en"): string {
-  const items = order.items.map((item) => `${item.quantity} ${spokenName(item.itemName, language)}`);
+  const items = order.items.map((item) => {
+    const options = chosenOptionsText(item.chosenOptions).replaceAll(" · ", ", ");
+    return `${item.quantity} ${spokenName(item.itemName, language)}${options ? `, ${spokenName(options, language)}` : ""}`;
+  });
   return [intro, ...items].join(". ") + ".";
 }
 

@@ -1,4 +1,5 @@
 import type { CustomerOrder } from "@/features/orders/lib/order-contract";
+import { chosenOptionsText } from "@/shared/lib/order-options";
 
 function money(amount: number, currency: string, minimumFractionDigits = 2) {
   try {
@@ -24,6 +25,7 @@ export function TrackingOrderSummaryCard({ order }: { order: CustomerOrder }) {
           <li key={item.id} className="flex items-start justify-between gap-3 py-3">
             <span className="min-w-0 text-[#1A1A1A]">
               <span className="font-semibold tabular-nums">{item.quantity} ×</span> {item.itemName}
+              {item.chosenOptions ? <span className="block text-[#6B6B6B]">{chosenOptionsText(item.chosenOptions)}</span> : null}
             </span>
             <span className="shrink-0 font-semibold text-[#1A1A1A]">
               {money(item.lineTotal, order.currency, 0)}

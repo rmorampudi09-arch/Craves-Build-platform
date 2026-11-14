@@ -27,6 +27,7 @@ import {
   needsCustomerContact,
 } from "@/features/chef/components/chef-ui";
 import { shortOrderNumber } from "@/shared/lib/order-number";
+import { chosenOptionsText } from "@/shared/lib/order-options";
 import { ChefOrderActions } from "@/features/chef/components/chef-order-actions";
 import { CustomerNote, HearOrderButton, chefStatusIcon } from "@/features/chef/components/chef-order-card";
 import { useChefOrderPolling } from "@/features/chef/lib/chef-order-alert";
@@ -252,11 +253,13 @@ export function ChefOrderDetails({ orderId }: { orderId: string }) {
           <ul className="chef-list border-t border-[#E3E6EA]">
             {order.items.map((item) => {
               const metadata = itemMetadata(item, language);
+              const options = chosenOptionsText(item.chosenOptions);
               return (
                 <li key={item.id} className="chef-row items-start">
                   <span className="chef-amount grid h-9 min-w-9 shrink-0 place-items-center rounded-xl bg-[#F1F3F5] px-2 text-[0.9375rem] font-bold text-[#1A1A1A]">{item.quantity}×</span>
                   <span className="chef-row-main">
                     <span className="chef-row-title block text-base">{item.itemName}</span>
+                    {options ? <span className="mt-0.5 block text-[0.9375rem] font-medium leading-snug text-[#1A1A1A]">{options}</span> : null}
                     {metadata ? <span className="chef-row-meta block">{metadata}</span> : null}
                   </span>
                   <span className="chef-row-value chef-amount text-[0.9375rem] font-semibold">{formatInr(item.lineTotal, currency)}</span>

@@ -1,4 +1,5 @@
 import { safeChefPhotoUrl } from "../../../shared/lib/chef-photo.ts";
+import { parseChosenOptions, type ChosenOption } from "../../../shared/lib/order-options.ts";
 
 export type ChefOrderStatus =
   | "PAYMENT_PENDING"
@@ -24,6 +25,8 @@ export type ChefOrderItem = {
   unitPrice: number;
   quantity: number;
   lineTotal: number;
+  /** Only on lines priced with menu options (M24c): the kitchen must cook these. */
+  chosenOptions?: ChosenOption[];
 };
 
 export type ChefDeliveryAddress = {
@@ -159,6 +162,7 @@ function parseItem(value: unknown): ChefOrderItem | null {
   ) {
     return null;
   }
+  const chosenOptions = parseChosenOptions(raw.chosenOptions);
   return {
     id,
     menuItemId,
@@ -168,6 +172,7 @@ function parseItem(value: unknown): ChefOrderItem | null {
     unitPrice,
     quantity,
     lineTotal,
+    ...(chosenOptions.length ? { chosenOptions } : {}),
   };
 }
 

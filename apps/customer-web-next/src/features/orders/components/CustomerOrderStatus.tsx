@@ -29,6 +29,7 @@ import { calendarCondensed } from "@/shared/fonts/theme-fonts";
 import { paidParcelDue } from "@/shared/lib/paid-parcel";
 import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
 import { shortOrderNumber } from "@/shared/lib/order-number";
+import { chosenOptionsText } from "@/shared/lib/order-options";
 import { returnToListPath } from "@/shared/lib/return-scroll";
 import { sessionFetch } from "@/shared/lib/session-fetch";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
@@ -483,6 +484,7 @@ export function CustomerOrderStatus({
                     <DishPhoto url={photos.get(item.menuItemId)} />
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold">{item.itemName}</span>
+                      {item.chosenOptions ? <span className="block text-[0.8125rem] text-[#4A4A4A]">{chosenOptionsText(item.chosenOptions)}</span> : null}
                       {/* Like the app: "2 × ₹120 · Main course". */}
                       <span className="block text-[0.8125rem] tabular-nums text-[#6B6B6B]">
                         {item.quantity} × {money(item.unitPrice, order.currency)} · {categoryLabel(item.category)}

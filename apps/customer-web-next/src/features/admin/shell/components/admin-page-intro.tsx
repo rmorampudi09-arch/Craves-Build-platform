@@ -1,19 +1,23 @@
-import type { ReactNode } from "react";
+"use client";
 
-export function AdminPageIntro({ eyebrow, title, description, children }: {
+import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
+import { currentAdminTab } from "@/features/admin/shell/lib/admin-navigation";
+
+/**
+ * A page's own header. On a tab page the workspace already shows the area, what the page is for and the tabs,
+ * so only the page's actions are drawn here; a detail page (one rider, one application, one case) gets its own title.
+ */
+export function AdminPageIntro({ title, description, children }: {
   eyebrow: string;
   title: string;
   description: string;
   children?: ReactNode;
 }) {
-  return <section className="rounded-[28px] border border-[#e9e2ef] bg-white px-6 py-7 shadow-[0_18px_50px_-42px_rgba(54,35,72,0.5)] sm:px-8">
-    <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930ca]">{eyebrow}</p>
-        <h1 className="mt-3 text-3xl font-bold text-[#2c1e39] sm:text-4xl">{title}</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-[#74667f]">{description}</p>
-      </div>
-      {children}
-    </div>
-  </section>;
+  const place = currentAdminTab(usePathname());
+  if (place && !place.detail) return children ? <div className="ad-intro-actions">{children}</div> : null;
+  return <header className="ad-ph ad-detail-head">
+    <div><h1>{title}</h1><p>{description}</p></div>
+    {children && <div className="ad-intro-actions">{children}</div>}
+  </header>;
 }

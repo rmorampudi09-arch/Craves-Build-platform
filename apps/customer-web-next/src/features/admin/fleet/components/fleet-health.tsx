@@ -47,7 +47,7 @@ export function FleetHealth() {
       {result.description && <p className="cr-muted">{result.description}</p>}
       {result.error ? <p className="cr-alert" role="alert">{result.error}</p>
         : result.rows.length === 0 ? <p className="cr-empty">No rows yet.</p>
-        : <div className="cr-table-scroll"><table className="cr-table">
+        : <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
           <thead><tr>{result.columns.map(column => <th key={column} scope="col">{column}</th>)}</tr></thead>
           <tbody>{result.rows.map((row, index) => <tr key={index}>{row.map((cell, column) => <td key={column}>{cellText(cell)}</td>)}</tr>)}</tbody>
         </table></div>}

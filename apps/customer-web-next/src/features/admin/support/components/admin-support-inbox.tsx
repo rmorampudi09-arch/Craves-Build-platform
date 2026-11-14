@@ -8,6 +8,8 @@ import { shortOrderNumber } from "@/shared/lib/order-number";
 
 const STATUSES = ["OPEN", "IN_PROGRESS", "WAITING_FOR_REQUESTER", "RESOLVED", "CLOSED"] as const;
 type SupportStatus = (typeof STATUSES)[number];
+const STATUS_WORDS: Record<SupportStatus, string> = { OPEN: "Open", IN_PROGRESS: "Being handled", WAITING_FOR_REQUESTER: "Waiting for reply", RESOLVED: "Done", CLOSED: "Closed" };
+const statusWords = (status: string) => STATUS_WORDS[status as SupportStatus] ?? readableAdminStatus(status);
 type SupportCase = {
   id: string; caseNumber: string; requesterIdentityId: string | null; requesterRole: string; orderId: string | null;
   subject: string; status: SupportStatus; assignedToIdentityId: string | null; createdAt: string; updatedAt: string;
@@ -60,7 +62,7 @@ export function AdminSupportInbox() {
     <div className="flex flex-wrap items-center gap-3">
       {[null, ...STATUSES].map(value => <button key={value ?? "ALL"} type="button" aria-pressed={status === value} onClick={() => setStatus(value)}
         className={`rounded-2xl px-4 py-2 text-sm font-bold ${status === value ? "bg-[#6930CA] text-white" : "border border-[#cfc4d7] bg-white text-[#5f506b]"}`}>
-        {value ? readableAdminStatus(value) : "All"}
+        {value ? statusWords(value) : "All"}
       </button>)}
       <label className="ml-auto flex items-center gap-2 text-sm font-bold">
         <input type="checkbox" checked={assignedToMe} onChange={event => setAssignedToMe(event.target.checked)} className="h-4 w-4" />
@@ -73,7 +75,7 @@ export function AdminSupportInbox() {
         <Link href={`/admin/support/${item.id}`} className="block rounded-2xl border border-slate-200 p-4 hover:bg-[#FFF8EC] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6930CA]">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#6930CA]">{item.caseNumber} · {readableAdminStatus(item.status)}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#6930CA]">{item.caseNumber} · {statusWords(item.status)}</p>
               <h2 className="mt-1 truncate text-lg font-bold">{item.subject}</h2>
             </div>
             <span className="text-xs text-slate-500">{formatAdminTimestamp(item.updatedAt)}</span>
@@ -93,7 +95,7 @@ const fromRequester = (role: string) => role === "CUSTOMER" || role === "CHEF" |
 const requesterLabel = (role: string) => role === "GUEST" ? "Website visitor (not signed in)" : readableAdminStatus(role);
 
 function author(message: SupportMessage): string {
-  if (message.internalNote) return `Internal note · ${readableAdminStatus(message.senderRole)}`;
+  if (message.internalNote) return `Private note · ${readableAdminStatus(message.senderRole)}`;
   if (fromRequester(message.senderRole)) {
     return message.body.startsWith(ASSISTANT_PREFIX) ? `${requesterLabel(message.senderRole)} via AI assistant (unverified summary)` : `Requester · ${requesterLabel(message.senderRole)}`;
   }
@@ -136,7 +138,7 @@ export function AdminSupportCase({ caseId }: { caseId: string }) {
 
   async function sendReply(event: FormEvent) {
     event.preventDefault();
-    if (await work(() => api(`/${caseId}/messages`, "POST", { message: reply.trim(), internalNote }), internalNote ? "Internal note added." : "Reply sent to the requester.")) setReply("");
+    if (await work(() => api(`/${caseId}/messages`, "POST", { message: reply.trim(), internalNote }), internalNote ? "Private note added. Only owners see it." : "Reply sent.")) setReply("");
   }
 
   async function updateStatus(event: FormEvent) {
@@ -151,10 +153,10 @@ export function AdminSupportCase({ caseId }: { caseId: string }) {
       <section className="rounded-[30px] bg-white p-6 text-slate-950">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#6930CA]">{supportCase.caseNumber} · {readableAdminStatus(supportCase.status)}</p>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#6930CA]">{supportCase.caseNumber} · {statusWords(supportCase.status)}</p>
             <h2 className="mt-2 text-2xl font-bold">{supportCase.subject}</h2>
           </div>
-          <button type="button" disabled={busy} onClick={() => void work(() => api(`/${caseId}/assign-to-me`, "POST"), "Case assigned to you.")} className="rounded-xl bg-[#6930CA] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Assign to me</button>
+          <button type="button" disabled={busy} onClick={() => void work(() => api(`/${caseId}/assign-to-me`, "POST"), "Case assigned to you.")} className="cr-button">Assign to me</button>
         </div>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
           <div><dt className="text-slate-500">Requester</dt><dd className="break-all font-bold">{supportCase.requesterIdentityId ? `${readableAdminStatus(supportCase.requesterRole)} · ${supportCase.requesterIdentityId}` : `${requesterLabel(supportCase.requesterRole)} · call or email them (details in the first message)`}</dd></div>
@@ -175,16 +177,19 @@ export function AdminSupportCase({ caseId }: { caseId: string }) {
           </li>)}
         </ol>
         <form onSubmit={sendReply} className="mt-6 space-y-3">
+          <fieldset className="flex flex-wrap gap-2">
+            <legend className="cr-sr-only">Who sees this</legend>
+            {[false, true].map(note => <label key={String(note)} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-4 text-sm font-bold ${internalNote === note ? "border-[#191919] bg-[#fafaf9]" : "border-slate-200"}`}>
+              <input type="radio" name="reply-kind" checked={internalNote === note} onChange={() => setInternalNote(note)} className="h-4 w-4" />
+              {note ? "Private note (only owners see it)" : `Reply to the ${supportCase.requesterRole === "GUEST" ? "visitor" : readableAdminStatus(supportCase.requesterRole).toLowerCase()}`}
+            </label>)}
+          </fieldset>
           <label className="block text-sm font-bold">
-            {internalNote ? "Internal note" : "Reply to requester"}
+            {internalNote ? "Private note" : "Your reply"}
             <textarea value={reply} onChange={event => setReply(event.target.value)} maxLength={5000} required className="mt-2 min-h-32 w-full rounded-2xl border border-slate-200 p-4 font-normal" />
           </label>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="flex items-center gap-2 text-sm font-bold">
-              <input type="checkbox" checked={internalNote} onChange={event => setInternalNote(event.target.checked)} className="h-4 w-4" />
-              Internal note (not visible to requester)
-            </label>
-            <button disabled={busy || !reply.trim()} className="rounded-xl bg-[#6930CA] px-5 py-3 font-bold text-white disabled:opacity-50">{internalNote ? "Add note" : "Send reply"}</button>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <button disabled={busy || !reply.trim()} className="rounded-xl bg-[#6930CA] px-5 py-3 font-bold text-white disabled:opacity-50">{internalNote ? "Add private note" : "Send reply"}</button>
           </div>
         </form>
       </section>
@@ -195,7 +200,7 @@ export function AdminSupportCase({ caseId }: { caseId: string }) {
           <label className="block text-sm font-bold">
             New status
             <select value={nextStatus} onChange={event => setNextStatus(event.target.value as SupportStatus)} className="mt-2 min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 font-normal">
-              {STATUSES.map(value => <option key={value} value={value}>{readableAdminStatus(value)}</option>)}
+              {STATUSES.map(value => <option key={value} value={value}>{statusWords(value)}</option>)}
             </select>
           </label>
           <label className="block text-sm font-bold">

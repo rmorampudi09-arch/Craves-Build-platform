@@ -1,24 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, Search } from "lucide-react";
-import { searchAdminModules } from "@/features/admin/shell/lib/admin-navigation";
-import { AdminModuleLink } from "@/features/admin/shell/components/admin-module-link";
+import { ADMIN_MODULES, newAdminPlace } from "@/features/admin/shell/lib/admin-navigation";
 
-export function AdminModuleDirectory({ compact = false }: { compact?: boolean }) {
+/** All tools: every tool from the old admin menu by its old name, and where it is now. Typing filters by old or new name. */
+export function AdminModuleDirectory() {
   const [query, setQuery] = useState("");
-  const modules = searchAdminModules(query).filter(module => module.id !== "overview" && module.id !== "modules");
-  return <section className="cr-panel" aria-labelledby="cr-directory-title">
-    <div className="cr-section-heading">
-      <div><p className="cr-eyebrow">Your admin workspace</p><h2 id="cr-directory-title">{compact ? "Everything in one place" : "All modules & controls"}</h2><p className="cr-muted">Choose a task. Each workspace keeps its own permission and approval checks.</p></div>
-      <label className="cr-search-field"><Search size={17} aria-hidden="true"/><span className="cr-sr-only">Find a module</span><input type="search" placeholder="Find a module or task…" value={query} onChange={event => setQuery(event.target.value)} maxLength={100}/></label>
-    </div>
-    <div className="cr-module-grid">
-      {modules.map(module => <AdminModuleLink key={module.id} module={module} className="cr-module-card">
-        <span className="cr-eyebrow">{module.group}</span><strong>{module.label}<ArrowRight size={17} aria-hidden="true"/></strong><span className="cr-muted">{module.description}</span><span className="cr-access-label">{module.access}</span>
-      </AdminModuleLink>)}
-    </div>
-    {modules.length === 0 && <div className="cr-empty" role="status"><strong>No matching modules</strong><p>Try “orders”, “finance”, “chef” or “recovery”.</p><button className="cr-button" onClick={() => setQuery("")}>Clear search</button></div>}
-    <p className="cr-footnote">A listed module is not a service-health or production-activation guarantee. Missing permissions or disabled capabilities are reported by the owning service.</p>
+  const rows = ADMIN_MODULES.map(module => ({ module, place: newAdminPlace(module) }));
+  const words = query.trim().toLocaleLowerCase("en-IN").split(/\s+/).filter(Boolean);
+  const shown = rows.filter(({ module, place }) => words.every(word => `${module.label} ${place.label} ${module.keywords}`.toLocaleLowerCase("en-IN").includes(word)));
+  return <section aria-labelledby="ad-tools-title">
+    <h2 id="ad-tools-title" className="cr-sr-only">Old menu names</h2>
+    <div className="ad-field"><label htmlFor="ad-tools-q">Type an old or new name</label>
+      <input id="ad-tools-q" className="ad-input" type="search" placeholder="For example: dead letters, payouts, banner" value={query} maxLength={100} onChange={event => setQuery(event.target.value)}/></div>
+    <p className="cr-sr-only" role="status">{words.length ? `${shown.length} ${shown.length === 1 ? "tool" : "tools"} found` : ""}</p>
+    {shown.length ? <div className="cr-table-scroll" tabIndex={0}><table className="ad-table">
+      <thead><tr><th scope="col">Old name</th><th scope="col">Where it is now</th></tr></thead>
+      <tbody>{shown.map(({ module, place }) => <tr key={module.id}><td><b>{module.label}</b></td>
+        <td>{module.externalApp ? <a href={place.href}>{place.label}</a> : <Link href={place.href} prefetch={false}>{place.label}</Link>}</td></tr>)}</tbody>
+    </table></div>
+      : <div className="ad-empty" role="status"><b>No tool matches.</b><span>Try one word, like “payout” or “rider”, or press Ctrl K to search everything.</span></div>}
   </section>;
 }

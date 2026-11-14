@@ -38,13 +38,133 @@ export const ADMIN_MODULES: readonly AdminModule[] = [
   { id: "fleet-banner", label: "Rider banner", group: "Riders & fleet", href: "/admin/fleet-banner", description: "Set the banner riders see on Home, like a rain warning. Booked slots were removed in 1.3.4.", access: "Operations admins; support and audit admins can view", keywords: "rider banner rain warning home zone" },
   { id: "fleet-setup", label: "Rider pilot setup", group: "Riders & fleet", href: "/admin/fleet-setup", description: "Publish the rider rate card, switch dispatch off, shadow or live, and choose the pilot riders and kitchens.", access: "Operations admins; support and audit admins can view", keywords: "rider pilot rate card pay terms publish dispatch policy mode shadow live stop test mode allow list kitchens" },
   { id: "fleet-health", label: "Rider pilot health", group: "Riders & fleet", href: "/admin/fleet-health", description: "The pilot's health checks and triggers, run read-only: how fast offers ring, phones that go silent, battery, batching and detours.", access: "Operations, support and audit admins", keywords: "rider pilot health offer ring push fcm silence shift survival battery batching detour trigger stop rule" },
-  { id: "finance", label: "Finance", group: "Finance & subscriptions", href: "/admin/finance", description: "Customer payments, refunds, chef earnings, chef and rider payouts, what Craves earned, and the fee and tax settings.", access: "Payments, platform and audit admins", keywords: "money transactions payments refunds payouts utr sales profit ledger earnings commission bank statement settlement tax pricing policy graphs" },
+  { id: "finance", label: "Finance", group: "Finance & subscriptions", href: "/admin/finance", description: "Customer payments, refunds, chef earnings, chef and rider payouts, what Craves earned, and the fee and tax settings.", access: "Payments, platform and audit admins", keywords: "money transactions payments refunds payouts utr sales profit ledger earnings commission bank statement settlement tax pricing policy graphs control center" },
   { id: "plans", label: "Subscription plans", group: "Finance & subscriptions", href: "/admin/subscription-plans", description: "Manage the subscription-plan controls exposed by the owning service.", access: "Backend-authorized changes", keywords: "plan menu price subscription" },
   { id: "subscriptions", label: "Subscriptions", group: "Finance & subscriptions", href: "/admin/subscriptions", description: "Inspect subscription status and use existing operational actions.", access: "Backend-authorized actions", keywords: "subscriber recurring status" },
   { id: "capacity", label: "Subscription capacity", group: "Finance & subscriptions", href: "/admin/subscription-capacity", description: "Inspect and manage the existing subscription-capacity workflow.", access: "Backend-authorized changes", keywords: "slots schedule capacity availability" },
   { id: "notifications", label: "Notification recovery", group: "Recovery & learning", href: "/admin/notifications", description: "Inspect failed notifications and use the existing recovery controls.", access: "Guarded recovery", keywords: "email sms messages retry failure" },
   { id: "academy", label: "Craves Academy", group: "Recovery & learning", href: "/admin/academy", description: "Learn Craves services, code, operating procedures and feature development.", access: "Admin learning workspace", keywords: "courses training quiz xp code documentation" },
 ];
+
+/**
+ * The owners' menu (Nov 2026 redesign): nine areas named after people and things, each with tabs.
+ * Every tab is an existing route; ADMIN_MODULES above keeps the old names, which All tools and search still understand.
+ */
+export type AdminAreaId = "today" | "inbox" | "orders" | "customers" | "kitchens" | "riders" | "finance" | "reports" | "settings";
+export type AdminArea = { id: AdminAreaId; label: string; href: string };
+export type AdminTab = { area: AdminAreaId; label: string; href: string; summary: string; module?: string };
+
+export const ADMIN_AREAS: readonly AdminArea[] = [
+  { id: "today", label: "Today", href: "/admin" },
+  { id: "inbox", label: "Inbox", href: "/admin/support" },
+  { id: "orders", label: "Orders", href: "/admin/orders" },
+  { id: "customers", label: "Customers", href: "/admin/search" },
+  { id: "kitchens", label: "Kitchens", href: "/admin/chef-reviews" },
+  { id: "riders", label: "Riders", href: "/admin/riders" },
+  { id: "finance", label: "Finance", href: "/admin/finance" },
+  { id: "reports", label: "Reports", href: "/admin/analytics" },
+  { id: "settings", label: "Settings", href: "/admin/subscription-capacity" },
+];
+
+export const ADMIN_TABS: readonly AdminTab[] = [
+  { area: "today", label: "Today", href: "/admin", module: "overview", summary: "What needs you now, most urgent first." },
+  { area: "inbox", label: "Help requests", href: "/admin/support", module: "support", summary: "Help requests from customers and chefs. Reply, add a private note, and change the status." },
+  { area: "orders", label: "Needs attention", href: "/admin/orders", summary: "Orders that need a person: refunds that failed and orders stuck in one step." },
+  { area: "orders", label: "All orders", href: "/admin/explorer/orders", module: "order-explorer", summary: "Every order, with filters, charts and the full list." },
+  { area: "orders", label: "Live trips", href: "/admin/fleet-trips", module: "fleet-trips", summary: "Orders waiting for a rider, trips on the road, delivery codes to check and where riders are." },
+  { area: "orders", label: "Delivery problems", href: "/admin/delivery-exceptions", module: "delivery-exceptions", summary: "Deliveries that went wrong. Take a case, ask for another delivery company and record how it ended." },
+  { area: "orders", label: "Look up an order", href: "/admin/operations", module: "operations", summary: "Find one order, payment, refund or delivery and see what happened to it. Each lookup needs a reason." },
+  { area: "orders", label: "Missed delivery & payment updates", href: "/admin/dead-letters", module: "dead-letters", summary: "Updates from delivery companies or Cashfree that our system couldn't process. A given-up delivery update can be tried once more." },
+  { area: "customers", label: "Find a customer", href: "/admin/search", module: "search", summary: "Find a customer or chef by phone, email or a reference. Each search needs a reason." },
+  { area: "customers", label: "All users", href: "/admin/explorer/users", module: "users", summary: "Everyone with a Craves account, with role filters." },
+  { area: "customers", label: "Reviews to publish", href: "/admin/reviews", module: "customer-reviews", summary: "Customer reviews wait here until you publish, hide or reject them." },
+  { area: "customers", label: "App home pictures", href: "/admin/banners", module: "home-banners", summary: "The pictures at the top of the customer app's home screen." },
+  { area: "kitchens", label: "To approve", href: "/admin/chef-reviews", module: "chefs", summary: "New kitchen applications. Check each document, verify the FSSAI licence, then decide." },
+  { area: "kitchens", label: "All kitchens", href: "/admin/explorer/chefs", module: "chef-explorer", summary: "Every kitchen application by status, city and date." },
+  { area: "kitchens", label: "Meal plans to approve", href: "/admin/subscription-plans", module: "plans", summary: "Meal plans chefs made. Check the dishes and the schedule, then approve." },
+  { area: "kitchens", label: "FSSAI help", href: "/admin/chef-onboarding", module: "chef-onboarding", summary: "Chefs who asked for help with the FSSAI licence, and the articles and videos that explain it." },
+  { area: "kitchens", label: "Deletion requests", href: "/admin/account-deletions", module: "account-deletions", summary: "Chefs who asked to close their kitchen and delete their account. Customers delete their own account in the app." },
+  { area: "riders", label: "Riders", href: "/admin/riders", module: "riders", summary: "Applications waiting for review first, then every rider by stage." },
+  { area: "riders", label: "Selfies to check", href: "/admin/riders/selfies", module: "fleet-selfies", summary: "Riders take a selfie each time they go online. Check it shows the rider on file." },
+  { area: "riders", label: "SOS & problems", href: "/admin/fleet-support", module: "fleet-support", summary: "Emergency presses and problems riders reported. Acknowledge within 24 hours, fix within 72." },
+  { area: "riders", label: "Live, practice & rain", href: "/admin/fleet-setup", module: "fleet-setup", summary: "Switch orders to Craves riders off, run a practice, or go live, and set rain mode." },
+  { area: "riders", label: "Trial setup", href: "/admin/fleet-setup?section=trial", summary: "The riders and kitchens in the trial." },
+  { area: "riders", label: "Pay rates", href: "/admin/fleet-setup?section=rates", summary: "What Craves pays riders for each trip. A new rate needs 14 days' notice to riders." },
+  { area: "riders", label: "Message to riders", href: "/admin/fleet-banner", module: "fleet-banner", summary: "A short message riders see on their home screen, like a rain warning." },
+  { area: "finance", label: "Overview", href: "/admin/finance", module: "finance", summary: "Money in, money out, what delivered orders earned and what chefs are owed." },
+  { area: "finance", label: "Transactions", href: "/admin/finance?tab=transactions", summary: "Every payment, refund, chef earning and payout, each with its money trail." },
+  { area: "finance", label: "Kitchen payouts", href: "/admin/finance?tab=payouts", summary: "What each chef is owed, bank transfers you record, and payout holds." },
+  { area: "finance", label: "Fees & settings", href: "/admin/finance?tab=settings", summary: "Fees, taxes, delivery charges, bank checks and the on/off switches." },
+  { area: "finance", label: "Rider pay", href: "/admin/fleet-payouts", module: "fleet-payouts", summary: "Rider pay files with a second approver, bank references (UTRs), failed payouts and pay holds." },
+  { area: "finance", label: "Subscriptions", href: "/admin/subscriptions", module: "subscriptions", summary: "Customers' meal plan subscriptions: look one up and change its status." },
+  { area: "reports", label: "Reports", href: "/admin/analytics", module: "analytics", summary: "How Craves is growing: users, kitchens and orders, with the full list behind every chart." },
+  { area: "settings", label: "Meal plan limits", href: "/admin/subscription-capacity", module: "capacity", summary: "How many meal plan meals each kitchen can take, and stopping new sales for a kitchen." },
+  { area: "settings", label: "Block or unblock", href: "/admin/accounts", module: "accounts", summary: "Block or unblock a customer's or chef's account. Each change needs a reason." },
+  { area: "settings", label: "Messages not sent", href: "/admin/notifications", module: "notifications", summary: "SMS, emails and app alerts that couldn't be sent, and sending one again." },
+  { area: "settings", label: "Rider app health", href: "/admin/fleet-health", module: "fleet-health", summary: "Checks on the Craves Riders app during the trial: alerts, silent phones and battery." },
+  { area: "settings", label: "Craves Academy", href: "/admin/academy", module: "academy", summary: "Short courses on how Craves works." },
+  { area: "settings", label: "All tools", href: "/admin/modules", module: "modules", summary: "Every tool from the old admin menu, and where it is now." },
+];
+
+const tabPath = (tab: AdminTab) => tab.href.split("?")[0];
+const tabQuery = (tab: AdminTab) => [...new URLSearchParams(tab.href.split("?")[1] ?? "")];
+
+/** The tab a page belongs to. On a tab's own path, a tab whose query matches wins; deeper paths are that tab's detail pages. */
+export function currentAdminTab(pathname: string, search: URLSearchParams | null = null): { tab: AdminTab; detail: boolean } | undefined {
+  const params = search ?? new URLSearchParams();
+  const own = ADMIN_TABS.filter(tab => tabPath(tab) === pathname);
+  const exact = own.find(tab => tabQuery(tab).length > 0 && tabQuery(tab).every(([key, value]) => params.get(key) === value))
+    ?? own.find(tab => tabQuery(tab).length === 0);
+  if (exact) return { tab: exact, detail: false };
+  const parent = ADMIN_TABS.filter(tab => tabPath(tab) !== "/admin" && pathname.startsWith(`${tabPath(tab)}/`) && tabQuery(tab).length === 0)
+    .sort((a, b) => tabPath(b).length - tabPath(a).length)[0];
+  return parent ? { tab: parent, detail: true } : undefined;
+}
+
+export const areaTabs = (area: AdminAreaId) => ADMIN_TABS.filter(tab => tab.area === area);
+export const adminArea = (id: AdminAreaId) => ADMIN_AREAS.find(area => area.id === id) ?? ADMIN_AREAS[0];
+const lower = (value: string) => value.toLocaleLowerCase("en-IN");
+
+/** The old menu name of a tab, when it differs from the new one ("Dead letters" for Missed delivery & payment updates). */
+export function oldAdminName(tab: AdminTab): string | null {
+  const old = ADMIN_MODULES.find(module => module.id === tab.module)?.label;
+  return old && lower(old) !== lower(tab.label) && lower(old) !== lower(adminArea(tab.area).label) ? old : null;
+}
+
+/** Where each old menu tool lives now, for All tools and search. Delivery Intelligence stays a separate app, linked from Reports. */
+export function newAdminPlace(module: AdminModule): { label: string; href: string } {
+  const tab = ADMIN_TABS.find(item => item.module === module.id);
+  if (!tab) return { label: module.externalApp ? "Reports › Delivery Intelligence (opens its own app)" : module.label, href: module.href };
+  const area = adminArea(tab.area).label;
+  return { label: area === tab.label ? area : `${area} › ${tab.label}`, href: tab.href };
+}
+
+export type AdminSearchHit = { label: string; detail: string; href: string; external?: boolean };
+
+/** Search pages by their new names, their old menu names and work words. Every word must match. */
+export function searchAdminPages(query: string): AdminSearchHit[] {
+  const words = lower(query.trim()).split(/\s+/).filter(Boolean);
+  const pages = ADMIN_TABS.map(tab => {
+    const owner = ADMIN_MODULES.find(item => item.id === tab.module);
+    const area = adminArea(tab.area).label;
+    const old = oldAdminName(tab);
+    return { hit: { label: area === tab.label ? area : `${area} › ${tab.label}`, detail: old ? `${tab.summary} Old name: ${old}.` : tab.summary, href: tab.href },
+      text: `${area} ${tab.label} ${tab.summary} ${owner ? `${owner.label} ${owner.group} ${owner.description} ${owner.keywords}` : ""}` };
+  });
+  const external = ADMIN_MODULES.filter(module => module.externalApp).map(module => ({
+    hit: { label: "Reports › Delivery Intelligence", detail: `${module.description} Opens its own app.`, href: module.href, external: true },
+    text: `reports ${module.label} ${module.description} ${module.keywords}` }));
+  return [...pages, ...external].filter(page => words.every(word => lower(page.text).includes(word))).map(page => page.hit);
+}
+
+/** An order number the owner typed: the 8-character short number customers see, or a full order ID. */
+export function adminOrderReference(query: string): { kind: "short" | "full"; value: string } | null {
+  const value = query.trim().replace(/^#/, "");
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return { kind: "full", value: value.toLowerCase() };
+  // Part of an order number works too (Finance's Find takes 3 or more); a digit keeps words like "cafe" out.
+  if (/^[0-9a-f]{4,8}$/i.test(value) && /\d/.test(value)) return { kind: "short", value: value.toUpperCase() };
+  return null;
+}
 
 export function matchesAdminRoute(pathname: string, href: string): boolean {
   return href === "/admin" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);

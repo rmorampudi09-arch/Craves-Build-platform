@@ -71,3 +71,50 @@ test("exports reject formula-like names and non-count values", () => {
   assert.match(csv, /"valid",1,/);
   assert.doesNotMatch(csv, /HYPERLINK|@SUM|negative|fractional|unsafe/);
 });
+
+test("the owners' menu: every old tool has exactly one new place, and every tab is a real, unique page", async () => {
+  const { ADMIN_AREAS, ADMIN_TABS, newAdminPlace } = await import("./admin-navigation.ts");
+  assert.equal(ADMIN_AREAS.length, 9);
+  assert.equal(new Set(ADMIN_TABS.map(tab => tab.href)).size, ADMIN_TABS.length);
+  for (const tab of ADMIN_TABS) assert.ok(ADMIN_AREAS.some(area => area.id === tab.area), tab.label);
+  for (const area of ADMIN_AREAS) assert.ok(ADMIN_TABS.some(tab => tab.href === area.href && tab.area === area.id), `${area.label} opens one of its own tabs`);
+  for (const tool of ADMIN_MODULES.filter(item => !item.externalApp)) {
+    assert.equal(ADMIN_TABS.filter(tab => tab.module === tool.id).length, 1, tool.label);
+    assert.equal(newAdminPlace(tool).href, ADMIN_TABS.find(tab => tab.module === tool.id)?.href);
+  }
+  assert.match(newAdminPlace(ADMIN_MODULES.find(item => item.externalApp)!).label, /^Reports › Delivery Intelligence/);
+});
+
+test("a page knows its tab, including ?tab= and ?section= pages and detail pages", async () => {
+  const { currentAdminTab } = await import("./admin-navigation.ts");
+  assert.equal(currentAdminTab("/admin")?.tab.label, "Today");
+  assert.equal(currentAdminTab("/admin/fleet-setup")?.tab.label, "Live, practice & rain");
+  assert.equal(currentAdminTab("/admin/fleet-setup", new URLSearchParams("section=trial"))?.tab.label, "Trial setup");
+  assert.equal(currentAdminTab("/admin/finance", new URLSearchParams("tab=payouts&q=x"))?.tab.label, "Kitchen payouts");
+  assert.equal(currentAdminTab("/admin/finance", new URLSearchParams("from=2026-11-01&to=2026-11-14"))?.tab.label, "Overview");
+  assert.equal(currentAdminTab("/admin/riders/selfies")?.tab.label, "Selfies to check");
+  assert.deepEqual(currentAdminTab("/admin/riders/2b6f1c34-0a1e-4c55-9d3a-5f2f4b1d9e10")?.detail, true);
+  assert.equal(currentAdminTab("/admin/riders/2b6f1c34-0a1e-4c55-9d3a-5f2f4b1d9e10")?.tab.label, "Riders");
+  assert.equal(currentAdminTab("/admin/support/2b6f1c34-0a1e-4c55-9d3a-5f2f4b1d9e10")?.tab.area, "inbox");
+  assert.equal(currentAdminTab("/admin/explorer/orders")?.tab.area, "orders");
+  assert.equal(currentAdminTab("/admin/no-such-page"), undefined);
+});
+
+test("old names lead to the new places, in search and on the page", async () => {
+  const { ADMIN_TABS, oldAdminName, searchAdminPages, adminOrderReference } = await import("./admin-navigation.ts");
+  const tab = (label: string) => ADMIN_TABS.find(item => item.label === label)!;
+  assert.equal(oldAdminName(tab("Missed delivery & payment updates")), "Dead letters");
+  assert.equal(oldAdminName(tab("All users")), null);
+  assert.equal(oldAdminName(tab("Riders")), null);
+  assert.equal(searchAdminPages("dead letters")[0]?.href, "/admin/dead-letters");
+  assert.ok(searchAdminPages("finance control center").some(hit => hit.href === "/admin/finance"));
+  assert.ok(searchAdminPages("delivery intelligence").some(hit => hit.external));
+  assert.ok(searchAdminPages("account security").some(hit => hit.href === "/admin/accounts"));
+  assert.equal(searchAdminPages("no-such-control-12947").length, 0);
+  assert.deepEqual(adminOrderReference("#7f3c21a9"), { kind: "short", value: "7F3C21A9" });
+  assert.deepEqual(adminOrderReference("7F3C21A9-0000-4000-8000-000000000001"), { kind: "full", value: "7f3c21a9-0000-4000-8000-000000000001" });
+  assert.equal(adminOrderReference("deadbeef"), null);
+  assert.deepEqual(adminOrderReference("7f3c"), { kind: "short", value: "7F3C" });
+  assert.equal(adminOrderReference("7f3"), null);
+  assert.equal(adminOrderReference("refund"), null);
+});

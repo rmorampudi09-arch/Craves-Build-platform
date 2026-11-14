@@ -46,7 +46,7 @@ export function FleetPayouts() {
       <h2 id="fleet-batches-title" className="text-lg font-bold">Payout batches</h2>
       {notice && <p className="cr-feedback" role="status">{notice}</p>}
       {message && <p className="cr-empty" role="status">{message}</p>}
-      {batches.length > 0 && <div className="cr-table-scroll"><table className="cr-table">
+      {batches.length > 0 && <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
         <thead><tr><th scope="col">Pay date</th><th scope="col">Kind</th><th scope="col">Status</th><th scope="col">Total</th><th scope="col">Payouts</th><th scope="col">Created by</th><th scope="col">Approved by</th><th scope="col"><span className="cr-sr-only">Open</span></th></tr></thead>
         <tbody>{batches.map(batch => <tr key={batch.batchId}>
           <td>{batch.payoutDate}</td><td>{KIND_LABELS[batch.kind]}</td><td><span className="cr-status">{readableFleetValue(batch.status)}</span></td>
@@ -132,7 +132,7 @@ function BatchDetail({ batchId, onChanged, onCancelled }: { batchId: string; onC
     {batch.status === "CREATED" && batch.createdByMe && <p className="cr-alert">You created this batch, so a different payments admin must approve it.</p>}
     <ActionMessage state={action.state} />
     {message && <p className="cr-error-text" role="alert">{message}</p>}
-    <div className="cr-table-scroll"><table className="cr-table">
+    <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
       <thead><tr><th scope="col">Rider</th><th scope="col">Amount</th><th scope="col">Account</th><th scope="col">Status</th><th scope="col">UTR or reason</th><th scope="col">Action</th></tr></thead>
       <tbody>{batch.payouts.map(payout => <PayoutRow key={payout.payoutId} batchId={batch.batchId} payout={payout} canMark={batch.status === "SENT"} onDone={refresh} />)}</tbody>
     </table></div>
@@ -298,7 +298,7 @@ function Holds() {
     </div>
     {notice && <p className="cr-feedback" role="status">{notice}</p>}
     {message && <p className="cr-empty" role="status">{message}</p>}
-    {holds.length > 0 && <div className="cr-table-scroll"><table className="cr-table">
+    {holds.length > 0 && <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
       <thead><tr><th scope="col">Order</th><th scope="col">Rider</th><th scope="col">Amount</th><th scope="col">Reason</th><th scope="col">Release on</th><th scope="col">Placed by</th><th scope="col">Action</th></tr></thead>
       <tbody>{holds.map(hold => <HoldRow key={hold.holdId} hold={hold} onDone={async text => { setNotice(text); await load(); }} />)}</tbody>
     </table></div>}

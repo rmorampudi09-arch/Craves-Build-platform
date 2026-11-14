@@ -68,7 +68,7 @@ export function DeletionRequestList() {
     {loading ? <p role="status" className="cr-muted">Loading requests...</p>
       : items.length === 0 ? (error ? null : <p className="cr-muted">{filter ? `No requests are ${label}.` : "No deletion requests yet."}</p>)
       : <div className="cr-panel !p-0">
-        <div className="cr-table-scroll"><table className="cr-table">
+        <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
           <caption className="sr-only">Deletion requests, oldest first</caption>
           <thead><tr>{["Requested", "Scope", "Status", "Via", "Due", "Request"].map(name => <th key={name} scope="col">{name}</th>)}</tr></thead>
           <tbody>{items.map(item => <tr key={item.requestId}>

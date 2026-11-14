@@ -4,7 +4,7 @@
   --fn-ink: #261a15; --fn-muted: #5c5653; --fn-faint: #8a8582; --fn-line: #e4e4e7; --fn-tint: #f4f4f5; --fn-surface: #ffffff;
   --fn-tint-strong: #e9e9eb; --fn-red: #f62e18; --fn-red-text: #c4230f; --fn-ok: #177245; --fn-warn: #9a5800; --fn-bad: #c4230f;
   --cr-ink: var(--fn-ink); --cr-muted: var(--fn-muted); --cr-line: var(--fn-line); --cr-canvas: var(--fn-tint); --cr-soft: #fdecea;
-  display: grid; gap: 20px; color: var(--fn-ink); accent-color: var(--fn-red); caret-color: var(--fn-red);
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; color: var(--fn-ink); accent-color: var(--fn-red); caret-color: var(--fn-red);
 }
 /* The shell's page colour is a warm off-white. While Finance is open the page sits on neutral grey instead. */
 .cr-admin:has(.fn) { --cr-canvas: #f4f4f5; }

@@ -44,7 +44,7 @@ function SosEvents() {
     </div>
     <p className="cr-muted">Each SOS is emailed to the ops alert addresses at once, with the rider&apos;s full phone number and a map link: call the rider first. A press marked &quot;Email not sent&quot; reached nobody, so call that rider now.</p>
     {message && <p className="cr-empty" role="status">{message}</p>}
-    {events.length > 0 && <div className="cr-table-scroll"><table className="cr-table">
+    {events.length > 0 && <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
       <thead><tr><th scope="col">When</th><th scope="col">Rider</th><th scope="col">Phone</th><th scope="col">Where</th><th scope="col">Trip ID</th><th scope="col">Alert</th></tr></thead>
       <tbody>{events.map(event => {
         const map = mapLink(event);

@@ -90,7 +90,7 @@ describe("Finance overview", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Customers paid/ }));
     await screen.findByRole("table");
     expect(last("transactions")?.get("kind")).toBe("CUSTOMER_PAYMENT"); expect(last("transactions")?.get("status")).toBe("PAID");
-    expect(screen.getByRole("tab", { name: "Transactions" }).getAttribute("aria-selected")).toBe("true");
+    expect(new URLSearchParams(window.location.search).get("tab")).toBe("transactions");
   });
 });
 

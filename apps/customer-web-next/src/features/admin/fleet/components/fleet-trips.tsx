@@ -104,7 +104,7 @@ export function FleetTrips() {
 
     <section className="cr-panel" aria-labelledby="fleet-positions-title">
       <h2 id="fleet-positions-title" className="text-lg font-bold">Rider positions</h2>
-      {positionsError ? <p className="cr-empty" role="status">{positionsError}</p> : positions.length === 0 ? <p className="cr-empty">No rider has sent a location in the last 12 hours.</p> : <div className="cr-table-scroll"><table className="cr-table">
+      {positionsError ? <p className="cr-empty" role="status">{positionsError}</p> : positions.length === 0 ? <p className="cr-empty">No rider has sent a location in the last 12 hours.</p> : <div className="cr-table-scroll" tabIndex={0}><table className="cr-table">
         <thead><tr><th scope="col">Rider</th><th scope="col">Last fix</th><th scope="col">Shift</th><th scope="col">Location</th></tr></thead>
         <tbody>{positions.map(position => <tr key={position.riderId}>
           <td><Link className="underline" href={`/admin/riders/${position.riderId}`}>{position.riderName}</Link></td>

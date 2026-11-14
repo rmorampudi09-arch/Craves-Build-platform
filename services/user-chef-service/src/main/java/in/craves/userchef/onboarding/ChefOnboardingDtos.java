@@ -1,5 +1,6 @@
 package in.craves.userchef.onboarding;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import in.craves.userchef.web.ApiDtos.ChefApplicationResponse;
 import in.craves.userchef.web.ApiDtos.KycDocumentResponse;
 import java.math.BigDecimal;
@@ -44,6 +45,12 @@ public final class ChefOnboardingDtos {
         String step, String reviewStatus, UUID applicationId, Instant startedAt, Instant lastActivityAt,
         String kitchenName, String city, String postalCode
     ) {}
+    /**
+     * A row of the admin list: the applicant, plus everything they saved (null when they only signed in) for the CSV export.
+     * Kept out of DraftApplicant so the sign-up alert emails still cannot carry date of birth, address, FSSAI or ID details.
+     * Unwrapped, so the list keeps its shape and only gains "details".
+     */
+    public record AdminDraft(@JsonUnwrapped DraftApplicant applicant, Details details) {}
     public record HelpStatusRequest(String status) {}
     public record ContentRequest(
         String language, String title, String kind, String body, String contentType, Long fileSizeBytes

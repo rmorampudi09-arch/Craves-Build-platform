@@ -281,16 +281,20 @@ public class ChefOnboardingService {
      * Everyone who started the Chef application and has not submitted it (including sent back for changes), and everyone who
      * signed in to it with their phone OTP but saved nothing yet, latest activity first.
      */
-    public List<DraftApplicant> drafts(CurrentUser admin) {
+    public List<AdminDraft> drafts(CurrentUser admin) {
         requireAdmin(admin);
-        return applicants(false);
+        return listed(false);
     }
 
     /**
      * The admin drafts list, plus (when asked) applicants who submitted and are not approved yet. No access check: the
      * admin list checks the caller; the Waitlist sign-up emails run as the service itself.
      */
-    public List<DraftApplicant> applicants(boolean includeSubmitted) { // no transaction: Auth lookups below must not hold a connection
+    public List<DraftApplicant> applicants(boolean includeSubmitted) {
+        return listed(includeSubmitted).stream().map(AdminDraft::applicant).toList();
+    }
+
+    private List<AdminDraft> listed(boolean includeSubmitted) { // no transaction: Auth lookups below must not hold a connection
         // shortcut: newest 1000 only; add paging when unsubmitted applicants pass that.
         var rows=jdbc.query("""
             WITH started AS (
@@ -337,9 +341,9 @@ public class ChefOnboardingService {
                 }
             }
             Details d=r.details();
-            return new DraftApplicant(r.identityId(),firstName,lastName,r.email(),r.emailVerified(),phone,step,
+            return new AdminDraft(new DraftApplicant(r.identityId(),firstName,lastName,r.email(),r.emailVerified(),phone,step,
                 r.reviewStatus(),r.applicationId(),r.startedAt(),r.lastActivityAt(),
-                d==null ? null : d.kitchenName(),d==null ? null : d.city(),d==null ? null : d.postalCode());
+                d==null ? null : d.kitchenName(),d==null ? null : d.city(),d==null ? null : d.postalCode()),d);
         }).toList();
     }
 

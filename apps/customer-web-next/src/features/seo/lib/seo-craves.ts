@@ -282,6 +282,11 @@ export function foodUrl(food: FoodIntent): string {
   return `${siteUrl}/food/${food.slug}`;
 }
 
+// Bing flagged the old one-line text as too short; this stays between 120 and 160 characters (tested).
+export function cityFoodDescription(city: LaunchCity, food: FoodIntent): string {
+  return `${food.name} in ${city.name} from verified home chefs cooking in their own kitchens. Pay securely, track every order and get help from Craves.`;
+}
+
 export function seoKeywords(city?: LaunchCity, food?: FoodIntent, area?: string): string[] {
   const base = [
     "Craves",

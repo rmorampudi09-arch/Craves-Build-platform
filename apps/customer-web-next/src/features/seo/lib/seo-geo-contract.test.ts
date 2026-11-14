@@ -28,6 +28,17 @@ test("seo discovery covers Hyderabad, Bangalore and major food intents", () => {
   assert.match(foodPage, /launchCities/);
 });
 
+test("city food pages have meta descriptions Bing does not flag as too short or too long", async () => {
+  const { launchCities, foodIntents, cityFoodDescription } = await import("./seo-craves.ts");
+  for (const city of launchCities) {
+    for (const food of foodIntents) {
+      const length = cityFoodDescription(city, food).length;
+      assert.ok(length >= 120 && length <= 160, `${city.slug}/${food.slug}: ${length} characters`);
+    }
+  }
+  assert.match(source("../../../app/[city]/[food]/page.tsx"), /description: cityFoodDescription\(city, food\)/);
+});
+
 test("every neighborhood has its own page slug that never collides with a food slug", async () => {
   const { launchCities, foodIntents, areaSlug } = await import("./seo-craves.ts");
   const foodSlugs = new Set(foodIntents.map((food) => food.slug));

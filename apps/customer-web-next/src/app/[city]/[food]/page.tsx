@@ -7,6 +7,7 @@ import {
   areaSlug,
   cityAreaUrl,
   cityBySlug,
+  cityFoodDescription,
   cityFoodUrl,
   foodBySlug,
   foodIntents,
@@ -57,7 +58,7 @@ export async function generateMetadata({ params }: CityFoodPageProps): Promise<M
 
   return {
     title: `${food.name} in ${city.searchName} | Craves`,
-    description: `Find ${food.name.toLowerCase()} and related homemade food options from Craves home chefs in ${city.searchName}.`,
+    description: cityFoodDescription(city, food),
     keywords: seoKeywords(city, food),
     alternates: { canonical: cityFoodUrl(city, food) },
     openGraph: {

@@ -1,4 +1,4 @@
-export type AdminPlanPeriod = "WEEKLY" | "MONTHLY";
+export type AdminPlanPeriod = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
 export type AdminPlanStatus = "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "REJECTED" | "INACTIVE";
 
 export type AdminSubscriptionPlan = {
@@ -33,7 +33,10 @@ export type AdminSubscriptionPlanInput = {
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const PERIODS = new Set(["WEEKLY", "MONTHLY"]);
+// FORTNIGHTLY: the 14-day bills the subscription service allows since its V19 migration (#656). Without it here, one
+// fortnightly plan made the whole admin plan list invalid (502), so Meal plans and Today couldn't load.
+const PERIODS = new Set(["WEEKLY", "FORTNIGHTLY", "MONTHLY"]);
+export const PLAN_PERIOD_WORDS: Record<AdminPlanPeriod, string> = { WEEKLY: "Weekly", FORTNIGHTLY: "Every 2 weeks", MONTHLY: "Monthly" };
 const STATUSES = new Set(["DRAFT", "PENDING_APPROVAL", "ACTIVE", "REJECTED", "INACTIVE"]);
 
 function text(value: unknown, max: number): string | null {

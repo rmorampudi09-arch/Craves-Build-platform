@@ -5,6 +5,7 @@ import { adminFetch } from "@/features/admin/shell/lib/admin-renewal";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminSubscriptionRuntimeManager } from "@/features/admin/subscriptions/components/admin-subscription-runtime-manager";
 import type { AdminSubscriptionPlan, ApprovedChefReference } from "@/features/admin/subscriptions/lib/admin-subscription-plan-contract";
+import { PLAN_PERIOD_WORDS } from "@/features/admin/subscriptions/lib/admin-subscription-plan-contract";
 
 function money(value: number, currency: string): string {
   try { return new Intl.NumberFormat("en-IN", { style: "currency", currency }).format(value); }
@@ -125,7 +126,7 @@ export function AdminSubscriptionPlanManager() {
         return <article key={plan.id} className="rounded-[26px] bg-[#FFF8EC] p-6 text-slate-950">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6930CA]">{label(plan.status)} · {plan.billingPeriod}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#6930CA]">{label(plan.status)} · {PLAN_PERIOD_WORDS[plan.billingPeriod]}</p>
               <h3 className="mt-2 text-2xl font-bold">{plan.name}</h3>
               <p className="mt-2 text-sm text-slate-600">Chef: {chef ?? "Approved Chef"} · {plan.planCode}</p>
             </div>

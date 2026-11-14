@@ -44,7 +44,7 @@ test("seo sitemap is published and advertised to crawlers", () => {
   assert.match(sitemapRoute, /siteUrl/);
   assert.match(sitemapRoute, /\/subscriptions\/plans/);
   assert.match(sitemapRoute, /\/chefs/);
-  assert.match(sitemapRoute, /cityUrl/);
+  assert.match(sitemapRoute, /cityFoodUrl/);
   assert.match(robots, /Sitemap: https:\/\/craves\.in\/sitemap\.xml/);
   assert.match(robots, /User-agent: OAI-SearchBot/);
   assert.match(robots, /AI discovery brief: https:\/\/craves\.in\/llms\.txt/);

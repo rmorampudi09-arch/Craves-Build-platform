@@ -2,7 +2,7 @@ import { PolicyList, PolicySection, PublicPolicyPage } from "@/features/legal/co
 
 export const metadata = {
   title: "Security | Craves",
-  description: "Security guidance for Craves customers and payment users.",
+  description: "How Craves protects your account, data and payments: Microsoft Azure in India, encrypted connections, OTP sign-in and Razorpay's secure checkout.",
 };
 
 export default function SecurityPage() {
@@ -10,8 +10,18 @@ export default function SecurityPage() {
     <PublicPolicyPage
       eyebrow="Security"
       title="Protecting Craves accounts and payments."
-      intro="Craves separates public customer applications from backend service credentials and verifies payment state on the server. Customers can also help by keeping authentication and payment secrets private."
+      intro="Craves is built with enterprise-grade security. Public customer applications are kept apart from backend service credentials, and payment state is verified on the server. Customers can also help by keeping authentication and payment secrets private."
     >
+      <PolicySection title="How Craves protects your account and data">
+        <PolicyList>
+          <li>Craves runs on Microsoft Azure in India.</li>
+          <li>Each part of the platform runs separately, with its own encrypted vault for keys and passwords.</li>
+          <li>craves.in is served through Azure Front Door with a web application firewall, over encrypted connections.</li>
+          <li>You sign in with a one-time password sent to your phone.</li>
+          <li>Craves staff use a separate admin portal with its own sign-in and role-based access.</li>
+        </PolicyList>
+      </PolicySection>
+
       <PolicySection title="What Craves will never ask you to send">
         <PolicyList>
           <li>Your UPI PIN.</li>

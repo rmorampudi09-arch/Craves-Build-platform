@@ -63,4 +63,16 @@ test("unsubmitted drafts keep people who only entered part of their details", ()
   assert.equal(parsed?.emailVerified, false);
   assert.equal(parseAdminChefDrafts([{ ...draft, startedAt: "not a date" }]), null);
   assert.equal(parseAdminChefDrafts({}), null);
+  assert.equal(parsed?.details, null);
+});
+
+test("unsubmitted drafts carry what the applicant saved, and an odd value empties only its own field", () => {
+  const draft = { identityId: "33333333-3333-4333-8333-333333333333", emailVerified: false, step: "kitchen", reviewStatus: "DRAFT", startedAt: "2026-11-02T06:00:00Z",
+    lastActivityAt: "2026-11-02T07:00:00Z", details: { kitchenName: "Asha’s Kitchen", dateOfBirth: "1990-01-01", latitude: 17.4, longitude: "not a number", fssaiNumber: 12345678901234 } };
+  const details = parseAdminChefDrafts([draft])?.[0]?.details;
+  assert.equal(details?.kitchenName, "Asha’s Kitchen");
+  assert.equal(details?.dateOfBirth, "1990-01-01");
+  assert.equal(details?.latitude, 17.4);
+  assert.equal(details?.longitude, null);
+  assert.equal(details?.fssaiNumber, null);
 });

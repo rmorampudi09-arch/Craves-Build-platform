@@ -85,7 +85,26 @@ export type AdminChefDraft = {
   applicationId: string | null;
   startedAt: string;
   lastActivityAt: string;
+  /** Everything else they saved, for the CSV export; null when they only signed in. */
+  details: AdminChefDraftDetails | null;
 };
+export type AdminChefDraftDetails = {
+  dateOfBirth: string | null; kitchenName: string | null; kitchenDescription: string | null; addressLine1: string | null; addressLine2: string | null;
+  landmark: string | null; city: string | null; state: string | null; postalCode: string | null; latitude: number | null; longitude: number | null;
+  proofKind: string | null; otherGovernmentId: string | null; fssaiNumber: string | null; language: string | null;
+};
+
+// Field by field with the server's own limits: one odd value leaves that cell empty instead of hiding the whole list.
+function parseDraftDetails(value: unknown): AdminChefDraftDetails | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  return { dateOfBirth: typeof raw.dateOfBirth === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.dateOfBirth) ? raw.dateOfBirth : null,
+    kitchenName: optionalText(raw.kitchenName, 160), kitchenDescription: optionalText(raw.kitchenDescription, 1000), addressLine1: optionalText(raw.addressLine1, 255),
+    addressLine2: optionalText(raw.addressLine2, 255), landmark: optionalText(raw.landmark, 255), city: optionalText(raw.city, 80), state: optionalText(raw.state, 80),
+    postalCode: optionalText(raw.postalCode, 20), latitude: coordinate(raw.latitude, -90, 90), longitude: coordinate(raw.longitude, -180, 180),
+    proofKind: optionalText(raw.proofKind, 40), otherGovernmentId: optionalText(raw.otherGovernmentId, 80), fssaiNumber: optionalText(raw.fssaiNumber, 14),
+    language: optionalText(raw.language, 10) };
+}
 
 function parseAdminChefDraft(value: unknown): AdminChefDraft | null {
   if (!value || typeof value !== "object") return null;
@@ -93,7 +112,7 @@ function parseAdminChefDraft(value: unknown): AdminChefDraft | null {
   const identityId = text(raw.identityId, 64); const startedAt = instant(raw.startedAt); const lastActivityAt = instant(raw.lastActivityAt);
   if (!identityId || !startedAt || !lastActivityAt) return null;
   const applicationId = text(raw.applicationId, 64);
-  return { identityId, firstName: optionalText(raw.firstName, 120), lastName: optionalText(raw.lastName, 120), email: optionalText(raw.email, 320), emailVerified: raw.emailVerified === true, phoneNumber: optionalText(raw.phoneNumber, 24), step: text(raw.step, 40) ?? "personal", reviewStatus: text(raw.reviewStatus, 40) ?? "DRAFT", applicationId: applicationId && UUID.test(applicationId) ? applicationId : null, startedAt, lastActivityAt };
+  return { identityId, firstName: optionalText(raw.firstName, 120), lastName: optionalText(raw.lastName, 120), email: optionalText(raw.email, 320), emailVerified: raw.emailVerified === true, phoneNumber: optionalText(raw.phoneNumber, 24), step: text(raw.step, 40) ?? "personal", reviewStatus: text(raw.reviewStatus, 40) ?? "DRAFT", applicationId: applicationId && UUID.test(applicationId) ? applicationId : null, startedAt, lastActivityAt, details: parseDraftDetails(raw.details) };
 }
 
 export function parseAdminChefDrafts(value: unknown): AdminChefDraft[] | null {

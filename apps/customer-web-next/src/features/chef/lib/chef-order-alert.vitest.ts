@@ -79,6 +79,12 @@ describe("new-order alerts", () => {
     expect(merged.map((o) => [o.id, o.status])).toEqual([[A, "PREPARING"], [B, "CHEF_ACCEPTANCE_PENDING"]]);
     expect(orderWords(order(A, "CHEF_ACCEPTANCE_PENDING"), "New order")).toBe("New order. 2 Rasmalai 4 pieces.");
   });
+
+  it("reads a line's menu options aloud after the dish, so a chef who listens cooks it right", () => {
+    const plain = order(A, "CHEF_ACCEPTANCE_PENDING");
+    const withOptions: ChefOrder = { ...plain, items: [{ ...plain.items[0], itemName: "Thali", chosenOptions: [{ group: "Spice", choice: "Hot" }, { group: "Extras", choice: "Raita" }, { group: "Extras", choice: "Papad" }] }] };
+    expect(orderWords(withOptions, "New order")).toBe("New order. 2 Thali, Spice: Hot, Extras: Raita, Papad.");
+  });
 });
 
 describe("order watcher on pages without an order list", () => {

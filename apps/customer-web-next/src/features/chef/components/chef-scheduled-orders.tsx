@@ -13,6 +13,7 @@ import { shortCustomerName } from "@/features/chef/lib/chef-order-presentation";
 import { scheduleWhen, type ChefScheduledOrder } from "@/features/chef/lib/chef-scheduled-orders";
 import { FEATURE_NOT_AVAILABLE } from "@/shared/lib/feature-availability";
 import { shortOrderNumber } from "@/shared/lib/order-number";
+import { chosenOptionsText, nameWithOptions } from "@/shared/lib/order-options";
 import { Dialog, Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { format, messages } from "@/shared/i18n/language";
 import { useLanguage, useText } from "@/shared/i18n/language-context";
@@ -206,13 +207,19 @@ export function ChefScheduledOrders({ queue, orders, onSeeNew }: { queue: Schedu
                 </div>
                 {live?.items.length ? (
                   <ul className="chef-order-items">
-                    {live.items.map((dish) => (
-                      <li key={dish.id}>
-                        <span className="chef-order-qty">{dish.quantity}×</span>
-                        <FoodTypeMark type={dish.foodType} />
-                        <span className="min-w-0">{dish.itemName}</span>
-                      </li>
-                    ))}
+                    {live.items.map((dish) => {
+                      const options = chosenOptionsText(dish.chosenOptions);
+                      return (
+                        <li key={dish.id}>
+                          <span className="chef-order-qty">{dish.quantity}×</span>
+                          <FoodTypeMark type={dish.foodType} />
+                          <span className="min-w-0">
+                            {dish.itemName}
+                            {options ? <span className="block text-[0.9375rem] font-medium">{options}</span> : null}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : null}
                 <p className="mt-3 text-[0.875rem] font-semibold text-[#6B6B6B]">
@@ -243,7 +250,7 @@ export function ChefScheduledOrders({ queue, orders, onSeeNew }: { queue: Schedu
           <ul className="chef-section chef-list">
             {queue.confirmed.map((item) => {
               const live = liveOrder(item.orderId);
-              const dishes = live?.items.map((dish) => `${dish.quantity}× ${dish.itemName}`).join(", ");
+              const dishes = live?.items.map((dish) => `${dish.quantity}× ${nameWithOptions(dish.itemName, dish.chosenOptions)}`).join(", ");
               return (
                 <li key={`${item.scheduleRequestId}:${item.orderId}`}>
                   <Link href={`/chef/orders/${item.orderId}`} className="chef-row">

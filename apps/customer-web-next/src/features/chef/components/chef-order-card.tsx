@@ -19,6 +19,7 @@ import { ChefOrderActions } from "@/features/chef/components/chef-order-actions"
 import { canSpeak, speakOrder } from "@/features/chef/lib/chef-order-alert";
 import { shortCustomerName } from "@/features/chef/lib/chef-order-presentation";
 import { shortOrderNumber } from "@/shared/lib/order-number";
+import { chosenOptionsText } from "@/shared/lib/order-options";
 import type { ChefOrder } from "@/features/chef/lib/chef-order-contract";
 import { format, messages, type Language } from "@/shared/i18n/language";
 import { useLanguage, useText } from "@/shared/i18n/language-context";
@@ -184,13 +185,19 @@ export function ChefOrderCard({ order, onUpdated }: { order: ChefOrder; onUpdate
         <span className="block font-normal text-[#6B6B6B]">{who}</span>
       </h3>
       <ul className="chef-order-items" aria-label={text.foodToCook}>
-        {order.items.map((item) => (
-          <li key={item.id}>
-            <span className="chef-order-qty">{item.quantity}×</span>
-            <FoodTypeMark type={item.foodType} />
-            <span className="min-w-0">{item.itemName}</span>
-          </li>
-        ))}
+        {order.items.map((item) => {
+          const options = chosenOptionsText(item.chosenOptions);
+          return (
+            <li key={item.id}>
+              <span className="chef-order-qty">{item.quantity}×</span>
+              <FoodTypeMark type={item.foodType} />
+              <span className="min-w-0">
+                {item.itemName}
+                {options ? <span className="block text-[0.9375rem] font-medium">{options}</span> : null}
+              </span>
+            </li>
+          );
+        })}
       </ul>
       {order.customerNote ? (
         <div className="mt-3">

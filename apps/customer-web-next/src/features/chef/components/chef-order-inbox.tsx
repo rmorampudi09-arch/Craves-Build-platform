@@ -22,6 +22,7 @@ import {
   formatInr,
 } from "@/features/chef/components/chef-ui";
 import { shortOrderNumber } from "@/shared/lib/order-number";
+import { nameWithOptions } from "@/shared/lib/order-options";
 import {
   parseChefOrdersResponse,
   type ChefOrder,
@@ -319,7 +320,7 @@ export function ChefOrderInbox() {
                                     <span className="chef-row-meta !mt-0">#{shortOrderNumber(order.id)} · {clockTime(order.updatedAt)}</span>
                                   </span>
                                   <span className="chef-row-title mt-2 line-clamp-2 block">
-                                    {order.items.map((item) => `${item.quantity}× ${item.itemName}`).join(", ") || text.foodOrder}
+                                    {order.items.map((item) => `${item.quantity}× ${nameWithOptions(item.itemName, item.chosenOptions)}`).join(", ") || text.foodOrder}
                                   </span>
                                   <span className="chef-row-meta mt-1 flex items-center gap-1.5">
                                     {format(itemCount === 1 ? text.itemOne : text.itemMany, { count: itemCount })}

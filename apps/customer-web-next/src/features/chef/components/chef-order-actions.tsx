@@ -37,6 +37,7 @@ import {
 import { FEATURE_NOT_AVAILABLE, isFeatureUnavailable } from "@/shared/lib/feature-availability";
 import { createSupportCase, SupportCaseError } from "@/shared/lib/support-cases-client";
 import { shortOrderNumber } from "@/shared/lib/order-number";
+import { nameWithOptions } from "@/shared/lib/order-options";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
 import { Dialog, Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { format, messages } from "@/shared/i18n/language";
@@ -376,7 +377,7 @@ export function ChefOrderActions({
   const clock = countdown ? <CountdownLine countdown={countdown} /> : null;
   // Null while the dishes load, so the one-tap button never promises a time it is about to change.
   const readyMinutes = order.prepTimeMinutes ?? (dishes ? acceptReadyMinutes(order, dishes) : null);
-  const dishSummary = order.items.map((item) => `${item.quantity} × ${item.itemName}`).join(", ");
+  const dishSummary = order.items.map((item) => `${item.quantity} × ${nameWithOptions(item.itemName, item.chosenOptions)}`).join(", ");
 
   useEffect(() => {
     if (!pending || order.prepTimeMinutes != null) return;

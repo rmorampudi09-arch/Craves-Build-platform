@@ -14,6 +14,7 @@ import {colors, iconSize} from '../../../design/tokens';
 import {iosType} from '../../../design/iosType';
 import {mapTilesBaseUrl, olaMapStyleUrl} from '../../maps/olaMapTiles';
 import {useMapTilesReferer, type MapPoint} from '../../maps/OlaMapPicker';
+import {remainingRoute} from '../presentation/orderRoute';
 
 /** Hyderabad, where Craves delivers today: the blurred backdrop when an order has no map pin. */
 const FALLBACK_CENTER: MapPoint = {latitude: 17.385, longitude: 78.4867};
@@ -24,6 +25,8 @@ interface Props {
   home: MapPoint | null;
   /** The delivery partner, once the server reports a position. */
   courier: MapPoint | null;
+  /** The road path kitchen to house, decoded; drawn solid when the courier is on it. */
+  routePath?: MapPoint[] | null;
   /** Before pickup the map is only a backdrop: blurred, washed out and still. */
   blurred: boolean;
   interactive?: boolean;
@@ -62,6 +65,7 @@ function cameraFor(
 export function OrderMap({
   home,
   courier,
+  routePath,
   blurred,
   interactive = false,
   bottomInset = 0,
@@ -75,12 +79,23 @@ export function OrderMap({
   const [failed, setFailed] = useState(false);
   const gestures = interactive && !blurred;
   const showCourier = courier && !blurred;
+  const onRoad = home && showCourier && routePath ? remainingRoute(routePath, courier) : null;
+  const last = onRoad?.[onRoad.length - 1];
+  const road =
+    onRoad && home
+      ? last && last.latitude === home.latitude && last.longitude === home.longitude
+        ? onRoad
+        : [...onRoad, home]
+      : null;
   const route: GeoJSON.Feature | null =
     home && showCourier
       ? {
           type: 'Feature',
           properties: {},
-          geometry: {type: 'LineString', coordinates: [lngLat(courier), lngLat(home)]},
+          geometry: {
+            type: 'LineString',
+            coordinates: (road ?? [courier, home]).map(lngLat),
+          },
         }
       : null;
 
@@ -113,7 +128,7 @@ export function OrderMap({
                   paint={{
                     'line-color': colors.espressoBrown,
                     'line-width': 3.5,
-                    'line-dasharray': [0.1, 2],
+                    ...(road ? {} : {'line-dasharray': [0.1, 2]}),
                   }}
                 />
               </GeoJSONSource>

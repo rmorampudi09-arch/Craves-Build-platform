@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -32,6 +32,7 @@ import {
 } from '../../../shared/components/LifecycleStates';
 import {ScreenShell} from '../../../shared/components/ScreenShell';
 import {OrderMap} from '../components/OrderMap';
+import {decodePolyline} from '../presentation/orderRoute';
 import {getCustomerOrderJourney, hasLeftKitchen} from '../presentation/customerOrderJourney';
 import {
   CUSTOMER_DELIVERY_POLL_INTERVAL_MS,
@@ -166,6 +167,11 @@ export function CustomerOrderTrackingScreen() {
     );
   }
 
+  const routePath = useMemo(
+    () => (projection?.routePath ? decodePolyline(projection.routePath) : null),
+    [projection?.routePath],
+  );
+
   if (tracking.isPending && !projection) {
     return (
       <ScreenShell keyboardAvoiding={false} testID="customer-order-tracking-loading">
@@ -232,6 +238,7 @@ export function CustomerOrderTrackingScreen() {
         blurred={!pickedUp}
         bottomInset={24}
         courier={projection.courierLocation}
+        routePath={routePath}
         home={home}
         interactive
         style={{height: Math.round(windowHeight * 0.46)}}>

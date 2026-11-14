@@ -43,4 +43,6 @@ export interface CustomerOrderTracking {
   courierLocation: CustomerCourierLocation | null;
   /** The 4 digits the customer gives a Craves rider at the door; null for other delivery partners. */
   deliveryCode: string | null;
+  /** Google encoded polyline (precision 5) of the road path kitchen to house; null when unknown. */
+  routePath: string | null;
 }

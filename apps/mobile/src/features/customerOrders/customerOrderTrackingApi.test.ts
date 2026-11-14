@@ -73,7 +73,15 @@ describe('P55 customer delivery tracking API', () => {
       history: [],
       courierLocation: null,
       deliveryCode: null,
+      routePath: null,
     });
+  });
+
+  it('reads the road route string, and ignores a bad one', () => {
+    expect(parseCustomerOrderTrackingResponse(tracking({routePath: 'abc'}))?.routePath).toBe('abc');
+    for (const routePath of [undefined, null, 42, 'a'.repeat(20001)]) {
+      expect(parseCustomerOrderTrackingResponse(tracking({routePath}))?.routePath).toBeNull();
+    }
   });
 
   it('reads the delivery partner position, and ignores a malformed one', () => {

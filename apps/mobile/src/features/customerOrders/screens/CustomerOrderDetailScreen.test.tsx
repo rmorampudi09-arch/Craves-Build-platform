@@ -35,6 +35,7 @@ const mockTracking: CustomerOrderTracking = {
   history: [],
   courierLocation: null,
   deliveryCode: '4821',
+  routePath: null,
 };
 let mockOrderNow: CustomerOrder;
 let mockTrackingNow: CustomerOrderTracking;

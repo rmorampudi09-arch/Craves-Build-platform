@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -46,6 +46,7 @@ import {pendingPaymentAttemptStore} from '../../payment/storage/pendingPaymentAt
 import {CUSTOMER_REVIEWS_AVAILABLE} from '../../reviews/api/customerReviewsApi';
 import {CustomerOrderMenuItemImage} from '../components/CustomerOrderMenuItemImage';
 import {OrderMap} from '../components/OrderMap';
+import {decodePolyline} from '../presentation/orderRoute';
 import {getProductionCustomerOrderMutationDecision} from '../domain/customerOrderActionEligibility';
 import type {CustomerOrder, CustomerOrderMoney} from '../domain/customerOrderTypes';
 import {
@@ -261,6 +262,9 @@ export function CustomerOrderDetailScreen() {
     }, CUSTOMER_DELIVERY_POLL_INTERVAL_MS);
     return () => clearInterval(intervalId);
   }, [afterKitchen, focused, live, refetchDetail, refetchTracking]);
+
+  const encodedRoute = tracking.data?.routePath;
+  const routePath = useMemo(() => (encodedRoute ? decodePolyline(encodedRoute) : null), [encodedRoute]);
 
   if (detail.invalidOrderId) {
     return (
@@ -560,6 +564,7 @@ export function CustomerOrderDetailScreen() {
               }
               blurred={journey.kind === 'KITCHEN'}
               courier={courier}
+              routePath={routePath}
               home={home}
               style={[styles.map, journey.kind === 'KITCHEN' ? styles.mapKitchen : styles.mapDelivery]}>
               {journey.kind === 'KITCHEN' ? (

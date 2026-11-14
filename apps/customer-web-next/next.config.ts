@@ -60,7 +60,7 @@ const nextConfig: NextConfig = {
       {
         // Page routes only: a path with a dot is a static file (see the rule above).
         source:
-          "/:path(chef|chefs|home|discover|cart|checkout|orders|payment|profile|subscriptions|tracking|wishlist|sign-in|contact|products-pricing|privacy|terms|refunds-cancellations|security|addresses|confirmation|kitchen|kitchens|dish|support|help|refer)([^.]*)",
+          "/:path(chef|chefs|home|discover|cart|checkout|orders|payment|profile|subscriptions|tracking|wishlist|sign-in|contact|products-pricing|privacy|terms|refunds-cancellations|security|addresses|confirmation|kitchen|kitchens|dish|support|help|refer|lists|l/)([^.]*)",
         headers: [
           {
             key: "Cache-Control",

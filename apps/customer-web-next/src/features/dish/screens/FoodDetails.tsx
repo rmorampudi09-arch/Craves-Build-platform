@@ -30,6 +30,7 @@ import { WhatsInsideCard } from "@/features/dish/components/WhatsInsideCard";
 import { CustomerReviewsSection } from "@/features/dish/components/CustomerReviewsSection";
 import { SimilarDishesSection } from "@/features/dish/components/SimilarDishesSection";
 import { DishBottomBar } from "@/features/dish/components/DishBottomBar";
+import { SaveToListButton } from "@/features/food-lists/components/SaveToListButton";
 import { CravesCartIcon } from "@/features/home/components/CravesCartIcon";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/EmptyState";
@@ -325,6 +326,7 @@ function DishDetailPage() {
               </div>
 
               <QuickInfoChips dish={dish} />
+              <SaveToListButton menuItemId={dish.id} />
               {dish.thermobox ? (
                 <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-[#1A1A1A]">
                   <Thermometer className="h-4 w-4 shrink-0 text-[#F62E18]" aria-hidden="true" />

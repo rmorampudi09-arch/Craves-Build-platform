@@ -16,6 +16,8 @@ Disallow: /notifications
 Disallow: /wishlist
 Disallow: /tracking
 Disallow: /sign-in
+Disallow: /lists
+Disallow: /l/
 
 User-agent: OAI-SearchBot
 Allow: /
@@ -35,6 +37,8 @@ Disallow: /notifications
 Disallow: /wishlist
 Disallow: /tracking
 Disallow: /sign-in
+Disallow: /lists
+Disallow: /l/
 
 User-agent: ChatGPT-User
 Allow: /
@@ -54,6 +58,8 @@ Disallow: /notifications
 Disallow: /wishlist
 Disallow: /tracking
 Disallow: /sign-in
+Disallow: /lists
+Disallow: /l/
 
 User-agent: GPTBot
 Allow: /
@@ -73,6 +79,8 @@ Disallow: /notifications
 Disallow: /wishlist
 Disallow: /tracking
 Disallow: /sign-in
+Disallow: /lists
+Disallow: /l/
 
 User-agent: PerplexityBot
 Allow: /
@@ -92,6 +100,8 @@ Disallow: /notifications
 Disallow: /wishlist
 Disallow: /tracking
 Disallow: /sign-in
+Disallow: /lists
+Disallow: /l/
 
 User-agent: Google-Extended
 Allow: /
@@ -114,6 +124,8 @@ Disallow: /notifications
 Disallow: /wishlist
 Disallow: /tracking
 Disallow: /sign-in
+Disallow: /lists
+Disallow: /l/
 
 User-agent: Claude-SearchBot
 Allow: /
@@ -133,6 +145,8 @@ Disallow: /notifications
 Disallow: /wishlist
 Disallow: /tracking
 Disallow: /sign-in
+Disallow: /lists
+Disallow: /l/
 
 User-agent: Applebot-Extended
 Allow: /

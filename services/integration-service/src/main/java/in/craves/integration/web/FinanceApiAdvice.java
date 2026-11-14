@@ -7,7 +7,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes={FinancePolicyController.class,ChefPayoutController.class,RazorpayXPayoutWebhookController.class,
-    FinancePayoutReconciliationController.class,ChefTaxProfileController.class,InternalOrderFinanceController.class,FinanceSourceOperationsController.class})
+    FinancePayoutReconciliationController.class,ChefTaxProfileController.class,InternalOrderFinanceController.class,FinanceSourceOperationsController.class,
+    FinanceInsightsController.class})
 public class FinanceApiAdvice {
     @ExceptionHandler({IllegalArgumentException.class,NullPointerException.class})
     public ProblemDetail invalid(RuntimeException exception){var result=ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,"Invalid finance request. Check exact-paise amounts, required fields and policy limits.");result.setProperty("code","INVALID_FINANCE_REQUEST");return result;}

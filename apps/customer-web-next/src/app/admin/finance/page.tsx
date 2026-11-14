@@ -1,8 +1,7 @@
-import { FinanceControlCenter } from "@/features/admin/finance/components/finance-control-center";
-import { FinanceReconciliationPanel } from "@/features/admin/finance/components/finance-reconciliation-panel";
+import { FinanceWorkspace } from "@/features/admin/finance/components/finance-workspace";
+import { initialView } from "@/features/admin/finance/lib/insights-contract";
 import { ChefTaxProfilePanel } from "@/features/chef/components/chef-tax-profile-panel";
-import { BankAutomationAdminPanel } from "@/features/admin/finance/components/bank-automation-admin-panel";
-import { ManualChefSettlementPanel } from "@/features/admin/finance/components/manual-chef-settlement-panel";
-export default function FinancePage() {
-  return <><BankAutomationAdminPanel /><FinanceControlCenter /><ManualChefSettlementPanel /><ChefTaxProfilePanel /><FinanceReconciliationPanel /></>;
+
+export default async function FinancePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  return <FinanceWorkspace initial={initialView(await searchParams)} taxProfiles={<ChefTaxProfilePanel />} />;
 }

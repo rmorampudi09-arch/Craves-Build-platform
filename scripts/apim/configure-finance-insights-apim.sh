@@ -46,7 +46,8 @@ operation_policy() {
   printf '<policies><inbound><base /><rewrite-uri template="/%s%s" copy-unmatched-params="%s" /></inbound><backend><base /></backend><outbound><base /></outbound><on-error><base /></on-error></policies>' \
     "$API_PATH" "$1" "$2"
 }
-squash() { tr -d ' \t\r\n'; }
+# For comparing policies: az returns the XML with a byte-order mark first and CRLF, tab-indented lines.
+squash() { sed $'1s/^\xef\xbb\xbf//' | tr -d ' \t\r\n'; }
 
 echo "GET operations on $API_ID (/$API_PATH) of $APIM, each rewritten to the same path on $INTEGRATION_APP:"
 printf '  %s\n' "${OPERATIONS[@]}"

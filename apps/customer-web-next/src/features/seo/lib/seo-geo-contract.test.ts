@@ -19,7 +19,8 @@ test("seo discovery covers Hyderabad, Bangalore and major food intents", () => {
   assert.match(seo, /slug: "biryani"/);
   assert.match(seo, /slug: "homemade-food"/);
   assert.match(seo, /SearchAction/);
-  assert.match(seo, /Restaurant/);
+  assert.match(seo, /"@type": "Service"/);
+  assert.doesNotMatch(seo, /"Restaurant"/);
   assert.match(seo, /FAQPage/);
   assert.match(sitemap, /cityFoodUrl/);
   assert.match(cityPage, /generateStaticParams/);
@@ -106,4 +107,10 @@ test("ai search crawler files advertise Craves facts without exposing private ro
   assert.match(llms, /homemade food marketplace/i);
   assert.match(llms, /\/hyderabad\/biryani/);
   assert.match(llms, /\/hyderabad\/gachibowli/);
+  assert.match(llms, /FSSAI/);
+  assert.match(llms, /https:\/\/craves\.in\/security/);
+  // Owner rule (Nov 2026): public copy talks about chef earnings, never about Craves commissions.
+  for (const copy of [llms, source("./seo-craves.ts"), source("../../../../public/landing-v20/index.html")]) {
+    assert.doesNotMatch(copy, /commission/i);
+  }
 });

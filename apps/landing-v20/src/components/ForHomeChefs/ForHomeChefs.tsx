@@ -138,10 +138,10 @@ const ForHomeChefs = () => {
 
           <p className="chefs__text">
             <span className="chefs__description-line">
-               Interested in bringing your homemade food to more people?
+               Cook from your own kitchen and earn from every order.
             </span>{' '}
             <span className="chefs__description-line">
-             Explore becoming a home chef with Craves.
+             Set your own prices. We handle payments, delivery and support.
             </span>
           </p>
 
@@ -172,9 +172,9 @@ const ForHomeChefs = () => {
             <li className="chefs__benefit">
               <GrowthIcon />
               <span className="chefs__benefit-label">
-                Grow
+                Paid to
                 <br />
-                at your own pace
+                your bank
               </span>
             </li>
 

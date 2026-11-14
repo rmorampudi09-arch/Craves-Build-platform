@@ -7,7 +7,7 @@ export const socialProfiles = [
   "https://www.linkedin.com/company/145186832/",
 ];
 // Bump when SEO page copy changes; a lastmod that changes on every request is ignored by search engines.
-export const seoContentUpdated = new Date("2026-10-11");
+export const seoContentUpdated = new Date("2026-11-14");
 // Served by app/opengraph-image.tsx; child pages that set openGraph must list it or they lose the preview image.
 export const shareImage = {
   url: `${siteUrl}/opengraph-image`,
@@ -344,8 +344,8 @@ export function cravesSiteGraph() {
           areaServed: "IN",
         },
         description:
-          "Craves is a homemade food marketplace connecting customers with trusted home chefs for fresh home-cooked meals, biryani, tiffin, and meal subscriptions across Hyderabad and Bangalore.",
-        knowsAbout: ["Homemade food", "Home chefs", "Home-cooked meals", "Hyderabadi biryani", "Tiffin service", "Meal subscriptions"],
+          "Craves is a homemade food marketplace in Hyderabad and Bangalore. Every dish is cooked by a verified home chef in their own kitchen, and Craves checks each chef's documents and FSSAI registration before their food goes live. Customers order biryani, tiffin, everyday meals and meal plans, pay through secure checkout and track every order. Home chefs set their own menus and prices and are paid to their bank accounts.",
+        knowsAbout: ["Homemade food", "Home chefs", "Home-cooked meals", "Hyderabadi biryani", "Tiffin service", "Meal subscriptions", "FSSAI-registered home kitchens", "Home-based food business"],
       },
       {
         "@type": "WebSite",
@@ -396,7 +396,15 @@ export function localFaq(city: LaunchCity, food?: FoodIntent, area?: string) {
     },
     {
       question: "Are Craves home chefs verified?",
-      answer: "Every Craves home chef goes through an application and document review before their kitchen can list food, and customers can see ratings and reviews before ordering.",
+      answer: "Yes. Every Craves home chef goes through an application and document review, and Craves verifies their FSSAI registration before any of their dishes go live. You can also see each chef's ratings and reviews before you order.",
+    },
+    {
+      question: "Is it safe to pay on Craves?",
+      answer: "Yes. You enter card and UPI details on Razorpay's secure checkout, not on Craves, and an order is confirmed only after the payment is verified on Craves' servers. Craves runs on Microsoft Azure in India with enterprise-grade security.",
+    },
+    {
+      question: "How do I get help with an order?",
+      answer: "Ask the Craves assistant on craves.in. It can check your order, open a support ticket or ask our team to call you back. You can also call +91 83673 66787 or email support@craves.in.",
     },
   ];
 }
@@ -422,31 +430,16 @@ export function cityStructuredData(city: LaunchCity, food?: FoodIntent, area?: s
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "Restaurant",
-        "@id": `${url}#restaurant`,
+        // A delivery service in the area, not a restaurant there: Craves has no premises in each locality.
+        "@type": "Service",
+        "@id": `${url}#service`,
         name,
+        serviceType: food ? `Homemade ${food.name.toLowerCase()} delivery` : "Homemade food delivery",
         url,
-        image: cravesLogoUrl,
-        servesCuisine: food
-          ? [food.name, food.category, "Homemade food", "Indian food"]
-          : ["Homemade food", "Indian food", "Home-cooked meals"],
-        priceRange: "₹₹",
-        menu: `${siteUrl}/products-pricing`,
+        provider: { "@id": `${siteUrl}/#organization` },
         areaServed: area
           ? { "@type": "Place", name: place, containedInPlace: cityPlace }
           : cityPlace,
-        address: {
-          "@type": "PostalAddress",
-          addressLocality: area ?? city.name,
-          addressRegion: city.state,
-          addressCountry: city.country,
-        },
-        parentOrganization: { "@id": `${siteUrl}/#organization` },
-        geo: {
-          "@type": "GeoCoordinates",
-          latitude: city.latitude,
-          longitude: city.longitude,
-        },
       },
       {
         "@type": "FAQPage",

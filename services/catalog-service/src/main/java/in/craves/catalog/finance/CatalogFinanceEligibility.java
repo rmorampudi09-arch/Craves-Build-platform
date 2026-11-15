@@ -2,12 +2,16 @@ package in.craves.catalog.finance;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.catalog.exception.ApiException;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Flow;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -49,28 +53,53 @@ public class CatalogFinanceEligibility {
     /** How long one verified answer may serve a replica. Load test 15 Nov 2026: asking Integration on every request
      *  queued the catalog, Integration and User/Chef chain and timed out at 1,000 requests a second. */
     static final Duration REUSE = Duration.ofSeconds(2);
+    /** How often each replica refreshes in the background. Probe 15 Nov 2026, refreshing on the request path: requests
+     *  stalled in bursts of up to 1 s and were released together, at every load. */
+    static final Duration REFRESH = Duration.ofMillis(500);
     private record Held(Snapshot snapshot, long at) {}
     private final Object gate = new Object();
     private volatile Held held;
     private CompletableFuture<Snapshot> inFlight; // guarded by gate
+    private ScheduledExecutorService refresher;
     LongSupplier clock = System::nanoTime;
 
-    /** Signed authority at most {@link #REUSE} old; concurrent requests share one fetch. A failed fetch is never
-     *  reused, so an Integration outage still fails closed, before Redis, within {@link #REUSE}. */
+    /** Signed authority at most {@link #REUSE} old, counted from when its fetch began. The background refresh keeps it
+     *  young, so requests do not wait on Integration; when no answer is young enough they share one fetch and wait.
+     *  A failed fetch is never reused, so an Integration outage still fails closed, before Redis, within {@link #REUSE}. */
     public Snapshot current() {
         Snapshot reuse = reusable();
-        if (reuse != null) return reuse;
+        return reuse != null ? reuse : shared(true);
+    }
+    // Own thread: the shared @Scheduled thread runs the pickup outbox, which must not delay this refresh.
+    @PostConstruct
+    void startRefresh() {
+        refresher = Executors.newSingleThreadScheduledExecutor(task -> {
+            Thread thread = new Thread(task, "catalog-eligibility-refresh");
+            thread.setDaemon(true);
+            return thread;
+        });
+        refresher.scheduleWithFixedDelay(this::refreshQuietly, 0, REFRESH.toMillis(), TimeUnit.MILLISECONDS);
+    }
+    @PreDestroy
+    void stopRefresh() { if (refresher != null) refresher.shutdownNow(); }
+    /** A failed background fetch stores nothing: the last answer serves until it is {@link #REUSE} old. */
+    void refreshQuietly() {
+        try { shared(false); } catch (RuntimeException ignored) { /* requests then fetch, and fail closed, themselves */ }
+    }
+    private Snapshot shared(boolean reuseIfYoung) {
         CompletableFuture<Snapshot> shared;
         boolean fetcher = false;
         synchronized (gate) {
-            if ((reuse = reusable()) != null) return reuse;
+            Snapshot reuse;
+            if (reuseIfYoung && (reuse = reusable()) != null) return reuse;
             if (inFlight == null) { inFlight = new CompletableFuture<>(); fetcher = true; }
             shared = inFlight;
         }
         if (fetcher) {
             try {
+                long started = clock.getAsLong();
                 Snapshot fresh = fetch();
-                held = new Held(fresh, clock.getAsLong());
+                held = new Held(fresh, started);
                 shared.complete(fresh);
             } catch (RuntimeException | Error ex) {
                 shared.completeExceptionally(ex);

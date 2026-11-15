@@ -42,8 +42,12 @@ or equal to its finance posting key. Catalog has no permissive fallback. Each
 Catalog replica reuses one verified answer for at most 2 seconds and lets
 concurrent requests share one fetch; a failed fetch is never reused (15 Nov 2026
 load test: asking on every request queued Catalog, Integration and User/Chef and
-timed out at 1,000 requests a second). An approval or revocation therefore shows
-on public pages within 2 seconds. The new endpoint must remain outside public APIM
+timed out at 1,000 requests a second). The 2 seconds count from when that fetch
+began. Each replica also refreshes in the background every 0.5 seconds, so
+requests use the held answer instead of waiting on Integration (15 Nov 2026
+probe: refreshing on the request path stalled bursts of requests for up to
+1 second at every load); a failed background fetch stores nothing. An approval
+or revocation therefore shows on public pages within 2 seconds. The new endpoint must remain outside public APIM
 products; do not add it to public bank or finance APIs. Logs and diagnostics
 must not capture request/response bodies, signatures or authorization headers.
 

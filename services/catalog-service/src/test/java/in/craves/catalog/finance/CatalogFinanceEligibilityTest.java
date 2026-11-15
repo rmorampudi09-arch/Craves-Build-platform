@@ -119,6 +119,76 @@ class CatalogFinanceEligibilityTest {
             assertEquals(1, eligibility.fetches.get());
         } finally { pool.shutdownNow(); }
     }
+    @Test void backgroundRefreshNeverMakesRequestsWait() throws Exception {
+        var eligibility = new Counting(json);
+        long[] nanos = {0};
+        eligibility.clock = () -> nanos[0];
+        var first = snapshot();
+        eligibility.answer = () -> first;
+        assertSame(first, eligibility.current());
+        var second = snapshot();
+        var release = new CountDownLatch(1);
+        eligibility.answer = () -> {
+            try { release.await(); } catch (InterruptedException ex) { throw new IllegalStateException(ex); }
+            return second;
+        };
+        nanos[0] = Duration.ofMillis(1500).toNanos();
+        var background = Executors.newSingleThreadExecutor();
+        try {
+            var refresh = background.submit(eligibility::refreshQuietly);
+            long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            while (eligibility.fetches.get() < 2 && System.nanoTime() < deadline) Thread.sleep(5);
+            assertEquals(2, eligibility.fetches.get());
+            nanos[0] = Duration.ofMillis(1900).toNanos();
+            assertSame(first, assertTimeoutPreemptively(Duration.ofSeconds(2), eligibility::current));
+            release.countDown();
+            refresh.get(5, TimeUnit.SECONDS);
+            nanos[0] = Duration.ofMillis(3400).toNanos(); // 1.9 s after the background fetch began
+            assertSame(second, eligibility.current());
+            assertEquals(2, eligibility.fetches.get());
+        } finally { background.shutdownNow(); }
+    }
+    @Test void answerAgeCountsFromWhenItsFetchBegan() {
+        var eligibility = new Counting(json);
+        long[] nanos = {0};
+        eligibility.clock = () -> nanos[0];
+        var slow = snapshot();
+        eligibility.answer = () -> { nanos[0] = Duration.ofMillis(1500).toNanos(); return slow; };
+        assertSame(slow, eligibility.current());
+        nanos[0] = Duration.ofMillis(2000).toNanos();
+        var next = snapshot();
+        eligibility.answer = () -> next;
+        assertSame(next, eligibility.current());
+        assertEquals(2, eligibility.fetches.get());
+    }
+    @Test void failedBackgroundRefreshKeepsTheLastAnswerOnlyUntilItIsTwoSecondsOld() {
+        var eligibility = new Counting(json);
+        long[] nanos = {0};
+        eligibility.clock = () -> nanos[0];
+        var first = snapshot();
+        eligibility.answer = () -> first;
+        eligibility.current();
+        eligibility.answer = () -> { throw new ApiException(503, "CATALOG_ELIGIBILITY_UNAVAILABLE", "x"); };
+        nanos[0] = Duration.ofMillis(500).toNanos();
+        eligibility.refreshQuietly();
+        nanos[0] = Duration.ofMillis(1999).toNanos();
+        assertSame(first, eligibility.current());
+        nanos[0] = Duration.ofMillis(2000).toNanos();
+        assertThrows(ApiException.class, eligibility::current);
+        assertEquals(3, eligibility.fetches.get());
+    }
+    @Test void refreshesInTheBackgroundOnceStarted() throws Exception {
+        var eligibility = new Counting(json);
+        var answer = snapshot();
+        eligibility.answer = () -> answer;
+        eligibility.startRefresh();
+        try {
+            long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+            while (eligibility.fetches.get() < 2 && System.nanoTime() < deadline) Thread.sleep(20);
+            assertTrue(eligibility.fetches.get() >= 2);
+            assertSame(answer, eligibility.current());
+        } finally { eligibility.stopRefresh(); }
+    }
     @Test void boundsBodyBeforeAllocatingEntireResponse() {
         var subscriber = new CatalogFinanceEligibility.BoundedBody();
         Flow.Subscription subscription = mock(Flow.Subscription.class);

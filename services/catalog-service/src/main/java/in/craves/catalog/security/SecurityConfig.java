@@ -37,6 +37,8 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**").denyAll()
                 .anyRequest().authenticated()
             )
+            // First: refuse requests that came through another company's Front Door profile.
+            .addFilterBefore(FrontDoorOriginFilter.fromEnvironment(environment), UsernamePasswordAuthenticationFilter.class)
             // CH-03: the internal kitchen read sits under the public catalog path; check the caller identity there too.
             .addFilterBefore(
                 InternalCallFilter.fromEnvironment(environment, "/api/v1/catalog/internal/**", "/internal/**"),

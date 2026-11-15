@@ -88,6 +88,36 @@ The code ships switched off. The release template changes only the image and `CR
 
 To undo, make a revision with `CRAVES_FRONT_DOOR_CHECK=report` (or `off`) and move traffic to it, or move traffic back to the previous revision.
 
+### Catalog: straight from Front Door
+
+Public catalog reads skip APIM. On 15 Nov 2026, with Front Door and APIM gateway logs turned on, APIM's two gateway machines each froze for 0.2–1 s at random (one about every 7 s, the other about every 30 s) at about 10 % of one unit's capacity, holding every request on that machine. APIM's own timer showed at most 3 ms for those requests, TCP connections to APIM never waited (1,754 opened, slowest 18 ms), and requests that skip APIM never stalled (Front Door p99: 15 ms for the web app, about 750 ms for anything through APIM). The freezes are inside the managed gateway, so catalog's busiest paths go around it.
+
+| What | Value |
+|---|---|
+| Straight to catalog | route `craves-catalog-route` on endpoint `craves-prod-api` (api.craves.in): `/api/v1/catalog/*`, `/api/v1/discovery/kitchens`, `/api/v1/discovery/menu-items` → origin group `craves-catalog-origin-group` |
+| Origins in that group | `craves-catalog-direct-origin` (catalog's own address) and `craves-catalog-apim-origin` (APIM, kept for the move and for undo) |
+| Still through APIM | route `craves-catalog-apim-route`: `/api/v1/catalog/internal/*`, `/api/v1/catalog/admin/*`; and, through `craves-api-route`, everything else (signed-in discovery, `/api/v1/kitchens/me`, every other service) |
+| Catalog's ingress | APIM, the 12 outbound addresses, and the web app's 157 Front Door ranges (`afd-*`) |
+
+Catalog checks `X-Azure-FDID` like the web app (`FrontDoorOriginFilter`), with the same two settings, `CRAVES_FRONT_DOOR_ID` and `CRAVES_FRONT_DOOR_CHECK` (`off`, `report`, `enforce`). One difference: a request **without** the header is answered, because APIM and our own apps call catalog without Front Door. A request with a **different** id came through another company's profile: Front Door overwrites the header and no Front Door rule can change or remove it. Under `enforce` it gets `403` with `Cache-Control: no-store`; under `report` it is answered and logged as `ORIGIN_CHECK_MISMATCH mode=report path=<path>`. The settings carry over to each release.
+
+Order, from Cloud Shell:
+
+1. Make a catalog revision with `CRAVES_FRONT_DOOR_ID=59117d14-1c4f-402e-a98b-0fa1009de276` and `CRAVES_FRONT_DOOR_CHECK=report` (`az containerapp update --revision-suffix … --set-env-vars …`), give it 10 % of traffic for a few minutes once it is Healthy, then 100 %, and deactivate the old revision. With traffic still only through APIM there must be no `ORIGIN_CHECK_` lines (query above, with `ca-craves-catalog-prod`); then do the same with `enforce`.
+2. `bash scripts/frontdoor/configure-catalog-direct-route.sh` prints the state. With `CONFIRM_FRONTDOOR_WRITE=true`: `allow-front-door` (refuses unless every revision taking traffic enforces the check), then `routes` (every request still goes through APIM), then `weight 100` (about 10 % straight to catalog), and `weight 1000` once the share looks right.
+3. Watch which origin served each request and how long it took:
+
+   ```kusto
+   AzureDiagnostics
+   | where Category == "FrontDoorAccessLog" and TimeGenerated > ago(30m) and requestUri_s has "/api/v1/catalog/"
+   | summarize n = count(), p50 = percentile(todouble(timeTaken_s) * 1000, 50), p99 = percentile(todouble(timeTaken_s) * 1000, 99),
+       errors = countif(toint(httpStatusCode_s) >= 500) by originName_s
+   ```
+
+**Undo:** `CONFIRM_FRONTDOOR_WRITE=true bash scripts/frontdoor/configure-catalog-direct-route.sh weight 0` sends every catalog request through APIM again within minutes; the routes and ingress ranges can stay.
+
+Logs used for this (15 Nov 2026), all in `law-craves-prod`: diagnostic settings `fd-access-log` (Front Door access log) and `apim-gateway-log` (APIM gateway log, table `ApiManagementGatewayLogs`), and APIM's `azuremonitor` logger and diagnostic (every request, no client address, query strings hidden, no bodies or headers).
+
 ## Previous: subscription 721906c9 (idle since 29 Oct 2026, read only)
 
 Everything below describes the old estate. Its apps, databases and storage still exist untouched as a fallback. Do not deploy to it, change it or run its pipelines.

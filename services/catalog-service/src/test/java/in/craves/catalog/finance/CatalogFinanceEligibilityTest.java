@@ -3,10 +3,18 @@ package in.craves.catalog.finance;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.catalog.exception.ApiException;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Flow;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -59,6 +67,57 @@ class CatalogFinanceEligibilityTest {
             assertThrows(ApiException.class, () -> new CatalogFinanceEligibility(origin, key, json).current());
         }
         assertThrows(ApiException.class, () -> new CatalogFinanceEligibility("https://finance.invalid", "", json).current());
+    }
+    /** Counts fetches instead of calling Integration. */
+    private static final class Counting extends CatalogFinanceEligibility {
+        final AtomicInteger fetches = new AtomicInteger();
+        volatile Supplier<Snapshot> answer;
+        Counting(ObjectMapper json) { super("https://finance.invalid", "k".repeat(32), json, null); }
+        @Override Snapshot fetch() { fetches.incrementAndGet(); return answer.get(); }
+    }
+    @Test void reusesOneVerifiedAnswerForTwoSecondsThenAsksAgain() {
+        var eligibility = new Counting(json);
+        long[] nanos = {0};
+        eligibility.clock = () -> nanos[0];
+        var first = snapshot();
+        eligibility.answer = () -> first;
+        assertSame(first, eligibility.current());
+        nanos[0] = Duration.ofMillis(1999).toNanos();
+        assertSame(first, eligibility.current());
+        assertEquals(1, eligibility.fetches.get());
+        nanos[0] = Duration.ofMillis(2000).toNanos();
+        eligibility.current();
+        assertEquals(2, eligibility.fetches.get());
+    }
+    @Test void neverReusesAFailedFetch() {
+        var eligibility = new Counting(json);
+        eligibility.clock = () -> 0;
+        eligibility.answer = () -> { throw new ApiException(503, "CATALOG_ELIGIBILITY_UNAVAILABLE", "x"); };
+        assertThrows(ApiException.class, eligibility::current);
+        assertThrows(ApiException.class, eligibility::current);
+        assertEquals(2, eligibility.fetches.get());
+        var answer = snapshot();
+        eligibility.answer = () -> answer;
+        assertSame(answer, eligibility.current());
+    }
+    @Test void concurrentRequestsShareOneFetch() throws Exception {
+        var eligibility = new Counting(json);
+        eligibility.clock = () -> 0;
+        var release = new CountDownLatch(1);
+        var answer = snapshot();
+        eligibility.answer = () -> {
+            try { release.await(); } catch (InterruptedException ex) { throw new IllegalStateException(ex); }
+            return answer;
+        };
+        var pool = Executors.newFixedThreadPool(8);
+        try {
+            List<Future<CatalogFinanceEligibility.Snapshot>> calls = new ArrayList<>();
+            for (int i = 0; i < 8; i++) calls.add(pool.submit(eligibility::current));
+            Thread.sleep(200);
+            release.countDown();
+            for (var call : calls) assertSame(answer, call.get(5, TimeUnit.SECONDS));
+            assertEquals(1, eligibility.fetches.get());
+        } finally { pool.shutdownNow(); }
     }
     @Test void boundsBodyBeforeAllocatingEntireResponse() {
         var subscriber = new CatalogFinanceEligibility.BoundedBody();

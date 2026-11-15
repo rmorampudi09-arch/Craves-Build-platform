@@ -32,6 +32,30 @@ referral-members 2). At full scale the business server sees about 260 connection
 far under the default `max_connections` of these sizes. More app replicas than this would only move the
 bottleneck to the database CPU.
 
+## Browse path for 5,000 people (`apply-browse-5k.sh`, 15 Nov 2026)
+Every public catalog request (kitchen lists, kitchen, menu, nearby) first asks integration which chefs may sell, and
+integration asks user-chef (`docs/finance/CATALOG_SELLING_ELIGIBILITY.md`). One page view therefore loads three
+services and two databases. The first load test (600 requests/s) found catalog and user-chef queueing on 2 database
+connections per replica at under 30 % CPU, and integration (max 10) and user-chef (max 20) at their caps.
+
+| App | Before | After |
+|---|---|---|
+| user-chef | 2–20 replicas, 2 DB connections each | 4–20, 8 connections, graceful shutdown |
+| integration | 2–10 replicas, 8 DB connections each | 4–20, graceful shutdown |
+| catalog | 2–20 replicas, 2 DB connections each | 4–20, 8 connections, graceful shutdown |
+
+Settings are environment variables on the apps (`SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE`, `SERVER_SHUTDOWN`,
+`SPRING_LIFECYCLE_TIMEOUTPERSHUTDOWNPHASE`); releases keep them. Worst case at full scale: business DB about 500 of its
+1,718 connections, integration DB 160 of 859. `scripts/release/check-db-connection-budget.py` still describes the old
+prodlow server and does not see these values.
+```bash
+bash infra/autoscale/apply-browse-5k.sh                                   # plan, changes nothing
+CONFIRM_AUTOSCALE_WRITE=true bash infra/autoscale/apply-browse-5k.sh apply  # user-chef, integration, catalog in turn
+bash infra/autoscale/test-apply-browse-5k.sh                              # offline check
+```
+The rollout is the same as above; the new revision must match the live one in image, scale rules and every other
+setting before any traffic moves. Load test: `loadtest/browse5k.js` on two generators (see the file header).
+
 ## What does not scale on its own
 - **Postgres compute.** Scale up by hand (e.g. business D4ds_v5 → D8ds_v5) when the CPU alert (> 85 %) keeps firing;
   with same-zone HA this is a short failover, so pick a quiet hour.

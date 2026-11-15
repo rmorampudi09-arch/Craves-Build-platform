@@ -1,5 +1,7 @@
 // Craves browse load test at 5,000+ people (owner-approved; read-only public endpoints; no sign-in, orders or payments).
-// Run on two generators with SHARE=0.5 each; both wait for START_AT (epoch seconds) so their minutes line up.
+// Run on four generators with SHARE=0.25 each; all wait for START_AT (epoch seconds) so their minutes line up.
+// Keep VUs per generator low: every VU holds its own connections, and a test machine holding several hundred
+// open connections had its new connections time out on the machine (15 Nov 2026), which is not what users see.
 // Totals: 100 req/s for 2 min, surge to 1,000 req/s (5,000 people at one request per 5 s) within 1 min,
 // hold 5 min, 1,250 req/s (6,250 people) for 3 min. PLAN=ramp instead climbs 200, 500, 800, 1,000 req/s and holds
 // 1,000 for 4 min. Prints one line per minute at the end.
@@ -28,7 +30,7 @@ export const options = {
   scenarios: {
     browse: {
       executor: 'ramping-arrival-rate',
-      startRate: rate(__ENV.PLAN === 'ramp' ? 50 : 100), timeUnit: '1s', preAllocatedVUs: rate(600), maxVUs: rate(3000),
+      startRate: rate(__ENV.PLAN === 'ramp' ? 50 : 100), timeUnit: '1s', preAllocatedVUs: rate(400), maxVUs: rate(2000),
       stages: __ENV.PLAN === 'ramp'
         ? [[200, '1m'], [500, '1m'], [500, '1m'], [800, '1m'], [800, '1m'], [1000, '1m'], [1000, '4m'], [0, '30s']]
           .map(([t, d]) => ({ target: rate(t), duration: d }))

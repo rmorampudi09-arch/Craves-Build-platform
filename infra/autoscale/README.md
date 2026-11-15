@@ -32,6 +32,40 @@ referral-members 2). At full scale the business server sees about 260 connection
 far under the default `max_connections` of these sizes. More app replicas than this would only move the
 bottleneck to the database CPU.
 
+## Browse path for 5,000 people (`apply-browse-5k.sh`, 15 Nov 2026)
+Every public catalog request (kitchen lists, kitchen, menu, nearby) first asks integration which chefs may sell, and
+integration asks user-chef (`docs/finance/CATALOG_SELLING_ELIGIBILITY.md`). One page view therefore loads three
+services and two databases. The first load test (600 requests/s) found catalog and user-chef queueing on 2 database
+connections per replica at under 30 % CPU, and integration (max 10) and user-chef (max 20) at their caps.
+
+| App | Before | After |
+|---|---|---|
+| user-chef | 2–20 replicas, 2 DB connections each | 4–20, 8 connections, graceful shutdown |
+| integration | 2–10 replicas, 8 DB connections each | 4–20, graceful shutdown |
+| catalog | 2–20 replicas, 2 DB connections each | 4–20, 8 connections, graceful shutdown |
+| web | 2–20 replicas, 0.5 vCPU / 1 GiB | 4–20, 1 vCPU / 2 GiB (applied by hand with the same canary steps) |
+
+Catalog also reuses the signed "which chefs may sell" answer for up to 2 seconds per replica (#673), so integration
+and user-chef no longer see one call per page view (about 10 calls a second at 1,250 requests a second).
+
+Result on 15 Nov 2026 with all of the above (four generators, 11:48–12:01 UTC): 622,391 requests and no errors over
+100 a second, a jump to 1,000 within one minute, 1,000 for 5 minutes and 1,250 (about 6,250 people) for 3 minutes.
+Median 11–12 ms, p95 78–90 ms, p99 about 0.8 s (1.2 s in the jump minute); the web page p95 13–16 ms. Peaks: catalog
+20 replicas (its cap) at 19 % CPU, integration and user-chef 4 replicas, web 4 replicas at 14 % CPU, business database
+13 % CPU and 186 connections, APIM 45 % of one unit.
+
+Settings are environment variables on the apps (`SPRING_DATASOURCE_HIKARI_MAX_POOL_SIZE`, `SERVER_SHUTDOWN`,
+`SPRING_LIFECYCLE_TIMEOUTPERSHUTDOWNPHASE`); releases keep them. Worst case at full scale: business DB about 500 of its
+1,718 connections, integration DB 160 of 859. `scripts/release/check-db-connection-budget.py` still describes the old
+prodlow server and does not see these values.
+```bash
+bash infra/autoscale/apply-browse-5k.sh                                   # plan, changes nothing
+CONFIRM_AUTOSCALE_WRITE=true bash infra/autoscale/apply-browse-5k.sh apply  # user-chef, integration, catalog in turn
+bash infra/autoscale/test-apply-browse-5k.sh                              # offline check
+```
+The rollout is the same as above; the new revision must match the live one in image, scale rules and every other
+setting before any traffic moves. Load test: `loadtest/browse5k.js` on four generators (see the file header).
+
 ## What does not scale on its own
 - **Postgres compute.** Scale up by hand (e.g. business D4ds_v5 → D8ds_v5) when the CPU alert (> 85 %) keeps firing;
   with same-zone HA this is a short failover, so pick a quiet hour.

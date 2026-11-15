@@ -38,8 +38,12 @@ Bank enrollment, payout credentials and RazorpayX approval are separate controls
 Reuse existing apps, identities, vault and service origins. Do not create new
 resources, print keys, rotate working financial credentials or change the
 one-replica maximum. Integration returns 503 if the read key is missing, short
-or equal to its finance posting key. Catalog has no permissive fallback or
-local eligibility cache. The new endpoint must remain outside public APIM
+or equal to its finance posting key. Catalog has no permissive fallback. Each
+Catalog replica reuses one verified answer for at most 2 seconds and lets
+concurrent requests share one fetch; a failed fetch is never reused (15 Nov 2026
+load test: asking on every request queued Catalog, Integration and User/Chef and
+timed out at 1,000 requests a second). An approval or revocation therefore shows
+on public pages within 2 seconds. The new endpoint must remain outside public APIM
 products; do not add it to public bank or finance APIs. Logs and diagnostics
 must not capture request/response bodies, signatures or authorization headers.
 
@@ -68,11 +72,11 @@ certification of unlimited traffic. Review the contract and benchmark the
 read-only profile evaluation before exceeding that ceiling; do not raise it
 without corresponding load evidence.
 
-Discovery obtains authority **before** Redis on every request and includes the
+Discovery obtains authority (at most 2 seconds old) **before** Redis on every request and includes the
 eligibility hash and privacy setting in its cache key. The hash includes policy
 identity/revision, evaluation date and eligible profile versions. Revocation
 changes the key even while a previous page is still cached. Any authority
-outage fails the request before a cache lookup. Query/page validation precedes
+outage fails the request before a cache lookup, at the latest 2 seconds after the last good answer. Query/page validation precedes
 the finance request. No user-controlled SQL or dynamically interpolated chef
 values are used; eligibility is a bound PostgreSQL UUID array.
 

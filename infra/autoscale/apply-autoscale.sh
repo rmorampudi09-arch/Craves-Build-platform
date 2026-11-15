@@ -157,15 +157,16 @@ autoscale_body() { # resource-id location min max rules-json
       profiles: [{name: "default", capacity: {minimum: $min, maximum: $max, default: $min}, rules: $rules}]}}'
 }
 
-capacity_targets() { # prints: kind id rg location sku capacity
-  az apim list --subscription "$SUB" --query "[0].['apim', id, resourceGroup, location, sku.name, to_string(sku.capacity)]" -o tsv
-  az servicebus namespace list --subscription "$SUB" --query "[0].['servicebus', id, resourceGroup, location, sku.name, to_string(sku.capacity)]" -o tsv
+capacity_targets() { # prints one line each: kind id rg location sku capacity (a list of lists, or tsv puts one value per line)
+  az apim list --subscription "$SUB" --query "[0:1].['apim', id, resourceGroup, location, sku.name, to_string(sku.capacity)]" -o tsv
+  az servicebus namespace list --subscription "$SUB" --query "[0:1].['servicebus', id, resourceGroup, location, sku.name, to_string(sku.capacity)]" -o tsv
 }
 
 capacity() { # plan | apply
   local kind id rg loc sku cap name rules
   while IFS=$'\t' read -r kind id rg loc sku cap; do
     [ "$sku" = Premium ] || die "$kind ${id##*/} is $sku; autoscale here assumes Premium"
+    loc=${loc// /}; loc=${loc,,} # APIM reports "Central India", Service Bus "centralindia"
     if [ "$kind" = apim ]; then
       name=as-apim-craves-prod
       echo "${id##*/} (APIM Premium, $cap unit now): autoscale 1-2 units; +1 when Capacity > 70% for 10 min, -1 when < 30% for 30 min"

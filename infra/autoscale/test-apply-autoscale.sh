@@ -26,8 +26,8 @@ case "$args" in
   "containerapp ingress traffic set"*) w=${args##*--revision-weight }; echo "TRAFFIC $(arg -n "$@") ${w% -o none}" >>"$W/log" ;;
   "containerapp revision deactivate"*) echo "DEACTIVATE $(arg --revision "$@")" >>"$W/log" ;;
   "containerapp revision activate"*) echo "ACTIVATE $(arg --revision "$@")" >>"$W/log" ;;
-  "apim list"*) printf 'apim\t/subscriptions/s/resourceGroups/rg-shared/providers/Microsoft.ApiManagement/service/apim-x\trg-shared\tcentralindia\tPremium\t1\n' ;;
-  "servicebus namespace list"*) printf 'servicebus\t/subscriptions/s/resourceGroups/rg-shared/providers/Microsoft.ServiceBus/namespaces/sb-x\trg-shared\tcentralindia\tPremium\t1\n' ;;
+  "apim list"*) printf 'apim\t/subscriptions/s/resourceGroups/rg-shared/providers/Microsoft.ApiManagement/service/apim-x\trg-shared\tCentral India\tPremium\t1\n' ;;
+  "servicebus namespace list"*) printf 'servicebus\t/subscriptions/s/resourceGroups/rg-shared/providers/Microsoft.ServiceBus/namespaces/sb-x\trg-shared\tCentral India\tPremium\t1\n' ;;
   *) echo "fake az: unexpected: $args" >&2; exit 9 ;;
 esac
 FAKE
@@ -109,6 +109,7 @@ apim=$(grep '^PUT .*as-apim-craves-prod' "$work/log" | cut -d' ' -f3-)
 sb=$(grep '^PUT .*as-sb-craves-prod' "$work/log" | cut -d' ' -f3-)
 jq -e '.properties.profiles[0].capacity == {minimum: "1", maximum: "2", default: "1"}' <<<"$apim" >/dev/null || fail "apim capacity"
 jq -e '[.properties.profiles[0].rules[].metricTrigger.metricName] == ["Capacity","Capacity"]' <<<"$apim" >/dev/null || fail "apim rules"
+jq -e '.location == "centralindia"' <<<"$apim" >/dev/null || fail "apim location not normalised"
 jq -e '.properties.profiles[0].capacity.maximum == "4" and ([.properties.profiles[0].rules[].scaleAction.type] | unique) == ["ServiceAllowedNextValue"]' <<<"$sb" >/dev/null || fail "sb rules"
 
 # 9. Rollback brings the old revision back before moving traffic.

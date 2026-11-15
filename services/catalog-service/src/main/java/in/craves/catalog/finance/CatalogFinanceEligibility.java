@@ -5,6 +5,7 @@ import in.craves.catalog.exception.ApiException;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
 import java.util.concurrent.TimeUnit;
@@ -19,6 +20,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -44,8 +46,51 @@ public class CatalogFinanceEligibility {
     CatalogFinanceEligibility(String origin, String key, ObjectMapper json, HttpClient http) {
         this.origin = origin; this.key = key; this.json = json; this.http = http;
     }
-    /** No local cache: every public request obtains fresh signed authority before Redis. */
+    /** How long one verified answer may serve a replica. Load test 15 Nov 2026: asking Integration on every request
+     *  queued the catalog, Integration and User/Chef chain and timed out at 1,000 requests a second. */
+    static final Duration REUSE = Duration.ofSeconds(2);
+    private record Held(Snapshot snapshot, long at) {}
+    private final Object gate = new Object();
+    private volatile Held held;
+    private CompletableFuture<Snapshot> inFlight; // guarded by gate
+    LongSupplier clock = System::nanoTime;
+
+    /** Signed authority at most {@link #REUSE} old; concurrent requests share one fetch. A failed fetch is never
+     *  reused, so an Integration outage still fails closed, before Redis, within {@link #REUSE}. */
     public Snapshot current() {
+        Snapshot reuse = reusable();
+        if (reuse != null) return reuse;
+        CompletableFuture<Snapshot> shared;
+        boolean fetcher = false;
+        synchronized (gate) {
+            if ((reuse = reusable()) != null) return reuse;
+            if (inFlight == null) { inFlight = new CompletableFuture<>(); fetcher = true; }
+            shared = inFlight;
+        }
+        if (fetcher) {
+            try {
+                Snapshot fresh = fetch();
+                held = new Held(fresh, clock.getAsLong());
+                shared.complete(fresh);
+            } catch (RuntimeException | Error ex) {
+                shared.completeExceptionally(ex);
+            } finally {
+                synchronized (gate) { inFlight = null; }
+            }
+        }
+        try { return shared.join(); }
+        catch (CompletionException ex) {
+            if (ex.getCause() instanceof ApiException api) throw api;
+            if (ex.getCause() instanceof Error error) throw error;
+            throw unavailable();
+        }
+    }
+    private Snapshot reusable() {
+        Held h = held;
+        return h != null && clock.getAsLong() - h.at() < REUSE.toNanos() ? h.snapshot() : null;
+    }
+    /** Fresh signed authority from Integration. */
+    Snapshot fetch() {
         try {
             URI uri = URI.create(origin);
             if (!"https".equals(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null

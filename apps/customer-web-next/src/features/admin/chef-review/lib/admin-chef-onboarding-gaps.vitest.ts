@@ -87,6 +87,7 @@ describe("Admin approval explains what is still needed", () => {
     render(createElement(AdminChefReviewDetails, { applicationId: APP, onboardingV2Enabled: true }));
     expect(await screen.findByText("Done: Every required document approved (3/3)")).toBeTruthy();
     expect(screen.getByText("Done: Chef has submitted the application")).toBeTruthy();
+    expect(screen.getByText(/^Submitted /)).toBeTruthy();
     expect(screen.queryByText(/FSSAI number checked/)).toBeNull();
     expect((screen.getByRole("button", { name: "Approve Chef application" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByText(/FSSAI callback: SUP-1001 · OPEN/)).toBeTruthy();
@@ -98,6 +99,20 @@ describe("Admin approval explains what is still needed", () => {
     fireEvent.change(await screen.findByLabelText("Onboarding review evidence"), { target: { value: "Checked on FoSCoS portal" } });
     expect((screen.getByPlaceholderText(/Use only for an application-level problem/) as HTMLTextAreaElement).value).toBe("");
     expect((screen.getByRole("button", { name: "Reject entire application" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("says when an application was only started, not submitted, or was sent back", async () => {
+    reviewFixtures(false);
+    const path = `/api/admin/chef-onboarding/applications/${APP}`;
+    const onboarding = routes.get(path) as { progress: object };
+    routes.set(path, { ...onboarding, submitted: false, progress: { ...onboarding.progress, status: "DRAFT" } });
+    render(createElement(AdminChefReviewDetails, { applicationId: APP, onboardingV2Enabled: true }));
+    expect(await screen.findByText(/^Not submitted yet · started /)).toBeTruthy();
+    expect(screen.queryByText(/^Submitted /)).toBeNull();
+    cleanup();
+    routes.set(path, { ...onboarding, submitted: false, progress: { ...onboarding.progress, status: "MORE_INFORMATION_REQUIRED" } });
+    render(createElement(AdminChefReviewDetails, { applicationId: APP, onboardingV2Enabled: true }));
+    expect(await screen.findByText(/^Sent back for changes · last submitted /)).toBeTruthy();
   });
 
   it("enables final approval once documents are approved and FSSAI is verified", async () => {

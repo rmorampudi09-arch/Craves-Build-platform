@@ -10,12 +10,15 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResul
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DeliveryCommandCompletionService {
+    private static final Logger log = LoggerFactory.getLogger(DeliveryCommandCompletionService.class);
     private final DeliveryAssignmentRepository assignments;
     private final DeliveryJobRepository deliveryJobs;
     private final DeliveryOutboxRepository outbox;
@@ -23,6 +26,7 @@ public class DeliveryCommandCompletionService {
     private final ObjectMapper objectMapper;
     private final BorzoPidgeHandoffRepository handoffs;
     private final DeliveryCommandProperties properties;
+    private ProviderCreateAttemptRepository journal;
 
     @Autowired
     public DeliveryCommandCompletionService(DeliveryAssignmentRepository assignments,
@@ -50,10 +54,22 @@ public class DeliveryCommandCompletionService {
             null, new DeliveryCommandProperties());
     }
 
+    /** The booking journal (V191); used only while CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED is on. */
+    @Autowired(required = false)
+    public void setJournal(ProviderCreateAttemptRepository journal) {
+        this.journal = journal;
+    }
+
     @Transactional
     public CompletionReceipt complete(DeliveryCommandMessage command, RoutingResult routingResult) {
+        boolean journalled = journal != null && journal.enabled() && routingResult.delivery() != null;
         UUID existing = deliveryJobs.findIdByChefSubOrderId(command.chefSubOrderId()).orElse(null);
         if (existing != null) {
+            // Another job got there first (a rider, or ops): the booking just made is real and nobody's. Kept, and a person is told.
+            if (journalled && journal.stray(command.chefSubOrderId(), routingResult.providerId(), routingResult.delivery().providerDeliveryId())) {
+                log.error("CRAVES_ALERT alert=COURIER_ORPHAN_BOOKING_FOUND provider={} chefSubOrderId={} providerRef={} orderHasJob=true",
+                    routingResult.providerId(), command.chefSubOrderId(), routingResult.delivery().providerDeliveryId());
+            }
             commands.markCompleted(command.commandId());
             return new CompletionReceipt(existing, true);
         }
@@ -72,6 +88,10 @@ public class DeliveryCommandCompletionService {
         UUID deliveryJobId = deliveryJobs.insert(
             command.orderId(), command.chefSubOrderId(), routingResult
         );
+        if (journalled) {
+            // In the job's transaction, so the journal never says "booked" without a job. No row: a command from before the flag.
+            journal.confirm(command.chefSubOrderId(), routingResult.providerId(), routingResult.delivery().providerDeliveryId());
+        }
         Instant borzoWindowStartedAt = "borzo".equals(routingResult.providerId())
             ? commands.borzoWindowStartedAt(command.commandId()).orElse(null) : null;
         if (borzoWindowStartedAt != null

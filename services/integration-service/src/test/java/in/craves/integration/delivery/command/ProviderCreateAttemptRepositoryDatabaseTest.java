@@ -131,7 +131,11 @@ class ProviderCreateAttemptRepositoryDatabaseTest {
         assertThat(journal.claimDueChecks(5)).isEmpty();
         assertThat(journal.find("borzo", orphan.clientRef()).orElseThrow().updatedAt()).isEqualTo(stateClock);
         assertThat(nextCheckInSeconds(orphan)).as("an orphan suspect is due again in 5 minutes").isBetween(290, 300);
-        assertThat(nextCheckInSeconds(refused)).as("a refusal is looked up once").isNull();
+        assertThat(nextCheckInSeconds(refused)).as("a recent refusal stays due until its answer is in").isBetween(290, 300);
+        database.db.update("UPDATE delivery_schema.provider_create_attempt SET updated_at = now() - INTERVAL '16 minutes', "
+            + "next_check_at = now() WHERE client_ref = ?", refused.clientRef());
+        assertThat(journal.claimDueChecks(5)).hasSize(1);
+        assertThat(nextCheckInSeconds(refused)).as("an old refusal is looked up one last time").isNull();
 
         journal.checkAgain(refused, Instant.now().minusSeconds(1));
         assertThat(journal.claimDueChecks(5)).extracting(Attempt::clientRef).containsExactly(refused.clientRef());
@@ -164,6 +168,13 @@ class ProviderCreateAttemptRepositoryDatabaseTest {
         assertThat(journal.find("borzo", held.clientRef())).map(Attempt::state).contains(INTENT);
         assertThat(journal.find("borzo", recent.clientRef())).map(Attempt::state).contains(INTENT);
         assertThat(journal.claimDueChecks(5)).extracting(Attempt::clientRef).containsExactly(abandoned.clientRef());
+
+        assertThat(journal.giveUp(reconciling, Instant.now().plusSeconds(20))).as("the fleet path gives its own attempt up at once").isTrue();
+        assertThat(journal.find("borzo", held.clientRef())).map(Attempt::state).contains(ORPHAN_SUSPECT);
+        database.db.update("UPDATE delivery_schema.delivery_command SET status = 'PROCESSING', processing_started_at = now() - INTERVAL '11 minutes' "
+            + "WHERE chef_sub_order_id = ?", fresh);
+        database.db.update("UPDATE delivery_schema.provider_create_attempt SET updated_at = now() - INTERVAL '16 minutes'");
+        assertThat(journal.sweepAbandoned()).as("a command whose lease lapsed is nobody's either").isEqualTo(1);
     }
 
     private Integer nextCheckInSeconds(Attempt attempt) {

@@ -169,15 +169,11 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
     }
 
     /**
-     * The codes of a definite refusal, or null when the outcome is unknown. Definite means: the request never left
-     * (connection refused), or Borzo answered is_successful false with only codes that say nothing was created.
+     * The codes of a definite refusal, or null when the outcome is unknown. Definite means Borzo answered is_successful
+     * false with only codes that say nothing was created. A failed connection is not: the JDK client may re-send a POST
+     * on a stale connection, so an earlier send can have arrived.
      */
     private List<String> refusalCodes(BorzoApiException error) {
-        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
-            if (cause instanceof java.net.ConnectException) {
-                return List.of("connection_refused");
-            }
-        }
         // No status: Borzo answered 2xx and the body said is_successful false.
         if (error.getProviderStatus() != null && !REFUSAL_STATUSES.contains(error.getProviderStatus().value())) {
             return null;

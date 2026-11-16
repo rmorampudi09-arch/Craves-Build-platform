@@ -118,6 +118,12 @@ public class ProviderCreateAttemptRepository {
             + "WHERE chef_sub_order_id = ? AND provider_id = ? AND state IN ('INTENT', 'UNKNOWN')", providerRef, chefSubOrderId, providerId) == 1;
     }
 
+    /** The order's unresolved attempt will never be reconciled by a command (the fleet's re-booking gives up): look for it soon. */
+    public boolean giveUp(UUID chefSubOrderId, Instant nextCheckAt) {
+        return jdbc.update("UPDATE " + TABLE + " SET state = 'ORPHAN_SUSPECT', next_check_at = ?, updated_at = now() "
+            + "WHERE chef_sub_order_id = ? AND state IN ('INTENT', 'UNKNOWN')", timestamp(nextCheckAt), chefSubOrderId) == 1;
+    }
+
     /**
      * Unresolved rows nobody is working on (the order's command finished or died without resolving them) become orphan
      * suspects with a lookup due now. 15 minutes is longer than the command's 10-minute lease.
@@ -128,13 +134,16 @@ public class ProviderCreateAttemptRepository {
             SET state = 'ORPHAN_SUSPECT', next_check_at = now(), updated_at = now()
             WHERE a.state IN ('INTENT', 'UNKNOWN') AND a.updated_at < now() - INTERVAL '15 minutes'
               AND NOT EXISTS (SELECT 1 FROM delivery_schema.delivery_command c
-                              WHERE c.chef_sub_order_id = a.chef_sub_order_id AND c.status IN ('PROCESSING', 'RECONCILIATION_PENDING'))
+                              WHERE c.chef_sub_order_id = a.chef_sub_order_id
+                                AND (c.status = 'RECONCILIATION_PENDING'
+                                     OR (c.status = 'PROCESSING' AND c.processing_started_at > now() - INTERVAL '10 minutes')))
             """);
     }
 
     /**
      * Rows whose lookup is due, each handed to one replica. An orphan suspect is due again every 5 minutes until it is
-     * 2 hours old; any other row is not due again unless the caller says so (checkAgain). updated_at is left alone.
+     * 2 hours old, and a refusal until its state is 15 minutes old, so a lookup lost to a restart is made again; the
+     * caller clears it (checkAgain) once the answer is in. updated_at is left alone.
      */
     public List<Attempt> claimDueChecks(int limit) {
         return jdbc.query("""
@@ -144,7 +153,8 @@ public class ProviderCreateAttemptRepository {
                 ORDER BY next_check_at FOR UPDATE SKIP LOCKED LIMIT ?
             )
             UPDATE delivery_schema.provider_create_attempt a
-            SET next_check_at = CASE WHEN a.state = 'ORPHAN_SUSPECT' AND a.created_at > now() - INTERVAL '2 hours'
+            SET next_check_at = CASE WHEN (a.state = 'ORPHAN_SUSPECT' AND a.created_at > now() - INTERVAL '2 hours')
+                                       OR (a.state = 'REJECTED' AND a.updated_at > now() - INTERVAL '15 minutes')
                                      THEN now() + INTERVAL '5 minutes' END
             FROM due
             WHERE a.chef_sub_order_id = due.chef_sub_order_id AND a.provider_id = due.provider_id AND a.attempt_no = due.attempt_no

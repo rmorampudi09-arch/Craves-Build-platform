@@ -267,13 +267,13 @@ class BorzoApiClientTest {
     }
 
     @Test
-    void aRequestThatNeverLeftIsARefusal() {
+    void aFailedConnectionIsNotProofTheRequestNeverLeft() {
         journal("verify");
         server.expect(requestTo(BASE_URL + "/create-order")).andRespond(request -> {
             throw new ResourceAccessException("connect failed", new java.net.ConnectException("Connection refused"));
         });
         assertThat(catchThrowableOfType(() -> client.create(new CreateDeliveryRequest("CRV-SUBORDER-123", quoteRequest())),
-            ProviderCreateRejectedException.class)).isNotNull();
+            ProviderCreateUncertainException.class)).isNotNull();
     }
 
     @Test

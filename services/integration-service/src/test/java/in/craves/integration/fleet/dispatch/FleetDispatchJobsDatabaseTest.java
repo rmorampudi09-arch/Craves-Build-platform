@@ -333,6 +333,60 @@ class FleetDispatchJobsDatabaseTest {
     }
 
     @Test
+    void withTheBookingJournalOnAHandBackConfirmsItsAttemptAndAnUnansweredOneIsLookedForSoon() {
+        var journalProperties = new in.craves.integration.delivery.command.DeliveryCommandProperties();
+        journalProperties.setBookingJournalEnabled(true);
+        var journal = new in.craves.integration.delivery.command.ProviderCreateAttemptRepository(fleet.db, journalProperties);
+        jobs.setJournal(journal);
+        when(router.borzoTimedPolicyReady()).thenReturn(false);
+
+        UUID booked = UUID.randomUUID();
+        UUID bookedJob = FleetDispatchFixtures.fleetJob(fleet.db, booked, UUID.randomUUID(), acceptedTrip(booked, "ASSIGNED"), "COURIER_ASSIGNED");
+        DeliveryCommandMessage bookedMessage = FleetDispatchFixtures.command(booked);
+        when(commands.findByChefSubOrderId(booked)).thenReturn(Optional.of(new CommandRecord(bookedMessage.commandId(), booked,
+            bookedMessage.orderId(), "COMPLETED", 1, bookedMessage, null, null, null, null, null, 0, 0, null, null)));
+        AssignmentResponse assignment = new AssignmentResponse(UUID.randomUUID(), booked, bookedMessage.orderId(), AssignmentStrategy.STOCHASTIC,
+            AssignmentStatus.RANKED, "TEST", null, "pidge", null, List.of(), Instant.now());
+        fleet.db.update("INSERT INTO delivery_schema.delivery_assignment (id, chef_sub_order_id, order_id, strategy, status, scoring_version, "
+            + "request_context) VALUES (?, ?, ?, 'STOCHASTIC', 'RANKED', 'TEST', '{}')", assignment.assignmentId(), booked, bookedMessage.orderId());
+        // The router journals its attempt before it calls the courier.
+        when(router.route(bookedMessage)).thenAnswer(call -> {
+            journal.begin(booked, "pidge").orElseThrow();
+            return new RoutingResult("pidge", new ProviderDelivery("pidge", "PIDGE-90", "PIDGE-90", DeliveryStatus.SEARCHING, "searching",
+                null, null, null, null, Instant.now()), assignment, UUID.randomUUID(), List.of(), List.of());
+        });
+
+        UUID unanswered = UUID.randomUUID();
+        UUID rider2 = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.fleetJob(fleet.db, unanswered, UUID.randomUUID(), acceptedTrip(unanswered, "ASSIGNED", rider2), "COURIER_ASSIGNED");
+        DeliveryCommandMessage unansweredMessage = FleetDispatchFixtures.command(unanswered);
+        when(commands.findByChefSubOrderId(unanswered)).thenReturn(Optional.of(new CommandRecord(unansweredMessage.commandId(), unanswered,
+            unansweredMessage.orderId(), "COMPLETED", 1, unansweredMessage, null, null, null, null, null, 0, 0, null, null)));
+        when(router.route(unansweredMessage)).thenAnswer(call -> {
+            var attempt = journal.begin(unanswered, "pidge").orElseThrow();
+            journal.move(attempt, java.util.Set.of("INTENT"), "UNKNOWN", "timeout", null);
+            throw new in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException("pidge",
+                attempt.clientRef(), Instant.now(), "lost");
+        });
+        FleetDispatchFixtures.seen(fleet.db, rider, 100);
+        FleetDispatchFixtures.seen(fleet.db, rider2, 100);
+
+        jobs.watchdog();
+        jobs.courierStages();
+
+        assertThat(fleet.db.queryForObject("SELECT provider_delivery_id FROM delivery_schema.delivery_job WHERE id = ?", String.class, bookedJob))
+            .isEqualTo("PIDGE-90");
+        assertThat(journal.forOrder(booked)).singleElement().satisfies(row -> {
+            assertThat(row.state()).isEqualTo("CONFIRMED");
+            assertThat(row.providerRef()).isEqualTo("PIDGE-90");
+        });
+        assertThat(journal.forOrder(unanswered)).singleElement().satisfies(row -> assertThat(row.state())
+            .as("no command reconciles the hand-back path, and an open attempt would block ops' next courier").isEqualTo("ORPHAN_SUSPECT"));
+        assertThat(fleet.db.queryForObject("SELECT CAST(ceil(extract(epoch FROM next_check_at - now())) AS integer) FROM "
+            + "delivery_schema.provider_create_attempt WHERE chef_sub_order_id = ?", Integer.class, unanswered)).isBetween(15, 20);
+    }
+
+    @Test
     void twoReplicasTickingAtOnceBookTheHandedBackOrderOnce() throws Exception {
         UUID chefSubOrderId = UUID.randomUUID();
         UUID trip = acceptedTrip(chefSubOrderId, "ASSIGNED");

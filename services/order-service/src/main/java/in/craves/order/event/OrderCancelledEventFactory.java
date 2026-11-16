@@ -9,21 +9,18 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 /**
- * ORDER_CANCELLED: order-service cancelled a chef order after the chef accepted it (R16 item 11). integration-service then
- * books no courier for it, ends its Craves rider trip (telling the rider) and cancels a Borzo or Pidge courier already
- * booked. One per chef order: the outbox's event key is the type and the order.
+ * ORDER_CANCELLED: order-service cancelled a chef order (R16 item 11). integration-service then books no courier for it,
+ * ends its Craves rider trip (telling the rider) and cancels a Borzo or Pidge courier already booked. One per chef order:
+ * the outbox's event key is the type and the order.
  *
- * <p>Nothing writes it yet: order-service has no customer or ops cancel after acceptance (a chef's decline or acceptance
- * timeout comes before it and requests a refund). The cancel that adds one writes it in its own transaction, and only
- * while ORDER_CANCELLED is on the publication allow-list (CRAVES_DOMAIN_EVENT_ENABLED_TYPES), as
- * ChefReadyForPickupService.markHandedOver does, so no unpublished row waits in the outbox:
- * <pre>
- * if (outboxProperties.normalizedEnabledEventTypes().contains(OrderCancelledEventFactory.EVENT_TYPE)) {
- *     outboxRepository.insert(orderId, cancelledEvents.create(new OrderCancelledEventData(checkoutId, orderId, reason, cancelledAt)));
- * }
- * </pre>
- * integration-service must run the release that reads it, and its subscription must let it through, before it is enabled
- * (docs/riders/BACKEND.md, dispatch chain step 7).
+ * <p>OrderCancelledEventWriter writes it in the cancel's own transaction, and only while ORDER_CANCELLED is on the
+ * publication allow-list (CRAVES_DOMAIN_EVENT_ENABLED_TYPES), so no unpublished row waits in the outbox. The cancels today,
+ * all before a courier is asked for: the chef declined (CHEF_DECLINED) or did not answer in time (CHEF_ACCEPTANCE_TIMEOUT),
+ * and the customer cancelled an unpaid checkout (CUSTOMER_CANCELLED_BEFORE_PAYMENT). A cancel added after acceptance calls
+ * the same writer. A refund alone writes nothing.
+ *
+ * <p>integration-service must run the release that reads it, and its subscription must let it through, before it is enabled
+ * (docs/riders/GO-LIVE.md §8; docs/riders/BACKEND.md, dispatch chain step 7).
  */
 @Component
 public class OrderCancelledEventFactory {

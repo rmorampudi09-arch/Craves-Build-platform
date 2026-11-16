@@ -2,6 +2,7 @@ package in.craves.order.referrals;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import in.craves.order.outbox.OrderCancelledEventWriter;
 import in.craves.order.referrals.transport.ReferralSourceClient;
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.web.ApiDtos.CheckoutResponse;
@@ -20,9 +21,9 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @ConditionalOnProperty(name="CRAVES_REFERRAL_CHECKOUT_BENEFITS_ENABLED",havingValue="true")
 public class ReferralCheckoutBenefits {
-    private final JdbcTemplate db;private final ObjectMapper json;private final ReferralSourceClient client;private final TransactionTemplate tx;
+    private final JdbcTemplate db;private final ObjectMapper json;private final ReferralSourceClient client;private final TransactionTemplate tx;private final OrderCancelledEventWriter orderCancelled;
     record Work(UUID checkout,UUID lease,String stage,String envelope,int attempts) {}
-    public ReferralCheckoutBenefits(JdbcTemplate db,ObjectMapper json,ReferralSourceClient client,PlatformTransactionManager manager){this.db=db;this.json=json;this.client=client;this.tx=new TransactionTemplate(manager);}
+    public ReferralCheckoutBenefits(JdbcTemplate db,ObjectMapper json,ReferralSourceClient client,PlatformTransactionManager manager,OrderCancelledEventWriter orderCancelled){this.db=db;this.json=json;this.client=client;this.tx=new TransactionTemplate(manager);this.orderCancelled=orderCancelled;}
     public void prepare(CheckoutResponse c,JsonNode request){
         if(request==null || request.isNull())return;
         if(!request.isObject())throw bad("Invalid referral benefits");request.fieldNames().forEachRemaining(f->{if(!Set.of("walletPaise","inviteeDiscount").contains(f))throw bad("Unknown referral benefit field");});
@@ -89,7 +90,9 @@ public class ReferralCheckoutBenefits {
                 int changed=db.update("UPDATE order_schema.referral_checkout_benefit SET state=?,lease_id=NULL,lease_until=NULL,last_code=NULL WHERE checkout_id=? AND lease_id=? AND lease_until>now()",target,w.checkout(),w.lease());
                 if(changed==1 && target.equals("RELEASED")){
                     db.update("INSERT INTO order_schema.order_status_history(id,order_id,old_status,new_status,reason) SELECT gen_random_uuid(),id,status,'CANCELLED','Customer cancelled before payment creation; referral funding released' FROM order_schema.customer_order WHERE checkout_id=? AND status IN ('CREATED','PAYMENT_PENDING')",w.checkout());
-                    db.update("UPDATE order_schema.customer_order SET status='CANCELLED',updated_at=now() WHERE checkout_id=? AND status IN ('CREATED','PAYMENT_PENDING')",w.checkout());
+                    // Each chef order cancelled here gets its ORDER_CANCELLED in this transaction (written only while the event is published).
+                    db.queryForList("UPDATE order_schema.customer_order SET status='CANCELLED',updated_at=now() WHERE checkout_id=? AND status IN ('CREATED','PAYMENT_PENDING') RETURNING id",UUID.class,w.checkout())
+                        .forEach(order->orderCancelled.write(order,"CUSTOMER_CANCELLED_BEFORE_PAYMENT"));
                     db.update("UPDATE order_schema.checkout SET status='CANCELLED',updated_at=now() WHERE id=? AND status IN ('CREATED','PAYMENT_PENDING')",w.checkout());
                 }
             });

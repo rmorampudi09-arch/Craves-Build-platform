@@ -1,0 +1,15 @@
+{
+  "eventId": "5c9d7e10-2a4b-4f6c-8e1d-0b3a5c7e9f21",
+  "eventType": "ORDER_READY_FOR_PICKUP",
+  "eventVersion": "1.0",
+  "occurredAt": "2026-11-01T09:20:00Z",
+  "correlationId": "5c9d7e10-2a4b-4f6c-8e1d-0b3a5c7e9f21",
+  "causationId": null,
+  "source": "order-service",
+  "subject": "2b0e8a44-6c1f-4f0a-8d35-91c7e2a4b6d1",
+  "data": {
+    "orderId": "c4d1f6a2-0e7b-4a93-b5c8-3f2a1d9e7b60",
+    "chefSubOrderId": "2b0e8a44-6c1f-4f0a-8d35-91c7e2a4b6d1",
+    "readyAt": "2026-11-01T09:20:00Z"
+  }
+}

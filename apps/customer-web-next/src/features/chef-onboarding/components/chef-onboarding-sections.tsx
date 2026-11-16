@@ -15,6 +15,7 @@ import {
   IdCard,
   Landmark,
   LocateFixed,
+  Lock,
   MapPin,
   Move,
   PencilLine,
@@ -92,6 +93,7 @@ const TEXT = messages({
     pinHere: "Your kitchen pin will appear here", pinHow: "Search for your address or use your current location.",
     searchLabel: "Search location", searchPlaceholder: "Building, street or area", searchButton: "Search address", searching: "Searching addresses…",
     locating: "Finding your location…", useLocation: "Use my current location", pinPlaced: "Pin placed on the map",
+    kitchenLocked: "Craves has checked your kitchen, so its name, building, city, state and map pin are locked. Contact support to change them.",
     pinCheck: "Move the map if the pin isn’t exactly on your kitchen.", addressLine1: "Flat / house number / building", addressLine2: "Street / area",
     landmark: "Landmark", landmarkExample: "For example, near the metro station", postalCode: "PIN code", city: "City", state: "State", mapPin: "Map pin",
     photos: "Kitchen photos", photosHelper: "Two clear photos of where you cook. Customers see them on your kitchen page.",
@@ -158,6 +160,7 @@ const TEXT = messages({
     pinHere: "మీ వంటగది పిన్ ఇక్కడ కనిపిస్తుంది", pinHow: "మీ చిరునామా వెతకండి, లేదా మీ ఇప్పటి లొకేషన్ వాడండి.",
     searchLabel: "చిరునామా వెతకండి", searchPlaceholder: "బిల్డింగ్, వీధి లేదా ఏరియా", searchButton: "చిరునామా వెతకండి", searching: "చిరునామాలు వెతుకుతున్నాం…",
     locating: "మీ లొకేషన్ వెతుకుతున్నాం…", useLocation: "నా ఇప్పటి లొకేషన్ వాడండి", pinPlaced: "మ్యాప్ మీద పిన్ పెట్టాం",
+    kitchenLocked: "Craves మీ వంటగదిని చూసింది, కాబట్టి దాని పేరు, బిల్డింగ్, నగరం, రాష్ట్రం, మ్యాప్ పిన్ మార్చలేరు. మార్చాలంటే సహాయ బృందాన్ని అడగండి.",
     pinCheck: "పిన్ సరిగ్గా మీ వంటగది మీద లేకపోతే మ్యాప్ జరపండి.", addressLine1: "ఫ్లాట్ / ఇంటి నంబర్ / బిల్డింగ్", addressLine2: "వీధి / ఏరియా",
     landmark: "ల్యాండ్‌మార్క్", landmarkExample: "ఉదాహరణకు, మెట్రో స్టేషన్ దగ్గర", postalCode: "పిన్ కోడ్", city: "నగరం", state: "రాష్ట్రం", mapPin: "మ్యాప్ పిన్",
     photos: "వంటగది ఫోటోలు", photosHelper: "మీరు వంట చేసే చోటును రెండు స్పష్టమైన ఫోటోలు తీయండి. కస్టమర్లు వీటిని మీ వంటగది పేజీలో చూస్తారు.",
@@ -221,6 +224,7 @@ const TEXT = messages({
     pinHere: "ಅಡುಗೆಮನೆಯ ಪಿನ್ ಇಲ್ಲಿ ಕಾಣುತ್ತದೆ", pinHow: "ನಿಮ್ಮ ವಿಳಾಸ ಹುಡುಕಿ, ಅಥವಾ ನಿಮ್ಮ ಈಗಿನ ಲೊಕೇಶನ್ ಬಳಸಿ.",
     searchLabel: "ವಿಳಾಸ ಹುಡುಕಿ", searchPlaceholder: "ಬಿಲ್ಡಿಂಗ್, ರಸ್ತೆ ಅಥವಾ ಏರಿಯಾ", searchButton: "ವಿಳಾಸ ಹುಡುಕಿ", searching: "ವಿಳಾಸಗಳನ್ನು ಹುಡುಕುತ್ತಿದ್ದೇವೆ…",
     locating: "ನಿಮ್ಮ ಲೊಕೇಶನ್ ಹುಡುಕುತ್ತಿದ್ದೇವೆ…", useLocation: "ನನ್ನ ಈಗಿನ ಲೊಕೇಶನ್ ಬಳಸಿ", pinPlaced: "ಮ್ಯಾಪ್ ಮೇಲೆ ಪಿನ್ ಹಾಕಲಾಗಿದೆ",
+    kitchenLocked: "Craves ನಿಮ್ಮ ಅಡುಗೆಮನೆಯನ್ನು ಪರಿಶೀಲಿಸಿದೆ, ಆದ್ದರಿಂದ ಅದರ ಹೆಸರು, ಬಿಲ್ಡಿಂಗ್, ನಗರ, ರಾಜ್ಯ ಮತ್ತು ಮ್ಯಾಪ್ ಪಿನ್ ಬದಲಾಯಿಸಲು ಆಗುವುದಿಲ್ಲ. ಬದಲಾಯಿಸಲು ಸಹಾಯ ತಂಡವನ್ನು ಕೇಳಿ.",
     pinCheck: "ಪಿನ್ ಸರಿಯಾಗಿ ನಿಮ್ಮ ಅಡುಗೆಮನೆಯ ಮೇಲೆ ಇಲ್ಲದಿದ್ದರೆ ಮ್ಯಾಪ್ ಸರಿಸಿ.", addressLine1: "ಫ್ಲ್ಯಾಟ್ / ಮನೆ ಸಂಖ್ಯೆ / ಬಿಲ್ಡಿಂಗ್", addressLine2: "ರಸ್ತೆ / ಏರಿಯಾ",
     landmark: "ಲ್ಯಾಂಡ್‌ಮಾರ್ಕ್", landmarkExample: "ಉದಾಹರಣೆಗೆ, ಮೆಟ್ರೋ ನಿಲ್ದಾಣದ ಹತ್ತಿರ", postalCode: "ಪಿನ್ ಕೋಡ್", city: "ನಗರ", state: "ರಾಜ್ಯ", mapPin: "ಮ್ಯಾಪ್ ಪಿನ್",
     photos: "ಅಡುಗೆಮನೆಯ ಫೋಟೋಗಳು", photosHelper: "ನೀವು ಅಡುಗೆ ಮಾಡುವ ಜಾಗದ ಎರಡು ಸ್ಪಷ್ಟ ಫೋಟೋಗಳು. ಗ್ರಾಹಕರು ಇವನ್ನು ನಿಮ್ಮ ಅಡುಗೆಮನೆಯ ಪುಟದಲ್ಲಿ ನೋಡುತ್ತಾರೆ.",
@@ -310,6 +314,7 @@ type TextFieldProps = Props & {
   inputMode?: "numeric" | "text";
   autoComplete?: string;
   sanitize?: (value: string) => string;
+  disabled?: boolean;
 };
 function TextField({
   flow,
@@ -323,6 +328,7 @@ function TextField({
   inputMode,
   autoComplete,
   sanitize,
+  disabled,
 }: TextFieldProps) {
   const id = `chef-${name}`;
   const error = fieldError(flow, name);
@@ -339,7 +345,7 @@ function TextField({
         max={type === "date" ? adultCutoff() : undefined}
         min={type === "date" ? "1900-01-01" : undefined}
         maxLength={maxLength}
-        disabled={flow.busy}
+        disabled={flow.busy || disabled}
         aria-required={optional ? undefined : true}
         aria-invalid={Boolean(error) || undefined}
         aria-describedby={describedBy(id, error, helper)}
@@ -516,7 +522,16 @@ export function ChefKitchenDetails({ flow }: Props) {
   }, []);
   const d = flow.details;
   const hasPin = d.latitude != null && d.longitude != null;
+  // Once Craves approves a kitchen photo, the server refuses any change to these (REVIEWED_KITCHEN_LOCKED).
+  const locked = Boolean(
+    flow.state?.documents.some(
+      (item) =>
+        (item.documentType === "KITCHEN_PHOTO_1" || item.documentType === "KITCHEN_PHOTO_2") &&
+        item.status === "APPROVED",
+    ),
+  );
   async function pin(latitude: number, longitude: number, label = "") {
+    if (locked) return;
     const request = ++generation.current;
     flow.updateDetails((previous) => ({ ...previous, latitude, longitude }));
     setLocationError("");
@@ -609,6 +624,14 @@ export function ChefKitchenDetails({ flow }: Props) {
   const missing = missingKitchenFields(d);
   return (
     <div className="cob-stack">
+      {locked ? (
+        <div className="cob-requires" role="note">
+          <p style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <Lock size={16} aria-hidden="true" style={{ flexShrink: 0, marginTop: 3 }} />
+            {text.kitchenLocked}
+          </p>
+        </div>
+      ) : null}
       <Card
         icon={<Store size={20} aria-hidden="true" />}
         title={text.kitchenInfo}
@@ -621,6 +644,7 @@ export function ChefKitchenDetails({ flow }: Props) {
             label={text.kitchenName}
             maxLength={160}
             placeholder={text.kitchenNameExample}
+            disabled={locked}
           />
           <FieldShell
             id="chef-kitchenDescription"
@@ -653,14 +677,16 @@ export function ChefKitchenDetails({ flow }: Props) {
           <div className="cob-map">
             {hasPin ? (
               <>
-                <span className="cob-map-hint">
-                  <Move size={14} aria-hidden="true" />
-                  {text.dragHint}
-                </span>
+                {locked ? null : (
+                  <span className="cob-map-hint">
+                    <Move size={14} aria-hidden="true" />
+                    {text.dragHint}
+                  </span>
+                )}
                 <AddressMapPicker
                   latitude={d.latitude!}
                   longitude={d.longitude!}
-                  disabled={flow.busy || searching}
+                  disabled={flow.busy || searching || locked}
                   locating={locating}
                   showLocateButton={false}
                   ariaLabel={text.mapLabel}
@@ -682,83 +708,87 @@ export function ChefKitchenDetails({ flow }: Props) {
             )}
           </div>
 
-          <div className="cob-field">
-            <label className="cob-label" htmlFor="chef-location-search">
-              {text.searchLabel}
-            </label>
-            <div className="cob-control">
-              <Search size={18} className="cob-input-icon" aria-hidden="true" />
-              <input
-                id="chef-location-search"
-                type="search"
-                enterKeyHint="search"
-                className="cob-input cob-input--with-icon cob-input--with-trailing-icon"
-                autoComplete="off"
-                placeholder={text.searchPlaceholder}
-                value={query}
-                maxLength={200}
-                disabled={flow.busy}
-                aria-controls={results.length ? "chef-location-results" : undefined}
-                onChange={(event) => {
-                  generation.current++;
-                  setQuery(event.target.value);
-                  setResults([]);
-                  setSearching(false);
-                  setLocating(false);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void search();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                aria-label={text.searchButton}
-                className="cob-trailing-button"
-                disabled={flow.busy || searching}
-                onClick={() => void search()}
-              >
-                {searching ? <Spinner red /> : <Search size={18} aria-hidden="true" />}
-              </button>
-            </div>
-            {searching ? (
-              <span role="status" className="cob-helper">
-                {text.searching}
-              </span>
-            ) : null}
-            {results.length ? (
-              <ul id="chef-location-results" className="cob-results">
-                {results.map((result) => (
-                  <li key={result.id}>
+          {locked ? null : (
+            <>
+              <div className="cob-field">
+                <label className="cob-label" htmlFor="chef-location-search">
+                  {text.searchLabel}
+                </label>
+                <div className="cob-control">
+                  <Search size={18} className="cob-input-icon" aria-hidden="true" />
+                  <input
+                    id="chef-location-search"
+                    type="search"
+                    enterKeyHint="search"
+                    className="cob-input cob-input--with-icon cob-input--with-trailing-icon"
+                    autoComplete="off"
+                    placeholder={text.searchPlaceholder}
+                    value={query}
+                    maxLength={200}
+                    disabled={flow.busy}
+                    aria-controls={results.length ? "chef-location-results" : undefined}
+                    onChange={(event) => {
+                      generation.current++;
+                      setQuery(event.target.value);
+                      setResults([]);
+                      setSearching(false);
+                      setLocating(false);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void search();
+                      }
+                    }}
+                  />
                   <button
                     type="button"
-                    className="cob-result"
-                    onClick={() => {
-                      setResults([]);
-                      setQuery(result.formattedAddress);
-                      void pin(result.latitude, result.longitude, result.formattedAddress);
-                    }}
+                    aria-label={text.searchButton}
+                    className="cob-trailing-button"
+                    disabled={flow.busy || searching}
+                    onClick={() => void search()}
                   >
-                    <MapPin size={16} aria-hidden="true" />
-                    <span>{result.formattedAddress}</span>
+                    {searching ? <Spinner red /> : <Search size={18} aria-hidden="true" />}
                   </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
+                </div>
+                {searching ? (
+                  <span role="status" className="cob-helper">
+                    {text.searching}
+                  </span>
+                ) : null}
+                {results.length ? (
+                  <ul id="chef-location-results" className="cob-results">
+                    {results.map((result) => (
+                      <li key={result.id}>
+                      <button
+                        type="button"
+                        className="cob-result"
+                        onClick={() => {
+                          setResults([]);
+                          setQuery(result.formattedAddress);
+                          void pin(result.latitude, result.longitude, result.formattedAddress);
+                        }}
+                      >
+                        <MapPin size={16} aria-hidden="true" />
+                        <span>{result.formattedAddress}</span>
+                      </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
 
-          <button
-            type="button"
-            className="cob-outline-red"
-            disabled={flow.busy || locating}
-            onClick={() => void locate()}
-          >
-            {locating ? <Spinner red /> : <LocateFixed size={18} aria-hidden="true" />}
-            {locating ? text.locating : text.useLocation}
-          </button>
+              <button
+                type="button"
+                className="cob-outline-red"
+                disabled={flow.busy || locating}
+                onClick={() => void locate()}
+              >
+                {locating ? <Spinner red /> : <LocateFixed size={18} aria-hidden="true" />}
+                {locating ? text.locating : text.useLocation}
+              </button>
+            </>
+          )}
 
           {locationError || locationFieldError ? (
             <FieldError>{locationError || locationFieldError}</FieldError>
@@ -769,7 +799,7 @@ export function ChefKitchenDetails({ flow }: Props) {
               <MapPin size={18} aria-hidden="true" />
               <span>
                 {pinnedLabel || kitchenAddress(d) || text.pinPlaced}
-                <small>{text.pinCheck}</small>
+                {locked ? null : <small>{text.pinCheck}</small>}
               </span>
             </div>
           ) : null}
@@ -789,6 +819,7 @@ export function ChefKitchenDetails({ flow }: Props) {
               name="addressLine1"
               label={text.addressLine1}
               autoComplete="address-line1"
+              disabled={locked}
             />
             <TextField
               flow={flow}
@@ -820,6 +851,7 @@ export function ChefKitchenDetails({ flow }: Props) {
                 label={text.city}
                 maxLength={80}
                 autoComplete="address-level2"
+                disabled={locked}
               />
             </div>
             <TextField
@@ -828,6 +860,7 @@ export function ChefKitchenDetails({ flow }: Props) {
               label={text.state}
               maxLength={80}
               autoComplete="address-level1"
+              disabled={locked}
             />
           </div>
         </div>

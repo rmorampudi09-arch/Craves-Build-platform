@@ -8,26 +8,7 @@ import type { Dish } from "@/features/dish/api/dishes";
 import { WishlistHeartButton } from "@/features/favorites/components/WishlistHeartButton";
 import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
 import { CartStepper } from "@/shared/ui/buttons/CartStepper";
-
-const FOOD_TYPE = {
-  VEG: { label: "Veg", color: "#29B47B" },
-  EGG: { label: "Egg", color: "#D98C16" },
-  NON_VEG: { label: "Non-veg", color: "#C72C21" },
-} as const;
-
-/** The square veg / egg / non-veg mark from Indian food packaging (a dot, or a triangle for non-veg). */
-function FoodTypeMark({ dish }: { dish: Dish }) {
-  const type = FOOD_TYPE[dish.foodType ?? (dish.veg ? "VEG" : "NON_VEG")];
-  return (
-    <span role="img" aria-label={type.label} className="flex h-4 w-4 items-center justify-center rounded-[4px] border-[1.5px]" style={{ borderColor: type.color }}>
-      {type === FOOD_TYPE.NON_VEG ? (
-        <span className="h-0 w-0 border-x-4 border-b-[7px] border-x-transparent" style={{ borderBottomColor: type.color }} />
-      ) : (
-        <span className="h-[7px] w-[7px] rounded-full" style={{ backgroundColor: type.color }} />
-      )}
-    </span>
-  );
-}
+import { FoodTypeMark } from "@/shared/ui/data-display/FoodTypeMark";
 
 /** "₹180", or "₹180.50" when there are paise, as in the app. */
 function price(dish: Dish): string {
@@ -62,7 +43,7 @@ export function KitchenMenuRow({ dish, orderable, priorityImage = false }: { dis
     <article className={`flex gap-4 border-t border-[#E5E7EB] pt-4 ${orderable ? "pb-9" : "pb-4"}`}>
       <div className="min-w-0 flex-1 pt-1">
         <Link to="/dish/$id" params={{ id: dish.id }} className="group block rounded-sm">
-          <FoodTypeMark dish={dish} />
+          <FoodTypeMark foodType={dish.foodType} veg={dish.veg} />
           <h4 className="mt-2 line-clamp-2 text-[1.0625rem] font-bold leading-[1.3125rem] text-[#261A15] transition-colors group-hover:text-[#D92714]">{dish.name}</h4>
           <p className="mt-1 text-[1.0625rem] font-bold text-[#261A15]">{price(dish)}</p>
           {meta ? (

@@ -54,6 +54,7 @@ export const CHEF_ERROR_MESSAGES: Record<string, string> = {
   // Application and documents
   USE_NEW_ONBOARDING_FLOW: "Continue your saved chef application from the Application page.",
   ONBOARDING_ALREADY_SUBMITTED: "Uploads are locked while your application is being reviewed.",
+  REVIEWED_KITCHEN_LOCKED: "Craves has checked your kitchen, so its name, building, city, state and map pin are locked. Reload this page to carry on; contact support to change them.",
   INVALID_PROOF_FILE_REQUEST: "Choose the document type and a file, then upload again.",
   INVALID_PROOF_FILE: "Choose a JPG, PNG or PDF file of 10 MB or less.",
   INVALID_APPLICANT_PHOTO: "Photos must be JPG or PNG images.",
@@ -231,6 +232,10 @@ const TRANSLATED: Record<string, { te: string; kn: string }> = {
   "Uploads are locked while your application is being reviewed.": {
     te: "Craves మీ దరఖాస్తు చూస్తున్నప్పుడు అప్‌లోడ్ చేయలేరు.",
     kn: "Craves ನಿಮ್ಮ ಅರ್ಜಿ ಪರಿಶೀಲಿಸುತ್ತಿರುವಾಗ ಅಪ್‌ಲೋಡ್ ಮಾಡಲು ಆಗುವುದಿಲ್ಲ.",
+  },
+  "Craves has checked your kitchen, so its name, building, city, state and map pin are locked. Reload this page to carry on; contact support to change them.": {
+    te: "Craves మీ వంటగదిని చూసింది, కాబట్టి దాని పేరు, బిల్డింగ్, నగరం, రాష్ట్రం, మ్యాప్ పిన్ మార్చలేరు. కొనసాగడానికి ఈ పేజీని మళ్లీ లోడ్ చేయండి; వాటిని మార్చాలంటే సహాయ బృందాన్ని అడగండి.",
+    kn: "Craves ನಿಮ್ಮ ಅಡುಗೆಮನೆಯನ್ನು ಪರಿಶೀಲಿಸಿದೆ, ಆದ್ದರಿಂದ ಅದರ ಹೆಸರು, ಬಿಲ್ಡಿಂಗ್, ನಗರ, ರಾಜ್ಯ ಮತ್ತು ಮ್ಯಾಪ್ ಪಿನ್ ಬದಲಾಯಿಸಲು ಆಗುವುದಿಲ್ಲ. ಮುಂದುವರಿಸಲು ಈ ಪುಟವನ್ನು ಮತ್ತೆ ಲೋಡ್ ಮಾಡಿ; ಅವುಗಳನ್ನು ಬದಲಾಯಿಸಲು ಸಹಾಯ ತಂಡವನ್ನು ಕೇಳಿ.",
   },
   "Choose the document type and a file, then upload again.": {
     te: "పత్రం రకం, ఒక ఫైల్ ఎంచుకుని, మళ్లీ అప్‌లోడ్ చేయండి.",

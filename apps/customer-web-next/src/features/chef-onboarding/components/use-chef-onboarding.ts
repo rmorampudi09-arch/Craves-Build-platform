@@ -1,6 +1,6 @@
 "use client";
 
-import { chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
+import { CHEF_ERROR_MESSAGES, chefApiError, ChefError, chefErrorText } from "@/features/chef/lib/chef-errors";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { captureSessionContext, isSessionContextCurrent } from "@/features/auth/api/cravesAuth";
@@ -50,13 +50,17 @@ export async function chefOnboardingApi(
       raw && typeof raw === "object" && "message" in raw && typeof raw.message === "string"
         ? raw.message
         : null;
+    const ref = chefApiError(response, raw, "").ref;
     throw new ChefError(
       response.status === 401
         ? "Your sign-in has ended. Sign in again to carry on; your saved details are kept."
-        : response.status === 409
-          ? (message ?? "Your saved application changed. Reload it before trying again.")
-          : (message ?? "We could not complete this request. Your saved progress is preserved."),
-      chefApiError(response, raw, "").ref,
+        : ref === "REVIEWED_KITCHEN_LOCKED"
+          ? // The server's sentence assumes the chef meant to move the kitchen; usually the page just predates the review.
+            CHEF_ERROR_MESSAGES[ref]
+          : response.status === 409
+            ? (message ?? "Your saved application changed. Reload it before trying again.")
+            : (message ?? "We could not complete this request. Your saved progress is preserved."),
+      ref,
       response.status,
     );
   }

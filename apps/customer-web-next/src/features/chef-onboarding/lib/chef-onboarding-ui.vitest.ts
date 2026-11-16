@@ -354,6 +354,38 @@ describe("Chef onboarding navigation and persistence", () => {
     await screen.findByRole("heading", { name: "Review your application" });
     expect(saved.details).toMatchObject({ latitude: 17.4, longitude: 78.4 });
   });
+  it("keeps a kitchen whose photo Craves approved as it was reviewed, and says why", async () => {
+    saved.documents = saved.documents.map((item) =>
+      item.documentType === "KITCHEN_PHOTO_1" ? { ...item, status: "APPROVED" } : item,
+    );
+    open();
+    await review();
+    fireEvent.click(primary("Edit Kitchen details"));
+    expect(screen.getByRole("note").textContent).toMatch(/^Craves has checked your kitchen/);
+    for (const label of ["Kitchen name", "Flat / house number / building", "City", "State"])
+      expect((screen.getByLabelText(label) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText(/^Street \/ area/) as HTMLInputElement).disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: "Use my current location" })).toBeNull();
+    expect(screen.queryByLabelText("Search location")).toBeNull();
+    fireEvent.click(primary("Move kitchen pin"));
+    fireEvent.click(primary("Save and return to review"));
+    await screen.findByRole("heading", { name: "Review your application" });
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes("reverse-geocode"))).toBe(false);
+    expect(saved.details).toMatchObject({ kitchenName: "Fixture Kitchen", addressLine1: "1 Fixture Road", city: "Fixture City" });
+  });
+  it("tells the chef to reload when Craves approved the kitchen after the page opened", async () => {
+    open();
+    await review();
+    fireEvent.click(primary("Edit Kitchen details"));
+    fireEvent.change(screen.getByLabelText("Kitchen name"), { target: { value: "Moved Kitchen" } });
+    fetcher.mockImplementation((url, init) =>
+      init?.method === "PUT"
+        ? Promise.resolve(Response.json({ code: "REVIEWED_KITCHEN_LOCKED", message: "Contact support before changing an already reviewed kitchen." }, { status: 409 }))
+        : normal(url, init),
+    );
+    fireEvent.click(primary("Save and return to review"));
+    await screen.findByText(/^Craves has checked your kitchen.*Reload this page.* \(Ref: REVIEWED_KITCHEN_LOCKED\)$/);
+  });
   it("shows a backend eligibility rejection without fabricating submission", async () => {
     open();
     await review();

@@ -51,6 +51,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class DeliveryProviderRouter {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeliveryProviderRouter.class);
     /** A new order may take a moment to show in a courier's list, so a refusal is looked up no sooner than this. */
     static final Duration REFUSAL_LOOKUP_AFTER = Duration.ofSeconds(20);
     private final Map<String, DeliveryProviderAdapter> adapters;
@@ -336,8 +337,7 @@ public class DeliveryProviderRouter {
                     candidate.providerId(), false, "Provider create outcome requires reconciliation"
                 ));
                 if (attempt != null) {
-                    journal.move(attempt, Set.of(ProviderCreateAttemptRepository.INTENT), ProviderCreateAttemptRepository.UNKNOWN,
-                        safeMessage(ex.getCause() == null ? ex : ex.getCause()), null);
+                    record(attempt, ProviderCreateAttemptRepository.UNKNOWN, safeMessage(ex.getCause() == null ? ex : ex.getCause()), null);
                     throw pending(attempt, "Provider create response was not received; fallback is blocked", ex);
                 }
                 throw new DeliveryCreateReconciliationPendingException(
@@ -351,10 +351,10 @@ public class DeliveryProviderRouter {
                 createAudit.add(new CreateAudit(candidate.providerId(), false, safeMessage(ex)));
                 if (attempt != null) {
                     // Every adapter raises ProviderCreateUncertainException when a booking may exist; anything else booked nothing.
-                    journal.move(attempt, Set.of(ProviderCreateAttemptRepository.INTENT), ProviderCreateAttemptRepository.REJECTED,
-                        safeMessage(ex), ex instanceof ProviderCreateRejectedException refusal && refusal.verifyLater()
+                    boolean recorded = record(attempt, ProviderCreateAttemptRepository.REJECTED, safeMessage(ex),
+                        ex instanceof ProviderCreateRejectedException refusal && refusal.verifyLater()
                             ? clock.instant().plus(REFUSAL_LOOKUP_AFTER) : null);
-                    if (timedPolicy && "borzo".equals(candidate.providerId())) {
+                    if (recorded && timedPolicy && "borzo".equals(candidate.providerId())) {
                         // The worker waits a second and runs again; the journal row then closes Borzo's window.
                         throw new DeliveryProviderTemporarilyUnavailableException("Borzo refused the booking; Pidge is next", clock.instant());
                     }
@@ -389,6 +389,28 @@ public class DeliveryProviderRouter {
             }
         }
         throw new DeliveryProviderTemporarilyUnavailableException("Booking journal is busy for this order");
+    }
+
+    /**
+     * The courier has answered; the answer goes on the attempt. If that write fails the attempt stays INTENT, which blocks
+     * every other booking for the order until the reconciliation worker has looked: safe, so the answer's own handling goes on.
+     */
+    private boolean record(Attempt attempt, String state, String error, Instant nextCheckAt) {
+        try {
+            if (journal.move(attempt, Set.of(ProviderCreateAttemptRepository.INTENT), state, error, nextCheckAt)) {
+                if (ProviderCreateAttemptRepository.REJECTED.equals(state)) {
+                    log.warn("Courier refused the booking chefSubOrderId={} provider={} clientRef={}: {}", attempt.chefSubOrderId(),
+                        attempt.providerId(), attempt.clientRef(), error);
+                }
+                return true;
+            }
+            log.error("Courier booking journal: attempt was no longer INTENT when its answer ({}) arrived chefSubOrderId={} provider={} "
+                + "clientRef={}", state, attempt.chefSubOrderId(), attempt.providerId(), attempt.clientRef());
+        } catch (RuntimeException journalFailure) {
+            log.error("Courier booking journal: answer {} could not be recorded chefSubOrderId={} provider={} clientRef={} answer={}", state,
+                attempt.chefSubOrderId(), attempt.providerId(), attempt.clientRef(), error, journalFailure);
+        }
+        return false;
     }
 
     private static boolean unresolved(Attempt row) {

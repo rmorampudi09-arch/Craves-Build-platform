@@ -59,7 +59,7 @@ public class IntegrationAlertMonitor {
             SELECT count(*) FROM delivery_schema.provider_create_attempt
             WHERE created_at > now() - (? * INTERVAL '1 day') AND updated_at < now() - INTERVAL '10 minutes'
               AND (state IN ('INTENT', 'UNKNOWN')
-                   OR (state = 'ORPHAN_SUSPECT' AND provider_ref IS NULL AND created_at > now() - INTERVAL '2 hours'))
+                   OR (state = 'ORPHAN_SUSPECT' AND provider_ref IS NULL AND updated_at > now() - INTERVAL '2 hours'))
             """);
         // A courier refusing over 20% of at least 3 bookings in 15 minutes: an empty wallet or a changed key, not bad luck.
         checks.put("COURIER_REJECTED_RATE", """

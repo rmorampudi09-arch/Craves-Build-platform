@@ -302,16 +302,19 @@ public class DeliveryCommandRepository {
             """, commandId, resolvedClientReference) == 1;
     }
 
-    /** Look at the command again at nextAt without counting this claim as a look: nothing was asked of the courier. */
-    public void deferReconciliation(UUID commandId, Instant nextAt) {
+    /**
+     * Look at the command again at nextAt without counting this claim as a look: nothing was asked of the courier. Only
+     * for the claim that counted claimedLook, so a worker whose lease lapsed cannot undo another's claim.
+     */
+    public void deferReconciliation(UUID commandId, Instant nextAt, int claimedLook) {
         jdbc.update("""
             UPDATE delivery_schema.delivery_command
             SET reconciliation_processing_started_at = NULL,
                 next_reconciliation_at = ?,
                 reconciliation_attempt_count = GREATEST(reconciliation_attempt_count - 1, 0),
                 updated_at = now()
-            WHERE id = ? AND status = 'RECONCILIATION_PENDING'
-            """, toDatabaseTimestamp(nextAt), commandId);
+            WHERE id = ? AND status = 'RECONCILIATION_PENDING' AND reconciliation_attempt_count = ?
+            """, toDatabaseTimestamp(nextAt), commandId, claimedLook);
     }
 
     @Transactional

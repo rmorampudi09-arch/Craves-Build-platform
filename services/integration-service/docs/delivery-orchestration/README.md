@@ -338,7 +338,7 @@ courier is called. Each attempt sends its own reference: the order id in base 36
 | `REJECTED` | The courier has no booking: it refused, or a lookup found none. |
 | `UNKNOWN` | The answer was lost. The reconciliation worker looks the booking up. |
 | `ADOPTED` | A lookup found the booking and it became the delivery job. |
-| `ORPHAN_SUSPECT` | A booking may exist that the order does not use. Re-checked until 2 hours old. |
+| `ORPHAN_SUSPECT` | A booking may exist that the order does not use. Re-checked for 2 hours. |
 | `CANCELLED` | Reserved for the stray-booking handling that follows this change. |
 
 What changes for an order:

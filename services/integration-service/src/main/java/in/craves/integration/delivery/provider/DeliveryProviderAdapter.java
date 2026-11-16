@@ -17,6 +17,11 @@ public interface DeliveryProviderAdapter {
 
     ProviderQuote quote(QuoteRequest request);
 
+    /**
+     * Books the delivery. Once the provider may have accepted the request, every failure, including one in this adapter's
+     * own handling of the answer, must be raised as ProviderCreateUncertainException: the caller reads any other exception
+     * as "nothing was booked" and moves to the next provider.
+     */
     ProviderDelivery create(CreateDeliveryRequest request);
 
     ProviderDelivery cancel(String providerDeliveryId);

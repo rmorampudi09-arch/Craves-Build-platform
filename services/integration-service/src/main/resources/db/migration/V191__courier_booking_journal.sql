@@ -36,3 +36,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS provider_create_attempt_ref
 CREATE INDEX IF NOT EXISTS provider_create_attempt_due
     ON delivery_schema.provider_create_attempt (next_check_at)
     WHERE next_check_at IS NOT NULL;
+
+-- The alert monitor's two counts (IntegrationAlertMonitor): open attempts by state age, and recent attempts per courier.
+CREATE INDEX IF NOT EXISTS provider_create_attempt_open
+    ON delivery_schema.provider_create_attempt (updated_at)
+    WHERE state IN ('INTENT', 'UNKNOWN', 'ORPHAN_SUSPECT');
+
+CREATE INDEX IF NOT EXISTS provider_create_attempt_created
+    ON delivery_schema.provider_create_attempt (created_at);

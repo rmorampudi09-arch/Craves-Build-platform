@@ -144,10 +144,12 @@ class ProviderCreateAttemptRepositoryDatabaseTest {
         assertThat(found.providerRef()).isEqualTo("1250040");
         assertThat(ProviderCreateAttemptRepository.bookable(List.of(found))).as("a refusal that booked after all closes its courier").isFalse();
 
-        database.db.update("UPDATE delivery_schema.provider_create_attempt SET created_at = now() - INTERVAL '121 minutes', next_check_at = now() "
+        database.db.update("UPDATE delivery_schema.provider_create_attempt SET updated_at = now() - INTERVAL '121 minutes', next_check_at = now() "
             + "WHERE client_ref = ?", orphan.clientRef());
         assertThat(journal.claimDueChecks(5)).hasSize(1);
-        assertThat(nextCheckInSeconds(orphan)).as("re-checks stop once the attempt is 2 hours old").isNull();
+        assertThat(nextCheckInSeconds(orphan)).as("re-checks stop 2 hours after it became an orphan suspect").isNull();
+        assertThat(journal.foundAt(orphan, "1250041")).isTrue();
+        assertThat(journal.foundAt(orphan, "1250042")).as("a booking id, once known, is not replaced").isFalse();
     }
 
     @Test
@@ -169,8 +171,15 @@ class ProviderCreateAttemptRepositoryDatabaseTest {
         assertThat(journal.find("borzo", recent.clientRef())).map(Attempt::state).contains(INTENT);
         assertThat(journal.claimDueChecks(5)).extracting(Attempt::clientRef).containsExactly(abandoned.clientRef());
 
-        assertThat(journal.giveUp(reconciling, Instant.now().plusSeconds(20))).as("the fleet path gives its own attempt up at once").isTrue();
-        assertThat(journal.find("borzo", held.clientRef())).map(Attempt::state).contains(ORPHAN_SUSPECT);
+        assertThat(journal.giveUp(reconciling, Instant.now().plusSeconds(20))).as("never an attempt its command is still reconciling").isFalse();
+        assertThat(journal.find("BORZO", held.clientRef())).map(Attempt::state).contains(INTENT);
+        database.db.update("UPDATE delivery_schema.provider_create_attempt SET updated_at = now() WHERE client_ref = ?", recent.clientRef());
+        assertThat(journal.giveUp(fresh, Instant.now().plusSeconds(20))).as("the fleet path gives up an attempt nobody is working on").isTrue();
+        assertThat(journal.find("borzo", recent.clientRef())).map(Attempt::state).contains(ORPHAN_SUSPECT);
+        assertThat(journal.begin(fresh, "borzo")).isEmpty();
+        assertThat(journal.begin(fresh, "pidge")).isPresent();
+        journal.foundAt(journal.find("borzo", abandoned.clientRef()).orElseThrow(), "1250050");
+        assertThat(journal.begin(order, "borzo")).as("a courier that holds a booking for the order is never booked again").isEmpty();
         database.db.update("UPDATE delivery_schema.delivery_command SET status = 'PROCESSING', processing_started_at = now() - INTERVAL '11 minutes' "
             + "WHERE chef_sub_order_id = ?", fresh);
         database.db.update("UPDATE delivery_schema.provider_create_attempt SET updated_at = now() - INTERVAL '16 minutes'");

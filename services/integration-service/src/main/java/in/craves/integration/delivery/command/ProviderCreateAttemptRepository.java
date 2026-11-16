@@ -17,6 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
  * The courier booking journal (V191): one row per booking attempt, committed before the courier is called. Every state
  * change is a compare-and-set, so only the caller whose update changed a row acts on it. Two partial unique indexes hold
  * the rules: one unresolved booking per order, and a courier booked again for an order only after refusals.
+ *
+ * <p>begin and move commit on their own (REQUIRES_NEW) and are for callers outside any transaction: the attempt must be on
+ * record before the courier is called. confirm and stray join the caller's transaction, which must be the one that writes
+ * the delivery job. The rest are single statements.
  */
 @Repository
 public class ProviderCreateAttemptRepository {
@@ -68,8 +72,9 @@ public class ProviderCreateAttemptRepository {
     }
 
     public Optional<Attempt> find(String providerId, String clientRef) {
-        return jdbc.query("SELECT " + COLUMNS + " FROM " + TABLE + " WHERE provider_id = ? AND client_ref = ?", ROW, providerId, clientRef)
-            .stream().findFirst();
+        // Stored lower-case, as the router normalises courier ids.
+        return jdbc.query("SELECT " + COLUMNS + " FROM " + TABLE + " WHERE provider_id = ? AND client_ref = ?", ROW,
+            providerId == null ? null : providerId.toLowerCase(java.util.Locale.ROOT), clientRef).stream().findFirst();
     }
 
     /** The next attempt for the order and courier, as INTENT, committed before the caller calls the courier. Empty when an index or the cap refuses it. */
@@ -81,9 +86,12 @@ public class ProviderCreateAttemptRepository {
             FROM (SELECT COALESCE(max(attempt_no), 0) + 1 AS n FROM delivery_schema.provider_create_attempt
                   WHERE chef_sub_order_id = ? AND provider_id = ?) next
             WHERE next.n <= ?
+              -- A booking found at this courier after all (foundAt) closes it for the order, also to a pass that read earlier.
+              AND NOT EXISTS (SELECT 1 FROM delivery_schema.provider_create_attempt
+                              WHERE chef_sub_order_id = ? AND provider_id = ? AND provider_ref IS NOT NULL)
             ON CONFLICT DO NOTHING
             RETURNING\s""" + COLUMNS, ROW, chefSubOrderId, providerId, clientRefPrefix(chefSubOrderId), chefSubOrderId, providerId,
-            MAX_ATTEMPTS).stream().findFirst();
+            MAX_ATTEMPTS, chefSubOrderId, providerId).stream().findFirst();
     }
 
     /** Compare-and-set by primary key. nextCheckAt null clears any due check; error null keeps the last one. */
@@ -120,8 +128,11 @@ public class ProviderCreateAttemptRepository {
 
     /** The order's unresolved attempt will never be reconciled by a command (the fleet's re-booking gives up): look for it soon. */
     public boolean giveUp(UUID chefSubOrderId, Instant nextCheckAt) {
-        return jdbc.update("UPDATE " + TABLE + " SET state = 'ORPHAN_SUSPECT', next_check_at = ?, updated_at = now() "
-            + "WHERE chef_sub_order_id = ? AND state IN ('INTENT', 'UNKNOWN')", timestamp(nextCheckAt), chefSubOrderId) == 1;
+        // Never an attempt the order's command is making or reconciling right now: that one may yet become the job.
+        return jdbc.update("UPDATE " + TABLE + " a SET state = 'ORPHAN_SUSPECT', next_check_at = ?, updated_at = now() "
+            + "WHERE a.chef_sub_order_id = ? AND a.state IN ('INTENT', 'UNKNOWN') AND NOT EXISTS (SELECT 1 FROM "
+            + "delivery_schema.delivery_command c WHERE c.chef_sub_order_id = a.chef_sub_order_id "
+            + "AND c.status IN ('PROCESSING', 'RECONCILIATION_PENDING'))", timestamp(nextCheckAt), chefSubOrderId) == 1;
     }
 
     /**
@@ -141,8 +152,8 @@ public class ProviderCreateAttemptRepository {
     }
 
     /**
-     * Rows whose lookup is due, each handed to one replica. An orphan suspect is due again every 5 minutes until it is
-     * 2 hours old, and a refusal until its state is 15 minutes old, so a lookup lost to a restart is made again; the
+     * Rows whose lookup is due, each handed to one replica. An orphan suspect is due again every 5 minutes for 2 hours
+     * from when it became one, and a refusal until its state is 15 minutes old, so a lookup lost to a restart is made again; the
      * caller clears it (checkAgain) once the answer is in. updated_at is left alone.
      */
     public List<Attempt> claimDueChecks(int limit) {
@@ -153,7 +164,7 @@ public class ProviderCreateAttemptRepository {
                 ORDER BY next_check_at FOR UPDATE SKIP LOCKED LIMIT ?
             )
             UPDATE delivery_schema.provider_create_attempt a
-            SET next_check_at = CASE WHEN (a.state = 'ORPHAN_SUSPECT' AND a.created_at > now() - INTERVAL '2 hours')
+            SET next_check_at = CASE WHEN (a.state = 'ORPHAN_SUSPECT' AND a.updated_at > now() - INTERVAL '2 hours')
                                        OR (a.state = 'REJECTED' AND a.updated_at > now() - INTERVAL '15 minutes')
                                      THEN now() + INTERVAL '5 minutes' END
             FROM due
@@ -162,10 +173,14 @@ public class ProviderCreateAttemptRepository {
             """, ROW, limit);
     }
 
-    /** A lookup found the booking at the courier: its id is kept, and the courier is no longer bookable for the order. */
-    public void foundAt(Attempt attempt, String providerRef) {
-        jdbc.update("UPDATE " + TABLE + " SET provider_ref = ?, next_check_at = NULL WHERE chef_sub_order_id = ? AND provider_id = ? "
-            + "AND attempt_no = ?", providerRef, attempt.chefSubOrderId(), attempt.providerId(), attempt.attemptNo());
+    /**
+     * A lookup found the booking at the courier: its id is kept, and the courier is no longer bookable for the order.
+     * False when the row already names a booking (it became the job meanwhile), so nothing was found that is new.
+     */
+    public boolean foundAt(Attempt attempt, String providerRef) {
+        return jdbc.update("UPDATE " + TABLE + " SET provider_ref = ?, next_check_at = NULL WHERE chef_sub_order_id = ? AND provider_id = ? "
+            + "AND attempt_no = ? AND provider_ref IS NULL", providerRef, attempt.chefSubOrderId(), attempt.providerId(),
+            attempt.attemptNo()) == 1;
     }
 
     public void checkAgain(Attempt attempt, Instant at) {

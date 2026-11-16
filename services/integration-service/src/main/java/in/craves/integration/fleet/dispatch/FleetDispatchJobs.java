@@ -441,7 +441,12 @@ public class FleetDispatchJobs {
         } catch (DeliveryCreateReconciliationPendingException uncertain) {
             if (journal != null && journal.enabled()) {
                 // No command reconciles this path, and the open row would block ops from sending the order to another courier.
-                journal.giveUp(stage.chefSubOrderId(), Instant.now().plusSeconds(20));
+                try {
+                    journal.giveUp(stage.chefSubOrderId(), Instant.now().plusSeconds(20));
+                } catch (RuntimeException journalFailure) {
+                    LOGGER.error("FLEET_HANDBACK trip={} chefSubOrderId={}: the unanswered booking could not be marked for lookup",
+                        stage.tripId(), stage.chefSubOrderId(), journalFailure);
+                }
             }
             return toOpsQueue(stage, "UNCERTAIN_CREATE_" + uncertain.providerId().toUpperCase(java.util.Locale.ROOT));
         } catch (RuntimeException notNow) {
@@ -454,8 +459,13 @@ public class FleetDispatchJobs {
         Boolean switched = transaction.execute(status -> switchJob(stage, routed));
         if (!Boolean.TRUE.equals(switched)) {
             if (journal != null && journal.enabled()) {
-                // The booking is real and nobody's: kept on the journal with its id, beside the alert below.
-                journal.stray(stage.chefSubOrderId(), routed.providerId(), routed.delivery().providerDeliveryId());
+                // The booking is real and nobody's: kept on the journal with its id. Never in the way of the alert below.
+                try {
+                    journal.stray(stage.chefSubOrderId(), routed.providerId(), routed.delivery().providerDeliveryId());
+                } catch (RuntimeException journalFailure) {
+                    LOGGER.error("FLEET_COURIER_UNRECORDED trip={} provider={} delivery={}: not kept on the booking journal", stage.tripId(),
+                        routed.providerId(), routed.delivery().providerDeliveryId(), journalFailure);
+                }
             }
             alerts.opsAlert("FLEET_COURIER_UNRECORDED", "Courier booked but not recorded, order " + stage.orderCode(),
                 "A " + routed.providerId() + " courier was booked for this order but its delivery changed meanwhile. Cancel "

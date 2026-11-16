@@ -65,10 +65,16 @@ public class DeliveryCommandCompletionService {
         boolean journalled = journal != null && journal.enabled() && routingResult.delivery() != null;
         UUID existing = deliveryJobs.findIdByChefSubOrderId(command.chefSubOrderId()).orElse(null);
         if (existing != null) {
-            // Another job got there first (a rider, or ops): the booking just made is real and nobody's. Kept, and a person is told.
-            if (journalled && journal.stray(command.chefSubOrderId(), routingResult.providerId(), routingResult.delivery().providerDeliveryId())) {
-                log.error("CRAVES_ALERT alert=COURIER_ORPHAN_BOOKING_FOUND provider={} chefSubOrderId={} providerRef={} orderHasJob=true",
-                    routingResult.providerId(), command.chefSubOrderId(), routingResult.delivery().providerDeliveryId());
+            if (journalled) {
+                String booking = routingResult.delivery().providerDeliveryId();
+                boolean strayRow = journal.stray(command.chefSubOrderId(), routingResult.providerId(), booking);
+                // Another job got there first (a rider, or ops): this booking is real and nobody's. Kept, and a person is told.
+                // Not when the journal already has it as the order's job: then this is the same booking, delivered twice.
+                if (strayRow || journal.forOrder(command.chefSubOrderId()).stream().noneMatch(row -> booking.equals(row.providerRef())
+                    && ("CONFIRMED".equals(row.state()) || "ADOPTED".equals(row.state())))) {
+                    log.error("CRAVES_ALERT alert=COURIER_ORPHAN_BOOKING_FOUND provider={} chefSubOrderId={} providerRef={} orderHasJob=true "
+                        + "commandStatus=COMPLETED", routingResult.providerId(), command.chefSubOrderId(), booking);
+                }
             }
             commands.markCompleted(command.commandId());
             return new CompletionReceipt(existing, true);
@@ -90,7 +96,12 @@ public class DeliveryCommandCompletionService {
         );
         if (journalled) {
             // In the job's transaction, so the journal never says "booked" without a job. No row: a command from before the flag.
-            journal.confirm(command.chefSubOrderId(), routingResult.providerId(), routingResult.delivery().providerDeliveryId());
+            if (!journal.confirm(command.chefSubOrderId(), routingResult.providerId(), routingResult.delivery().providerDeliveryId())
+                && journal.forOrder(command.chefSubOrderId()).stream().anyMatch(row -> row.providerId().equals(routingResult.providerId()))) {
+                log.warn("Courier booking journal disagrees with the delivery job chefSubOrderId={} provider={} providerRef={}: the booking "
+                    + "is the job, but its attempt was already resolved otherwise", command.chefSubOrderId(), routingResult.providerId(),
+                    routingResult.delivery().providerDeliveryId());
+            }
         }
         Instant borzoWindowStartedAt = "borzo".equals(routingResult.providerId())
             ? commands.borzoWindowStartedAt(command.commandId()).orElse(null) : null;

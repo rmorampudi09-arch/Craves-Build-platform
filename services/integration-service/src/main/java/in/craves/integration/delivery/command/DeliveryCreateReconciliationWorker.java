@@ -11,7 +11,6 @@ import in.craves.integration.delivery.status.DeliveryLeaseRecoveryRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -39,6 +38,9 @@ public class DeliveryCreateReconciliationWorker {
     private static final Duration ORPHAN_FIRST_CHECK = Duration.ofSeconds(60);
     /** One more look after a "not found", in case the courier's list missed the booking. */
     private static final Duration NOT_FOUND_RECHECK = Duration.ofMinutes(5);
+    // As ProviderCreateAttemptRepository.claimDueChecks schedules them.
+    private static final Duration ORPHAN_RECHECK_FOR = Duration.ofHours(2);
+    private static final Duration REFUSAL_RECHECK_FOR = Duration.ofMinutes(15);
     private static final Duration COME_BACK = Duration.ofSeconds(15);
     /** A few a tick, after the commands: a slow courier must not hold up other orders' looks. */
     private static final int CHECKS_PER_TICK = 5;
@@ -108,37 +110,65 @@ public class DeliveryCreateReconciliationWorker {
             try {
                 checkJournal();
             } catch (RuntimeException ex) {
-                log.warn("Courier booking journal checks could not run", ex);
+                log.error("Courier booking journal checks could not run", ex);
             }
         }
     }
 
-    /** Stray-booking lookups: orphan suspects until they are 2 hours old, and one look after each refusal or "not found". */
+    /** Stray-booking lookups: orphan suspects for 2 hours, and refusals and "not found" answers while they are fresh. */
     private void checkJournal() {
         int abandoned = journal.sweepAbandoned();
         if (abandoned > 0) {
             log.warn("Courier booking journal: {} unresolved attempt(s) nobody was working on are now orphan suspects", abandoned);
         }
         for (Attempt row : journal.claimDueChecks(CHECKS_PER_TICK)) {
-            boolean orphan = ProviderCreateAttemptRepository.ORPHAN_SUSPECT.equals(row.state());
-            CreateReconciliationResult result = router.lookup(row.providerId(), row.clientRef(), row.createdAt());
-            if (result.status() == CreateReconciliationStatus.FOUND) {
-                journal.foundAt(row, result.delivery().providerDeliveryId());
+            try {
+                check(row);
+            } catch (RuntimeException ex) {
+                // One row's failure must not drop the rest of the batch, whose next look the claim has already moved on.
+                log.error("Courier booking journal: lookup failed chefSubOrderId={} provider={} clientRef={} state={}", row.chefSubOrderId(),
+                    row.providerId(), row.clientRef(), row.state(), ex);
+            }
+        }
+    }
+
+    private void check(Attempt row) {
+        boolean orphan = ProviderCreateAttemptRepository.ORPHAN_SUSPECT.equals(row.state());
+        CreateReconciliationResult result = router.lookup(row.providerId(), row.clientRef(), row.createdAt());
+        if (result.status() == CreateReconciliationStatus.FOUND) {
+            String booking = result.delivery().providerDeliveryId();
+            // Read before the row is marked, so the alert cannot be lost between the two.
+            String orderHasJob = describe(() -> String.valueOf(deliveryJobs.findIdByChefSubOrderId(row.chefSubOrderId()).isPresent()));
+            String commandStatus = describe(() -> commands.findByChefSubOrderId(row.chefSubOrderId()).map(CommandRecord::status).orElse("NONE"));
+            if (journal.foundAt(row, booking)) {
                 // A person cancels it with the courier, unless the order has no job and its command is dead: then it is the
                 // order's only courier.
                 log.error("CRAVES_ALERT alert={} provider={} chefSubOrderId={} providerRef={} orderHasJob={} commandStatus={}",
                     orphan ? "COURIER_ORPHAN_BOOKING_FOUND" : "COURIER_REJECTED_BOOKING_EXISTS", row.providerId(), row.chefSubOrderId(),
-                    result.delivery().providerDeliveryId(), deliveryJobs.findIdByChefSubOrderId(row.chefSubOrderId()).isPresent(),
-                    commands.findByChefSubOrderId(row.chefSubOrderId()).map(CommandRecord::status).orElse("NONE"));
-            } else if (result.status() == CreateReconciliationStatus.NOT_FOUND) {
-                if (orphan) {
-                    journal.move(row, Set.of(ProviderCreateAttemptRepository.ORPHAN_SUSPECT), ProviderCreateAttemptRepository.REJECTED,
-                        result.detail(), null);
-                } else {
-                    journal.checkAgain(row, null);
-                }
+                    booking, orderHasJob, commandStatus);
             }
-            // Inconclusive: the claim has already set the next look, while one is still due.
+        } else if (result.status() == CreateReconciliationStatus.NOT_FOUND) {
+            if (orphan) {
+                // Looked for again while the refusal is fresh, as after any "not found": a courier's list can lag.
+                boolean moved = journal.move(row, Set.of(ProviderCreateAttemptRepository.ORPHAN_SUSPECT), ProviderCreateAttemptRepository.REJECTED,
+                    result.detail(), Instant.now().plus(NOT_FOUND_RECHECK));
+                log.info("Courier booking journal: orphan suspect not found at the courier chefSubOrderId={} provider={} clientRef={} "
+                    + "rejected={}", row.chefSubOrderId(), row.providerId(), row.clientRef(), moved);
+            } else {
+                journal.checkAgain(row, null);
+            }
+        } else if (row.updatedAt().isBefore(Instant.now().minus(orphan ? ORPHAN_RECHECK_FOR : REFUSAL_RECHECK_FOR))) {
+            // The claim scheduled no further look for a row this old: its last one has just failed.
+            log.error("CRAVES_ALERT alert=COURIER_UNRESOLVED_BOOKING provider={} chefSubOrderId={} clientRef={} state={} reason=last-lookup-"
+                + "inconclusive detail={}", row.providerId(), row.chefSubOrderId(), row.clientRef(), row.state(), result.detail());
+        }
+    }
+
+    private static String describe(java.util.function.Supplier<String> read) {
+        try {
+            return read.get();
+        } catch (RuntimeException ex) {
+            return "unknown";
         }
     }
 
@@ -147,11 +177,10 @@ public class DeliveryCreateReconciliationWorker {
      * runs the path below unchanged.
      */
     private boolean reconcileJournalled(CommandRecord command) {
-        if (journal == null || !journal.enabled() || publisher == null || command.reconciliationProviderId() == null) {
+        if (journal == null || !journal.enabled() || command.reconciliationProviderId() == null) {
             return false;
         }
-        Attempt row = journal.find(command.reconciliationProviderId().toLowerCase(Locale.ROOT), command.reconciliationClientReference())
-            .orElse(null);
+        Attempt row = journal.find(command.reconciliationProviderId(), command.reconciliationClientReference()).orElse(null);
         if (row == null) {
             return false;
         }
@@ -165,7 +194,7 @@ public class DeliveryCreateReconciliationWorker {
             } catch (DeliveryCreateDefinitivelyNotFoundException notFound) {
                 if (!journal.move(row, UNRESOLVED, ProviderCreateAttemptRepository.REJECTED, safeMessage(notFound),
                     Instant.now().plus(NOT_FOUND_RECHECK))) {
-                    commands.deferReconciliation(command.id(), Instant.now().plus(COME_BACK));
+                    commands.deferReconciliation(command.id(), Instant.now().plus(COME_BACK), command.reconciliationAttemptCount());
                     return true;
                 }
                 makeDue(command, "the courier has no such booking");
@@ -184,7 +213,7 @@ public class DeliveryCreateReconciliationWorker {
                 }
                 if (!journal.move(row, UNRESOLVED, ProviderCreateAttemptRepository.ORPHAN_SUSPECT, safeMessage(inconclusive),
                     Instant.now().plus(ORPHAN_FIRST_CHECK))) {
-                    commands.deferReconciliation(command.id(), Instant.now().plus(COME_BACK));
+                    commands.deferReconciliation(command.id(), Instant.now().plus(COME_BACK), command.reconciliationAttemptCount());
                     return true;
                 }
                 makeDue(command, "the booking could not be confirmed either way");
@@ -210,12 +239,20 @@ public class DeliveryCreateReconciliationWorker {
      */
     private void makeDue(CommandRecord command, String why) {
         try {
+            if (publisher == null) {
+                // Only when delivery commands are switched off while this worker runs: nothing would process the message.
+                // The command is still made due, so DELIVERY_COMMAND_STALLED shows it.
+                throw new IllegalStateException("No Service Bus publisher is configured");
+            }
             publisher.publishNow(command.message(), "reconciled:" + command.id() + ":" + UUID.randomUUID());
         } catch (RuntimeException ex) {
-            commands.deferReconciliation(command.id(), Instant.now().plus(COME_BACK));
-            log.warn("Delivery command could not be made due after reconciliation commandId={} chefSubOrderId={}: {}", command.id(),
-                command.chefSubOrderId(), safeMessage(ex));
-            return;
+            // Tried again every 15 seconds, without asking the courier again, for as long as the message cannot be sent.
+            log.error("CRAVES_ALERT alert=DELIVERY_COMMAND_STALLED commandId={} chefSubOrderId={} reason=the message that runs it after "
+                + "reconciliation could not be sent: {}", command.id(), command.chefSubOrderId(), safeMessage(ex));
+            if (publisher != null) {
+                commands.deferReconciliation(command.id(), Instant.now().plus(COME_BACK), command.reconciliationAttemptCount());
+                return;
+            }
         }
         boolean due = commands.makeDueFromReconciliation(command.id(), command.reconciliationClientReference());
         log.info("Delivery create reconciliation moves the order on commandId={} chefSubOrderId={} providerId={} reason={} due={}",

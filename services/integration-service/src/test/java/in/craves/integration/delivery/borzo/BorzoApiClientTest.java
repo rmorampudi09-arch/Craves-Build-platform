@@ -9,11 +9,14 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.BorzoProperties;
+import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateDeliveryRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationStatus;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateRejectedException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.QuoteRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Stop;
@@ -22,6 +25,7 @@ import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.ResourceAccessException;
@@ -228,6 +232,94 @@ class BorzoApiClientTest {
         assertThat(error.providerId()).isEqualTo("borzo");
         assertThat(error.clientReference()).isEqualTo("CRV-SUBORDER-123");
         assertThat(error.attemptedAt()).isNotNull();
+        server.verify();
+    }
+
+    // The booking journal on (CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED): Borzo's answer is read as refused or unknown.
+
+    @Test
+    void aRefusalBorzoDocumentsAsNothingCreatedMovesOnAndAsksForOneLookup() {
+        journal("verify");
+        ProviderCreateRejectedException refused = refusedBy(HttpStatus.BAD_REQUEST,
+            "{\"is_successful\":false,\"errors\":[\"invalid_parameters\"],\"parameter_errors\":{\"points\":[{},{\"contact_person\":{\"phone\":[\"invalid_phone\"]}}]}}");
+        assertThat(refused.providerId()).isEqualTo("borzo");
+        assertThat(refused.verifyLater()).isTrue();
+        assertThat(refused).hasMessageContaining("invalid_parameters");
+    }
+
+    @Test
+    void aRefusalInASuccessfulHttpAnswerIsStillARefusal() {
+        journal("verify");
+        assertThat(refusedBy(HttpStatus.OK, "{\"is_successful\":false,\"errors\":[\"insufficient_balance\"]}").verifyLater()).isTrue();
+    }
+
+    @Test
+    void anOverloadedBorzoIsNotAskedToLookTheRefusalUp() {
+        journal("verify");
+        assertThat(refusedBy(HttpStatus.BAD_REQUEST, "{\"is_successful\":false,\"errors\":[\"requests_limit_exceeded\"]}").verifyLater()).isFalse();
+        assertThat(refusedBy(HttpStatus.TOO_MANY_REQUESTS, "{\"is_successful\":false,\"errors\":[\"invalid_parameters\"]}").verifyLater()).isFalse();
+    }
+
+    @Test
+    void trustedRefusalsAreNeverLookedUp() {
+        journal("trust");
+        assertThat(refusedBy(HttpStatus.BAD_REQUEST, "{\"is_successful\":false,\"errors\":[\"invalid_parameters\"]}").verifyLater()).isFalse();
+    }
+
+    @Test
+    void aRequestThatNeverLeftIsARefusal() {
+        journal("verify");
+        server.expect(requestTo(BASE_URL + "/create-order")).andRespond(request -> {
+            throw new ResourceAccessException("connect failed", new java.net.ConnectException("Connection refused"));
+        });
+        assertThat(catchThrowableOfType(() -> client.create(new CreateDeliveryRequest("CRV-SUBORDER-123", quoteRequest())),
+            ProviderCreateRejectedException.class)).isNotNull();
+    }
+
+    @Test
+    void anythingBorzoDoesNotDocumentAsNothingCreatedStaysUnknown() {
+        journal("verify");
+        unknownAfter(HttpStatus.BAD_REQUEST, "{\"is_successful\":false,\"errors\":[\"order_is_duplicate\"]}");
+        unknownAfter(HttpStatus.BAD_REQUEST, "{\"is_successful\":false,\"errors\":[\"unexpected_error\"]}");
+        unknownAfter(HttpStatus.BAD_REQUEST, "{\"is_successful\":false,\"errors\":[\"invalid_parameters\",\"a_code_added_later\"]}");
+        unknownAfter(HttpStatus.BAD_REQUEST, "{\"is_successful\":false,\"errors\":[]}");
+        unknownAfter(HttpStatus.BAD_REQUEST, "<html>Bad Request</html>");
+        unknownAfter(HttpStatus.INTERNAL_SERVER_ERROR, "{\"is_successful\":false,\"errors\":[\"invalid_parameters\"]}");
+        unknownAfter(HttpStatus.SERVICE_UNAVAILABLE, "{\"is_successful\":false,\"errors\":[\"service_unavailable\"]}");
+        unknownAfter(HttpStatus.UNAUTHORIZED, "");
+    }
+
+    @Test
+    void refusalsAreUnknownAsBeforeWithTheJournalOffOrInUnknownMode() {
+        unknownAfter(HttpStatus.BAD_REQUEST, "{\"is_successful\":false,\"errors\":[\"invalid_parameters\"]}");
+        journal("unknown");
+        unknownAfter(HttpStatus.BAD_REQUEST, "{\"is_successful\":false,\"errors\":[\"invalid_parameters\"]}");
+    }
+
+    private void journal(String borzoRefusals) {
+        DeliveryCommandProperties commandProperties = new DeliveryCommandProperties();
+        commandProperties.setBookingJournalEnabled(true);
+        commandProperties.setBorzoRefusals(borzoRefusals);
+        client.setCommandProperties(commandProperties);
+    }
+
+    private ProviderCreateRejectedException refusedBy(HttpStatus status, String body) {
+        server.reset();
+        server.expect(requestTo(BASE_URL + "/create-order")).andExpect(method(HttpMethod.POST))
+            .andRespond(withStatus(status).contentType(MediaType.APPLICATION_JSON).body(body));
+        ProviderCreateRejectedException refused = catchThrowableOfType(
+            () -> client.create(new CreateDeliveryRequest("CRV-SUBORDER-123", quoteRequest())), ProviderCreateRejectedException.class);
+        assertThat(refused).as("%s %s", status, body).isNotNull();
+        server.verify();
+        return refused;
+    }
+
+    private void unknownAfter(HttpStatus status, String body) {
+        server.reset();
+        server.expect(requestTo(BASE_URL + "/create-order")).andExpect(method(HttpMethod.POST))
+            .andRespond(withStatus(status).contentType(MediaType.APPLICATION_JSON).body(body));
+        assertThat(catchThrowableOfType(() -> client.create(new CreateDeliveryRequest("CRV-SUBORDER-123", quoteRequest())),
+            ProviderCreateUncertainException.class)).as("%s %s", status, body).isNotNull();
         server.verify();
     }
 

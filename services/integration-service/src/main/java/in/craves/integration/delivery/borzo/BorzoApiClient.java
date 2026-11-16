@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import in.craves.integration.config.BorzoProperties;
+import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateRejectedException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -17,7 +19,10 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -36,11 +41,24 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
     private static final int MOTORBIKE_MAX_WEIGHT_GRAMS = 20_000;
     private static final DateTimeFormatter BORZO_TIMESTAMP =
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+    private static final Logger log = LoggerFactory.getLogger(BorzoApiClient.class);
+    // Borzo's request error codes (Business API 1.8, "Errors") that say the request was refused before any order existed.
+    // Not here, so read as "outcome unknown": unexpected_error, service_unavailable, order_is_duplicate and any new code.
+    private static final Set<String> NOT_CREATED = Set.of("invalid_parameters", "requests_limit_exceeded", "required_auth_token",
+        "invalid_auth_token", "invalid_api_version", "required_api_upgrade", "invalid_api_method", "required_method_post",
+        "invalid_post_json", "unapproved_contract", "insufficient_balance", "insufficient_funds", "card_payment_failed",
+        "tax_retension_limit", "route_not_found", "total_payment_amount_limit_exceeded", "buyout_not_allowed",
+        "insufficient_balance_for_buyout", "buyout_amount_limit_exceeded", "impossible_delivery_fee_calculation");
+    // The key, the contract or the wallet: every order is refused until a person fixes it.
+    private static final Set<String> ACCOUNT = Set.of("required_auth_token", "invalid_auth_token", "unapproved_contract",
+        "insufficient_balance", "insufficient_funds", "card_payment_failed", "tax_retension_limit");
+    private static final Set<Integer> REFUSAL_STATUSES = Set.of(400, 401, 403, 404, 422, 429);
 
     private final BorzoProperties properties;
     private final ObjectMapper objectMapper;
     private final BorzoStatusMapper statusMapper;
     private final RestClient restClient;
+    private DeliveryCommandProperties commandProperties;
 
     @Autowired
     public BorzoApiClient(BorzoProperties properties,
@@ -70,6 +88,12 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         this.objectMapper = objectMapper;
         this.statusMapper = statusMapper;
         this.restClient = restClient;
+    }
+
+    /** The booking journal's switches (booking-journal-enabled, borzo-refusals); without them a refusal is "unknown" as before. */
+    @Autowired(required = false)
+    public void setCommandProperties(DeliveryCommandProperties commandProperties) {
+        this.commandProperties = commandProperties;
     }
 
     @Override
@@ -121,11 +145,54 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
             requireSuccessful(response, "Borzo create-order");
             return mapOrder(response.path("order"));
         } catch (RuntimeException ex) {
+            if (commandProperties != null && commandProperties.isBookingJournalEnabled() && ex instanceof BorzoApiException refusal) {
+                List<String> codes = refusalCodes(refusal);
+                int status = refusal.getProviderStatus() == null ? 200 : refusal.getProviderStatus().value();
+                if (status == 401 || status == 403 || (codes != null && codes.stream().anyMatch(ACCOUNT::contains))) {
+                    log.error("CRAVES_ALERT alert=COURIER_ACCOUNT_REFUSED provider={} status={} code={}", PROVIDER_ID, status,
+                        codes == null ? "none" : String.join(",", codes));
+                }
+                String mode = commandProperties.getBorzoRefusals();
+                if (codes != null && !"unknown".equals(mode)) {
+                    // During an overload a lookup only deepens it.
+                    boolean overloaded = status == 429 || codes.contains("requests_limit_exceeded");
+                    throw new ProviderCreateRejectedException(PROVIDER_ID, "verify".equals(mode) && !overloaded,
+                        "Borzo refused the booking: " + String.join(",", codes), ex);
+                }
+            }
             // The request may have reached Borzo even when the reply is 5xx, empty,
             // malformed, or times out. Reconcile the client reference before any retry.
             throw new ProviderCreateUncertainException(
                 PROVIDER_ID, clientReference, attemptedAt, ex
             );
+        }
+    }
+
+    /**
+     * The codes of a definite refusal, or null when the outcome is unknown. Definite means: the request never left
+     * (connection refused), or Borzo answered is_successful false with only codes that say nothing was created.
+     */
+    private List<String> refusalCodes(BorzoApiException error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof java.net.ConnectException) {
+                return List.of("connection_refused");
+            }
+        }
+        // No status: Borzo answered 2xx and the body said is_successful false.
+        if (error.getProviderStatus() != null && !REFUSAL_STATUSES.contains(error.getProviderStatus().value())) {
+            return null;
+        }
+        try {
+            JsonNode body = objectMapper.readTree(error.getSafeProviderResponse());
+            JsonNode errors = body.path("errors");
+            if (!body.path("is_successful").isBoolean() || body.path("is_successful").booleanValue() || !errors.isArray() || errors.isEmpty()) {
+                return null;
+            }
+            List<String> codes = new ArrayList<>();
+            errors.forEach(code -> codes.add(code.asText()));
+            return NOT_CREATED.containsAll(codes) ? codes : null;
+        } catch (Exception unreadable) {
+            return null;
         }
     }
 

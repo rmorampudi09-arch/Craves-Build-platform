@@ -342,4 +342,22 @@ public interface DeliveryProviderAdapter {
         public String clientReference() { return clientReference; }
         public Instant attemptedAt() { return attemptedAt; }
     }
+
+    /**
+     * Raised when the provider definitely created nothing: it refused the request, or the request never left. The caller
+     * may move to the next provider at once. verifyLater asks for one later lookup, to check that reading of the answer.
+     */
+    class ProviderCreateRejectedException extends RuntimeException {
+        private final String providerId;
+        private final boolean verifyLater;
+
+        public ProviderCreateRejectedException(String providerId, boolean verifyLater, String message, Throwable cause) {
+            super(message, cause);
+            this.providerId = Objects.requireNonNull(providerId, "providerId is required");
+            this.verifyLater = verifyLater;
+        }
+
+        public String providerId() { return providerId; }
+        public boolean verifyLater() { return verifyLater; }
+    }
 }

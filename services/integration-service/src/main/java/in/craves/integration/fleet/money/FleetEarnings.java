@@ -110,7 +110,7 @@ public class FleetEarnings {
      * Phase 4: each rider's available online time in a window (from, to): every shift cut to the window and to SHIFT_END,
      * less its breaks there. The CTEs win, w and available; the queries below add to them.
      */
-    private static final String AVAILABLE = """
+    public static final String AVAILABLE = """
         WITH win AS (SELECT CAST(? AS timestamptz) AS from_at, LEAST(CAST(? AS timestamptz), now()) AS to_at),
         w AS (SELECT s.id, s.rider_id, GREATEST(s.started_at, win.from_at) AS from_at, LEAST(%1$s, win.to_at) AS to_at
               FROM fleet_schema.rider_shift s CROSS JOIN win WHERE s.started_at < win.to_at AND %1$s > win.from_at),

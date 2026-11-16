@@ -111,6 +111,14 @@ class FleetConfigurationTest {
     }
 
     @Test
+    void theDispatchPolicyIsReadOnEveryLookUnlessTheCacheIsSwitchedOn() {
+        runner.withPropertyValues("craves.fleet.enabled=true").run(context ->
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetPolicyStore.class), "cacheNanos")).isEqualTo(0L));
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.dispatch-policy-cache-seconds=5").run(context ->
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetPolicyStore.class), "cacheNanos")).isEqualTo(5_000_000_000L));
+    }
+
+    @Test
     void theRiderApiNeedsBothFlags() {
         runner.withPropertyValues("craves.fleet.enabled=true").run(context ->
             assertThat(context).doesNotHaveBean(FleetRiderController.class).doesNotHaveBean(FleetMoneyController.class)

@@ -150,6 +150,36 @@ class FleetPolicyStoreDatabaseTest {
         assertThat(store.currentDispatchPolicy()).as("published, but not in force for 15 days").isEmpty();
     }
 
+    /** The switch off (the default): every read asks the database, so the emergency stop is seen by the very next look. */
+    @Test
+    void withoutTheCacheTheEmergencyStopIsSeenAtOnce() {
+        insertPolicy("2026-09-v1", "now() - INTERVAL '1 day'", 130, "shadow");
+        assertThat(store.currentDispatchPolicy().orElseThrow().mode()).isEqualTo("shadow");
+        insertPolicy("2026-09-v2", "now()", 130, "off");
+        assertThat(store.currentDispatchPolicy().orElseThrow().mode()).as("mode off, published a moment ago").isEqualTo("off");
+    }
+
+    /**
+     * CRAVES_FLEET_DISPATCH_POLICY_CACHE_SECONDS: a replica goes on using the policy it last read for that long and no
+     * longer, so the emergency stop (or a new version, or a withdrawal) reaches it within those seconds; never more than 5.
+     */
+    @Test
+    void withTheCacheOnTheEmergencyStopIsSeenWithinTheCachedSeconds() throws Exception {
+        insertPolicy("2026-09-v1", "now() - INTERVAL '1 day'", 130, "shadow");
+        store.setDispatchPolicyCacheSeconds(1);
+        assertThat(store.currentDispatchPolicy().orElseThrow().mode()).isEqualTo("shadow");
+        insertPolicy("2026-09-v2", "now()", 130, "off");
+        assertThat(store.currentDispatchPolicy().orElseThrow().mode()).as("within the second: the policy last read").isEqualTo("shadow");
+        Thread.sleep(1_100);
+        assertThat(store.currentDispatchPolicy().orElseThrow().mode()).as("after it: the stop").isEqualTo("off");
+
+        store.setDispatchPolicyCacheSeconds(3_600);
+        assertThat(org.springframework.test.util.ReflectionTestUtils.getField(store, "cacheNanos")).as("never more than 5 s")
+            .isEqualTo(5_000_000_000L);
+        store.setDispatchPolicyCacheSeconds(-1);
+        assertThat(org.springframework.test.util.ReflectionTestUtils.getField(store, "cacheNanos")).as("a negative value is off").isEqualTo(0L);
+    }
+
     private void draftRateCard(String version, String effectiveFrom) {
         fleet.db.update("INSERT INTO fleet_schema.rate_card (version, effective_from, base_paise, base_drop_m, drop_per_km_paise, "
             + "pickup_free_m, pickup_per_km_paise, wait_free_minutes, wait_per_minute_paise, slot_guarantee_per_hour_paise, ranges, "
@@ -167,8 +197,12 @@ class FleetPolicyStoreDatabaseTest {
     }
 
     private void insertPolicy(String version, String effectiveFrom, int detour) {
+        insertPolicy(version, effectiveFrom, detour, "off");
+    }
+
+    private void insertPolicy(String version, String effectiveFrom, int detour, String mode) {
         fleet.db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
             + "fleet_stage_seconds, radius_m, pickup_detour_percent, ranges, joint_matching, next_order_offers) VALUES (?, 'PUBLISHED', "
-            + effectiveFrom + ", now(), 'off', 40, 60, 5000, ?, '{}', true, true)", version, detour);
+            + effectiveFrom + ", now(), ?, 40, 60, 5000, ?, '{}', true, true)", version, mode, detour);
     }
 }

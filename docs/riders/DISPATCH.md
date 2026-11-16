@@ -103,7 +103,7 @@ With rounds set to 0, the order stays with Craves riders for the whole time they
 - **With nobody to ask, the order waits for a rider.** One who comes online, or becomes free, hears of it at the next check (every 5 s).
 - **Only the end of that time sends the order on** to Borzo, then Pidge, then the ops queue. An offer still goes out only with its full time left, so in the last seconds nobody is asked.
 - **No cost guard.** No courier is asked for a quote, and every rider in range may hear of the order.
-- **Unchanged:** declining is free (§1); the emergency stop sends an order waiting for riders on to Borzo at once; and an order riders can't take at all still goes to Borzo at once (no coordinates, an unknown chef, no rate card in force, severe rain).
+- **Unchanged:** declining is free (§1); the emergency stop sends an order waiting for riders on to Borzo at its next check (with the policy cache on, `CRAVES_FLEET_DISPATCH_POLICY_CACHE_SECONDS`, up to 5 s after that); and an order riders can't take at all still goes to Borzo at once (no coordinates, an unknown chef, no rate card in force, severe rain).
 
 ### Rain mode
 
@@ -275,7 +275,7 @@ This is the figure fair turns compare. It is also what the Telangana union and F
 
 **Before choosing,** run the replay on the pilot area's recorded orders twice: once nearest first, once with these rules (`REPLAY.md`, "Comparing offer rules"). Compare the Gini and the spread of pay per hour against the mean pickup distance. If 1.5 km adds over 30% to the mean pickup, try 1 km.
 
-**Changing them** is a code change (`FleetPolicyStore`), and once a rate card is published it needs 14 days' notice to riders. The emergency stop (off, now) always works and keeps the values riders are shown.
+**Changing them** is a code change (`FleetPolicyStore`), and once a rate card is published it needs 14 days' notice to riders. The emergency stop (off, now) always works and keeps the values riders are shown. Each server acts on it the next time it looks at an order; with `CRAVES_FLEET_DISPATCH_POLICY_CACHE_SECONDS` on (built, switched off), up to 5 s later, and a new version reaches the servers that much later too.
 
 ### When to change them
 

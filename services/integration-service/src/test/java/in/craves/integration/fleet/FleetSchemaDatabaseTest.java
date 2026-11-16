@@ -137,8 +137,10 @@ class FleetSchemaDatabaseTest {
         assertThatThrownBy(() -> db.update("DELETE FROM fleet_schema.rate_card WHERE version = '2026-10-v1'"))
             .isInstanceOf(DataIntegrityViolationException.class);
 
+        // Riders have terms, so a version that starts now keeps the two rule lines the seeded draft shows them (V184, V192).
         String insert = "INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
-            + "fleet_stage_seconds, radius_m, ranges) VALUES (?, 'PUBLISHED', now() + CAST(? AS interval), now(), ?, 40, 60, 5000, '{}')";
+            + "fleet_stage_seconds, radius_m, ranges, joint_matching, next_order_offers) VALUES (?, 'PUBLISHED', now() + CAST(? AS interval), "
+            + "now(), ?, 40, 60, 5000, '{}', true, true)";
         db.update(insert, "2026-10-v2", "0 days", "off");
         db.update(insert, "2026-10-v3", "15 days", "live");
         assertThatThrownBy(() -> db.update("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = now() - INTERVAL '1 hour', "

@@ -5,13 +5,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.Timestamp;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 class FleetPolicyStoreDatabaseTest {
+    /**
+     * The dispatch_policy columns that are not rules of how orders are offered: a version's identity and lifecycle, its mode,
+     * and the operations values that change at once inside their declared ranges (docs/riders/DISPATCH.md §7). The table's
+     * trigger (V192) has the same list and treats every other column as a rule, so a new column needs 14 days' notice unless
+     * it is named in both.
+     */
+    static final Set<String> NOT_RULES = Set.of("version", "status", "effective_from", "published_at", "published_by", "created_at",
+        "withdrawn_at", "withdrawn_by", "mode", "ranges", "offer_seconds", "fleet_stage_seconds", "radius_m",
+        "per_order_overhead_paise", "cost_guard_premium_paise", "pidge_stage_seconds");
     FleetDatabase fleet;
     FleetPolicyStore store;
 
@@ -148,6 +160,95 @@ class FleetPolicyStoreDatabaseTest {
         fleet.db.update("UPDATE fleet_schema.dispatch_policy SET mode = 'off'");
         store.publishDispatchPolicy("2026-10-v1", UUID.randomUUID());
         assertThat(store.currentDispatchPolicy()).as("published, but not in force for 15 days").isEmpty();
+    }
+
+    /**
+     * Read from the catalog, so a column added later is tested with no change here: once riders have terms, a version that
+     * changes any rules column inside 14 days is refused by the table and by the code, and with the notice riders are shown
+     * the change coming. A column the code does not carry (DispatchRules, rules(), nextTermsChange()) fails here.
+     */
+    @Test
+    void everyRulesColumnNeedsFourteenDaysNoticeInTheTableAndInTheCode() {
+        ridersHaveTerms();
+        List<String> columns = fleet.db.queryForList("SELECT column_name FROM information_schema.columns WHERE table_schema = "
+            + "'fleet_schema' AND table_name = 'dispatch_policy' ORDER BY ordinal_position", String.class);
+        assertThat(columns).as("the list names only columns there are").containsAll(NOT_RULES);
+        List<String> rules = columns.stream().filter(column -> !NOT_RULES.contains(column)).toList();
+        assertThat(rules).contains("pickup_detour_percent", "offers_at_once", "offer_rounds", "fair_band_m", "rank_by_travel_time",
+            "joint_matching", "next_order_offers");
+        UUID ops = UUID.randomUUID();
+        for (String column : rules) {
+            String version = "2099-01-v" + (rules.indexOf(column) + 1);
+            draft(version);
+            change(version, column);
+            assertThatThrownBy(() -> fleet.db.update("UPDATE fleet_schema.dispatch_policy SET status = 'PUBLISHED', published_at = now() "
+                + "WHERE version = ?", version), "%s, in the table", column).isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("must start at least 14 days after it is published");
+            // The pickup detour is pay, with a refusal of its own; every other rules column is how orders are offered.
+            boolean detour = "pickup_detour_percent".equals(column);
+            assertThatThrownBy(() -> store.publishDispatchPolicy(version, ops), "%s, in the code", column).isInstanceOfSatisfying(
+                FleetApiException.class, error -> assertThat(error.code()).isEqualTo(detour ? "DETOUR_NEEDS_NOTICE" : "RULES_NEED_NOTICE"));
+
+            fleet.db.update("UPDATE fleet_schema.dispatch_policy SET effective_from = now() + INTERVAL '15 days' WHERE version = ?", version);
+            store.publishDispatchPolicy(version, ops);
+            assertThat(store.nextTermsChange()).as(column + ": riders are shown the change during its notice").hasValueSatisfying(
+                next -> assertThat(detour ? next.detourAfter().equals(next.detourBefore()) : next.rulesAfter().equals(next.rulesBefore()))
+                    .as(column + " is among the terms riders are shown").isFalse());
+            // Withdrawn, so the next column's version is the only change ahead.
+            fleet.db.update("UPDATE fleet_schema.dispatch_policy SET withdrawn_at = now() WHERE version = ?", version);
+        }
+    }
+
+    @Test
+    void theModeAndTheOperationsValuesChangeAtOnceAndTheEmergencyStopWorks() {
+        ridersHaveTerms();
+        draft("2099-01-v1");
+        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET mode = 'shadow', offer_seconds = offer_seconds + 1, "
+            + "fleet_stage_seconds = fleet_stage_seconds + 1, radius_m = radius_m + 1, per_order_overhead_paise = per_order_overhead_paise + 1, "
+            + "cost_guard_premium_paise = cost_guard_premium_paise + 1, pidge_stage_seconds = pidge_stage_seconds + 1, "
+            + "ranges = ranges || '{\"radius_m\": [1000, 9000]}' WHERE version = '2099-01-v1'");
+        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET status = 'PUBLISHED', published_at = now(), effective_from = now() "
+            + "WHERE version = '2099-01-v1'");
+        assertThat(store.currentDispatchPolicy().orElseThrow().version()).as("in the table").isEqualTo("2099-01-v1");
+
+        draft("2099-01-v2");
+        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET offer_seconds = offer_seconds + 2, radius_m = radius_m + 2 "
+            + "WHERE version = '2099-01-v2'");
+        assertThat(store.publishDispatchPolicy("2099-01-v2", UUID.randomUUID())).as("the emergency stop: off, now").isEmpty();
+        FleetPolicyStore.DispatchPolicy stop = store.currentDispatchPolicy().orElseThrow();
+        assertThat(stop.version()).isEqualTo("2099-01-v2");
+        assertThat(stop.mode()).isEqualTo("off");
+    }
+
+    /** The seeded policy in force, then a rate card in force: from here a change to riders' terms needs notice. */
+    private void ridersHaveTerms() {
+        fleet.db.update("UPDATE fleet_schema.dispatch_policy SET status = 'PUBLISHED', published_at = now(), effective_from = now()");
+        insertRateCard("2026-09-v1", "now() - INTERVAL '1 day'");
+    }
+
+    /** A draft copy of the seeded policy, column for column, to start in 13 days. */
+    private void draft(String version) {
+        fleet.db.update("INSERT INTO fleet_schema.dispatch_policy SELECT (jsonb_populate_record(p, jsonb_build_object('version', "
+            + "CAST(? AS text), 'status', 'DRAFT', 'published_at', NULL, 'created_at', now(), 'effective_from', now() + INTERVAL '13 days'))).* "
+            + "FROM fleet_schema.dispatch_policy p WHERE version = '2026-10-v1'", version);
+    }
+
+    /** Moves a draft's column off the seeded value: a boolean flipped, a number one up, or one down where its CHECK ends. */
+    private void change(String version, String column) {
+        String set = "UPDATE fleet_schema.dispatch_policy SET " + column + " = ";
+        Object value = fleet.db.queryForMap("SELECT * FROM fleet_schema.dispatch_policy WHERE version = ?", version).get(column);
+        if (value instanceof Boolean) {
+            fleet.db.update(set + "NOT " + column + " WHERE version = ?", version);
+        } else if (value instanceof Number) {
+            try {
+                fleet.db.update(set + column + " + 1 WHERE version = ?", version);
+            } catch (DataIntegrityViolationException atItsMaximum) {
+                fleet.db.update(set + column + " - 1 WHERE version = ?", version);
+            }
+        } else {
+            throw new AssertionError("dispatch_policy." + column + " is a rules column this test cannot change (" + value
+                + "): teach change() its type, or, if it is not a rule, name it in NOT_RULES and in the trigger.");
+        }
     }
 
     private void draftRateCard(String version, String effectiveFrom) {

@@ -177,7 +177,8 @@ export function AdminChefReviewDetails({ applicationId, onboardingV2Enabled = fa
     <section className="rounded-[30px] bg-[#FFF8EC] p-6 text-slate-950 sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#6930CA]">{item.referenceCode ? `${item.referenceCode} · ` : ""}{item.status}</p><h2 className="mt-2 text-3xl font-bold">{item.firstName} {item.lastName}</h2><p className="mt-2 text-sm text-slate-600">{item.email} · {item.phoneNumber}</p></div>
-        <span className="text-sm text-slate-500">Submitted {new Date(item.submittedAt).toLocaleString("en-IN")}</span>
+        {/* submittedAt is set when the kitchen is first saved, then again at each submission. */}
+        <span className="text-sm text-slate-500">{!v2 || onboarding?.submitted ? "Submitted" : onboarding?.progress?.status === "MORE_INFORMATION_REQUIRED" ? "Sent back for changes · last submitted" : "Not submitted yet · started"} {new Date(item.submittedAt).toLocaleString("en-IN")}</span>
       </div>
       <p className="mt-5 text-sm leading-6">{item.addressLine1}{item.addressLine2 ? `, ${item.addressLine2}` : ""}{item.landmark ? `, ${item.landmark}` : ""}<br />{item.city}, {item.state} {item.postalCode ?? ""}</p>
       {item.rejectionReason && <div className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-900"><strong>Whole-application rejection reason</strong><p className="mt-2">{item.rejectionReason}</p></div>}

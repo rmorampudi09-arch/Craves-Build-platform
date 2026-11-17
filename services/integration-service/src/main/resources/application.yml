@@ -69,6 +69,11 @@ craves:
     # to 5 s later, so the next rider is asked then. Who hears, in what order, for how long, and the 5 s before the same
     # rider is asked again all stay, so riders need no notice. Off: the 5 s check only, as before.
     offer-expiry-wake-enabled: ${CRAVES_FLEET_OFFER_EXPIRY_WAKE_ENABLED:false}
+    # GPS rule (R22 9; DISPATCH.md §1), off | shadow | enforce: a rider is asked only with a fix under 60 s old and accurate
+    # to 250 m, on top of today's rule (a call in 45 s, a real fix under 3 minutes old). shadow asks the same riders as off
+    # and logs FLEET_GPS_RULE with how many each look would leave out; enforce leaves them out. enforce changes who can be
+    # asked: 14 days' notice to riders first once a rate card is published (GO-LIVE.md §8). Any other value stops start-up.
+    gps-rule: ${CRAVES_FLEET_GPS_RULE:off}
     # Seconds each replica goes on using the dispatch policy it last read, 0 to 5 (more counts as 5); 0 = off, every look
     # at an order reads it from the database. With 5, the emergency stop (mode off), a new version or a withdrawal takes
     # up to 5 s to reach every replica: orders looked at in those seconds are still offered under the policy before.

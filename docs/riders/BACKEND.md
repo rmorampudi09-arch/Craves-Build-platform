@@ -305,6 +305,17 @@ The selfie goes to `riders/<riderId>/selfies/<shiftId>.jpg`, PENDING in the cons
 
 ## Dispatch and trips
 
+### Order events
+
+order-service publishes its domain events from a transactional outbox to the `craves-domain-events` topic, and only the types in its `CRAVES_DOMAIN_EVENT_ENABLED_TYPES` (default `CHEF_ACCEPTED_ORDER`). integration-service reads four of them on one subscription (`DeliveryServiceBusProcessors`):
+
+- `CHEF_ACCEPTED_ORDER` creates the delivery command, due 10 minutes before the promised ready time.
+- `ORDER_READY_FOR_PICKUP`, the chef's ready tap, moves a command that has not started to now (`DeliveryCommandScheduler.accelerateReadyForPickup`) and starts the rider's free wait at the kitchen.
+- `ORDER_HANDED_OVER`: step 6 below.
+- `ORDER_CANCELLED`: step 7 below.
+
+The last three reach integration-service only once they are on the list and the subscription lets them through (`GO-LIVE.md` §8, "Order events for dispatch"). The JSON both services agree on is kept as fixtures in each service's `src/test/resources/contracts`.
+
 ### Dispatch chain
 
 `dispatch_policy` mode governs it; with no published policy in force, or mode `off`, nothing below happens and Borzo and Pidge run exactly as before.
@@ -327,7 +338,7 @@ The selfie goes to `riders/<riderId>/selfies/<shiftId>.jpg`, PENDING in the cons
    - the next tick ends the trip through `FleetTripService.cancel`: open offers withdrawn, every open stage closed, a rider already on the trip told at once (`TRIP_ENDED`, reason `ORDER_CANCELLED`) and paid for the state reached, not held;
    - a Borzo or Pidge courier already booked for an order order-service cancelled (`ORDER_CANCELLED` only: a refund comes before any courier is booked, and a partial refund must never cancel one) is cancelled by `FleetCourierCancel`, a fleet job of its own every 5 s, so a slow courier never holds up the dispatch tick. One statement stores the intent and claims the attempt in `delivery_schema.courier_cancel` before the courier is called, so two replicas never both call, and the call runs outside any transaction. A confirmed cancel goes through the delivery-status pipeline at once, as their callback would. A refusal (their courier may already have the food) is tried again a minute later, 3 tries in all; then ops gets `FLEET_COURIER_CANCEL_FAILED` (also logged as `CRAVES_ALERT alert=FLEET_COURIER_CANCEL_FAILED`) with the order to cancel it by hand. A Borzo order still inside its 120 s for a courier first stops its switch to Pidge (the handoff goes to `MANUAL_REVIEW`, "Craves cancelled this delivery"); one the handoff worker is switching right now is waited for, and the courier it ends with is the one cancelled. A courier Craves cancelled never sends its stage to the ops queue. Only with `CRAVES_FLEET_ENABLED`: without the fleet the cancel is recorded and nobody new is booked, but a courier already booked must be cancelled by hand.
 
-   order-service writes the event only once it has a cancel after acceptance (none yet) and `ORDER_CANCELLED` is in its `CRAVES_DOMAIN_EVENT_ENABLED_TYPES`. Deploy this integration-service and let the event through the `integration-service-chef-accepted` subscription first (`GO-LIVE.md`): an older integration-service reads it as a chef acceptance and dead-letters it.
+   order-service writes the event in the cancel's own transaction (`OrderCancelledEventWriter`), one per chef order, and only while `ORDER_CANCELLED` is in its `CRAVES_DOMAIN_EVENT_ENABLED_TYPES` (off by default, so nothing waits unpublished). It has three cancels today, all before a courier is asked for: the chef declined (`CHEF_DECLINED`) or did not answer in time (`CHEF_ACCEPTANCE_TIMEOUT`), and an unpaid checkout was cancelled (`CUSTOMER_CANCELLED_BEFORE_PAYMENT`). It has no cancel after acceptance yet; the one that adds it calls the same writer. A refund writes nothing. Deploy this integration-service and let the event through the `integration-service-chef-accepted` subscription first (`GO-LIVE.md` §8, "Order events for dispatch"): an older integration-service reads it as a chef acceptance and dead-letters it.
 
 8. One writer per rider (1 Nov 2026): an accept and every offer insert first lock the rider row (`FOR NO KEY UPDATE`; offers in rider-id order), so an offer for another order waits for a committing accept and then finds the rider busy, instead of ringing on a phone that can no longer take it.
 9. A rider whose trip ends without them (ops cancel, release to Borzo or Pidge, hand-over to another rider, or the order cancelled) gets a high-priority `TRIP_ENDED` push once the change commits (`FleetTripService.tellRider`, `RiderPushClient.tripEnded`; data `{type, tripId, reason}` with reason `CANCELLED`, `RELEASED`, `HANDED_TO_RIDER` or `ORDER_CANCELLED`). `/locations` still carries the ended trip.

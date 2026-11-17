@@ -2,6 +2,7 @@ package in.craves.integration.delivery.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,9 +16,15 @@ import com.azure.messaging.servicebus.ServiceBusReceivedMessage;
 import com.azure.messaging.servicebus.ServiceBusReceivedMessageContext;
 import com.azure.messaging.servicebus.ServiceBusSenderClient;
 import com.azure.messaging.servicebus.models.DeadLetterOptions;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
+import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.command.DeliveryServiceBusConfiguration.DeliveryServiceBusClientFactory;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +40,60 @@ import org.mockito.ArgumentCaptor;
 class DeliveryServiceBusProcessorsTest {
     final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
     final DeliveryCommandRepository repository = mock(DeliveryCommandRepository.class);
+    final DeliveryServiceBusPublisher publisher = mock(DeliveryServiceBusPublisher.class);
     final UUID chefSubOrderId = UUID.randomUUID();
+
+    /**
+     * The contract with order-service: the exact JSON its OrderCancelledEventFactory writes is recorded as a cancel.
+     * order-service keeps the same file and checks its output against it (DeliveryEventContractTest), so change both copies
+     * together.
+     */
+    @Test
+    void theOrderCancelledEventOrderServiceWritesIsRecorded() throws Exception {
+        String body = fixture("order-cancelled-v1.json");
+        JsonNode data = json.readTree(body).path("data");
+        UUID order = UUID.fromString(data.path("chefSubOrderId").asText());
+        when(repository.recordOrderCancelled(any(), any(), any())).thenReturn(true);
+        ServiceBusReceivedMessageContext context = message(body, "ORDER_CANCELLED", order.toString());
+
+        process(context);
+
+        verify(repository).recordOrderCancelled(order, data.path("reason").asText(), Instant.parse(data.path("cancelledAt").asText()));
+        verify(context).complete();
+        verify(context, never()).deadLetter(any(DeadLetterOptions.class));
+    }
+
+    /**
+     * R22 finding 1a, the same contract for the chef's ready tap: order-service's ORDER_READY_FOR_PICKUP moves the order's
+     * waiting delivery command to now and sends it at once, instead of at promised ready minus the lead time.
+     */
+    @Test
+    void theReadyEventOrderServiceWritesStartsTheSearchNow() throws Exception {
+        String body = fixture("order-ready-for-pickup-v1.json");
+        JsonNode event = json.readTree(body);
+        UUID order = UUID.fromString(event.path("data").path("chefSubOrderId").asText());
+        UUID checkout = UUID.fromString(event.path("data").path("orderId").asText());
+        Instant plannedDispatch = Instant.now().plusSeconds(600);
+        DeliveryCommandMessage waiting = new DeliveryCommandMessage(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), checkout,
+            order, plannedDispatch.plusSeconds(600), plannedDispatch, order.toString(), 4.5, "Madhapur", 17, 1, null);
+        when(repository.findByChefSubOrderId(order)).thenReturn(Optional.of(new CommandRecord(waiting.commandId(), order, checkout,
+            "SCHEDULED", 0, waiting, 7001L, "delivery-command:test", null, null, null, 0, 0, null, null)));
+        when(repository.accelerateScheduled(any(), any(), anyString())).thenReturn(true);
+        ServiceBusReceivedMessageContext context = message(body, "ORDER_READY_FOR_PICKUP", order.toString());
+
+        process(context);
+
+        ArgumentCaptor<DeliveryCommandMessage> moved = ArgumentCaptor.forClass(DeliveryCommandMessage.class);
+        ArgumentCaptor<String> messageId = ArgumentCaptor.forClass(String.class);
+        verify(repository).accelerateScheduled(eq(waiting.commandId()), moved.capture(), messageId.capture());
+        assertThat(moved.getValue().dispatchAt()).isBefore(plannedDispatch).isBeforeOrEqualTo(Instant.now());
+        assertThat(moved.getValue().readyAt()).isEqualTo(Instant.parse(event.path("data").path("readyAt").asText()));
+        assertThat(moved.getValue().sourceEventId()).isEqualTo(UUID.fromString(event.path("eventId").asText()));
+        verify(publisher).publishNow(moved.getValue(), messageId.getValue());
+        verify(publisher).cancelScheduled(7001L);
+        verify(context).complete();
+        verify(context, never()).deadLetter(any(DeadLetterOptions.class));
+    }
 
     @Test
     void anOrderCancelledEventIsRecordedAndCompleted() {
@@ -112,21 +172,31 @@ class DeliveryServiceBusProcessorsTest {
 
     /** As order-service's transport sends it: the type in the event_type property the subscription rule filters on, the order as aggregateId. */
     private static ServiceBusReceivedMessageContext message(String body, String aggregateId) {
+        return message(body, "ORDER_CANCELLED", aggregateId);
+    }
+
+    private static ServiceBusReceivedMessageContext message(String body, String eventType, String aggregateId) {
         ServiceBusReceivedMessage message = mock(ServiceBusReceivedMessage.class);
         when(message.getBody()).thenReturn(BinaryData.fromString(body));
-        when(message.getApplicationProperties()).thenReturn(Map.<String, Object>of("event_type", "ORDER_CANCELLED", "aggregateId", aggregateId));
-        when(message.getSubject()).thenReturn("ORDER_CANCELLED");
+        when(message.getApplicationProperties()).thenReturn(Map.<String, Object>of("event_type", eventType, "aggregateId", aggregateId));
+        when(message.getSubject()).thenReturn(eventType);
         when(message.getMessageId()).thenReturn("order-cancelled-1");
         ServiceBusReceivedMessageContext context = mock(ServiceBusReceivedMessageContext.class);
         when(context.getMessage()).thenReturn(message);
         return context;
     }
 
+    private String fixture(String name) throws IOException {
+        try (InputStream stream = getClass().getResourceAsStream("/contracts/" + name)) {
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
     private void process(ServiceBusReceivedMessageContext context) {
         DeliveryCommandProperties properties = new DeliveryCommandProperties();
         properties.setFullyQualifiedNamespace("test.servicebus.windows.net");
         DeliveryServiceBusProcessors processors = new DeliveryServiceBusProcessors(new DeliveryServiceBusClientFactory(properties),
-            new DeliveryCommandScheduler(repository, mock(DeliveryServiceBusPublisher.class), properties), mock(DeliveryCommandWorker.class),
+            new DeliveryCommandScheduler(repository, publisher, properties), mock(DeliveryCommandWorker.class),
             properties, json, mock(ServiceBusSenderClient.class), Optional.empty());
         try {
             processors.processDeliveryDomainEvent(context);

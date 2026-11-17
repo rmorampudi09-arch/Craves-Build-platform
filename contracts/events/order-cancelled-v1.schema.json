@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://craves.in/contracts/events/order-cancelled-v1.schema.json",
   "title": "ORDER_CANCELLED v1.0",
-  "description": "order-service cancelled a chef order after the chef accepted it (OrderCancelledEventFactory, R16 item 11). Written only while ORDER_CANCELLED is in CRAVES_DOMAIN_EVENT_ENABLED_TYPES; integration-service then books no courier for the order, ends its Craves rider trip and cancels a Borzo or Pidge courier already booked. One per chef order.",
+  "description": "order-service cancelled a chef order (OrderCancelledEventFactory, R16 item 11). Written in the cancel's transaction, only while ORDER_CANCELLED is in CRAVES_DOMAIN_EVENT_ENABLED_TYPES; integration-service then books no courier for the order, ends its Craves rider trip and cancels a Borzo or Pidge courier already booked. One per chef order. A refund alone is not a cancel and writes nothing.",
   "type": "object",
   "required": [
     "eventId",
@@ -29,7 +29,7 @@
       "properties": {
         "checkoutId": { "type": "string", "format": "uuid" },
         "chefSubOrderId": { "type": "string", "format": "uuid" },
-        "reason": { "type": "string", "pattern": "^[A-Z0-9_]{1,40}$", "description": "A code such as CUSTOMER_CANCELLED; integration-service stores any other value as OTHER." },
+        "reason": { "type": "string", "pattern": "^[A-Z0-9_]{1,40}$", "description": "A code. Written today: CHEF_DECLINED, CHEF_ACCEPTANCE_TIMEOUT, CUSTOMER_CANCELLED_BEFORE_PAYMENT. integration-service stores a value that is not a code as OTHER." },
         "cancelledAt": { "type": "string", "format": "date-time" }
       },
       "additionalProperties": false

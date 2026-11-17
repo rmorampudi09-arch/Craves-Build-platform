@@ -23,6 +23,12 @@ public class DeliveryCommandProperties {
     private boolean courierCancelEnabled = false;
     /** Courier status rank guard (DeliveryStatusUpdateService): off (as today), shadow (logs what it would refuse) or enforce. */
     private String statusRankGuard = "off";
+    /** Re-send due commands nobody is working on and cap the wait on couriers (DeliveryCommandSweeper); off keeps today's behaviour. */
+    private boolean sweeperEnabled = false;
+    /** How long a command must be due and untouched before the sweeper re-sends it. */
+    private int sweeperMarginSeconds = 15;
+    /** A command still without a courier this long after its promised ready time is ended and a person is told. */
+    private int courierWaitCapMinutes = 20;
     /**
      * Webhook-first courier tracking: a job is polled only after its quiet period with no callback and no poll, and at
      * least every trackingSafetyPollSeconds while callbacks arrive; off keeps the poll every trackingPollSeconds.
@@ -127,6 +133,12 @@ public class DeliveryCommandProperties {
         if (!java.util.Set.of("off", "shadow", "enforce").contains(statusRankGuard)) {
             throw new IllegalStateException("Delivery statusRankGuard must be off, shadow or enforce");
         }
+        if (sweeperMarginSeconds < 5 || sweeperMarginSeconds > 3600) {
+            throw new IllegalStateException("Delivery sweeperMarginSeconds must be between 5 and 3600");
+        }
+        if (courierWaitCapMinutes < 1 || courierWaitCapMinutes > 1440) {
+            throw new IllegalStateException("Delivery courierWaitCapMinutes must be between 1 and 1440");
+        }
         validateBatch(webhookBatchSize, "webhookBatchSize");
         validateInterval(webhookProcessingIntervalMs, "webhookProcessingIntervalMs");
         validateAttempts(maxWebhookAttempts, "maxWebhookAttempts");
@@ -217,6 +229,12 @@ public class DeliveryCommandProperties {
     public void setBookingJournalEnabled(boolean bookingJournalEnabled) { this.bookingJournalEnabled = bookingJournalEnabled; }
     public boolean isCourierCancelEnabled() { return courierCancelEnabled; }
     public void setCourierCancelEnabled(boolean courierCancelEnabled) { this.courierCancelEnabled = courierCancelEnabled; }
+    public boolean isSweeperEnabled() { return sweeperEnabled; }
+    public void setSweeperEnabled(boolean sweeperEnabled) { this.sweeperEnabled = sweeperEnabled; }
+    public int getSweeperMarginSeconds() { return sweeperMarginSeconds; }
+    public void setSweeperMarginSeconds(int sweeperMarginSeconds) { this.sweeperMarginSeconds = sweeperMarginSeconds; }
+    public int getCourierWaitCapMinutes() { return courierWaitCapMinutes; }
+    public void setCourierWaitCapMinutes(int courierWaitCapMinutes) { this.courierWaitCapMinutes = courierWaitCapMinutes; }
     public String getStatusRankGuard() { return statusRankGuard; }
     /** Trimmed and lower-cased; unset or blank is off. */
     public void setStatusRankGuard(String statusRankGuard) {

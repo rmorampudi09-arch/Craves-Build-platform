@@ -22,6 +22,29 @@ import org.junit.jupiter.api.Test;
 class DeliveryCreateReconciliationWorkerTest {
 
     @Test
+    void everyTickRunsTheSweeperLastWhenThereIsOneEvenIfTheTickFails() {
+        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
+        DeliveryLeaseRecoveryRepository leaseRecovery = mock(DeliveryLeaseRecoveryRepository.class);
+        DeliveryCommandSweeper sweeper = mock(DeliveryCommandSweeper.class);
+        DeliveryCreateReconciliationWorker worker = new DeliveryCreateReconciliationWorker(commands, mock(DeliveryJobRepository.class),
+            mock(DeliveryProviderRouter.class), mock(DeliveryCommandCompletionService.class), leaseRecovery, new DeliveryCommandProperties());
+
+        worker.reconcilePending();
+        worker.setSweeper(sweeper);
+        worker.reconcilePending();
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(sweeper, commands);
+        order.verify(commands, org.mockito.Mockito.times(2)).claimReconciliationBatch(org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt());
+        order.verify(sweeper).sweep();
+
+        when(commands.claimReconciliationBatch(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyInt())).thenThrow(new IllegalStateException("database down"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, worker::reconcilePending);
+        verify(sweeper, org.mockito.Mockito.times(2)).sweep();
+    }
+
+    @Test
     void recoversFinalLeasesThenCompletesProviderDeliveryWithoutAnotherCreate() {
         DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
         DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);

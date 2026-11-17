@@ -234,6 +234,10 @@ public class DeliveryCommandWorker {
         if ("DEAD_LETTER".equals(command.status()) && commands.orderCancelled(chefSubOrderId)) {
             return new WorkerReceipt(null, true, ORDER_CANCELLED);
         }
+        // A message still on its way for a command the sweeper ended at the wait cap: done, and the reason stays on the row.
+        if ("DEAD_LETTER".equals(command.status()) && properties.isSweeperEnabled() && commands.endedAtWaitCap(commandId)) {
+            return new WorkerReceipt(null, true, DeliveryCommandSweeper.WAIT_CAP);
+        }
         if ("WAITING_FOR_PROVIDER".equals(command.status())) {
             Instant retryAt = command.nextProviderRetryAt();
             if (retryAt == null) {

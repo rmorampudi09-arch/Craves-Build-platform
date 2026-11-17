@@ -15,6 +15,7 @@ import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.admin.FleetAdminController;
 import in.craves.integration.fleet.admin.FleetOpsController;
 import in.craves.integration.fleet.admin.FleetSetupController;
+import in.craves.integration.fleet.dispatch.FleetDispatcher;
 import in.craves.integration.fleet.money.FleetEarnings;
 import in.craves.integration.fleet.money.FleetMoneyController;
 import in.craves.integration.fleet.money.FleetPayouts;
@@ -40,6 +41,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.util.ClassUtils;
 import org.springframework.web.client.RestClient;
@@ -97,6 +99,15 @@ class FleetConfigurationTest {
             assertThat(context.getBean(FleetConfiguration.FLEET_SCHEDULER)).isInstanceOf(SchedulerLagWatchdog.MonitoredTaskScheduler.class);
             assertThat(context.getBean(FleetProperties.class).testMode()).as("test mode is on unless switched off").isTrue();
         });
+    }
+
+    /** Switches read through a setter: off unless set, and Spring does call the setter. */
+    @Test
+    void theOfferExpiryWakeIsOffUnlessSwitchedOn() {
+        runner.withPropertyValues("craves.fleet.enabled=true").run(context ->
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "expiryWake")).isEqualTo(false));
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.offer-expiry-wake-enabled=true").run(context ->
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "expiryWake")).isEqualTo(true));
     }
 
     @Test

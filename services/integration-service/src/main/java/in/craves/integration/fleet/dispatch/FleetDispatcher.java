@@ -128,6 +128,12 @@ public class FleetDispatcher implements FleetStage {
      */
     private final int unheardSeconds;
     private final String heardOrYoung;
+    /**
+     * CRAVES_FLEET_OFFER_EXPIRY_WAKE_ENABLED (off by default): with rounds, the order's command also looks again as its
+     * offer runs out, not up to ROUND_CHECK_EVERY later, so the next rider hears then. Who hears, in what order and for how
+     * long stay as they are.
+     */
+    private boolean expiryWake;
     private final AtomicLong noRateCardLoggedAt = new AtomicLong();
     /** Phase 5, the fleet engine (craves.fleet.engine.*): the feed while shadow or live, the client while live; else null. */
     private FleetEngineFeed engineFeed;
@@ -174,6 +180,11 @@ public class FleetDispatcher implements FleetStage {
         this.unheardSeconds = Math.max(0, unheardSeconds); // a negative value is off, never "every offer is unheard"
         this.heardOrYoung = this.unheardSeconds == 0 ? ""
             : " AND (rang_at IS NOT NULL OR offered_at > now() - make_interval(secs => " + this.unheardSeconds + "))";
+    }
+
+    @Value("${craves.fleet.offer-expiry-wake-enabled:false}")
+    public void setExpiryWake(boolean expiryWake) {
+        this.expiryWake = expiryWake;
     }
 
     @Autowired(required = false)
@@ -1027,7 +1038,8 @@ public class FleetDispatcher implements FleetStage {
 
     /**
      * Riders are deciding on the trip's offers: look again at the stage deadline or the next check, whichever comes first,
-     * and with unheardSeconds on (rounds only), when the trip's next offer turns unheard, so its next rider hears on time.
+     * and with unheardSeconds on (rounds only), when the trip's next offer turns unheard, so its next rider hears on time;
+     * with expiryWake on (rounds only), also when the trip's next offer runs out.
      */
     private DeliveryProviderTemporarilyUnavailableException riderDeciding(Instant deadline, DispatchPolicy policy, UUID tripId) {
         boolean rounds = policy != null && (policy.offerRounds() > 1 || policy.wholeStage());
@@ -1039,6 +1051,15 @@ public class FleetDispatcher implements FleetStage {
                 Timestamp.class, unheardSeconds, tripId, unheardSeconds);
             if (unheard != null && unheard.toInstant().isBefore(check)) {
                 check = unheard.toInstant();
+            }
+        }
+        if (expiryWake && rounds) {
+            // Only offers still running, so this never wakes twice for one. The command is claimed by the database clock
+            // (next_provider_retry_at <= now()), the clock expires_at is on, so the look it starts finds the offer over.
+            Timestamp runsOut = jdbc.queryForObject("SELECT MIN(expires_at) FROM fleet_schema.trip_offer WHERE trip_id = ? "
+                + "AND state = 'ACTIVE' AND expires_at > now()", Timestamp.class, tripId);
+            if (runsOut != null && runsOut.toInstant().isBefore(check)) {
+                check = runsOut.toInstant();
             }
         }
         return new DeliveryProviderTemporarilyUnavailableException("Craves riders are deciding on the order",

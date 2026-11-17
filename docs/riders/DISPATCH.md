@@ -87,6 +87,8 @@ After that, a person retrains it about monthly (`ml/fleet-eta/README.md`).
 | Fair band, km | 0 to 5 | 0 | 0 means nearest first. Above 0 means fair turns among riders within that distance of the nearest. |
 
 A new round starts soon after the last one is decided. While a policy runs rounds, the delivery command checks every 5 s (every 10 s otherwise).
+- **A decline starts the next round at once.** Once the decline is saved, the order's command is woken (`DeliveryCommandWake`), and the next rider's phone rings within about a second.
+- **An offer that runs out** is noticed at the next check, so up to 5 s later. With `CRAVES_FLEET_OFFER_EXPIRY_WAKE_ENABLED` (built, switched off) the command also looks as the offer runs out, and the next rider hears then. It changes when the server looks, not a rule: who hears, in what order and for how long stay the same, and so do the 5 s before the same rider is asked again ("No limit on rounds" below). So it needs no notice. To undo, set it to false.
 - **A round always gets its full time.** It goes out only if the stage still has the full time to decide left. If not, the order moves on to Borzo at once, so no rider's time is cut short.
 - **A round is never withdrawn by mistake.** The stage closes only under a lock on its row, the same lock a round is sent under. So a round another worker has just sent never disappears from a rider's phone while it rings.
 - **If the rider chosen first becomes busy** a moment before their offer goes out, the stage stays open, and the next check offers the order to the riders free then.

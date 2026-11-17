@@ -379,12 +379,13 @@ every 5 minutes per row, for 2 hours) reads the booking from the courier and the
 | The courier and the order say | What happens |
 |---|---|
 | The booking is already cancelled | The attempt becomes `CANCELLED` |
-| The order has no delivery job, and its command is `SCHEDULED`, `WAITING_FOR_PROVIDER` or `FAILED` | The booking becomes the job (`ADOPTED`) and the command completes. Adoption and a pass claiming the command exclude each other |
+| The order has no delivery job, and its command is `SCHEDULED`, `WAITING_FOR_PROVIDER` or `FAILED` | The booking becomes the job (`ADOPTED`) and the command completes, unless order-service cancelled the order meanwhile (checked again under the lock). Adoption and a pass claiming the command exclude each other |
 | No job, and the command is `PROCESSING` or `RECONCILIATION_PENDING` | Looked at again at the next check |
 | No job, and the command is `DEAD_LETTER` | Left to a person, as `COURIER_ORPHAN_BOOKING_FOUND` said |
 | The order has a job (or was cancelled by order-service) | The booking is cancelled with the courier and read again. Cancelled: `CANCELLED`. Not cancelled: `COURIER_STRAY_BOOKING_UNSETTLED`, once, and no further try |
 | The order's own courier is gone (its job is cancelled, failed or returned, or a handoff cancelled Borzo and did not finish) | Not cancelled: `COURIER_STRAY_BOOKING_UNSETTLED` |
-| The stray courier has picked up, or its booking has ended | Not cancelled: `COURIER_STRAY_BOOKING_UNSETTLED` (unless the order was cancelled: then the cancel is tried) |
+| The stray courier has picked up, or its booking has ended | Never cancelled, also when the order was cancelled: `COURIER_STRAY_BOOKING_UNSETTLED` |
+| No job, and it is a Pidge order still `PENDING` (created, never dispatched) | Cancelled with Pidge, not adopted |
 | A Borzo-to-Pidge handoff is in progress for the job | Looked at again at the next check |
 
 An attempt recorded as `REJECTED` whose booking exists is not touched: `COURIER_REJECTED_BOOKING_EXISTS` and a person.

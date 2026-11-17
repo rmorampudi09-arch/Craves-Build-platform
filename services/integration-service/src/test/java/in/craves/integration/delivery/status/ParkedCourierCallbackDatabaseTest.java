@@ -195,6 +195,37 @@ class ParkedCourierCallbackDatabaseTest {
     }
 
     @Test
+    void aStrayCourierThatHasTheFoodIsNeverCancelledEvenForACancelledOrder() {
+        for (DeliveryProviderAdapter.DeliveryStatus status : List.of(DeliveryProviderAdapter.DeliveryStatus.PICKED_UP,
+            DeliveryProviderAdapter.DeliveryStatus.IN_TRANSIT, DeliveryProviderAdapter.DeliveryStatus.AT_DROPOFF)) {
+            database.db.update("DELETE FROM delivery_schema.provider_create_attempt");
+            Attempt attempt = journal.begin(chefSubOrderId, "borzo").orElseThrow();
+            journal.stray(chefSubOrderId, "borzo", attempt.clientRef(), "1250032");
+            borzo.bookings.put("1250032", borzo.delivery("1250032", attempt.clientRef(), status));
+            commands.recordOrderCancelled(chefSubOrderId, "Customer cancelled", Instant.now());
+
+            assertThat(strayBookings.resolve(journal.find("borzo", attempt.clientRef()).orElseThrow())).as("%s: a person's", status).isTrue();
+
+            assertThat(borzo.cancels).as("%s", status).isEmpty();
+            assertThat(journal.find("borzo", attempt.clientRef())).map(Attempt::state).contains("ORPHAN_SUSPECT");
+            assertThat(journal.claimDueChecks(5)).as("no further try").isEmpty();
+        }
+    }
+
+    @Test
+    void aPidgeOrderThatWasNeverDispatchedIsCancelledNotMadeTheJob() {
+        Attempt attempt = journal.begin(chefSubOrderId, "pidge").orElseThrow();
+        journal.stray(chefSubOrderId, "pidge", attempt.clientRef(), "PG-1");
+        pidge.bookings.put("PG-1", pidge.delivery("PG-1", attempt.clientRef(), DeliveryProviderAdapter.DeliveryStatus.PENDING));
+
+        assertThat(strayBookings.resolve(journal.find("pidge", attempt.clientRef()).orElseThrow())).isTrue();
+
+        assertThat(pidge.cancels).containsExactly("PG-1");
+        assertThat(journal.find("pidge", attempt.clientRef())).map(Attempt::state).contains("CANCELLED");
+        assertThat(jobCount()).isZero();
+    }
+
+    @Test
     void aBookingTheCourierOrTheJournalDoesNotKnowAndAnOldCallbackEndAsBefore() {
         // The courier has no such booking.
         UUID unknown = borzoCallback("999", "courier_assigned");

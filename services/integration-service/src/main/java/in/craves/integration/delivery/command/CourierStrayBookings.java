@@ -39,7 +39,8 @@ public class CourierStrayBookings {
     private static final Logger log = LoggerFactory.getLogger(CourierStrayBookings.class);
     /** The couriers whose fetched booking shows the reference it was made under. */
     private static final Set<String> REFERENCE_READABLE = Set.of("borzo", "pidge");
-    private static final Set<DeliveryStatus> ADOPTABLE = Set.of(DeliveryStatus.SEARCHING, DeliveryStatus.COURIER_ASSIGNED,
+    /** PENDING too: a courier's new booking is a live job elsewhere (the handoff enrols one). Not Pidge's, see resolve. */
+    private static final Set<DeliveryStatus> ADOPTABLE = Set.of(DeliveryStatus.PENDING, DeliveryStatus.SEARCHING, DeliveryStatus.COURIER_ASSIGNED,
         DeliveryStatus.COURIER_TO_PICKUP, DeliveryStatus.AT_PICKUP, DeliveryStatus.DELAYED);
     /** The food has left with this courier, or the booking is over: cancelling is no longer the answer. */
     private static final Set<DeliveryStatus> PAST_CANCELLING = Set.of(DeliveryStatus.PICKED_UP, DeliveryStatus.IN_TRANSIT,
@@ -129,19 +130,24 @@ public class CourierStrayBookings {
             return cancelled(row, "Already cancelled at the courier");
         }
         boolean orderCancelled = commands.orderCancelled(row.chefSubOrderId());
+        // A Pidge order still PENDING was created and never dispatched (PidgeApiClient.create cancels such an order
+        // itself): it is no courier for the order, so it is cancelled rather than adopted.
+        boolean neverDispatched = "pidge".equals(row.providerId()) && booking.status() == DeliveryStatus.PENDING;
         if (!orderCancelled) {
-            if (job == null) {
+            if (job == null && !neverDispatched) {
                 return adopt(row, booking);
             }
-            if (job.switching()) {
+            if (job != null && job.switching()) {
                 return false;
             }
-            if (job.courierGone()) {
+            if (job != null && job.courierGone()) {
                 return unsettled(row, booking, "the order's own courier is gone, so this may be its only one");
             }
-            if (PAST_CANCELLING.contains(booking.status())) {
-                return unsettled(row, booking, "a second courier is this far along");
-            }
+        }
+        if (PAST_CANCELLING.contains(booking.status())) {
+            // Whatever the order's state: a courier with the food is never cancelled from here.
+            return unsettled(row, booking, orderCancelled ? "the order was cancelled and this courier is this far along"
+                : "a second courier is this far along");
         }
         String refusal = null;
         try {
@@ -158,7 +164,8 @@ public class CourierStrayBookings {
             return false;
         }
         if (booking.status() == DeliveryStatus.CANCELLED) {
-            return cancelled(row, orderCancelled ? "Cancelled: the order was cancelled" : "Cancelled: the order has another delivery job");
+            return cancelled(row, orderCancelled ? "Cancelled: the order was cancelled"
+                : job == null ? "Cancelled: Pidge never dispatched it" : "Cancelled: the order has another delivery job");
         }
         return unsettled(row, booking, refusal == null ? "the courier did not cancel it" : "the courier refused the cancel: " + refusal);
     }

@@ -166,11 +166,13 @@ public class DeliveryCommandCompletionService {
 
     /**
      * A booking the journal had given up becomes the order's job (CourierStrayBookings). Empty, with nothing written,
-     * when a pass or a lookup holds the command or the order has a job by now.
+     * when a pass or a lookup holds the command, the order has a job by now, or order-service has cancelled it (a cancel
+     * is a row of its own and leaves the command's status alone until a pass claims it).
      */
     @Transactional
     public Optional<CompletionReceipt> adoptStray(DeliveryCommandMessage command, RoutingResult found) {
-        if (!commands.lockIdle(command.commandId()) || deliveryJobs.findIdByChefSubOrderId(command.chefSubOrderId()).isPresent()) {
+        if (!commands.lockIdle(command.commandId()) || deliveryJobs.findIdByChefSubOrderId(command.chefSubOrderId()).isPresent()
+            || commands.orderCancelled(command.chefSubOrderId())) {
             return Optional.empty();
         }
         return Optional.of(complete(command, found, null));

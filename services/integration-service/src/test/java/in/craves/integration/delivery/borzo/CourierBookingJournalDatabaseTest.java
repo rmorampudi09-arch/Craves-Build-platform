@@ -320,6 +320,40 @@ class CourierBookingJournalDatabaseTest {
     }
 
     @Test
+    void aStrayBookingBorzoHasOnlyJustTakenIsAdoptedLikeAnyOther() {
+        Attempt given = journal.begin(chefSubOrderId, "borzo").orElseThrow();
+        journal.move(given, Set.of("INTENT"), "ORPHAN_SUSPECT", "no answer", null);
+        journal.foundAt(given, "1250032");
+        database.db.update("UPDATE delivery_schema.delivery_command SET status = 'WAITING_FOR_PROVIDER', next_provider_retry_at = now(), provider_wait_started_at = now()");
+        borzoShows("new");
+
+        reconciliation.reconcilePending();
+
+        assertThat(row("borzo")).containsEntry("state", "ADOPTED").containsEntry("provider_ref", "1250032");
+        assertThat(database.db.queryForMap("SELECT provider_id, status FROM delivery_schema.delivery_job"))
+            .containsEntry("provider_id", "borzo").containsEntry("status", "PENDING");
+        assertThat(commandStatus()).isEqualTo("COMPLETED");
+        borzo.verify();
+    }
+
+    @Test
+    void aStrayBookingIsNotMadeTheJobOfAnOrderCancelledMeanwhile() {
+        Attempt given = journal.begin(chefSubOrderId, "pidge").orElseThrow();
+        journal.move(given, Set.of("INTENT"), "ORPHAN_SUSPECT", "no answer", null);
+        journal.foundAt(given, "PG-1");
+        database.db.update("UPDATE delivery_schema.delivery_command SET status = 'WAITING_FOR_PROVIDER', next_provider_retry_at = now(), provider_wait_started_at = now()");
+        RoutingResult found = router.recovered(given, pidge.delivery("PG-1"));
+        // The cancel lands after the stray-booking check read the order as live: the command's status is still idle.
+        commands.recordOrderCancelled(chefSubOrderId, "Customer cancelled", Instant.now());
+
+        assertThat(completion.adoptStray(message, found)).isEmpty();
+
+        assertThat(database.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
+        assertThat(row("pidge")).containsEntry("state", "ORPHAN_SUSPECT");
+        assertThat(commandStatus()).isEqualTo("WAITING_FOR_PROVIDER");
+    }
+
+    @Test
     void adoptingAStrayBookingAndAPassClaimingTheCommandExcludeEachOther() throws Exception {
         database.db.update("UPDATE delivery_schema.delivery_command SET status = 'WAITING_FOR_PROVIDER', next_provider_retry_at = now(), provider_wait_started_at = now()");
         var transaction = new org.springframework.transaction.support.TransactionTemplate(database.transactions);

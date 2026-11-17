@@ -78,7 +78,7 @@ to this folder deploys nothing: no pipeline or workflow reads it, and the rules 
 
 | The fix program asks for a page on | Rule that pages | Logged by |
 |---|---|---|
-| Double assignment | None yet: `FLEET_DOUBLE_HOLD` arrives with PR #695. Then add it to `pagedCodes` | — |
+| Double assignment | `FLEET_DOUBLE_HOLD` | `IntegrationAlertMonitor` (with `CRAVES_FLEET_DOUBLE_HOLD_ALERT_ENABLED`) |
 | The NO_SUPPLY rate | None yet: nothing logs a `CRAVES_ALERT` for it. `FleetDispatcher` logs `FLEET_STAGE_CLOSED … outcome=NO_SUPPLY` per order, and no rate or threshold is defined | — |
 | Stuck commands | `DELIVERY_COMMAND_STALLED` | `IntegrationAlertMonitor`, `DeliveryCreateReconciliationWorker` |
 | Dead letters | `OUTBOX_DEAD_LETTERED` and the Service Bus `DeadletteredMessages` metric alert | every outbox worker; Azure metric |

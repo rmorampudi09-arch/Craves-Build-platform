@@ -65,6 +65,7 @@ var pagedCodes = [
   'COURIER_UNRESOLVED_BOOKING'
   'COURIER_ENDED_DELIVERY'
   'COURIER_REJECTED_RATE'
+  'FLEET_DOUBLE_HOLD'
 ]
 
 var paging = deployAlerts && !empty(pagePhoneNumbers)

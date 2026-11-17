@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Behind CRAVES_DELIVERY_COMMAND_SWEEPER_ENABLED (off: nothing here runs). A delivery command is run by Service Bus
- * messages; one whose message never comes stays where it is. Every reconciliation tick (15 s) this finds commands that are
+ * messages; one whose message never comes stays where it is. After every reconciliation tick (15 s) this finds commands that are
  * due with nobody working on them and sends each one message under a new id, and ends a command still without a courier
  * once its promised ready time is courier-wait-cap-minutes old. The worker's own rules do the rest (claim, takeover after
  * the lease, attempt limit). RECONCILIATION_PENDING is not swept: the reconciliation worker polls it and ends it itself.
@@ -44,11 +44,17 @@ public class DeliveryCommandSweeper {
                 + LEAST(:retryBase * power(2, LEAST(GREATEST(c.attempt_count, 1) - 1, 20)), :retryMax)))
           OR (c.status = 'PROCESSING' AND c.processing_started_at < now() - make_interval(mins => :leaseMinutes, secs => :margin)))
         """;
-    // Craves riders deciding (an open fleet stage) is not a wait on couriers.
+    // Craves riders deciding (an open fleet stage) is not a wait on couriers. An order with a delivery job, or with a
+    // booking call whose answer is not known yet (the journal; an orphan suspect for the 2 hours it is looked up), is
+    // never past the cap: the takeover and the reconciliation worker finish those, so they are still re-sent.
     private static final String PAST_CAP = """
         COALESCE(c.promised_ready_at, c.ready_at, c.dispatch_at) < now() - make_interval(mins => :capMinutes)
         AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip t JOIN fleet_schema.trip_stage s ON s.trip_id = t.id
                         WHERE t.chef_sub_order_id = c.chef_sub_order_id AND s.state = 'OPEN' AND s.provider = 'CRAVES_FLEET')
+        AND NOT EXISTS (SELECT 1 FROM delivery_schema.delivery_job j WHERE j.chef_sub_order_id = c.chef_sub_order_id)
+        AND NOT EXISTS (SELECT 1 FROM delivery_schema.provider_create_attempt a WHERE a.chef_sub_order_id = c.chef_sub_order_id
+                        AND (a.state IN ('INTENT', 'UNKNOWN')
+                             OR (a.state = 'ORPHAN_SUSPECT' AND a.updated_at > now() - INTERVAL '2 hours')))
         """;
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -94,11 +100,15 @@ public class DeliveryCommandSweeper {
         }
     }
 
-    /** Still waiting on couriers, or due with nobody working on it, past the cap: ended, and a person is told. */
+    /**
+     * Still waiting on couriers, or due with nobody working on it, past the cap: ended, and a person is told. A command a
+     * pass holds inside its lease is never due, so never ended here; the write applies only to the status and the lease
+     * token that were read.
+     */
     private void endCapped(Map<String, Object> settings) {
         List<Map<String, Object>> ended = jdbc.queryForList("""
             WITH capped AS (
-                SELECT c.id, c.status AS was FROM delivery_schema.delivery_command c
+                SELECT c.id, c.status AS was, c.processing_started_at AS lease FROM delivery_schema.delivery_command c
                 WHERE %s AND %s AND (c.status = 'WAITING_FOR_PROVIDER' OR (%s))
                 ORDER BY c.dispatch_at
                 FOR UPDATE OF c SKIP LOCKED
@@ -107,7 +117,7 @@ public class DeliveryCommandSweeper {
             UPDATE delivery_schema.delivery_command c
             SET status = 'DEAD_LETTER', processing_started_at = NULL, next_provider_retry_at = NULL,
                 last_error = '%s', updated_at = now()
-            FROM capped WHERE c.id = capped.id
+            FROM capped WHERE c.id = capped.id AND c.status = capped.was AND c.processing_started_at IS NOT DISTINCT FROM capped.lease
             RETURNING c.id, c.chef_sub_order_id, c.order_id, capped.was
             """.formatted(OPEN_RECENT, PAST_CAP, IDLE_DUE, WAIT_CAP), settings);
         for (Map<String, Object> row : ended) {

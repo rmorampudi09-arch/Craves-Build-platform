@@ -159,6 +159,45 @@ class DeliveryCommandSweeperDatabaseTest {
     }
 
     @Test
+    void anOrderWithADeliveryJobOrAnUnansweredBookingIsNeverCappedAndItsTakeoverCompletesIt() {
+        String late = "promised_ready_at = now() - INTERVAL '21 minutes', ";
+        String leaseOver = late + "attempt_count = 1, processing_started_at = now() - INTERVAL '11 minutes', updated_at = now() - INTERVAL '11 minutes'";
+        UUID booked = command("PROCESSING", leaseOver);
+        database.db.update("INSERT INTO delivery_schema.delivery_job(id,chef_sub_order_id,order_id,provider_id,status) VALUES (?,?,?,'borzo',"
+            + "'SEARCHING_AGENT')", UUID.randomUUID(), order(booked), UUID.randomUUID());
+        UUID nobody = command("PROCESSING", leaseOver);
+        ProviderCreateAttemptRepository journal = new ProviderCreateAttemptRepository(database.db, properties);
+        UUID unanswered = command("WAITING_FOR_PROVIDER", late + "next_provider_retry_at = now() + INTERVAL '5 minutes'");
+        journal.begin(order(unanswered), "borzo").orElseThrow();
+        UUID lost = command("WAITING_FOR_PROVIDER", late + "next_provider_retry_at = now() - INTERVAL '1 minute'");
+        var call = journal.begin(order(lost), "borzo").orElseThrow();
+        journal.move(call, java.util.Set.of(ProviderCreateAttemptRepository.INTENT), ProviderCreateAttemptRepository.UNKNOWN, "timeout", null);
+        UUID refused = command("WAITING_FOR_PROVIDER", late + "next_provider_retry_at = now() + INTERVAL '5 minutes'");
+        var no = journal.begin(order(refused), "borzo").orElseThrow();
+        journal.move(no, java.util.Set.of(ProviderCreateAttemptRepository.INTENT), ProviderCreateAttemptRepository.REJECTED, "refused", null);
+        UUID plain = command("WAITING_FOR_PROVIDER", late + "next_provider_retry_at = now() + INTERVAL '5 minutes'");
+
+        sweeper().sweep();
+
+        assertThat(status(booked)).isEqualTo("PROCESSING");
+        assertThat(status(unanswered)).isEqualTo("WAITING_FOR_PROVIDER");
+        assertThat(status(lost)).isEqualTo("WAITING_FOR_PROVIDER");
+        assertThat(status(nobody)).as("lease over, no job, no booking call open").isEqualTo("DEAD_LETTER");
+        assertThat(status(refused)).as("a refused call is resolved").isEqualTo("DEAD_LETTER");
+        assertThat(status(plain)).isEqualTo("DEAD_LETTER");
+        // The two that are due and idle are sent to their takeover and their lookup; the one still cycling needs no message.
+        ArgumentCaptor<DeliveryCommandMessage> sent = ArgumentCaptor.forClass(DeliveryCommandMessage.class);
+        verify(publisher, times(2)).publishNow(sent.capture(), anyString());
+        assertThat(sent.getAllValues()).extracting(DeliveryCommandMessage::commandId).containsExactlyInAnyOrder(booked, lost);
+
+        DeliveryCommandMessage message = sent.getAllValues().stream().filter(m -> m.commandId().equals(booked)).findFirst().orElseThrow();
+        DeliveryCommandWorker worker = new DeliveryCommandWorker(commands, new DeliveryJobRepository(database.db, json),
+            mock(DeliveryProviderRouter.class), mock(DeliveryCommandCompletionService.class), properties, new DeliveryCommandRetryProperties());
+        assertThat(worker.process(message).providerId()).isEqualTo("ALREADY_COMPLETED");
+        assertThat(status(booked)).isEqualTo("COMPLETED");
+    }
+
+    @Test
     void aCommandHeldForTheFoodIsNotSentWhileItsHoldMayStillRun() {
         properties.setFoodTimedDispatchEnabled(true);
         String idle = "dispatch_at = now() - INTERVAL '5 minutes', updated_at = now() - INTERVAL '5 minutes', ";

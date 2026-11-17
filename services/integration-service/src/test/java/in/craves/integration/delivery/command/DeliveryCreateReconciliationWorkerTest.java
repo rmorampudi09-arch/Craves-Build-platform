@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 class DeliveryCreateReconciliationWorkerTest {
 
     @Test
-    void everyTickRunsTheSweeperFirstWhenThereIsOne() {
+    void everyTickRunsTheSweeperLastWhenThereIsOneEvenIfTheTickFails() {
         DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
         DeliveryLeaseRecoveryRepository leaseRecovery = mock(DeliveryLeaseRecoveryRepository.class);
         DeliveryCommandSweeper sweeper = mock(DeliveryCommandSweeper.class);
@@ -33,12 +33,15 @@ class DeliveryCreateReconciliationWorkerTest {
         worker.setSweeper(sweeper);
         worker.reconcilePending();
 
-        org.mockito.InOrder order = org.mockito.Mockito.inOrder(sweeper, leaseRecovery);
-        order.verify(leaseRecovery).deadLetterExhaustedCreateReconciliationLeases(org.mockito.ArgumentMatchers.anyInt(),
-            org.mockito.ArgumentMatchers.anyInt());
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(sweeper, commands);
+        order.verify(commands, org.mockito.Mockito.times(2)).claimReconciliationBatch(org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt());
         order.verify(sweeper).sweep();
-        order.verify(leaseRecovery).deadLetterExhaustedCreateReconciliationLeases(org.mockito.ArgumentMatchers.anyInt(),
-            org.mockito.ArgumentMatchers.anyInt());
+
+        when(commands.claimReconciliationBatch(org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyInt())).thenThrow(new IllegalStateException("database down"));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, worker::reconcilePending);
+        verify(sweeper, org.mockito.Mockito.times(2)).sweep();
     }
 
     @Test

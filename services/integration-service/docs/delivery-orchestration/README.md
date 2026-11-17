@@ -577,8 +577,9 @@ endpoint writes no `courier_cancel` row, so its cancel opens a case under enforc
 ## Command sweeper and courier wait cap
 
 `CRAVES_DELIVERY_COMMAND_SWEEPER_ENABLED` (default `false`). Off, nothing below happens. On, it also needs
-`CRAVES_DELIVERY_COMMAND_ENABLED` and `CRAVES_DELIVERY_RECONCILIATION_ENABLED`: the sweep is the first step of the
-create-reconciliation tick (`DeliveryCreateReconciliationWorker`, every 15 s), on every replica. No migration.
+`CRAVES_DELIVERY_COMMAND_ENABLED` and `CRAVES_DELIVERY_RECONCILIATION_ENABLED`: the sweep is the last step of the
+create-reconciliation tick (`DeliveryCreateReconciliationWorker`, every 15 s), on every replica, so a tick with slow
+courier lookups delays it. No migration.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -601,11 +602,16 @@ where it is. Each tick the sweeper (`DeliveryCommandSweeper`) looks at commands 
     that fails is logged with `sent=false` and tried again one margin later.
 *   **Cap.** A command still `WAITING_FOR_PROVIDER`, or due with nobody working on it, once its promised ready time is
     older than the cap becomes `DEAD_LETTER` with `last_error = COURIER_WAIT_CAP`, is not sent again, and
-    `DELIVERY_COURIER_WAIT_CAP` is logged. Not while Craves riders are deciding (an open `CRAVES_FLEET` stage). A
+    `DELIVERY_COURIER_WAIT_CAP` is logged. Not while Craves riders are deciding (an open `CRAVES_FLEET` stage), not
+    a command a pass holds inside its lease, and never an order that has a delivery job or a booking call whose answer
+    is not known yet (journal `INTENT` or `UNKNOWN`, or an `ORPHAN_SUSPECT` in its 2 hours of lookups): those are
+    re-sent instead, and the takeover or the reconciliation worker finishes them. A
     message still on its way for it completes without a Service Bus dead letter. Fleet ops can still give the order to
     a rider; a courier is booked by hand.
 *   **Not swept:** `RECONCILIATION_PENDING` (the reconciliation worker polls it and ends it after its looks), and
     commands dispatched over 24 hours ago, which stay as they are.
+*   While riders decide, the command's own message runs each round, so a command whose message is lost there is
+    re-sent like any other. A healthy round rewrites the command every 5 to 10 s and is never re-sent.
 *   A re-sent command's `updated_at` moves, so `DELIVERY_COMMAND_STALLED` (10 minutes unwritten) no longer shows it;
     `DELIVERY_COMMAND_SWEPT` does, each time.
 

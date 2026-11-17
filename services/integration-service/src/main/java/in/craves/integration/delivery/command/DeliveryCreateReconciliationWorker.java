@@ -103,10 +103,17 @@ public class DeliveryCreateReconciliationWorker {
         fixedDelayString = "${craves.delivery-command.reconciliation-interval-ms:15000}"
     )
     public void reconcilePending() {
-        if (sweeper != null) {
-            // First, so a slow courier lookup below does not hold it up. It checks its own flag and never throws.
-            sweeper.sweep();
+        try {
+            reconcile();
+        } finally {
+            if (sweeper != null) {
+                // Last, so its sends never hold up the lookups. It checks its own flag and never throws.
+                sweeper.sweep();
+            }
         }
+    }
+
+    private void reconcile() {
         int recovered = leaseRecovery.deadLetterExhaustedCreateReconciliationLeases(
             properties.getMaxReconciliationAttempts(),
             properties.getReconciliationStaleMinutes()

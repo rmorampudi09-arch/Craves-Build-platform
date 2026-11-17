@@ -1,8 +1,9 @@
 <policies>
   <inbound>
     <base />
-    <!-- /locations and /devices only: the phone's online service sends the shift credential instead of a Bearer token.
-         A 401 or 403 here ends the rider's shift on the phone, so either one is enough; the backend checks both. -->
+    <!-- /locations, /devices and the ring receipt (/offers/{offerId}/rang) only: the phone's online service sends the shift
+         credential instead of a Bearer token. A 401 or 403 on /locations ends the rider's shift on the phone, so either one
+         is enough; the backend checks both. -->
     <choose>
       <when condition="@(!context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;, &quot;&quot;).StartsWith(&quot;Bearer &quot;, StringComparison.OrdinalIgnoreCase) &amp;&amp; string.IsNullOrWhiteSpace(context.Request.Headers.GetValueOrDefault(&quot;X-Craves-Shift-Credential&quot;, &quot;&quot;)))">
         <return-response>
@@ -13,7 +14,7 @@
         </return-response>
       </when>
     </choose>
-    <!-- Up to 5 fixes, or one device registration: 16 KB is plenty. -->
+    <!-- Up to 5 fixes, one device registration or one ring receipt: 16 KB is plenty. -->
     <validate-content unspecified-content-type-action="ignore" max-size="16384" size-exceeded-action="prevent" />
     <set-backend-service base-url="__BACKEND_URL__" />
   </inbound>

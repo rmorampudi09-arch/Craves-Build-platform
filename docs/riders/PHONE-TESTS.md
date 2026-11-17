@@ -199,6 +199,28 @@ Set-up: a live build on a phone with Google Play services and a SIM that receive
 
 **Pass:** every step as written, and Settings → Apps → Craves Rider → Permissions lists no SMS permission.
 
+## 9. Ring receipt at once: p99 under 2 s (the 4 test phones)
+
+Needs an app build after 1.4.1, `CRAVES_FLEET_RING_RECEIPT_ENABLED` on and the `/offers/{offerId}/rang` route published (`GO-LIVE.md` §8). The phone reports each offer as it rings, without waiting for its next location call.
+
+On each of the 4 test phones, send **25 offers** through dispatch in test mode (100 in all), in the four phone states of §2. Then read the server's lines, one per receipt, with no rider on them (Log Analytics; add `| where TimeGenerated > datetime(<the test's start>)`):
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where Log_s has "FLEET_RING_RECEIPT"
+| extend ms = tolong(extract(' ms=([0-9]+)', 1, Log_s)), channel = extract('channel=([a-z]+)', 1, Log_s)
+| summarize receipts = count(), p50 = percentile(ms, 50), p99 = percentile(ms, 99) by channel
+```
+
+`ms` is from the server creating the offer to the receipt reaching it, so it holds the push, the ring and the receipt's own trip.
+
+- [ ] Logcat has no `ring receipt for <id> refused` or `not sent` line while the phone has signal.
+- [ ] With the phone in airplane mode for one offer's 20 s, then back: logcat says `not sent`, and `first_channel` (`PILOT-HEALTH.md`) still shows that offer's receipt after the next location call. The shift stays online.
+- [ ] With the switch set to false for 5 offers: logcat says `refused: 401` (or 404), the phone rings as before, nothing else on screen changes, and `offer_to_ring` has all 5.
+- [ ] `first_channel` shows no offer of the test that never rang.
+
+**Pass:** `p99` of the `fcm` rows at or under 2000 ms over the 100 offers, and every box ticked. A receipt whose offer came by `locations` first is counted apart: its `ms` holds the wait for that location call.
+
 ## Results
 
 ### Service survival
@@ -259,5 +281,14 @@ Set-up: a live build on a phone with Google Play services and a SIM that receive
 | Phone (model, Android) | Date | Tester | Paste (1) | Allow (2) | Deny (3) | Resend (4) | No Play services (5) | Back (6) | Decision push (7) | Demo separate (8) | No SMS permission | Pass |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | | | | | | | | | | | | | |
+
+### Ring receipt at once
+
+| Phone (model, Android, skin) | Date | Tester | Build | Offers | Receipts (fcm) | p50 (ms) | p99 (ms) | Airplane-mode offer kept | Switch off: rings as before | Pass |
+|---|---|---|---|---|---|---|---|---|---|---|
+| | | | | 25 | | | | | | |
+| | | | | 25 | | | | | | |
+| | | | | 25 | | | | | | |
+| | | | | 25 | | | | | | |
 
 Keep each phone's logcat file and the query output with the results.

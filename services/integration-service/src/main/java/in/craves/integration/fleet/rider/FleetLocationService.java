@@ -134,6 +134,22 @@ public class FleetLocationService {
         FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id
         WHERE o.rider_id = ? AND o.state = 'ACTIVE' AND o.expires_at > now()
         ORDER BY o.expires_at""";
+    /**
+     * One offer's receipt, sent as it rings (R22 22): the same two columns and the same rule as HEARTBEAT's receipt, for the
+     * offer of the rider whose live shift the credential is. A row comes back when the credential is live; its ms, how long
+     * after the offer went out the receipt got here, only when this call stored the receipt.
+     */
+    private static final String RANG = """
+        WITH shift AS (
+          SELECT s.rider_id FROM fleet_schema.rider_shift s WHERE s.credential_hash = CAST(? AS CHAR(64)) AND s.ended_at IS NULL
+            AND s.credential_revoked_at IS NULL AND s.credential_expires_at > now()),
+        receipt AS (
+          UPDATE fleet_schema.trip_offer o
+          SET rang_at = GREATEST(o.offered_at, now() - make_interval(secs => CAST(? AS bigint) / 1000.0)), rang_channel = ?
+          FROM shift
+          WHERE o.id = ? AND o.rider_id = shift.rider_id AND o.rang_at IS NULL
+          RETURNING (EXTRACT(EPOCH FROM now() - o.offered_at) * 1000)::bigint AS ms)
+        SELECT (SELECT ms FROM receipt) AS ms FROM shift""";
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
@@ -311,6 +327,29 @@ public class FleetLocationService {
             }
             return null;
         });
+    }
+
+    /**
+     * POST /offers/{offerId}/rang (CRAVES_FLEET_RING_RECEIPT_ENABLED): stores the first arrival of the credential's rider's
+     * own offer, in one statement. Any other offer, or one already reported, changes nothing and is no error, so repeating
+     * it is harmless. 401 SHIFT_CREDENTIAL_INVALID without a live shift's credential; 400 for an unknown channel. The log
+     * line names the offer, never the rider: it measures the phones as a fleet (PHONE-TESTS.md), not a person.
+     */
+    public void rang(String credential, UUID offerId, OfferReceipt receipt) {
+        if (receipt == null || !RECEIPT_CHANNELS.contains(receipt.channel())) {
+            throw FleetApiException.invalid("Send the channel the offer came by: fcm or locations.");
+        }
+        long ageMs = receipt.ageMs() == null ? 0 : Math.max(0, Math.min(MAX_RECEIPT_AGE_MS, receipt.ageMs()));
+        List<Long> stored = jdbc.query(RANG, (row, n) -> {
+            long ms = row.getLong("ms");
+            return row.wasNull() ? null : Long.valueOf(ms);
+        }, FleetShiftService.hash(credential), ageMs, receipt.channel(), offerId);
+        if (stored.isEmpty()) {
+            throw FleetShiftService.credentialInvalid();
+        }
+        if (stored.get(0) != null) {
+            LOGGER.info("FLEET_RING_RECEIPT offer={} channel={} ms={}", offerId, receipt.channel(), stored.get(0));
+        }
     }
 
     /**

@@ -164,6 +164,19 @@ paths:
       description: Repeating it is harmless. 404 OFFER_NOT_FOUND (not this rider's offer); 400 IDEMPOTENCY_KEY_REQUIRED.
       parameters: [{$ref: '#/components/parameters/OfferId'}, {$ref: '#/components/parameters/IdempotencyKey'}]
       responses: {'204': {description: Declined}, '400': {$ref: '#/components/responses/Error'}, '404': {$ref: '#/components/responses/Error'}}
+  /offers/{offerId}/rang:
+    post:
+      summary: Ring receipt. The offer reached the phone (apps after 1.4.1; off until CRAVES_FLEET_RING_RECEIPT_ENABLED)
+      description: |
+        Sent by the native online service as the offer rings, with the shift credential only. The server keeps the first
+        arrival of the rider's own offer (the same rule as LocationBatch.offerReceipts, which still carries a receipt this
+        call did not deliver); any other offer, or a repeat, changes nothing and is 204 too. It is never a decline and
+        nothing counts it per rider. 400 VALIDATION_FAILED for an unknown channel; 401 SHIFT_CREDENTIAL_INVALID. While
+        the switch is off the route does not exist (401 or 404), and the app ignores every failure.
+      security: [{shiftCredential: []}]
+      parameters: [{$ref: '#/components/parameters/OfferId'}]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/RingReceipt'}}}}
+      responses: {'204': {description: Received}, '400': {$ref: '#/components/responses/Error'}, '401': {$ref: '#/components/responses/Error'}}
   /trips/active:
     get:
       summary: The trip in progress, or 204
@@ -276,7 +289,7 @@ paths:
 components:
   securitySchemes:
     bearer: {type: http, scheme: bearer, bearerFormat: JWT}
-    shiftCredential: {type: apiKey, in: header, name: X-Craves-Shift-Credential, description: 'ShiftStart.shiftCredential, sent by the native online service; valid only for /locations, /devices and (once switched on) trip steps, until /shift/end or 12 h'}
+    shiftCredential: {type: apiKey, in: header, name: X-Craves-Shift-Credential, description: 'ShiftStart.shiftCredential, sent by the native online service; valid only for /locations, /devices and (once switched on) trip steps and /offers/{offerId}/rang, until /shift/end or 12 h'}
   parameters:
     OfferId: {name: offerId, in: path, required: true, schema: {type: string}}
     TripId: {name: tripId, in: path, required: true, schema: {type: string}}
@@ -665,6 +678,12 @@ components:
       required: [offerId, channel, ageMs]
       properties:
         offerId: {type: string}
+        channel: {type: string, enum: [fcm, locations], description: 'How the offer first reached the phone'}
+        ageMs: {type: integer, minimum: 0, maximum: 3600000, description: 'How long before this call it arrived, by the phone''s monotonic clock'}
+    RingReceipt:
+      type: object
+      required: [channel, ageMs]
+      properties:
         channel: {type: string, enum: [fcm, locations], description: 'How the offer first reached the phone'}
         ageMs: {type: integer, minimum: 0, maximum: 3600000, description: 'How long before this call it arrived, by the phone''s monotonic clock'}
     LocationBatchResponse:

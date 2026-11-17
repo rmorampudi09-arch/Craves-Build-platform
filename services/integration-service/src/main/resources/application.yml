@@ -69,6 +69,10 @@ craves:
     # to 5 s later, so the next rider is asked then. Who hears, in what order, for how long, and the 5 s before the same
     # rider is asked again all stay, so riders need no notice. Off: the 5 s check only, as before.
     offer-expiry-wake-enabled: ${CRAVES_FLEET_OFFER_EXPIRY_WAKE_ENABLED:false}
+    # Ring receipt at once (R22 22): POST /api/v1/rider/offers/{offerId}/rang takes the phone's offer receipt as the offer
+    # rings (shift credential), into the same trip_offer.rang_at and rang_channel that /locations' receipts fill up to 10 s
+    # later. It changes no dispatch rule. Off: the route does not exist. Switch on once its APIM route is published.
+    ring-receipt-enabled: ${CRAVES_FLEET_RING_RECEIPT_ENABLED:false}
     # GPS rule (R22 9; DISPATCH.md §1), off | shadow | enforce: a rider is asked only with a fix under 60 s old and accurate
     # to 250 m, on top of today's rule (a call in 45 s, a real fix under 3 minutes old). shadow asks the same riders as off
     # and logs FLEET_GPS_RULE with how many each look would leave out; enforce leaves them out. enforce changes who can be

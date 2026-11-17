@@ -1,7 +1,6 @@
 package in.craves.integration.delivery.command;
 
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
-import in.craves.integration.delivery.shiprocket.ShiprocketTransport.ShiprocketApiException;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
@@ -99,9 +98,6 @@ public class ProviderGuard {
             }
             if (cause instanceof RestClientResponseException response) {
                 return serverSide(response.getStatusCode().value());
-            }
-            if (cause instanceof ShiprocketApiException shiprocket && shiprocket.httpStatus() != null) {
-                return serverSide(shiprocket.httpStatus());
             }
         }
         String message = error.getMessage() == null ? "" : error.getMessage();

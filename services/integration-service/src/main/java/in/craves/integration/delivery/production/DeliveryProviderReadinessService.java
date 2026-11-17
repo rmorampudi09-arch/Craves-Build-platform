@@ -1,7 +1,6 @@
 package in.craves.integration.delivery.production;
 
 import in.craves.integration.config.BorzoProperties;
-import in.craves.integration.config.ShiprocketProperties;
 import in.craves.integration.config.PidgeProperties;
 import in.craves.integration.delivery.DeliveryProviderRepository;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
@@ -20,7 +19,6 @@ import org.springframework.util.StringUtils;
 @Service
 public class DeliveryProviderReadinessService {
     private final BorzoProperties borzo;
-    private final ShiprocketProperties shiprocket;
     private final DeliveryCommandProperties delivery;
     private final DeliveryProviderRepository providerRepository;
     private final DeliveryProviderPickupLocationRepository pickupLocations;
@@ -28,22 +26,20 @@ public class DeliveryProviderReadinessService {
     private final PidgeProperties pidge;
 
     public DeliveryProviderReadinessService(BorzoProperties borzo,
-                                            ShiprocketProperties shiprocket,
                                             DeliveryCommandProperties delivery,
                                             DeliveryProviderRepository providerRepository,
                                             DeliveryProviderPickupLocationRepository pickupLocations,
                                             List<DeliveryProviderAdapter> commandAdapters) {
-        this(borzo, shiprocket, delivery, providerRepository, pickupLocations, commandAdapters, new PidgeProperties());
+        this(borzo, delivery, providerRepository, pickupLocations, commandAdapters, new PidgeProperties());
     }
 
     @Autowired
-    public DeliveryProviderReadinessService(BorzoProperties borzo, ShiprocketProperties shiprocket,
+    public DeliveryProviderReadinessService(BorzoProperties borzo,
         DeliveryCommandProperties delivery, DeliveryProviderRepository providerRepository,
         DeliveryProviderPickupLocationRepository pickupLocations, List<DeliveryProviderAdapter> commandAdapters,
         PidgeProperties pidge) {
         this.borzo = borzo;
         this.pidge = pidge;
-        this.shiprocket = shiprocket;
         this.delivery = delivery;
         this.providerRepository = providerRepository;
         this.pickupLocations = pickupLocations;
@@ -76,7 +72,6 @@ public class DeliveryProviderReadinessService {
         return new ReadinessMatrix(
             List.of(
                 borzoReadiness(),
-                shiprocketReadiness(),
                 pidgeReadiness(),
                 vendorBlocked(
                     "SHADOWFAX",
@@ -168,68 +163,6 @@ public class DeliveryProviderReadinessService {
         return new ProviderReadiness("PIDGE", pidge.getEnvironment(), adapterRegistered("pidge"),
             pidge.isEnabled(), create, blockers.isEmpty() && create,
             pidge.isEnabled() && pidge.credentialReady(), catalogActive("pidge"), 0, List.copyOf(blockers));
-    }
-
-    private ProviderReadiness shiprocketReadiness() {
-        List<String> blockers = new ArrayList<>();
-        if (!"PRODUCTION".equals(shiprocket.executionMode())) {
-            blockers.add("SHIPROCKET_API_ENVIRONMENT_NOT_PRODUCTION");
-        }
-        if (!shiprocket.isProductionActivationApproved()) {
-            blockers.add("PRODUCTION_ACTIVATION_NOT_APPROVED");
-        }
-        if (!shiprocket.credentialReady()) {
-            blockers.add("API_CREDENTIALS_NOT_BOUND");
-        }
-        if (!StringUtils.hasText(shiprocket.getWebhookToken())) {
-            blockers.add("WEBHOOK_TOKEN_NOT_BOUND");
-        }
-        if (!StringUtils.hasText(shiprocket.getOrderEmail())) {
-            blockers.add("ORDER_EMAIL_NOT_CONFIGURED");
-        }
-        if (!shiprocket.packageDimensionsReady()) {
-            blockers.add("PACKAGE_DIMENSIONS_NOT_CONFIGURED");
-        }
-        if (!shiprocket.isAttributionApproved()) {
-            blockers.add("COURIER_ATTRIBUTION_NOT_APPROVED");
-        }
-        if (!shiprocket.isEnabled()) {
-            blockers.add("SHIPROCKET_API_DISABLED");
-        }
-        if (!shiprocket.isCreateEnabled()) {
-            blockers.add("SHIPROCKET_CREATE_DISABLED");
-        }
-        if (!adapterRegistered("shiprocket")) {
-            blockers.add("COMMAND_ADAPTER_NOT_REGISTERED");
-        }
-        if (!catalogActive("shiprocket")) {
-            blockers.add("PROVIDER_CATALOG_INACTIVE");
-        }
-        int verifiedPickupLocations = pickupLocations.countVerified("shiprocket");
-        if (verifiedPickupLocations < 1) {
-            blockers.add("NO_VERIFIED_CHEF_PICKUP_MAPPING");
-        }
-        blockers.addAll(sharedDownstreamBlockers());
-
-        boolean readOnlyQuoteReady = shiprocket.isEnabled()
-            && shiprocket.credentialReady()
-            && adapterRegistered("shiprocket");
-        boolean createEnabled = shiprocket.productionCreateReady()
-            && delivery.isEnabled()
-            && catalogActive("shiprocket")
-            && verifiedPickupLocations > 0;
-        return new ProviderReadiness(
-            "SHIPROCKET",
-            shiprocket.executionMode(),
-            adapterRegistered("shiprocket"),
-            readOnlyQuoteReady,
-            createEnabled,
-            blockers.isEmpty() && createEnabled,
-            readOnlyQuoteReady,
-            catalogActive("shiprocket"),
-            verifiedPickupLocations,
-            List.copyOf(blockers)
-        );
     }
 
     private ProviderReadiness vendorBlocked(String provider, String blocker) {

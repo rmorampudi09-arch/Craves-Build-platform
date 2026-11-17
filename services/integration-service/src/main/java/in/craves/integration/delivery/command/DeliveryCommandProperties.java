@@ -19,7 +19,7 @@ public class DeliveryCommandProperties {
     private boolean bookingJournalEnabled = false;
     /** With the journal on, how a Borzo refusal is read: verify (refused, then one lookup), trust (refused) or unknown (as today). */
     private String borzoRefusals = "verify";
-    /** Cancel a cancelled order's courier whatever the fleet flag, Shiprocket too, confirmed by fetching it (CourierCancel); off keeps today's behaviour. */
+    /** Cancel a cancelled order's courier whatever the fleet flag, confirmed by fetching it (CourierCancel); off keeps today's behaviour. */
     private boolean courierCancelEnabled = false;
     /** Courier status rank guard (DeliveryStatusUpdateService): off (as today), shadow (logs what it would refuse) or enforce. */
     private String statusRankGuard = "off";

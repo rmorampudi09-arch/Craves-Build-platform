@@ -16,7 +16,7 @@ export const STATUS_LABELS: Readonly<Record<CaseStatus, string>> = {
 export const ACTIONS = ["ACKNOWLEDGE", "ASSIGN", "REQUEST_REASSIGNMENT", "RESOLVE", "DISMISS"] as const;
 export type CaseAction = (typeof ACTIONS)[number];
 /** Providers integration-service registers; it refuses one that is not active. */
-export const PROVIDERS = ["pidge", "borzo", "craves_fleet", "shadowfax", "porter", "delhivery", "shiprocket"] as const;
+export const PROVIDERS = ["pidge", "borzo", "craves_fleet", "shadowfax", "porter", "delhivery"] as const;
 
 const reason = z.enum(Object.keys(REASONS) as [string, ...string[]]);
 const note = z.string().max(1000);

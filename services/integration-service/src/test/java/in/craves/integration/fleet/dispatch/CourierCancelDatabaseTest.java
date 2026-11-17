@@ -41,7 +41,6 @@ class CourierCancelDatabaseTest {
     final DeliveryStatusUpdateService statusUpdates = mock(DeliveryStatusUpdateService.class);
     final DeliveryProviderAdapter borzo = mock(DeliveryProviderAdapter.class);
     final DeliveryProviderAdapter pidge = mock(DeliveryProviderAdapter.class);
-    final DeliveryProviderAdapter shiprocket = mock(DeliveryProviderAdapter.class);
     final DeliveryCommandProperties properties = new DeliveryCommandProperties();
     CourierCancel couriers;
 
@@ -49,9 +48,8 @@ class CourierCancelDatabaseTest {
     void setUp() {
         when(borzo.providerId()).thenReturn("borzo");
         when(pidge.providerId()).thenReturn("pidge");
-        when(shiprocket.providerId()).thenReturn("shiprocket");
         properties.setCourierCancelEnabled(true);
-        couriers = new CourierCancel(fleet.db, properties, List.of(borzo, pidge, shiprocket), statusUpdates);
+        couriers = new CourierCancel(fleet.db, properties, List.of(borzo, pidge), statusUpdates);
     }
 
     @Test
@@ -64,39 +62,39 @@ class CourierCancelDatabaseTest {
     }
 
     @Test
-    void aShiprocketBookingIsCancelledAndRecordedOnlyOnceTheCourierShowsItCancelled() {
+    void aPidgeBookingIsCancelledAndRecordedOnlyOnceTheCourierShowsItCancelled() {
         UUID order = UUID.randomUUID();
-        UUID job = courierJob(order, "shiprocket", "AWB-1", "COURIER_ASSIGNED");
+        UUID job = courierJob(order, "pidge", "P-A1", "COURIER_ASSIGNED");
         UUID refunded = UUID.randomUUID();
-        courierJob(refunded, "shiprocket", "AWB-2", "COURIER_ASSIGNED");
+        courierJob(refunded, "pidge", "P-A2", "COURIER_ASSIGNED");
         fleet.orderCancelled(order);
         fleet.refundRequested(refunded);
-        // Shiprocket's cancel answers CANCELLED at once; its record follows a little later.
-        when(shiprocket.cancel("AWB-1")).thenReturn(delivery("shiprocket", "AWB-1", DeliveryStatus.CANCELLED));
-        when(shiprocket.track("AWB-1")).thenReturn(seen("shiprocket", "AWB-1", DeliveryStatus.COURIER_ASSIGNED),
-            seen("shiprocket", "AWB-1", DeliveryStatus.COURIER_ASSIGNED), seen("shiprocket", "AWB-1", DeliveryStatus.CANCELLED));
+        // Pidge's cancel answers CANCELLED at once; its record follows a little later.
+        when(pidge.cancel("P-A1")).thenReturn(delivery("pidge", "P-A1", DeliveryStatus.CANCELLED));
+        when(pidge.track("P-A1")).thenReturn(seen("pidge", "P-A1", DeliveryStatus.COURIER_ASSIGNED),
+            seen("pidge", "P-A1", DeliveryStatus.COURIER_ASSIGNED), seen("pidge", "P-A1", DeliveryStatus.CANCELLED));
 
-        assertThat(couriers.cancelledOrders()).as("still live at Shiprocket after the cancel").isZero();
+        assertThat(couriers.cancelledOrders()).as("still live at Pidge after the cancel").isZero();
         assertThat(fleet.db.queryForMap("SELECT reason, attempts, last_error, cancelled_at, alerted_at FROM delivery_schema.courier_cancel "
-            + "WHERE provider_delivery_id = 'AWB-1'")).containsEntry("reason", "ORDER_CANCELLED").containsEntry("attempts", 1)
-            .containsEntry("last_error", "Shiprocket still shows it COURIER_ASSIGNED after the cancel").containsEntry("cancelled_at", null)
+            + "WHERE provider_delivery_id = 'P-A1'")).containsEntry("reason", "ORDER_CANCELLED").containsEntry("attempts", 1)
+            .containsEntry("last_error", "Pidge still shows it COURIER_ASSIGNED after the cancel").containsEntry("cancelled_at", null)
             .containsEntry("alerted_at", null);
         verify(statusUpdates, never()).processTracking(any(), any());
         assertThat(couriers.cancelledOrders()).as("not due again within the attempt window").isZero();
 
-        due("AWB-1");
+        due("P-A1");
         assertThat(couriers.cancelledOrders()).isEqualTo(1);
 
-        verify(shiprocket, times(1)).cancel("AWB-1"); // the second attempt found it cancelled and did not ask again
+        verify(pidge, times(1)).cancel("P-A1"); // the second attempt found it cancelled and did not ask again
         assertThat(fleet.db.queryForObject("SELECT cancelled_at IS NOT NULL FROM delivery_schema.courier_cancel WHERE provider_delivery_id = "
-            + "'AWB-1'", Boolean.class)).isTrue();
+            + "'P-A1'", Boolean.class)).isTrue();
         ArgumentCaptor<TrackingWorkItem> item = ArgumentCaptor.forClass(TrackingWorkItem.class);
         ArgumentCaptor<TrackingSnapshot> applied = ArgumentCaptor.forClass(TrackingSnapshot.class);
         verify(statusUpdates).processTracking(item.capture(), applied.capture());
         assertThat(item.getValue().deliveryJobId()).isEqualTo(job);
         assertThat(applied.getValue().delivery().status()).isEqualTo(DeliveryStatus.CANCELLED);
-        verify(shiprocket, never()).cancel("AWB-2");
-        verify(shiprocket, never()).track("AWB-2");
+        verify(pidge, never()).cancel("P-A2");
+        verify(pidge, never()).track("P-A2");
     }
 
     @Test
@@ -164,13 +162,12 @@ class CourierCancelDatabaseTest {
     @Test
     void theFleetsCancelStaysAsItIsWithTheFlagOffAndHandsOverWithItOn() {
         RiderPushClient alerts = mock(RiderPushClient.class);
-        FleetCourierCancel fleetCancel = new FleetCourierCancel(fleet.db, List.of(borzo, pidge, shiprocket), statusUpdates, alerts);
+        FleetCourierCancel fleetCancel = new FleetCourierCancel(fleet.db, List.of(borzo, pidge), statusUpdates, alerts);
         UUID order = UUID.randomUUID();
         courierJob(order, "borzo", "B-9", "COURIER_ASSIGNED");
-        UUID shiprocketOrder = UUID.randomUUID();
-        courierJob(shiprocketOrder, "shiprocket", "AWB-9", "COURIER_ASSIGNED");
+        UUID pidgeOrder = UUID.randomUUID(); // not cancelled by order-service: ops cancels it below
+        courierJob(pidgeOrder, "pidge", "P-9", "COURIER_ASSIGNED");
         fleet.orderCancelled(order);
-        fleet.orderCancelled(shiprocketOrder);
         when(borzo.cancel("B-9")).thenThrow(new IllegalStateException("Borzo cancel-order was rejected"));
         properties.setCourierCancelEnabled(false);
         fleetCancel.setConfirmed(couriers);
@@ -179,7 +176,7 @@ class CourierCancelDatabaseTest {
 
         verify(borzo, times(1)).cancel("B-9");
         verify(borzo, never()).track(anyString()); // today's path: no fetch
-        verify(shiprocket, never()).cancel(anyString());
+        verify(pidge, never()).cancel(anyString());
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM delivery_schema.courier_cancel", Integer.class)).isEqualTo(1);
 
         properties.setCourierCancelEnabled(true);
@@ -187,17 +184,17 @@ class CourierCancelDatabaseTest {
         verify(borzo, times(1)).cancel("B-9"); // CourierCancel's tick has it now
         verify(borzo, never()).track(anyString());
 
-        UUID trip = fleet.trip(shiprocketOrder);
-        when(shiprocket.track("AWB-9")).thenReturn(seen("shiprocket", "AWB-9", DeliveryStatus.IN_TRANSIT));
+        UUID trip = fleet.trip(pidgeOrder);
+        when(pidge.track("P-9")).thenReturn(seen("pidge", "P-9", DeliveryStatus.IN_TRANSIT));
         Admin ops = new Admin(UUID.randomUUID(), "Admin +91 98xxxxx321");
         assertThatThrownBy(() -> fleetCancel.forOps(trip, ops)).isInstanceOfSatisfying(FleetApiException.class, error -> {
             assertThat(error.code()).isEqualTo("TRIP_NOT_CANCELLABLE");
-            assertThat(error.getMessage()).contains("Shiprocket didn't cancel delivery AWB-9", "IN_TRANSIT");
+            assertThat(error.getMessage()).contains("Pidge didn't cancel delivery P-9", "IN_TRANSIT");
         });
-        verify(shiprocket, never()).cancel(anyString());
-        assertThat(fleet.db.queryForMap("SELECT reason, requested_by FROM delivery_schema.courier_cancel WHERE provider_delivery_id = 'AWB-9'"))
+        verify(pidge, never()).cancel(anyString());
+        assertThat(fleet.db.queryForMap("SELECT reason, requested_by FROM delivery_schema.courier_cancel WHERE provider_delivery_id = 'P-9'"))
             .containsEntry("reason", "OPS_CANCELLED").containsEntry("requested_by", ops.id());
-        verify(alerts, times(1)).opsAlert(eq("FLEET_COURIER_CANCEL_FAILED"), contains("by hand"), contains("AWB-9"), anyMap());
+        verify(alerts, times(1)).opsAlert(eq("FLEET_COURIER_CANCEL_FAILED"), contains("by hand"), contains("P-9"), anyMap());
     }
 
     private void due(String deliveryId) {

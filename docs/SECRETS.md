@@ -12,5 +12,5 @@ Required future keys:
 - PostgreSQL connection string
 - ACS connection string
 - Cashfree credentials
-- Shiprocket credentials
+- Borzo and Pidge credentials
 - Google Maps API key

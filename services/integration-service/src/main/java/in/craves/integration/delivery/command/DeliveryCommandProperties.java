@@ -21,6 +21,8 @@ public class DeliveryCommandProperties {
     private String borzoRefusals = "verify";
     /** Cancel a cancelled order's courier whatever the fleet flag, Shiprocket too, confirmed by fetching it (CourierCancel); off keeps today's behaviour. */
     private boolean courierCancelEnabled = false;
+    /** Courier status rank guard (DeliveryStatusUpdateService): off (as today), shadow (logs what it would refuse) or enforce. */
+    private String statusRankGuard = "off";
     private String fullyQualifiedNamespace = "";
     private String connectionString = "";
     private String topicName = "craves-domain-events";
@@ -105,6 +107,9 @@ public class DeliveryCommandProperties {
         if (!java.util.Set.of("verify", "trust", "unknown").contains(borzoRefusals)) {
             throw new IllegalStateException("Delivery borzoRefusals must be verify, trust or unknown");
         }
+        if (!java.util.Set.of("off", "shadow", "enforce").contains(statusRankGuard)) {
+            throw new IllegalStateException("Delivery statusRankGuard must be off, shadow or enforce");
+        }
         validateBatch(webhookBatchSize, "webhookBatchSize");
         validateInterval(webhookProcessingIntervalMs, "webhookProcessingIntervalMs");
         validateAttempts(maxWebhookAttempts, "maxWebhookAttempts");
@@ -186,6 +191,8 @@ public class DeliveryCommandProperties {
     public void setBookingJournalEnabled(boolean bookingJournalEnabled) { this.bookingJournalEnabled = bookingJournalEnabled; }
     public boolean isCourierCancelEnabled() { return courierCancelEnabled; }
     public void setCourierCancelEnabled(boolean courierCancelEnabled) { this.courierCancelEnabled = courierCancelEnabled; }
+    public String getStatusRankGuard() { return statusRankGuard; }
+    public void setStatusRankGuard(String statusRankGuard) { this.statusRankGuard = statusRankGuard; }
     public String getBorzoRefusals() { return borzoRefusals; }
     public void setBorzoRefusals(String borzoRefusals) { this.borzoRefusals = borzoRefusals; }
     public String getFullyQualifiedNamespace() { return fullyQualifiedNamespace; }

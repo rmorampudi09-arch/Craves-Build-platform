@@ -46,6 +46,9 @@ The courier booking journal (integration, `CRAVES_DELIVERY_BOOKING_JOURNAL_ENABL
 Courier cancel for cancelled orders (integration `CourierCancel`, `CRAVES_DELIVERY_COURIER_CANCEL_ENABLED`) adds
 `COURIER_CANCEL_UNCONFIRMED`; see the same README, "Courier cancel for cancelled orders".
 
+The status rank guard (integration `DeliveryStatusUpdateService`, `CRAVES_DELIVERY_STATUS_RANK_GUARD=enforce`) adds
+`COURIER_ENDED_DELIVERY`; see the same README, "Status rank guard".
+
 The Borzo-to-Pidge handoff (integration `BorzoPidgeHandoffWorker`) adds `DELIVERY_HANDOFF_NO_COURIER` (Borzo cancelled and
 Pidge refused or cancelled the fallback, so the order needs a person) and `DELIVERY_HANDOFF_STALLED` (the Pidge fallback
 is still unresolved about 10 minutes later; it keeps retrying). Both are logged once per order.

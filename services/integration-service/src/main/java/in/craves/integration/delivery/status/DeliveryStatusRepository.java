@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class DeliveryStatusRepository {
+    /** opened_by of a case no person opened. */
+    static final UUID SYSTEM_ACTOR = new UUID(0L, 0L);
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
 
@@ -201,6 +203,38 @@ public class DeliveryStatusRepository {
             databaseTimestamp(nextTrackingAt),
             deliveryJobId
         );
+    }
+
+    /** Rank guard only: whether the job's parcel was ever picked up (a DELAYED job no longer says which stage it reached). */
+    public boolean pickedUp(UUID deliveryJobId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT picked_up_at IS NOT NULL FROM delivery_schema.delivery_job WHERE id = ?", Boolean.class, deliveryJobId));
+    }
+
+    /** Rank guard only: Craves cancels this booking itself (courier_cancel), or order-service cancelled its order. */
+    public boolean cravesEndedBooking(String providerId, String providerDeliveryId, UUID chefSubOrderId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+            SELECT EXISTS (SELECT 1 FROM delivery_schema.courier_cancel WHERE provider_id = lower(?) AND provider_delivery_id = ?)
+                OR EXISTS (SELECT 1 FROM delivery_schema.order_cancelled WHERE chef_sub_order_id = ?)
+            """, Boolean.class, providerId, providerDeliveryId, chefSubOrderId));
+    }
+
+    /**
+     * Rank guard only: an ops case (PROVIDER_CANCELLED) for a job its courier ended, opened by the system. False when the
+     * job already has an active case.
+     */
+    public boolean openCourierEndedCase(UUID deliveryJobId, UUID orderId, String note) {
+        UUID caseId = UUID.randomUUID();
+        if (jdbc.update("""
+            INSERT INTO delivery_schema.delivery_exception_case (id, delivery_job_id, order_id, reason, status, opened_by)
+            VALUES (?, ?, ?, 'PROVIDER_CANCELLED', 'OPEN', ?)
+            ON CONFLICT (delivery_job_id) WHERE status NOT IN ('RESOLVED', 'DISMISSED') DO NOTHING
+            """, caseId, deliveryJobId, orderId, SYSTEM_ACTOR) != 1) {
+            return false;
+        }
+        jdbc.update("INSERT INTO delivery_schema.delivery_exception_event (case_id, action, status, actor_id, note) "
+            + "VALUES (?, 'OPEN', 'OPEN', ?, ?)", caseId, SYSTEM_ACTOR, note);
+        return true;
     }
 
     public void markWebhookProcessed(UUID inboxId,

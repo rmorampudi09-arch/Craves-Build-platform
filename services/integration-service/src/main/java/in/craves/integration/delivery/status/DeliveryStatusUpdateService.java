@@ -26,6 +26,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +35,7 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class DeliveryStatusUpdateService {
+    private static final Logger log = LoggerFactory.getLogger(DeliveryStatusUpdateService.class);
     private final Map<String, DeliveryWebhookNormalizer> normalizers;
     private final DeliveryStatusRepository repository;
     private final DeliveryOutboxRepository outbox;
@@ -104,7 +107,7 @@ public class DeliveryStatusUpdateService {
                 "Delivery job disappeared during processing"
             ));
 
-        Decision decision = decide(job, update);
+        Decision decision = rankGuard(job, update, decide(job, update), "WEBHOOK");
         String eventType = webhookEventType(workItem.rawPayload());
         boolean inserted = repository.insertEventIfAbsent(
             job.id(),
@@ -199,7 +202,7 @@ public class DeliveryStatusUpdateService {
                     "BORZO_HANDOFF_SUPERSEDED");
             }
         }
-        Decision decision = decide(job, update);
+        Decision decision = rankGuard(job, update, decide(job, update), "TRACK");
         Instant nextTrackingAt = nextTrackingAt(update.status());
 
         if (!decision.applied()) {
@@ -310,6 +313,86 @@ public class DeliveryStatusUpdateService {
             job.orderId(),
             objectMapper.valueToTree(event)
         );
+        courierEnded(job, update, source);
+    }
+
+    /**
+     * CRAVES_DELIVERY_STATUS_RANK_GUARD, under the job's row lock: an update decide() accepted that would move the job to
+     * an earlier stage is logged (shadow) or refused as STALE_RANK (enforce). Off, the decision is returned untouched.
+     */
+    private Decision rankGuard(DeliveryJobState job, ProviderStatusUpdate update, Decision decision, String source) {
+        String mode = properties.getStatusRankGuard();
+        if (!decision.applied() || !("shadow".equals(mode) || "enforce".equals(mode))) {
+            return decision;
+        }
+        DeliveryStatus current = parseStatus(job.status());
+        boolean pickedUp = rank(current) == 0 && repository.pickedUp(job.id());
+        if (!backwards(current, pickedUp, update.status())) {
+            return decision;
+        }
+        log.warn("DELIVERY_STATUS_RANK_GUARD mode={} decision=STALE_RANK source={} provider={} jobId={} delivery={} from={} to={} "
+            + "providerStatus={}", mode, source, update.providerId(), job.id(), safe(update.providerOrderId()), current,
+            update.status(), safe(update.providerStatus()));
+        return "enforce".equals(mode) ? Decision.ignored("STALE_RANK") : decision;
+    }
+
+    /**
+     * With the rank guard on: a courier ended (CANCELLED or FAILED) a live booking that Craves did not cancel and whose
+     * order is not cancelled. Shadow logs it; enforce also opens one ops case in this transaction and alerts once.
+     */
+    private void courierEnded(DeliveryJobState job, ProviderStatusUpdate update, String source) {
+        String mode = properties.getStatusRankGuard();
+        if (!("shadow".equals(mode) || "enforce".equals(mode))
+            || (update.status() != DeliveryStatus.CANCELLED && update.status() != DeliveryStatus.FAILED)
+            || isTerminal(parseStatus(job.status()))
+            || "craves_fleet".equals(normalize(update.providerId()))
+            || repository.cravesEndedBooking(update.providerId(), update.providerOrderId(), job.chefSubOrderId())) {
+            return;
+        }
+        log.warn("DELIVERY_STATUS_RANK_GUARD mode={} decision=COURIER_ENDED source={} provider={} jobId={} delivery={} from={} to={} "
+            + "providerStatus={}", mode, source, update.providerId(), job.id(), safe(update.providerOrderId()), job.status(),
+            update.status(), safe(update.providerStatus()));
+        if ("enforce".equals(mode) && repository.openCourierEndedCase(job.id(), job.orderId(), safe(update.providerId())
+            + " ended booking " + safe(update.providerOrderId()) + " as " + update.status() + " while it was " + job.status())) {
+            log.error("CRAVES_ALERT alert=COURIER_ENDED_DELIVERY provider={} orderId={} chefSubOrderId={} jobId={} delivery={} was={} "
+                + "status={}", update.providerId(), job.orderId(), job.chefSubOrderId(), job.id(), safe(update.providerOrderId()),
+                job.status(), update.status());
+        }
+    }
+
+    /** A stage's place in a delivery; 100 is final; 0 for DELAYED and UNKNOWN, which are not stages. */
+    static int rank(DeliveryStatus status) {
+        return switch (status) {
+            case PENDING -> 10;
+            case SEARCHING -> 20;
+            case COURIER_ASSIGNED -> 30;
+            case COURIER_TO_PICKUP -> 35;
+            case AT_PICKUP -> 40;
+            case PICKED_UP -> 50;
+            case IN_TRANSIT -> 60;
+            case AT_DROPOFF -> 70;
+            case RETURNING -> 80;
+            case DELIVERED, RETURNED, CANCELLED, FAILED -> 100;
+            case DELAYED, UNKNOWN -> 0;
+        };
+    }
+
+    /**
+     * Whether next is an earlier stage than current. pickedUp: for a job that is DELAYED (no stage), whether its parcel
+     * was picked up. Allowed although lower: back to PENDING or SEARCHING from an assigned courier before pickup (the
+     * courier dropped the job and the provider searches again). DELAYED is never earlier.
+     * shortcut: a re-match is told by its status alone and a DELAYED job keeps only the pickup boundary, upgrade with
+     * provider clocks and delayed_at.
+     */
+    static boolean backwards(DeliveryStatus current, boolean pickedUp, DeliveryStatus next) {
+        int to = rank(next);
+        if (to == 0) {
+            return false;
+        }
+        int from = rank(current) != 0 ? rank(current) : rank(pickedUp ? DeliveryStatus.PICKED_UP : DeliveryStatus.PENDING);
+        boolean rematch = from >= rank(DeliveryStatus.COURIER_ASSIGNED) && from <= rank(DeliveryStatus.AT_PICKUP)
+            && to <= rank(DeliveryStatus.SEARCHING);
+        return to < from && !rematch;
     }
 
     private Decision decide(DeliveryJobState job,

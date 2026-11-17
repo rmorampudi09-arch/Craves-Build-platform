@@ -437,7 +437,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #F1F3F5;
+  background: #FFFFFF;
   color: var(--landing-red);
 }
 
@@ -550,7 +550,7 @@
   height: 3.6rem;
   margin: 0 auto 0.65rem;
   border: 1px solid #E5E7EB;
-  background: #F1F3F5;
+  background: #FFFFFF;
 }
 
 .referenceHowCard h3,

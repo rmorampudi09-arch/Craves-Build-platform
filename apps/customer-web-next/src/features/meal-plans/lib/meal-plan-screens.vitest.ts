@@ -4,12 +4,16 @@ import { createElement } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MotionGlobalConfig } from "framer-motion";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+const auth = vi.hoisted(() => ({ address: { lat: 17.44, lng: 78.38 } as { lat: number; lng: number } | null }));
 vi.mock("@/features/auth/api/cravesAuth", () => ({
-  getAddress: () => ({ lat: 17.44, lng: 78.38 }),
+  getAddress: () => auth.address,
+  getSession: () => null,
+  recoverSessionSnapshotForNavigation: () => null,
+  loadSelectedAddress: async () => null,
 }));
 import { SubscriptionDetails } from "@/features/meal-plans/components/subscription-details";
 import { SubscriptionManager } from "@/features/meal-plans/components/subscription-manager";
-import { PreviousPageBack } from "@/features/meal-plans/components/previous-page-back";
+import { PreviousPageBack } from "@/shared/components/navigation/PreviousPageBack";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const PLAN = "22222222-2222-4222-8222-222222222222";
@@ -91,6 +95,7 @@ const plan = (id: string, name: string, billingPeriod = "WEEKLY") => ({
 
 let current: Record<string, unknown> = subscription();
 let mine: unknown[] = [];
+let meals: unknown[] = [meal];
 const credit = {
   id: "99999999-9999-4999-8999-999999999999", kind: "PAUSE", firstDate: "2099-10-10", lastDate: "2099-10-12", mealSlotCode: null, days: 3,
   status: "PENDING_CHOICE", refundAmount: 360, currency: "INR", choiceDeadline: "2099-10-16T06:00:00Z", extendAvailable: true,
@@ -102,6 +107,8 @@ beforeAll(() => {
 beforeEach(() => {
   current = subscription();
   mine = [];
+  meals = [meal];
+  auth.address = { lat: 17.44, lng: 78.38 };
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -117,7 +124,7 @@ beforeEach(() => {
             ? schedule
             : { ...schedule, planId: OTHER_PLAN, kitchenId: null, items: [] },
         );
-      if (url.includes("/occurrences")) return Response.json([meal]);
+      if (url.includes("/occurrences")) return Response.json(meals);
       if (url === "/api/customer/addresses")
         return Response.json([
           { id: ADDRESS, areaName: "Madhapur", districtName: null, city: "Hyderabad" },
@@ -243,6 +250,29 @@ describe("meal plan page", () => {
     );
     await settle();
   });
+
+  it("names the plan, as the app does, and says Starts before its first day", async () => {
+    current = subscription({ status: "PENDING_PAYMENT", startDate: "2099-01-05", nextServiceDate: "2099-01-05" });
+    render(createElement(SubscriptionDetails, { subscriptionId: ID }));
+    expect(await screen.findByRole("heading", { name: "Weekly thali" })).toBeTruthy();
+    expect(screen.getByText("Starts").nextElementSibling?.textContent).toBe("Mon 5 Jan");
+    expect(screen.queryByText("Started")).toBeNull();
+    await settle();
+  });
+
+  it("shows an ended plan without a next meal, changes or a promise of meals to come", async () => {
+    current = subscription({ status: "EXPIRED" });
+    meals = [];
+    render(createElement(SubscriptionDetails, { subscriptionId: ID }));
+    expect(await screen.findByText("No meals for this plan.")).toBeTruthy();
+    expect(screen.getByText("Started")).toBeTruthy();
+    expect(screen.queryByText("Next meal")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Manage meal plan" })).toBeNull();
+    expect(screen.queryByText(/once your plan starts/)).toBeNull();
+    // What the plan was stays readable.
+    expect(screen.getByRole("heading", { name: "Meal schedule" })).toBeTruthy();
+    await settle();
+  });
 });
 
 describe("meal plans list", () => {
@@ -330,7 +360,7 @@ describe("meal plans list", () => {
       (await screen.findByRole("tab", { name: "Explore plans" })).getAttribute("aria-selected"),
     ).toBe("true");
     expect(await screen.findByText("By Asha's Kitchen · 5 meals · Mon – Fri")).toBeTruthy();
-    expect(screen.getByText("Veg")).toBeTruthy();
+    expect(within(screen.getByRole("heading", { name: "Weekly thali" }).closest("article")!).getByText("Veg")).toBeTruthy();
     expect(screen.getByLabelText("Rated 4.6 from 12 reviews")).toBeTruthy();
     expect(screen.getByText("/ 14 days")).toBeTruthy();
     fireEvent.change(screen.getByRole("searchbox", { name: "Search meal plans or chefs" }), {
@@ -342,6 +372,41 @@ describe("meal plans list", () => {
       target: { value: "biryani" },
     });
     expect(screen.getByText("No plans match “biryani”.")).toBeTruthy();
+    await settle();
+  });
+
+  it("opens on My plans while a plan waits for payment, so Pay now isn't hidden behind Explore", async () => {
+    mine = [subscription({ status: "PENDING_PAYMENT" })];
+    render(createElement(SubscriptionManager));
+    expect((await screen.findByRole("tab", { name: "My plans" })).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("link", { name: "Pay now" }).getAttribute("href")).toBe(`/subscriptions/${ID}/payment`);
+    await settle();
+  });
+
+  it("filters by the app's plan types; Veg goes by the dishes' own veg marks", async () => {
+    render(createElement(SubscriptionManager));
+    await screen.findByText("By Asha's Kitchen · 5 meals · Mon – Fri");
+    expect(screen.getByRole("group", { name: "Plan type" }).textContent).toBe("All plansWeight lossHigh proteinVegBalanced");
+    fireEvent.click(screen.getByRole("button", { name: "Veg" }));
+    expect(screen.getByRole("heading", { name: "Weekly thali" })).toBeTruthy();
+    // Its dishes aren't known to be veg, so it stays out, whatever its name says.
+    expect(screen.queryByRole("heading", { name: "Fortnight tiffin" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "High protein" }));
+    expect(screen.getByText("No plans of this type near you yet. Try All plans.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "All plans" }));
+    expect(screen.getByRole("heading", { name: "Fortnight tiffin" })).toBeTruthy();
+    await settle();
+  });
+
+  it("without a delivery address lists every plan, as the app does, and asks for the address", async () => {
+    auth.address = null;
+    render(createElement(SubscriptionManager));
+    expect(await screen.findByText(/Showing plans from every kitchen/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Set your delivery address" }).getAttribute("href")).toBe("/addresses");
+    expect(screen.getByRole("heading", { name: "Weekly thali" })).toBeTruthy();
+    const asked = vi.mocked(fetch).mock.calls.map(([url]) => String(url)).filter((url) => url.startsWith("/api/subscriptions/plans") && !url.includes("/", "/api/subscriptions/plans".length));
+    expect(asked).toContain("/api/subscriptions/plans");
+    expect(asked.some((url) => url.includes("latitude"))).toBe(false);
     await settle();
   });
 });

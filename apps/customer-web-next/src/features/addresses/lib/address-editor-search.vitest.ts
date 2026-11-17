@@ -114,6 +114,26 @@ describe("customer address search typeahead", () => {
   });
 });
 
+describe("moving between the address steps", () => {
+  it("goes back from the location step to the details once a pin is set, keeping the chosen type", async () => {
+    mocks.search.mockResolvedValue([result("p1", "Madhapur", 17.4483, 78.3915)]);
+    mount();
+    // A new address starts on the location step with no details to go back to.
+    expect(screen.queryByRole("button", { name: "Back to address details" })).toBeNull();
+    fireEvent.change(input(), { target: { value: "Madhapur" } });
+    fireEvent.click(await screen.findByText("Madhapur", {}, { timeout: 3_000 }));
+    await screen.findByTestId("map");
+    fireEvent.click(screen.getByRole("button", { name: "Work" }));
+    expect(screen.getByRole("button", { name: "Work" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Home" }).getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByLabelText("Search for your area, street or landmark");
+    fireEvent.click(screen.getByRole("button", { name: "Back to address details" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Work" }).getAttribute("aria-pressed")).toBe("true"));
+  });
+});
+
 describe("leaving the address editor", () => {
   const open = (onClose: () => void) => render(createElement(AddressEditorFlow, {
     open: true,

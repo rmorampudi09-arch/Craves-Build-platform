@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 function source(relativePath: string): string {
@@ -32,10 +32,15 @@ test("home uses a real banner, customer skeletons, sticky cravings and image-led
   assert.match(chefs, /discoverDishes\(/);
   // Veg mode narrows the cards' dishes (pure veg kitchens, or veg dishes from every kitchen).
   assert.match(chefs, /dishes=\{vegDishes\}/);
-  // Top kitchens near you (app 1.35): one row of up to eight cards. People swipe each card's
-  // photos; nothing moves on its own, so there is no pause or play button (owner, 5 Nov 2026).
+  // Top kitchens near you (app 1.35): one row of up to eight cards. Each card shows only its food, which slides on by
+  // itself while on screen, holds while hovered, focused or touched, and never moves with reduced motion (owner,
+  // 17 Nov 2026); there is still no pause or play button (owner, 5 Nov 2026).
   assert.match(kitchens, /function KitchenPhotos/);
-  assert.doesNotMatch(kitchens, /setInterval|setTimeout|Pause kitchen photos|Play kitchen photos/);
+  assert.doesNotMatch(kitchens, /Pause kitchen photos|Play kitchen photos/);
+  assert.match(kitchens, /const SLIDE_MS = 3_000/);
+  assert.match(kitchens, /useReducedMotion\(\)/);
+  assert.match(kitchens, /new IntersectionObserver/);
+  assert.match(kitchens, /const images = summary\?\.imageUrls \?\? NO_PHOTOS/);
   assert.match(kitchens, /snap-center snap-always object-cover/);
   assert.doesNotMatch(kitchens, /onPointerDown|setPointerCapture|setSwiped/);
   assert.match(home, /limit=\{8\}/);
@@ -255,4 +260,28 @@ test("photos show instantly from cache and dish photos swipe natively", () => {
   assert.match(dishHeader, /snap-x snap-mandatory overflow-x-auto/);
   assert.match(dishHeader, /onClick=\{\(\) => showIndex\(index\)\}/);
   assert.doesNotMatch(dishHeader, /backdrop-blur/);
+});
+
+test("icons sit on plain white across the customer and chef web, not on grey or pale-red tiles (owner, 17 Nov 2026)", () => {
+  // The old tile: a round light-grey or pale-red chip right behind a coloured icon. Photos, avatars and
+  // text buttons keep their own backgrounds; the admin portal is a separate tool.
+  const tile = /rounded-(?:full|xl|2xl|\[10px\]) !?bg-\[#(?:F1F3F5|F7F5F3|FDEAE8)\] !?text-\[#(?:F62E18|D92714|C4200F|1A1A1A|6B6B6B)\]/;
+  const root = new URL("../", import.meta.url);
+  const offenders = (readdirSync(root, { recursive: true }) as string[])
+    .filter((file) => file.endsWith(".tsx") && !/(^|\/)admin\//.test(file) && !/\.(test|vitest)\.tsx$/.test(file))
+    .filter((file) => tile.test(readFileSync(new URL(file, root), "utf8")));
+  assert.deepEqual(offenders, []);
+});
+
+test("Saved, Addresses and Edit profile renew an expired sign-in instead of failing (craves.in, 17 Nov 2026)", () => {
+  // A plain fetch() gets a 401 once the short sign-in lapses; sessionFetch renews it and retries once.
+  for (const file of [
+    "../features/favorites/api/customerFavorites.ts",
+    "../features/addresses/screens/Addresses.tsx",
+    "../features/profile/components/EditProfileModal.tsx",
+  ]) {
+    const code = source(file);
+    assert.match(code, /sessionFetch\(/, file);
+    assert.doesNotMatch(code, /(?<![\w.])fetch\(/, file);
+  }
 });

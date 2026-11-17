@@ -417,7 +417,7 @@ export function RazorpayPayment({ checkoutId }: { checkoutId: string }) {
         ) : (
           <div className="space-y-4">
             <section className="rounded-2xl border border-border bg-white p-5 shadow-[var(--shadow-card)] sm:p-6 md:p-7">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F1F3F5] text-[#F62E18]">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-[#F62E18]">
                 <ShieldCheck
                   className="h-8 w-8"
                   strokeWidth={2.5}

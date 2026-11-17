@@ -55,7 +55,7 @@ export function AccountCard({
 
       <div className="mt-5 grid gap-2.5 rounded-2xl bg-[#F8F9FA] p-3 sm:grid-cols-2">
         <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-white px-3 py-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
             <FaPhone className="text-xs" aria-hidden="true" />
           </span>
           <div className="min-w-0">
@@ -69,7 +69,7 @@ export function AccountCard({
         </div>
 
         <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-white px-3 py-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
             <FaEnvelope className="text-xs" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">

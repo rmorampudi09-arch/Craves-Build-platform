@@ -327,7 +327,7 @@ function Overlay({
                       <RadixDialog.Close
                         disabled={busy}
                         aria-label={closeLabel ?? text.close}
-                        className="-mr-1 -mt-1 flex !h-11 !min-h-11 !w-11 !min-w-11 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#F1F3F5] !p-0 !text-[#1A1A1A] !shadow-none"
+                        className="-mr-1 -mt-1 flex !h-11 !min-h-11 !w-11 !min-w-11 shrink-0 items-center justify-center rounded-full !border-0 !bg-white !p-0 !text-[#1A1A1A] !shadow-none"
                       >
                         <X className="h-5 w-5" aria-hidden="true" />
                       </RadixDialog.Close>

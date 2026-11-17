@@ -29,7 +29,7 @@ export function TrackingHeader({
         <button
           type="button"
           onClick={onBack}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-white !text-[#151515] !shadow-none transition-colors hover:!bg-[#F1F3F5]"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-white !text-[#151515] !shadow-none transition-shadow hover:!shadow-[0_6px_16px_rgba(26,26,26,0.10)]"
           aria-label={backLabel}
         >
           <FaArrowLeft className="text-lg" aria-hidden="true" />
@@ -47,7 +47,7 @@ export function TrackingHeader({
           type="button"
           onClick={onRefresh}
           disabled={refreshing}
-          className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-white !text-[#C8281F] !shadow-none transition-colors hover:!bg-[#F1F3F5] disabled:cursor-not-allowed disabled:opacity-50"
+          className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full !bg-white !text-[#C8281F] !shadow-none transition-shadow hover:!shadow-[0_6px_16px_rgba(26,26,26,0.10)] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Refresh order tracking"
         >
           <FaArrowsRotate className={`text-lg ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />

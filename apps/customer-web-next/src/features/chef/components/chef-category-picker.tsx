@@ -80,7 +80,7 @@ export function ChefCategoryPicker({
         {known ? (
           <img src={known.image} alt="" className="h-10 w-10 shrink-0 rounded-[10px] object-cover" />
         ) : (
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-[#F1F3F5] text-[#6B6B6B]">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[10px] bg-white text-[#6B6B6B]">
             <LayoutGrid className="h-5 w-5" aria-hidden="true" />
           </span>
         )}

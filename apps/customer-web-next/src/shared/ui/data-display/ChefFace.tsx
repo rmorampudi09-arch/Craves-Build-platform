@@ -5,7 +5,7 @@ import { ChefHat } from "lucide-react";
 import { chefInitials, safeChefPhotoUrl } from "@/shared/lib/chef-photo";
 import { cn } from "@/shared/lib/utils";
 
-/** A chef's drawn avatar (chefs never upload real faces): the picture, else their initials, else a chef hat. */
+/** A chef's drawn avatar (chefs never upload real faces): the picture, else their initials, else a chef hat, on plain white with a hairline ring. */
 export function ChefFace({ photoUrl, name, size = 40, className, decorative = true }: { photoUrl?: string | null; name?: string | null; size?: number; className?: string; decorative?: boolean }) {
   // Remember which url failed, so a new url gets its own try.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -14,7 +14,7 @@ export function ChefFace({ photoUrl, name, size = 40, className, decorative = tr
   const label = name?.trim() ? `${name.trim()}'s chef picture` : "Chef picture";
   return (
     <span
-      className={cn("relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F1F3F5] font-semibold text-[#1A1A1A]", className)}
+      className={cn("relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white font-semibold text-[#1A1A1A] ring-1 ring-[#E5E7EB]", className)}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }}
       {...(decorative ? { "aria-hidden": true } : url && url !== failedUrl ? {} : { role: "img", "aria-label": label })}
     >

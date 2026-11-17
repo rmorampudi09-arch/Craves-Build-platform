@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
   FlatList,
   Image,
@@ -13,6 +13,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
+import {useQuery} from '@tanstack/react-query';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {CustomerHomeStackParamList} from '../../../app/navigation/types';
 import {
@@ -23,6 +24,8 @@ import {
   spacing,
   typography,
 } from '../../../design/tokens';
+import {queryStaleTimes} from '../../../app/query/queryPolicy';
+import {fetchAppBanners} from '../api/homeBannersApi';
 import {useHomeNearbyDishesQuery} from '../query/homeFeedQueries';
 import type {NearbyDish} from '../api/homeFeedApi';
 import {CustomerChefAvatar} from '../../customerShell/components/CustomerChefAvatar';
@@ -40,36 +43,44 @@ const TOP_PICKS_PAGE_SIZE = 12;
 const MAX_TOP_PICKS = 8;
 const PROMO_AUTO_ADVANCE_MS = 5_000;
 
-const HOME_PROMO_BANNERS = [
+type PromoBanner = {id: string; label: string; image: ImageSourcePropType};
+
+/** Shown until admin publishes app banners, and whenever they can't load. */
+const HOME_PROMO_BANNERS: readonly PromoBanner[] = [
   {id: 'home-kitchen-picks', label: 'Fresh meals from home chefs, up to 30 percent off', image: require('../../../assets/home/home-kitchen-picks.jpg')},
   {id: 'daily-home-feasts', label: 'Healthy dinners from trusted home cooks, starting at 199 rupees', image: require('../../../assets/home/daily-home-feasts.jpg')},
   {id: 'local-chef-specials', label: 'Tasty lunches from neighborhood kitchens, flat 25 percent off', image: require('../../../assets/home/local-chef-specials.jpg')},
-] as const;
-
-type PromoBanner = (typeof HOME_PROMO_BANNERS)[number];
+];
 type HomeNavigation = NativeStackNavigationProp<CustomerHomeStackParamList, 'CustomerHomeRoot'>;
 
-function PromoCarousel({width, onPress}: {width: number; onPress: () => void}) {
+function PromoCarousel({banners, width, onPress}: {banners: readonly PromoBanner[]; width: number; onPress: () => void}) {
   const listRef = useRef<FlatList<PromoBanner>>(null);
   const activeIndexRef = useRef(0);
   const isDraggingRef = useRef(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // Admin's banners arriving in place of the bundled ones start again at the first.
   useEffect(() => {
-    if (width <= 0 || HOME_PROMO_BANNERS.length < 2) return undefined;
+    activeIndexRef.current = 0;
+    setActiveIndex(0);
+    listRef.current?.scrollToOffset({offset: 0, animated: false});
+  }, [banners]);
+
+  useEffect(() => {
+    if (width <= 0 || banners.length < 2) return undefined;
     const interval = setInterval(() => {
       if (isDraggingRef.current) return;
-      const nextIndex = (activeIndexRef.current + 1) % HOME_PROMO_BANNERS.length;
+      const nextIndex = (activeIndexRef.current + 1) % banners.length;
       listRef.current?.scrollToOffset({offset: nextIndex * width, animated: true});
       activeIndexRef.current = nextIndex;
       setActiveIndex(nextIndex);
     }, PROMO_AUTO_ADVANCE_MS);
     return () => clearInterval(interval);
-  }, [width]);
+  }, [width, banners.length]);
 
   const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (width <= 0) return;
-    const nextIndex = Math.max(0, Math.min(HOME_PROMO_BANNERS.length - 1, Math.round(event.nativeEvent.contentOffset.x / width)));
+    const nextIndex = Math.max(0, Math.min(banners.length - 1, Math.round(event.nativeEvent.contentOffset.x / width)));
     isDraggingRef.current = false;
     activeIndexRef.current = nextIndex;
     setActiveIndex(nextIndex);
@@ -79,7 +90,7 @@ function PromoCarousel({width, onPress}: {width: number; onPress: () => void}) {
     <View style={styles.promoCarousel}>
       <FlatList
         ref={listRef}
-        data={HOME_PROMO_BANNERS}
+        data={banners}
         horizontal
         pagingEnabled
         nestedScrollEnabled
@@ -94,8 +105,8 @@ function PromoCarousel({width, onPress}: {width: number; onPress: () => void}) {
           </Pressable>
         )}
       />
-      <View accessibilityLabel={`Banner ${activeIndex + 1} of ${HOME_PROMO_BANNERS.length}`} accessibilityRole="text" pointerEvents="none" style={styles.pagination}>
-        {HOME_PROMO_BANNERS.map((banner, index) => <View key={banner.id} style={[styles.paginationDot, index === activeIndex && styles.paginationDotActive]} />)}
+      <View accessibilityLabel={`Banner ${activeIndex + 1} of ${banners.length}`} accessibilityRole="text" pointerEvents="none" style={styles.pagination}>
+        {banners.map((banner, index) => <View key={banner.id} style={[styles.paginationDot, index === activeIndex && styles.paginationDotActive]} />)}
       </View>
     </View>
   );
@@ -139,6 +150,19 @@ export function HomePromoAndKitchens() {
   const toggleFavorite = useToggleCustomerFavorite();
   const picks = (discovery.data?.pages.flatMap(page => page.menuItems) ?? []).slice(0, MAX_TOP_PICKS);
   const bannerWidth = Math.max(280, width - spacing.md * 2);
+  // The app's own banners from admin ("App banners"); the website's never show here.
+  const appBanners = useQuery({
+    queryKey: ['craves', 'v1', 'public', 'home-app-banners'],
+    queryFn: ({signal}) => fetchAppBanners(signal),
+    staleTime: queryStaleTimes.discoveryMs,
+  });
+  const banners = useMemo<readonly PromoBanner[]>(
+    () =>
+      appBanners.data?.length
+        ? appBanners.data.map(banner => ({id: banner.id, label: banner.label, image: {uri: banner.imageUrl}}))
+        : HOME_PROMO_BANNERS,
+    [appBanners.data],
+  );
 
   const handleFavorite = (dish: NearbyDish) => {
     if (toggleFavorite.isPending || favorites.sessionRequired) return;
@@ -149,7 +173,7 @@ export function HomePromoAndKitchens() {
   return (
     <View>
       <View style={styles.bannerRow}>
-        <PromoCarousel width={bannerWidth} onPress={() => navigation.navigate('CustomerHomeSearch')} />
+        <PromoCarousel banners={banners} width={bannerWidth} onPress={() => navigation.navigate('CustomerHomeSearch')} />
       </View>
       {picks.length > 0 ? (
         <View style={styles.picksSection}>

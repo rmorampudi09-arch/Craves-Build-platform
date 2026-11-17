@@ -5,8 +5,8 @@ import type { MouseEvent, ReactNode } from "react";
 type NavigationLike = { currentEntry?: { index: number } | null };
 
 /**
- * The page's back link goes back to the Craves page the customer came from (Help or meal plans), like
- * the app. Only the Navigation API can tell that the previous entry is ours; without it the link's href is used.
+ * The page's back link goes back to the Craves page the customer came from (Help, meal plans, the dish or
+ * kitchen a food list or group order was opened from), like the app. Only the Navigation API can tell that the previous entry is ours; without it the link's href is used.
  */
 export function PreviousPageBack({ children }: { children: ReactNode }) {
   function onClickCapture(event: MouseEvent<HTMLDivElement>) {

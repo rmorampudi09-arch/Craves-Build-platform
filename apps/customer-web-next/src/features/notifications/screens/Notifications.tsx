@@ -130,7 +130,7 @@ async function readPage(cursor: string | null): Promise<{ notices: CustomerNotif
 function NoticeIcon({ notice }: { notice: CustomerNotification }) {
   const Icon = isKitchenNotice(notice) ? ChefHat : ICONS[noticeCategory(notice)];
   return (
-    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
       <Icon className="h-5 w-5" aria-hidden="true" />
     </span>
   );
@@ -419,7 +419,7 @@ export default function NotificationsPage() {
                               <button
                                 type="button"
                                 onClick={() => clearNotices([notice.id])}
-                                className="relative z-10 flex h-11 w-11 items-center justify-center rounded-full !border-0 !bg-transparent !text-[#706864] !shadow-none hover:!bg-[#F7F5F3] hover:!text-[#D92714]"
+                                className="relative z-10 flex h-11 w-11 items-center justify-center rounded-full !border-0 !bg-transparent !text-[#706864] !shadow-none hover:!text-[#D92714]"
                                 aria-label={`Clear ${notice.title}`}
                                 title="Clear read notification"
                               >
@@ -463,7 +463,7 @@ export default function NotificationsPage() {
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3 md:px-6">
           <Link
             to="/home"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-shadow hover:shadow-[0_6px_16px_rgba(26,26,26,0.10)]"
             aria-label="Back to home"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />

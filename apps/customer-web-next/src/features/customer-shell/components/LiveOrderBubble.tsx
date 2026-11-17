@@ -215,7 +215,7 @@ export function LiveOrderBubble({ pathname }: { pathname: string }) {
                     </div>
                     <RadixDialog.Close
                       aria-label="Close"
-                      className="flex !h-11 !min-h-11 !w-11 !min-w-11 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#F1F3F5] !p-0 !text-[#C4200F] !shadow-none"
+                      className="flex !h-11 !min-h-11 !w-11 !min-w-11 shrink-0 items-center justify-center rounded-full !border-0 !bg-white !p-0 !text-[#C4200F] !shadow-none"
                     >
                       <X className="h-5 w-5" aria-hidden="true" />
                     </RadixDialog.Close>
@@ -272,7 +272,7 @@ export function LiveOrderBubble({ pathname }: { pathname: string }) {
                     <Link
                       href={`/support?orderId=${order.orderId}`}
                       aria-label="Get help with this order"
-                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#F1F3F5] text-[#C4200F]"
+                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-[#C4200F]"
                     >
                       <Headset className="h-6 w-6" aria-hidden="true" />
                     </Link>

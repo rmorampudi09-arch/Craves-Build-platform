@@ -32,6 +32,7 @@ import { LeafPlate } from "@/features/cart/components/LeafPlate";
 import { courseOf } from "@/shared/ui/banana-leaf/leaf-plate";
 import { leafSerif } from "@/shared/fonts/theme-fonts";
 import { ChefFace } from "@/shared/ui/data-display/ChefFace";
+import { useKitchenProfile } from "@/shared/hooks/use-kitchen-profile";
 import { CustomerPageSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { ease } from "@/shared/lib/motion";
 
@@ -297,6 +298,8 @@ function CartPage() {
   const itemCount = items.reduce((total, item) => total + item.qty, 0);
   const kitchenName = items[0]?.chef;
   const kitchenId = items[0]?.kitchenId;
+  // The chef's picture at the top, as on the kitchen page and order cards (the cart itself only knows the kitchen's name).
+  const { profile: kitchenProfile } = useKitchenProfile(kitchenId);
   const kitchenDetail = items[0] ? dishDetails[items[0].menuItemId] : undefined;
   const kitchenWhere = [
     kitchenDetail?.areaName,
@@ -354,7 +357,7 @@ function CartPage() {
               (() => {
                 const from = (
                   <>
-                    <ChefFace size={56} className="bg-[#EAF3E2] text-[#22553A]" />
+                    <ChefFace photoUrl={kitchenProfile?.chefPhotoUrl} name={kitchenProfile?.displayName ?? kitchenName} size={56} className="text-[#22553A] ring-[#E1EAD8]" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-base font-semibold text-[#1C2420]">From {kitchenName}</span>
                       {kitchenWhere ? <span className="mt-0.5 block truncate text-sm text-[#59645C]">{kitchenWhere}</span> : null}

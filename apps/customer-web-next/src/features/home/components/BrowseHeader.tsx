@@ -1,13 +1,12 @@
 import { useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { Link } from "@tanstack/react-router";
-import { Bell, CalendarDays, ChevronDown, ClipboardList } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import {
   FaArrowLeft,
   FaMapMarkerAlt,
   FaSearch,
-  FaSignOutAlt,
-  FaUser,
 } from "react-icons/fa";
+import { FaBagShopping, FaBell, FaCalendarDays, FaRightFromBracket, FaUser } from "react-icons/fa6";
 
 import { CravesLogo } from "@/shared/components/brand/CravesLogo";
 import {
@@ -47,13 +46,22 @@ interface BrowseHeaderProps {
   searchPlaceholder?: string;
 }
 
-/** One quiet round button for every header action (owner, 5 Nov 2026): grey tile, ink icon. */
+/**
+ * Meal plans, Orders, Alerts, Profile and Sign out on plain white (owner, 17 Nov 2026): only the icon shows, and on
+ * hover or keyboard focus the button opens into a pill with its name. Padding keeps the closed button a circle; the
+ * min-size and weight overrides stop the global button skin making Sign out bigger than the links beside it.
+ */
+const headerActionShape =
+  "group/action relative h-9 !min-h-0 !min-w-0 shrink-0 items-center rounded-full !border-0 !bg-white px-[0.6rem] text-[0.8125rem] !font-bold !text-[#1A1A1A] !shadow-none transition-[box-shadow] duration-300 ease-out hover:!shadow-[0_7px_18px_rgba(26,26,26,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30 lg:h-10 lg:px-[0.725rem]";
+const headerActionClass = "inline-flex " + headerActionShape;
+/** The name, folded away until the pointer or focus arrives; the short pause keeps a passing pointer from opening each one. */
+const headerActionLabel =
+  "max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-[max-width,margin-left,opacity] duration-300 ease-out group-hover/action:ml-1.5 group-hover/action:max-w-[4.75rem] group-hover/action:opacity-100 group-hover/action:delay-75 group-focus-visible/action:ml-1.5 group-focus-visible/action:max-w-[4.75rem] group-focus-visible/action:opacity-100 motion-reduce:transition-none";
+/** The phone header's bell: the same white circle, icon only. */
 const headerIconActionClass =
-  "h-9 w-9 items-center justify-center rounded-full !bg-[#F1F3F5] lg:h-10 lg:w-10 !text-[#1A1A1A] transition-[background-color,box-shadow] duration-200 ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30";
-/** The same tile with its name beside the icon from xl, where there is room for it. */
-const headerActionClass =
-  "relative inline-flex h-9 w-9 shrink-0 items-center justify-center gap-1.5 rounded-full !bg-[#F1F3F5] text-[0.8125rem] font-bold !text-[#1A1A1A] transition-[background-color,box-shadow] duration-200 ease-out hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30 lg:h-10 lg:w-10 xl:w-auto xl:pl-3 xl:pr-3.5";
-const headerActionLabel = "hidden whitespace-nowrap xl:inline";
+  "h-9 w-9 items-center justify-center rounded-full !border-0 !bg-white !text-[#1A1A1A] !shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30";
+/** The same solid icons as the profile page's rows (My orders, Notifications, Meal plans), in Craves red. */
+const headerIcon = "h-[1.05rem] w-[1.05rem] shrink-0 text-[#F62E18]";
 
 /** The veg mark Indian menus use: a green square with a dot. */
 function VegMark({ size = "sm" }: { size?: "sm" | "md" }) {
@@ -232,7 +240,7 @@ export function BrowseHeader({
             </span>
           </button>
 
-          <label className="ml-auto flex min-h-10 min-w-[8rem] flex-1 items-center gap-2 rounded-[1.05rem] border border-white/80 bg-[#F1F3F5] px-3 transition-[background-color,box-shadow,border-color] duration-200 ease-out hover:border-[#D3D7DD] hover:bg-white focus-within:border-[#1A1A1A] focus-within:bg-white focus-within:shadow-[0_0_0_1px_#1A1A1A] lg:min-h-12 lg:min-w-[12rem] lg:gap-3 lg:px-4 xl:min-h-14 xl:max-w-[34rem] xl:px-5">
+          <label className="flex min-h-10 min-w-[8rem] flex-1 items-center gap-2 rounded-[1.05rem] border border-white/80 bg-[#F1F3F5] px-3 transition-[background-color,box-shadow,border-color] duration-200 ease-out hover:border-[#D3D7DD] hover:bg-white focus-within:border-[#1A1A1A] focus-within:bg-white focus-within:shadow-[0_0_0_1px_#1A1A1A] lg:min-h-12 lg:min-w-[12rem] lg:gap-3 lg:px-4 xl:min-h-14 xl:max-w-[34rem] xl:px-5">
             <FaSearch className="h-4 w-4 shrink-0 text-[#F62E18] lg:h-5 lg:w-5" aria-hidden="true" />
             <span className="sr-only">Search dishes or home kitchens</span>
             <input
@@ -254,37 +262,33 @@ export function BrowseHeader({
 
           {vegToggle ? <VegModeSwitch onTurnOn={askVegMode} onTurnOff={vegOff} className="hidden lg:flex" /> : null}
 
-          {/* Meal plans, Orders, Alerts and Profile share one button style. */}
-          <Link to="/subscriptions" className={headerActionClass} aria-label="Open meal plans" title="Meal plans">
-            <CalendarDays className="h-[1.05rem] w-[1.05rem] shrink-0" aria-hidden="true" />
+          {/* Meal plans, Orders, Alerts, Profile and Sign out share one button: the icon, then its name on hover.
+              Spare width sits before them, so a name opening moves only these buttons, not the search field. */}
+          <Link to="/subscriptions" className={"ml-auto " + headerActionClass} aria-label="Open meal plans">
+            <FaCalendarDays className={headerIcon} aria-hidden="true" />
             <span className={headerActionLabel}>Meal plans</span>
           </Link>
 
           {/* On desktop, orders are one tap away (phones have the tab bar). */}
-          <Link to="/orders" className={headerActionClass} aria-label="Open your orders" title="Your orders">
-            <ClipboardList className="h-[1.05rem] w-[1.05rem] shrink-0" aria-hidden="true" />
+          <Link to="/orders" className={headerActionClass} aria-label="Open your orders">
+            <FaBagShopping className={headerIcon} aria-hidden="true" />
             <span className={headerActionLabel}>Orders</span>
           </Link>
 
-          <Link to="/notifications" className={headerActionClass} aria-label={notificationsLabel(unread, "Alerts")} title="Alerts">
-            <Bell className="h-[1.08rem] w-[1.08rem] shrink-0" aria-hidden="true" />
+          <Link to="/notifications" className={headerActionClass} aria-label={notificationsLabel(unread, "Alerts")}>
+            <FaBell className={headerIcon} aria-hidden="true" />
             <span className={headerActionLabel}>Alerts</span>
             <UnreadBadge count={unread} />
           </Link>
 
-          <Link to="/profile" className={headerActionClass} aria-label="Open profile" title="Profile">
-            <FaUser className="h-[1.05rem] w-[1.05rem] shrink-0" aria-hidden="true" />
+          <Link to="/profile" className={headerActionClass} aria-label="Open profile">
+            <FaUser className={headerIcon} aria-hidden="true" />
             <span className={headerActionLabel}>Profile</span>
           </Link>
 
-          <button
-            type="button"
-            onClick={onLogout}
-            className={"hidden shrink-0 2xl:flex " + headerIconActionClass}
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <FaSignOutAlt className="h-[1.05rem] w-[1.05rem]" aria-hidden="true" />
+          <button type="button" onClick={onLogout} className={"hidden 2xl:inline-flex " + headerActionShape} aria-label="Sign out">
+            <FaRightFromBracket className="h-[1.05rem] w-[1.05rem] shrink-0" aria-hidden="true" />
+            <span className={headerActionLabel}>Sign out</span>
           </button>
         </div>
 
@@ -309,7 +313,7 @@ export function BrowseHeader({
               className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-[1.1rem] border border-[#E5E7EB] !bg-white px-2.5 py-2 text-left !text-[#1A1A1A] shadow-[0_4px_16px_rgba(26,26,26,0.07)] transition-[scale] duration-(--dur-micro) active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
               aria-label={locationTypeLabel + " delivery address: " + locationLabel + ". Manage address"}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
                 <FaMapMarkerAlt className="h-4 w-4" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
@@ -329,7 +333,7 @@ export function BrowseHeader({
               aria-label={notificationsLabel(unread)}
               title="Notifications"
             >
-              <Bell className="h-[1.08rem] w-[1.08rem]" aria-hidden="true" />
+              <FaBell className={headerIcon} aria-hidden="true" />
               <UnreadBadge count={unread} />
             </Link>
 

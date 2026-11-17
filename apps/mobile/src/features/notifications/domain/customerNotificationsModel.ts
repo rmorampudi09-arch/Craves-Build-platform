@@ -41,7 +41,8 @@ export function resolveCustomerNotificationCategory(
   const targetType = normalizedToken(notice.targetType);
   const noticeType = normalizedToken(notice.noticeType);
 
-  if (targetType === 'ORDER' || targetType === 'DELIVERY') {
+  // Order created and Payment successful point at the checkout (one payment, one or more orders): still order news.
+  if (targetType === 'ORDER' || targetType === 'DELIVERY' || targetType === 'CHECKOUT') {
     return 'ORDERS';
   }
   if (

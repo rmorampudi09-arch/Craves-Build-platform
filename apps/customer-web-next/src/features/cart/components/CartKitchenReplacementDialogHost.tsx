@@ -111,13 +111,13 @@ export function CartKitchenReplacementDialogHost() {
             className="relative w-full rounded-t-[1.8rem] border border-[#E5E7EB] bg-white p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-[0_28px_80px_rgba(26,26,26,0.24)] sm:max-w-md sm:rounded-[1.8rem] sm:pb-6 md:p-7"
           >
             <div className="flex items-start justify-between gap-4">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
                 <ShoppingBag className="h-5 w-5" aria-hidden="true" />
               </span>
               <button
                 type="button"
                 onClick={() => settle(false)}
-                className="!flex !h-10 !w-10 !items-center !justify-center !rounded-full !bg-[#F1F3F5] !p-0 !text-[#1A1A1A] transition-[background-color,scale] duration-(--dur-micro) hover:!bg-[#E5E7EB] active:scale-[0.94]"
+                className="!flex !h-10 !w-10 !items-center !justify-center !rounded-full !bg-white !p-0 !text-[#1A1A1A] transition-[box-shadow,scale] duration-(--dur-micro) hover:!shadow-[0_6px_16px_rgba(26,26,26,0.10)] active:scale-[0.94]"
                 aria-label="Keep current cart"
               >
                 <X className="h-4 w-4" aria-hidden="true" />

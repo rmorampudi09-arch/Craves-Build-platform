@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { changeDeadline, dayCreditCard, formatMoney, isPastSubscription, nextMealLine, noticeLength, pauseDaysLine, pauseInfo, planActions, planDay, resumeDateFor } from "./meal-plan-copy.ts";
+import { changeDeadline, dayCreditCard, formatMoney, isPastSubscription, nextMealLine, noticeLength, pauseDaysLine, pauseInfo, planActions, planDay, resumeDateFor, startDateChoices } from "./meal-plan-copy.ts";
 import type { DayCredit } from "./subscription-contract.ts";
 import type { SubscriptionOccurrence } from "./subscription-lifecycle-contract.ts";
 
 const meal = (serviceDate: string, serviceAt: string, status: SubscriptionOccurrence["status"] = "READY_FOR_ORDER") =>
   ({ id: serviceAt, serviceDate, mealSlotCode: "LUNCH", serviceAt, status, items: [], orderId: null }) as SubscriptionOccurrence;
+
+test("a new plan starts on one of the 7 days from tomorrow, as in the app", () => {
+  assert.deepEqual(startDateChoices("2026-11-17"), ["2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21", "2026-11-22", "2026-11-23", "2026-11-24"]);
+  // Across a month and a year end.
+  assert.deepEqual(startDateChoices("2026-12-28"), ["2026-12-29", "2026-12-30", "2026-12-31", "2027-01-01", "2027-01-02", "2027-01-03", "2027-01-04"]);
+});
 
 test("plan dates read like a calendar, not ISO", () => {
   assert.equal(planDay("2026-10-12"), "Mon 12 Oct");

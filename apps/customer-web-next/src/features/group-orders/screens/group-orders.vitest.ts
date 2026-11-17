@@ -18,8 +18,8 @@ vi.mock("@/features/cart/api/cravesCart", () => ({ loadCart: cart.loadCart }));
 vi.mock("@/shared/lib/kitchen-profile-client", () => ({ getKitchenProfile: async () => ({ displayName: null, kitchenName: "Lakshmi's Kitchen" }) }));
 vi.mock("@/features/dish/api/dishes", () => ({
   loadKitchenMenu: async () => [
-    { id: ids.ROTI, name: "Roti", price: 20 },
-    { id: ids.DAL, name: "Dal tadka", price: 120 },
+    { id: ids.ROTI, name: "Roti", price: 20, img: "/media/public/dishes/roti.webp", veg: true, foodType: "VEG" },
+    { id: ids.DAL, name: "Dal tadka", price: 120, img: "/placeholder.svg", imageIsPlaceholder: true, veg: true, foodType: "VEG" },
   ],
 }));
 
@@ -49,6 +49,7 @@ const calls: { key: string; init: RequestInit }[] = [];
 beforeEach(() => {
   calls.length = 0;
   router.push.mockReset();
+  router.replace.mockReset();
   cart.loadCart.mockClear();
   auth.session = { id: ME };
   answers = {};
@@ -99,7 +100,8 @@ describe("joining by link (craves.in/g/<code>)", () => {
     render(createElement(JoinGroupOrder, { code: "ABCD-EFGH" }));
     fireEvent.change(await screen.findByLabelText(/Your name for the group/), { target: { value: " Ravi " } });
     fireEvent.click(screen.getByRole("button", { name: "Join" }));
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith(`/group-orders/${GROUP}`));
+    // Replaced, so Back from the group doesn't land on this invite again.
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith(`/group-orders/${GROUP}`));
     expect(sent(calls.find((call) => call.key === "POST /api/advanced/group-orders/join")!.init)).toEqual({ code: "ABCD-EFGH", displayName: "Ravi" });
   });
 
@@ -132,6 +134,16 @@ describe("a group order page", () => {
     fireEvent.click(within(screen.getByRole("list", { name: "The kitchen's dishes" })).getByRole("button", { name: "Remove Roti from your share" }));
     await waitFor(() => expect(screen.queryByText("1 × Roti")).toBeNull());
     expect(calls.filter((call) => call.key.startsWith("PUT")).map((call) => sent(call.init))).toEqual([{ quantity: 1 }]);
+  });
+
+  it("shows each dish with its photo, and opens the dish from the menu and from everyone's dishes", async () => {
+    answers[`GET ${groupUrl}`] = () => Response.json(view({ participants: [host(), friend([item(ROTI, "Roti", 2)])], itemCount: 2 }));
+    render(createElement(GroupOrderPage, { groupId: GROUP }));
+    const menu = await screen.findByRole("list", { name: "The kitchen's dishes" });
+    expect(within(menu).getByRole("link", { name: /Roti/ }).getAttribute("href")).toBe(`/dish/${ROTI}`);
+    expect(menu.querySelector(`a[href="/dish/${ROTI}"] img`)).toBeTruthy();
+    expect(within(menu).getAllByRole("img", { name: "Veg" })).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "2 × Roti" }).getAttribute("href")).toBe(`/dish/${ROTI}`);
   });
 
   it("shows the invite and lets the host lock it", async () => {
@@ -205,7 +217,8 @@ describe("a group order page", () => {
     render(createElement(GroupOrderPage, { groupId: GROUP }));
     fireEvent.click(await screen.findByRole("button", { name: "Leave group order" }));
     fireEvent.click(within(screen.getByRole("group", { name: "Confirm" })).getByRole("button", { name: "Leave" }));
-    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/group-orders"));
+    // Replaced, so Back doesn't land on the group just left.
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/group-orders"));
   });
 
   it("says why when the host locked it meanwhile, and shows it locked", async () => {

@@ -20,7 +20,7 @@ export function BillSummaryCard({
   return (
     <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_6px_22px_rgba(17,24,39,0.05)] md:p-6">
       <div className="flex items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
           <FaBagShopping className="text-lg" aria-hidden="true" />
         </span>
         <div>
@@ -38,7 +38,7 @@ export function BillSummaryCard({
         </div>
       </dl>
       <div className="mt-4 flex items-start gap-3 text-xs leading-5 text-[#1A1A1A]">
-        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
           <FaShieldHalved className="text-sm" aria-hidden="true" />
         </span>
         <p className="pt-1">

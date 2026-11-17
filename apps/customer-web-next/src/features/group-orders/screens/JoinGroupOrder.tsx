@@ -31,7 +31,8 @@ export default function JoinGroupOrder({ code }: { code: string }) {
     setBusy(true);
     setFailure(null);
     const result = await joinGroup(code, name.trim());
-    if (result.ok) return navigate({ to: `/group-orders/${result.data.id}` });
+    // Replace: Back from the group goes to where the link was opened from, not to this invite again.
+    if (result.ok) return navigate({ to: `/group-orders/${result.data.id}`, replace: true });
     setBusy(false);
     if (result.status === 401) return navigate({ to: signInPath(`/g/${code}`) });
     setFailure({ code: result.code, status: result.status });

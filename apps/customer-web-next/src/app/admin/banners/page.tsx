@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default function AdminBannersPage() {
   return <div className="space-y-7">
-    <AdminPageIntro eyebrow="Mobile app" title="Home banners" description="Images shown in the customer app's home screen carousel. Upload an image, tick Published to show it, or delete it. Catalog Service enforces the platform administrator role on every change." />
+    <AdminPageIntro eyebrow="Website and app" title="Home banners" description="Website banners show on the website's home page; app banners show in the app's home screen carousel. Each has its own uploads, order and Published switch. Catalog Service enforces the platform administrator role on every change." />
     <AdminHomeBanners />
   </div>;
 }

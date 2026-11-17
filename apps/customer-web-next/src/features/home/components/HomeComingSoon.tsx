@@ -103,7 +103,7 @@ export function HomeComingSoon({
         </p>
 
         <div className="mt-6 flex items-center gap-3 rounded-2xl bg-[#F6F7F8] px-4 py-3 text-left">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FDEAE8] text-[#D92714]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#D92714]">
             <MapPin className="h-5 w-5" aria-hidden="true" />
           </span>
           <span className="min-w-0">

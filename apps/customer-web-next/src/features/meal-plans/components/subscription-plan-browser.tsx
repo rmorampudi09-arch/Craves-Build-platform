@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ChefHat, Search, Star } from "lucide-react";
-import { getAddress } from "@/features/auth/api/cravesAuth";
+import { getAddress, getSession, loadSelectedAddress, recoverSessionSnapshotForNavigation } from "@/features/auth/api/cravesAuth";
 import { getPlanCover, type PlanCover } from "@/features/meal-plans/api/plan-cover";
 import {
   parsePublicSubscriptionPlans,
@@ -28,6 +28,33 @@ const FILTERS: Array<{ key: Filter; label: string; empty: string }> = [
   { key: "14 days", label: "14 days", empty: "No 14-day meal plans near you yet" },
   { key: "28 days", label: "Monthly", empty: "No monthly meal plans near you yet" },
 ];
+/**
+ * The app's plan categories, matched on words in the plan's code, name and description as the app does
+ * (CustomerMealPlansScreen). Veg goes by the dishes' own veg marks instead: the app's words also match "non-veg".
+ * The app's "Custom" chip isn't live there either, so it is left out.
+ */
+type Category = "all" | "weight-loss" | "high-protein" | "veg" | "balanced";
+const CATEGORIES: Array<{ key: Category; label: string; words: RegExp | null }> = [
+  { key: "all", label: "All plans", words: null },
+  { key: "weight-loss", label: "Weight loss", words: /(weight|light|calorie|lean)/ },
+  { key: "high-protein", label: "High protein", words: /(protein|fitness|muscle)/ },
+  { key: "veg", label: "Veg", words: null },
+  { key: "balanced", label: "Balanced", words: /(balanced|daily|complete|regular)/ },
+];
+
+export function planInCategory(
+  plan: Pick<PublicSubscriptionPlan, "planCode" | "name" | "description">,
+  category: Category,
+  foodType: MealPlanFoodType | null | undefined,
+): boolean {
+  if (category === "veg") return foodType === "VEG";
+  const words = CATEGORIES.find((option) => option.key === category)?.words;
+  return !words || words.test(`${plan.planCode} ${plan.name} ${plan.description ?? ""}`.toLowerCase());
+}
+
+const chip = (on: boolean) =>
+  `min-h-11 rounded-full border px-5 text-sm font-bold ${on ? "border-[#1A1A1A] bg-[#1A1A1A] text-white" : "border-[#E5E7EB] bg-white text-[#1A1A1A]"}`;
+
 const FOOD_TYPE: Record<MealPlanFoodType, { label: string; dot: string }> = {
   VEG: { label: "Veg", dot: "bg-[#2E7D32]" },
   EGG: { label: "Egg", dot: "bg-[#D99A00]" },
@@ -115,23 +142,22 @@ export function SubscriptionPlanBrowser() {
   const [failed, setFailed] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [category, setCategory] = useState<Category>("all");
+  const [nearby, setNearby] = useState(true);
 
   const load = useCallback(async () => {
-    const address = getAddress();
-    if (typeof address?.lat !== "number" || typeof address.lng !== "number") {
-      setPlans([]);
-      setMessage("Choose a delivery address to see meal plans from chefs near you.");
-      return;
-    }
     setPlans(null);
     setFailed(false);
     setMessage("");
+    // A fresh page load reads this before the session is back: the tab's snapshot brings it back first,
+    // and a signed-in customer's saved address is read when none is chosen yet.
+    const signedIn = Boolean(getSession() ?? recoverSessionSnapshotForNavigation());
+    const address = getAddress() ?? (signedIn ? await loadSelectedAddress().catch(() => null) : null);
+    const near = typeof address?.lat === "number" && typeof address.lng === "number" ? `?latitude=${address.lat}&longitude=${address.lng}` : "";
+    setNearby(Boolean(near));
     try {
-      // Only chefs within 10 km of this address are listed.
-      const response = await fetch(
-        `/api/subscriptions/plans?latitude=${address.lat}&longitude=${address.lng}`,
-        { cache: "no-store" },
-      );
+      // With an address only chefs within 10 km of it are listed; without one, every plan, as the app lists them.
+      const response = await fetch(`/api/subscriptions/plans${near}`, { cache: "no-store" });
       const items = response.ok
         ? parsePublicSubscriptionPlans(await response.json().catch(() => null))
         : null;
@@ -167,7 +193,9 @@ export function SubscriptionPlanBrowser() {
   const query = search.trim().toLowerCase();
   // Matches the plan name or the kitchen; a kitchen name still loading simply doesn't match yet.
   const ofLength = (plans ?? []).filter(
-    (plan) => filter === "all" || billingUnit(plan.billingPeriod) === filter,
+    (plan) =>
+      (filter === "all" || billingUnit(plan.billingPeriod) === filter) &&
+      planInCategory(plan, category, covers.get(plan.id)?.summary?.foodType),
   );
   const visible = ofLength.filter(
     (plan) =>
@@ -210,24 +238,36 @@ export function SubscriptionPlanBrowser() {
               className="min-h-12 w-full rounded-full border border-[#E5E7EB] bg-white pl-12 pr-4 text-base text-[#1A1A1A]"
             />
           </label>
+          {!nearby ? (
+            <p className="mb-5 rounded-2xl bg-[#F1F3F5] p-4 text-sm text-[#1A1A1A]" role="status">
+              Showing plans from every kitchen. Chefs deliver meal plans within 10 km.{" "}
+              <Link href="/addresses" className="font-bold underline underline-offset-2">
+                Set your delivery address
+              </Link>{" "}
+              to see the ones near you.
+            </p>
+          ) : null}
+          <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Plan type">
+            {CATEGORIES.map((option) => (
+              <button key={option.key} type="button" aria-pressed={category === option.key} onClick={() => setCategory(option.key)} className={chip(category === option.key)}>
+                {option.label}
+              </button>
+            ))}
+          </div>
           <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Bill length">
             {FILTERS.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                aria-pressed={filter === option.key}
-                onClick={() => setFilter(option.key)}
-                className={`min-h-11 rounded-full border px-5 text-sm font-bold ${filter === option.key ? "border-[#1A1A1A] bg-[#1A1A1A] text-white" : "border-[#E5E7EB] bg-white text-[#1A1A1A]"}`}
-              >
+              <button key={option.key} type="button" aria-pressed={filter === option.key} onClick={() => setFilter(option.key)} className={chip(filter === option.key)}>
                 {option.label}
               </button>
             ))}
           </div>
           {visible.length === 0 ? (
             <p className="rounded-2xl bg-[#F1F3F5] p-5 text-sm text-[#1A1A1A]" role="status">
-              {ofLength.length === 0
-                ? FILTERS.find((option) => option.key === filter)?.empty
-                : `No plans match “${search.trim()}”.`}
+              {ofLength.length > 0
+                ? `No plans match “${search.trim()}”.`
+                : category !== "all"
+                  ? "No plans of this type near you yet. Try All plans."
+                  : FILTERS.find((option) => option.key === filter)?.empty}
             </p>
           ) : null}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

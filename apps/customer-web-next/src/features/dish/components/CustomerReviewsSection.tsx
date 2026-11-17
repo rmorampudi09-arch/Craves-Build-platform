@@ -22,7 +22,7 @@ export function CustomerReviewsSection({ reviews }: { reviews: Review[] }) {
         {reviews.map((review) => (
           <div key={review.name} className="rounded-2xl border border-[#E5E7EB] bg-white p-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
                 <User className="h-4 w-4" aria-hidden="true" />
               </div>
               <div className="min-w-0">

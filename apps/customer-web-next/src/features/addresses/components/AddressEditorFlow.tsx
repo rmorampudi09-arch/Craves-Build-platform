@@ -455,9 +455,10 @@ export function AddressEditorFlow({
       setMessage("Please complete the highlighted fields.");
       const firstField = Object.keys(errors)[0];
       window.requestAnimationFrame(() => {
-        document
-          .getElementById("address-" + firstField)
-          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        const field = document.getElementById("address-" + firstField);
+        field?.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Focus too, so a keyboard or screen-reader user lands on what needs filling.
+        field?.querySelector<HTMLElement>("input, textarea, select")?.focus({ preventScroll: true });
       });
       return;
     }
@@ -576,17 +577,18 @@ export function AddressEditorFlow({
         >
 
           <div className="flex items-start gap-3 border-b border-[#F1F3F5] px-5 py-5 md:px-7 md:py-6">
-            {step === "details" ? (
+            {/* With a pin already set, the location step goes back to the details instead of only closing. */}
+            {step === "details" || hasCoordinates(draft) ? (
               <button
                 type="button"
-                onClick={() => setStep("locate")}
-                disabled={busy}
+                onClick={() => setStep(step === "details" ? "locate" : "details")}
+                disabled={busy || locating}
                 className={
-                  "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#1A1A1A] " +
+                  "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] " +
                   actionClass +
                   " disabled:opacity-50"
                 }
-                aria-label="Back"
+                aria-label={step === "details" ? "Back" : "Back to address details"}
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
@@ -620,7 +622,7 @@ export function AddressEditorFlow({
               onClick={() => requestClose()}
               disabled={busy}
               className={
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#1A1A1A] " +
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] " +
                 actionClass +
                 " disabled:opacity-50"
               }
@@ -776,7 +778,7 @@ export function AddressEditorFlow({
                     className="mt-4 flex items-start gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_6px_18px_rgba(26,26,26,0.06)]"
                     aria-live="polite"
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
                       {mapResolving ? (
                         <Loader2 className="h-4.5 w-4.5 animate-spin" />
                       ) : (
@@ -920,6 +922,7 @@ export function AddressEditorFlow({
                           <button
                             key={option.value}
                             type="button"
+                            aria-pressed={selected}
                             onClick={() =>
                               setDraft((current) => ({
                                 ...current,

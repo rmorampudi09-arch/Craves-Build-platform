@@ -19,6 +19,8 @@ import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetTestMode;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
+import in.craves.integration.fleet.trip.FleetStatusBridge;
+import in.craves.integration.fleet.trip.FleetTripService;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.UUID;
@@ -126,6 +128,37 @@ class FleetGpsRuleDatabaseTest {
 
     private void freeFor(UUID rider, int minutes) {
         fleet.db.update("UPDATE fleet_schema.rider_shift SET started_at = now() - make_interval(mins => ?) WHERE rider_id = ?", minutes, rider);
+    }
+
+    /**
+     * Enforced, the rule decides only whom to offer to. Whether riders are near (the quote routing reads) is today's
+     * answer, and under the owner's rule the order keeps its stage and waits for the rider's next fresh fix.
+     */
+    @Test
+    void enforcedARiderWithAnOldFixStillCountsAsNearAndTheOrderWaitsForTheirFreshFix() {
+        FleetDispatchFixtures.policy(fleet.db, "live", 20, 300, 1, 0, 0); // the owner's rule: no limit on rounds, 300 s
+        UUID rider = rider(1, 0.001, 100, 8);
+        dispatcher.setGpsRule("enforce");
+        UUID order = UUID.randomUUID();
+        FleetDispatchFixtures.kitchen(fleet.db, order, true);
+        var command = FleetDispatchFixtures.command(order);
+
+        assertThat(dispatcher.ridersNear(KITCHEN_LAT, KITCHEN_LNG)).as("ops' count is today's").isOne();
+        assertThat(new CravesFleetAdapter(dispatcher, mock(FleetTripService.class), mock(FleetStatusBridge.class), json)
+            .quote(command.deliveryRequest()).available()).as("the fleet quote is still available").isTrue();
+        for (int look = 1; look <= 2; look++) {
+            assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).as("the stage opens and stays open")
+                .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+            assertThat(fleet.db.queryForList("SELECT state FROM fleet_schema.trip_stage", String.class)).containsExactly("OPEN");
+            assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_offer", Integer.class)).isZero();
+        }
+
+        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(fleet.db.queryForList("SELECT rider_id FROM fleet_schema.trip_offer WHERE state = 'ACTIVE'", UUID.class))
+            .as("offered in the same stage").containsExactly(rider);
+        assertThat(fleet.db.queryForList("SELECT state FROM fleet_schema.trip_stage", String.class)).containsExactly("OPEN");
     }
 
     /** A rider on shift, heard from 5 s ago, whose newest fix is this old and this accurate. */

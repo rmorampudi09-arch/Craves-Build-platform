@@ -971,17 +971,18 @@ public class FleetDispatcher implements FleetStage {
      * order that takes them home (homeNearerM). Declines play no part.
      */
     private List<Candidate> nearbyRiders(double lat, double lng, int radiusM, int dropM, int detourPercent, Double dropLat, Double dropLng) {
-        return nearbyRiders(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, Set.of(), new int[3]);
+        // Whether riders are near (the courier quote, ops) and food timing never apply the GPS rule: null.
+        return nearbyRiders(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, Set.of(), null);
     }
 
     /**
-     * As above, for one look at an order. With CRAVES_FLEET_GPS_RULE on, gpsFailed counts the riders in range, not in
-     * exclude, who meet everything above but not the rule: [0] fix too old, [1] too inaccurate, [2] both. shadow keeps
-     * them; enforce leaves them out, as if out of range. The same statement either way.
+     * As above, for choosing whom to offer an order (gpsFailed not null). With CRAVES_FLEET_GPS_RULE on, gpsFailed counts
+     * the riders in range, not in exclude, who meet everything above but not the rule: [0] fix too old, [1] too
+     * inaccurate, [2] both. shadow keeps them; enforce leaves them out, as if out of range. The same statement either way.
      */
     private List<Candidate> nearbyRiders(double lat, double lng, int radiusM, int dropM, int detourPercent, Double dropLat, Double dropLng,
                                          Set<UUID> exclude, int[] gpsFailed) {
-        boolean gps = !"off".equals(gpsRule);
+        boolean gps = gpsFailed != null && !"off".equals(gpsRule);
         boolean enforce = "enforce".equals(gpsRule);
         double dLat = radiusM / 111_320.0;
         double dLng = radiusM / (111_320.0 * Math.max(0.01, Math.cos(Math.toRadians(lat))));

@@ -120,6 +120,22 @@ public class RiderPushClient {
             "ttlSeconds", 600, "collapseKey", "trip-ended-" + tripId));
     }
 
+    /**
+     * Ops gave the rider a trip (FleetTripService.tellAssigned): a data message of type TRIP_ASSIGNED with the trip id and
+     * nothing else, so the phone rings once and an open app reads its trip at once. Before, the phone learnt it only on its
+     * next /locations call. An app that doesn't know the type drops it. Alive 10 minutes. Returns as offer does.
+     */
+    public String tripAssigned(String fcmToken, UUID tripId) {
+        if (client == null) {
+            return "OFF";
+        }
+        return realtime(Map.of("app", "rider", "token", fcmToken,
+            "data", Map.of("type", "TRIP_ASSIGNED", "tripId", tripId.toString()),
+            // English riders see these words (the phone words it for the others), as strings.xml rider_trip_assigned_*.
+            "notification", Map.of("title", "Craves ops gave you an order", "body", "Open Craves Riders to start the trip."),
+            "ttlSeconds", 600, "collapseKey", "trip-assigned-" + tripId));
+    }
+
     private String realtime(Map<String, Object> request) {
         try {
             return client.post().uri("/internal/v1/push/realtime").header("X-Craves-Internal-Key", secret)

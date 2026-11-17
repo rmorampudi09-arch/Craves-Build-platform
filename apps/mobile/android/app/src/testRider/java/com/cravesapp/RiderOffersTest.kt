@@ -1,7 +1,9 @@
 package com.cravesapp
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** App 1.3.0: an offer counts down to the server's expiresAt on the phone's clock, never past arrival plus expiresInSec. */
@@ -30,6 +32,13 @@ class RiderOffersTest {
     assertEquals(arrival + 10_000, RiderOffers.deadlineMs(arrival, 10, expiresAt, offset))
     assertEquals(arrival + 40_000, RiderOffers.deadlineMs(arrival, 40, expiresAt, null))
     assertEquals(arrival + 40_000, RiderOffers.deadlineMs(arrival, 40, "", offset))
+  }
+
+  @Test
+  fun theSameAssignedPushTwiceRingsOnce() {
+    assertTrue(RiderOffers.firstAssigned("trip-1"))
+    assertFalse(RiderOffers.firstAssigned("trip-1"))
+    assertTrue(RiderOffers.firstAssigned("trip-2"))
   }
 
   @Test

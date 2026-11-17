@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
@@ -75,6 +76,8 @@ class FleetOpsDatabaseTest {
     FleetOpsService service;
     /** The same, with craves.fleet.rider-handover-enabled on. */
     FleetOpsService handover;
+    /** With the handover and craves.fleet.ops-assign-push-enabled on. */
+    FleetOpsService ringing;
     DeliveryCommandMessage command;
     UUID near;
     UUID other;
@@ -95,8 +98,9 @@ class FleetOpsDatabaseTest {
             mock(BankDataCipher.class));
         when(borzo.providerId()).thenReturn("borzo");
         FleetCourierCancel couriers = new FleetCourierCancel(fleet.db, List.of(borzo), statusUpdates, alerts);
-        service = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, couriers, false);
-        handover = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, couriers, true);
+        service = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, couriers, false, false);
+        handover = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, couriers, true, false);
+        ringing = new FleetOpsService(fleet.db, fleet.transactions, policies, testMode, dispatcher, trips, pay, bridge, admin, couriers, true, true);
         FleetDispatchFixtures.policy(fleet.db, "live");
         near = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
         other = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.01, KITCHEN_LNG, 5, false);
@@ -165,6 +169,66 @@ class FleetOpsDatabaseTest {
         refused(() -> service.reassign(ops, key, tripId, new ReassignInput(near, null, "Changed my mind")), 409, "IDEMPOTENCY_KEY_REUSED");
         assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.admin_audit WHERE action = 'TRIP_REASSIGNED' AND rider_id = ?",
             Integer.class, other)).isEqualTo(1);
+        // Without craves.fleet.ops-assign-push-enabled nothing is pushed, as before.
+        verify(alerts, after(500).never()).tripAssigned(any(), any());
+    }
+
+    /** R22 item 15: the rider ops gave the order to hears at once, once the change has committed and never before. */
+    @Test
+    void withThePushOnTheRiderOpsGaveTheOrderToIsToldOnceAfterTheCommit() {
+        UUID tripId = tripId();
+        token(other, "token-other");
+        // Rolled back: nothing is pushed for a change that never happened.
+        new TransactionTemplate(fleet.transactions).executeWithoutResult(status -> {
+            ringing.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider"));
+            status.setRollbackOnly();
+        });
+        assertThat(single().state()).isEqualTo("SEARCHING");
+        // Refused: the same.
+        FleetDispatchFixtures.seen(fleet.db, other, 50);
+        refused(() -> ringing.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider")), 409, "RIDER_NOT_AVAILABLE");
+        FleetDispatchFixtures.seen(fleet.db, other, 5);
+        verify(alerts, after(500).never()).tripAssigned(any(), any());
+
+        UUID key = UUID.randomUUID();
+        ringing.reassign(ops, key, tripId, new ReassignInput(other, null, "Closest rider"));
+        verify(alerts, timeout(5_000)).tripAssigned("token-other", tripId);
+        // The same key again is the first answer and rings nobody a second time.
+        ringing.reassign(ops, key, tripId, new ReassignInput(other, null, "Closest rider"));
+        verify(alerts, after(500).times(1)).tripAssigned(any(), any());
+        verify(alerts, never()).tripEnded(any(), any(), any());
+    }
+
+    @Test
+    void aPushThatFailsChangesNothingAndWritesNothingAboutTheRider() {
+        UUID tripId = tripId();
+        token(other, "token-other");
+        when(alerts.tripAssigned(any(), any())).thenThrow(new IllegalStateException("notification-service is down"));
+        Map<String, Object> riderBefore = fleet.db.queryForMap("SELECT * FROM fleet_schema.rider WHERE id = ?", other);
+
+        OpsTrip trip = (OpsTrip) ringing.reassign(ops, UUID.randomUUID(), tripId, new ReassignInput(other, null, "Closest rider"));
+
+        verify(alerts, timeout(5_000)).tripAssigned("token-other", tripId);
+        assertThat(trip.state()).isEqualTo("ASSIGNED");
+        assertThat(single().riderId()).isEqualTo(other);
+        assertThat(fleet.db.queryForMap("SELECT * FROM fleet_schema.rider WHERE id = ?", other)).isEqualTo(riderBefore);
+        assertThat(fleet.db.queryForList("SELECT rider_id || ':' || state FROM fleet_schema.trip_offer WHERE trip_id = ? ORDER BY offered_at, state",
+            String.class, tripId)).as("the same offers as without the push").containsExactlyInAnyOrder(near + ":WITHDRAWN", other + ":WITHDRAWN",
+            other + ":ACCEPTED");
+    }
+
+    @Test
+    void withThePushOnAHandoverTellsTheFirstRiderItEndedAndRingsTheSecond() {
+        UUID first = accept(other);
+        token(other, "token-other");
+        token(near, "token-near");
+        contractMigration();
+        OpsTrip moved = (OpsTrip) ringing.reassign(ops, UUID.randomUUID(), first, new ReassignInput(near, null, "Ravi's bike broke down"));
+
+        assertThat(moved.tripId()).isNotEqualTo(first);
+        verify(alerts, timeout(5_000)).tripAssigned("token-near", moved.tripId());
+        verify(alerts, timeout(5_000)).tripEnded("token-other", first, "HANDED_TO_RIDER");
+        verify(alerts, after(500).times(1)).tripAssigned(any(), any());
     }
 
     @Test
@@ -410,10 +474,7 @@ class FleetOpsDatabaseTest {
     void cancellingARiderTripPaysByTheStateTableAndTellsThePipeline() {
         UUID tripId = accept(other);
         fleet.db.update("UPDATE fleet_schema.trip SET state = 'AT_PICKUP', arrived_kitchen_at = now() WHERE id = ?", tripId);
-        if (fleet.db.update("UPDATE fleet_schema.rider_device SET fcm_token = 'token-other' WHERE rider_id = ? AND state = 'BOUND'", other) == 0) {
-            fleet.db.update("INSERT INTO fleet_schema.rider_device (id, rider_id, fcm_token, app_version, model, state) "
-                + "VALUES (?, ?, 'token-other', '1.3.0', 'Redmi 13C', 'BOUND')", UUID.randomUUID(), other);
-        }
+        token(other, "token-other");
         events.clear();
         OpsTrip trip = (OpsTrip) service.cancel(ops, UUID.randomUUID(), tripId, "Customer cancelled the order");
         // The rider hears at once, once the cancel has committed (R16 item 11), not on the next /locations call.
@@ -591,6 +652,14 @@ class FleetOpsDatabaseTest {
     private void alerted(UUID tripId) {
         fleet.db.update("INSERT INTO fleet_schema.trip_event (id, trip_id, kind, actor_type, idempotency_key) "
             + "VALUES (?, ?, 'OFFLINE_OTP_ALERTED', 'SYSTEM', 'offline-otp-alert')", UUID.randomUUID(), tripId);
+    }
+
+    /** The rider's bound phone has this FCM token. */
+    private void token(UUID rider, String token) {
+        if (fleet.db.update("UPDATE fleet_schema.rider_device SET fcm_token = ? WHERE rider_id = ? AND state = 'BOUND'", token, rider) == 0) {
+            fleet.db.update("INSERT INTO fleet_schema.rider_device (id, rider_id, fcm_token, app_version, model, state) "
+                + "VALUES (?, ?, ?, '1.3.0', 'Redmi 13C', 'BOUND')", UUID.randomUUID(), rider, token);
+        }
     }
 
     private UUID accept(UUID rider) {

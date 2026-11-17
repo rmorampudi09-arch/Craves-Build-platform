@@ -61,6 +61,13 @@ Checks on every phone:
 - [ ] An offer that expires stops ringing and its notification disappears.
 - [ ] Phone setup's **Test ring** rings the same way.
 
+**Ops gives an order** (with `CRAVES_FLEET_OPS_ASSIGN_PUSH_ENABLED` on and the app build that rings on `TRIP_ASSIGNED`): on Fleet trips in the ops console, give a searching order to the rider (Reassign, the rider), once with the app open and once with it swiped away and the screen off.
+
+- [ ] Ops assign rings the phone: within 5 s it rings once with the offer sound and shows "Craves ops gave you an order", with the screen off too.
+- [ ] Tapping the notification opens the app on the trip; an open app shows the trip without a tap.
+- [ ] It rings once per trip, and there is nothing to accept or decline.
+- [ ] With the switch off, or on an older app, the phone stays silent and the trip appears on the next location call, as before.
+
 **Pass:** `p95_s` under 5 for each phone's model over its 20 offers, and none missed. If FCM misses and the location call delivers, that offer can take up to about 11 s; if p95 fails because of it, write how many offers came by `locations` first.
 
 ## 3. Airplane-mode trip test: zero lost steps (a 4 GB and a 3 GB phone)

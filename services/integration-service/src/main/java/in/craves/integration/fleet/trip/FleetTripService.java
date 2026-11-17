@@ -555,19 +555,33 @@ public class FleetTripService {
      * changes nothing, and /locations still carries the ended trip.
      */
     public void tellRider(UUID tripId, String reason) {
+        push(tripId, "ENDED", reason);
+    }
+
+    /**
+     * Rings the phone of the rider ops gave this trip to, after this transaction commits (R22 item 15, behind
+     * craves.fleet.ops-assign-push-enabled). Best effort, as tellRider: a failed push changes nothing and writes nothing
+     * about the rider, and /locations still carries the trip.
+     */
+    public void tellAssigned(UUID tripId) {
+        push(tripId, "ASSIGNED", "OPS");
+    }
+
+    private void push(UUID tripId, String what, String reason) {
         UUID riderId = jdbc.queryForList("SELECT rider_id FROM fleet_schema.trip WHERE id = ? AND rider_id IS NOT NULL", UUID.class, tripId)
             .stream().findFirst().orElse(null);
         if (riderId == null || alerts == null) {
             return;
         }
-        Runnable send = () -> Thread.ofVirtual().name("fleet-trip-ended-push").start(() -> {
+        Runnable send = () -> Thread.ofVirtual().name("ASSIGNED".equals(what) ? "fleet-trip-assigned-push" : "fleet-trip-ended-push").start(() -> {
             try {
                 String token = jdbc.queryForList("SELECT fcm_token FROM fleet_schema.rider_device WHERE rider_id = ? AND state = 'BOUND' "
                     + "AND fcm_token IS NOT NULL", String.class, riderId).stream().findFirst().orElse(null);
-                String result = token == null ? "NO_TOKEN" : alerts.tripEnded(token, tripId, reason);
-                LOGGER.info("FLEET_TRIP_ENDED_PUSH trip={} rider={} reason={} result={}", tripId, riderId, reason, result);
+                String result = token == null ? "NO_TOKEN"
+                    : "ASSIGNED".equals(what) ? alerts.tripAssigned(token, tripId) : alerts.tripEnded(token, tripId, reason);
+                LOGGER.info("FLEET_TRIP_{}_PUSH trip={} rider={} reason={} result={}", what, tripId, riderId, reason, result);
             } catch (RuntimeException exception) {
-                LOGGER.warn("FLEET_TRIP_ENDED_PUSH trip={} failed: {}", tripId, exception.getClass().getSimpleName());
+                LOGGER.warn("FLEET_TRIP_{}_PUSH trip={} failed: {}", what, tripId, exception.getClass().getSimpleName());
             }
         });
         if (TransactionSynchronizationManager.isSynchronizationActive()) {

@@ -14,7 +14,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import in.craves.integration.delivery.shiprocket.ShiprocketTransport.ShiprocketApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
@@ -132,8 +131,6 @@ class ProviderGuardTest {
         assertThat(ProviderGuard.health(new HttpClientErrorException(HttpStatus.TOO_MANY_REQUESTS))).isFalse();
         assertThat(ProviderGuard.health(new IllegalStateException("Borzo returned HTTP 400",
             new HttpClientErrorException(HttpStatus.BAD_REQUEST)))).isNull();
-        assertThat(ProviderGuard.health(new ShiprocketApiException(502, "Shiprocket failed", false))).isFalse();
-        assertThat(ProviderGuard.health(new ShiprocketApiException(422, "Shiprocket refused", false))).isNull();
         assertThat(ProviderGuard.health(new IllegalStateException("Pidge API HTTP 502 (UNCLASSIFIED)"))).isFalse();
         assertThat(ProviderGuard.health(new IllegalStateException("Pidge response was not received"))).isFalse();
         assertThat(ProviderGuard.health(new IllegalStateException("Pidge reported an API error (NOT_SERVICEABLE)"))).isNull();

@@ -74,7 +74,7 @@ public class FleetCourierCancel {
         // Its alert also reaches ops's app, as FLEET_COURIER_CANCEL_FAILED does.
         confirmed.opsPush((booking, why) -> push(new Booking(booking.jobId(), booking.orderId(), booking.chefSubOrderId(),
             booking.provider(), booking.providerDeliveryId(), booking.status()), "borzo".equals(booking.provider()) ? "Borzo"
-            : "pidge".equals(booking.provider()) ? "Pidge" : "Shiprocket", why));
+            : "pidge".equals(booking.provider()) ? "Pidge" : booking.provider(), why));
     }
 
     private boolean confirmedOn() {

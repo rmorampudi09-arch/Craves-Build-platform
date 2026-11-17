@@ -9,9 +9,6 @@ parameters:
   - name: activateBorzo
     type: boolean
     default: false
-  - name: activateShiprocket
-    type: boolean
-    default: false
   - name: activateShadowfax
     type: boolean
     default: false
@@ -34,37 +31,6 @@ parameters:
   - name: borzoCallbackSecretName
     type: string
     default: borzo-callback-token
-
-  - name: shiprocketBaseUrl
-    type: string
-    default: https://apiv2.shiprocket.in/v1/external
-  - name: shiprocketCallbackUrl
-    type: string
-    default: https://api.craves.in/api/v1/webhooks/delivery/p4
-  - name: shiprocketApiEmailSecretName
-    type: string
-    default: shiprocket-api-email
-  - name: shiprocketApiPasswordSecretName
-    type: string
-    default: shiprocket-api-password
-  - name: shiprocketWebhookSecretName
-    type: string
-    default: shiprocket-webhook-token
-  - name: shiprocketAttributionApproved
-    type: boolean
-    default: false
-  - name: shiprocketOrderEmail
-    type: string
-    default: ''
-  - name: shiprocketPackageLengthCm
-    type: string
-    default: ''
-  - name: shiprocketPackageBreadthCm
-    type: string
-    default: ''
-  - name: shiprocketPackageHeightCm
-    type: string
-    default: ''
 
   - name: expectedDeliveryQueueActiveCount
     type: number
@@ -123,7 +89,6 @@ steps:
 
       confirm='${{ parameters.confirmProductionActivation }}'
       borzo='${{ parameters.activateBorzo }}'
-      shiprocket='${{ parameters.activateShiprocket }}'
       shadowfax='${{ parameters.activateShadowfax }}'
       porter='${{ parameters.activatePorter }}'
       delhivery='${{ parameters.activateDelhivery }}'
@@ -134,7 +99,7 @@ steps:
       }
 
       selected=0
-      for value in "$borzo" "$shiprocket" "$shadowfax" "$porter" "$delhivery"; do
+      for value in "$borzo" "$shadowfax" "$porter" "$delhivery"; do
         [[ "${value,,}" == 'true' ]] && selected=$((selected + 1))
       done
       (( selected > 0 )) || {
@@ -160,11 +125,6 @@ steps:
 
       app_yml='services/integration-service/src/main/resources/application.yml'
       grep -Fq 'enabled: ${BORZO_API_ENABLED:false}' "$app_yml"
-      grep -Fq 'enabled: ${SHIPROCKET_API_ENABLED:false}' "$app_yml"
-      grep -Fq 'create-enabled: ${SHIPROCKET_CREATE_ENABLED:false}' "$app_yml"
-      grep -Fq 'production-activation-approved: ${SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED:false}' "$app_yml"
-      grep -Fq 'attribution-approved: ${SHIPROCKET_ATTRIBUTION_APPROVED:false}' "$app_yml"
-      grep -R -Fq '/api/v1/webhooks/delivery/p4' services/integration-service/src/main/java
       grep -R -Fq '/api/v1/webhooks/delivery/borzo' services/integration-service/src/main/java
 
       echo 'PASS: static provider productionization preflight.'
@@ -189,18 +149,11 @@ steps:
         STATUS_SUB='${{ parameters.deliveryStatusSubscriptionName }}'
         APIM='${{ parameters.apimName }}'
         BORZO_RAW='${{ parameters.activateBorzo }}'
-        SHIPROCKET_RAW='${{ parameters.activateShiprocket }}'
         BORZO="${BORZO_RAW,,}"
-        SHIPROCKET="${SHIPROCKET_RAW,,}"
 
         fail() {
           echo "ERROR: $*" >&2
           exit 2
-        }
-
-        positive_decimal() {
-          [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ ]] || return 1
-          awk -v value="$1" 'BEGIN { exit !(value > 0) }'
         }
 
         for tool in az jq psql python3; do
@@ -240,29 +193,6 @@ steps:
           grep -qx '${{ parameters.borzoCallbackSecretName }}' <<<"$secrets" || fail 'Borzo callback secret is missing.'
         fi
 
-        if [[ "$SHIPROCKET" == 'true' ]]; then
-          sr_base='${{ parameters.shiprocketBaseUrl }}'
-          sr_callback='${{ parameters.shiprocketCallbackUrl }}'
-          sr_attribution='${{ parameters.shiprocketAttributionApproved }}'
-          sr_email='${{ parameters.shiprocketOrderEmail }}'
-          sr_length='${{ parameters.shiprocketPackageLengthCm }}'
-          sr_breadth='${{ parameters.shiprocketPackageBreadthCm }}'
-          sr_height='${{ parameters.shiprocketPackageHeightCm }}'
-          [[ "${sr_attribution,,}" == 'true' ]] || fail 'Shiprocket courier attribution approval is required.'
-          [[ -n "$sr_email" && "$sr_email" == *@*.* ]] || fail 'Shiprocket order email is required.'
-          positive_decimal "$sr_length" || fail 'Shiprocket package length must be positive.'
-          positive_decimal "$sr_breadth" || fail 'Shiprocket package breadth must be positive.'
-          positive_decimal "$sr_height" || fail 'Shiprocket package height must be positive.'
-          sr_host="$(python3 -c 'from urllib.parse import urlparse; import sys; print((urlparse(sys.argv[1]).hostname or "").lower())' "$sr_base")"
-          [[ "$sr_host" == 'apiv2.shiprocket.in' ]] || fail 'Shiprocket base URL must use apiv2.shiprocket.in.'
-          [[ "$sr_callback" == https://*'/api/v1/webhooks/delivery/p4' ]] || fail 'Shiprocket callback must use the neutral /p4 route.'
-          sr_callback_lower="${sr_callback,,}"
-          [[ "$sr_callback_lower" != *shiprocket* && "$sr_callback_lower" != *kartrocket* ]] || fail 'Shiprocket callback URL is not provider-neutral.'
-          grep -qx '${{ parameters.shiprocketApiEmailSecretName }}' <<<"$secrets" || fail 'Shiprocket API email secret is missing.'
-          grep -qx '${{ parameters.shiprocketApiPasswordSecretName }}' <<<"$secrets" || fail 'Shiprocket API password secret is missing.'
-          grep -qx '${{ parameters.shiprocketWebhookSecretName }}' <<<"$secrets" || fail 'Shiprocket webhook token secret is missing.'
-        fi
-
         db_url="$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].env[?name=='SPRING_DATASOURCE_URL']|[0].value" -o tsv --only-show-errors)"
         db_user="$(az containerapp show -g "$RG" -n "$APP" --query "properties.template.containers[0].env[?name=='SPRING_DATASOURCE_USERNAME']|[0].value" -o tsv --only-show-errors)"
         db_secret_url="$(az containerapp secret list -g "$RG" -n "$APP" --query "[?name=='kv-db-password']|[0].keyVaultUrl" -o tsv --only-show-errors)"
@@ -274,7 +204,7 @@ steps:
         export PGPASSWORD="$db_password" PGUSER="$db_user"
         DB="${db_url#jdbc:}"
 
-        for provider in borzo shiprocket shadowfax porter delhivery; do
+        for provider in borzo shadowfax porter delhivery; do
           count="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider WHERE provider_id='${provider}';")"
           [[ "$count" == '1' ]] || fail "Provider catalog row is missing for $provider. Deploy migrations first."
         done
@@ -284,13 +214,6 @@ steps:
           [[ "$open_borzo" == '0' ]] || fail "Borzo has $open_borzo non-terminal sandbox delivery job(s). Drain/cancel them before switching the provider endpoint to production."
         fi
 
-        if [[ "$SHIPROCKET" == 'true' ]]; then
-          pickup_table="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT to_regclass('delivery_schema.delivery_provider_pickup_location') IS NOT NULL;")"
-          [[ "$pickup_table" == 't' ]] || fail 'Provider pickup mapping migration is missing.'
-          verified_pickups="$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM delivery_schema.delivery_provider_pickup_location WHERE provider_id='shiprocket' AND is_verified=TRUE AND NULLIF(BTRIM(external_location_code),'') IS NOT NULL;")"
-          [[ "$verified_pickups" -ge 1 ]] || fail 'Shiprocket has no verified kitchen pickup mapping.'
-        fi
-
         mapfile -t API_IDS < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='api/v1/webhooks/delivery'].name" -o tsv --only-show-errors)
         (( ${#API_IDS[@]} == 1 )) || fail 'Expected exactly one APIM delivery webhook API.'
         API_ID="${API_IDS[0]}"
@@ -298,10 +221,6 @@ steps:
         if [[ "$BORZO" == 'true' ]]; then
           [[ "$(jq '[.[] | select((.method | ascii_upcase) == "POST" and .urlTemplate == "/borzo")] | length' <<<"$operations")" == '1' ]] || fail 'Borzo APIM webhook route is missing.'
         fi
-        if [[ "$SHIPROCKET" == 'true' ]]; then
-          [[ "$(jq '[.[] | select((.method | ascii_upcase) == "POST" and .urlTemplate == "/p4")] | length' <<<"$operations")" == '1' ]] || fail 'Shiprocket neutral APIM /p4 route is missing.'
-        fi
-
         unset db_password PGPASSWORD PGUSER
         echo 'PASS: every selected provider passed preflight. No runtime changes have been made.'
 
@@ -319,9 +238,7 @@ steps:
         APP='${{ parameters.integrationContainerAppName }}'
         ORDER_APP='${{ parameters.orderContainerAppName }}'
         BORZO_RAW='${{ parameters.activateBorzo }}'
-        SHIPROCKET_RAW='${{ parameters.activateShiprocket }}'
         BORZO="${BORZO_RAW,,}"
-        SHIPROCKET="${SHIPROCKET_RAW,,}"
 
         fail() {
           echo "ERROR: $*" >&2
@@ -368,24 +285,6 @@ steps:
           )
         fi
 
-        if [[ "$SHIPROCKET" == 'true' ]]; then
-          env_args+=(
-            SHIPROCKET_API_ENVIRONMENT=PRODUCTION
-            SHIPROCKET_API_BASE_URL='${{ parameters.shiprocketBaseUrl }}'
-            SHIPROCKET_API_EMAIL='secretref:${{ parameters.shiprocketApiEmailSecretName }}'
-            SHIPROCKET_API_PASSWORD='secretref:${{ parameters.shiprocketApiPasswordSecretName }}'
-            SHIPROCKET_WEBHOOK_TOKEN='secretref:${{ parameters.shiprocketWebhookSecretName }}'
-            SHIPROCKET_ORDER_EMAIL='${{ parameters.shiprocketOrderEmail }}'
-            SHIPROCKET_PACKAGE_LENGTH_CM='${{ parameters.shiprocketPackageLengthCm }}'
-            SHIPROCKET_PACKAGE_BREADTH_CM='${{ parameters.shiprocketPackageBreadthCm }}'
-            SHIPROCKET_PACKAGE_HEIGHT_CM='${{ parameters.shiprocketPackageHeightCm }}'
-            SHIPROCKET_API_ENABLED=true
-            SHIPROCKET_CREATE_ENABLED=true
-            SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED=true
-            SHIPROCKET_ATTRIBUTION_APPROVED=true
-          )
-        fi
-
         az containerapp update -g "$RG" -n "$APP" --set-env-vars "${env_args[@]}" >/dev/null
         wait_ready "$APP"
 
@@ -400,7 +299,6 @@ steps:
 
         sql='BEGIN;'
         [[ "$BORZO" == 'true' ]] && sql+=" UPDATE delivery_schema.delivery_provider SET is_active=TRUE, updated_at=now() WHERE provider_id='borzo';"
-        [[ "$SHIPROCKET" == 'true' ]] && sql+=" UPDATE delivery_schema.delivery_provider SET is_active=TRUE, updated_at=now() WHERE provider_id='shiprocket';"
         sql+=' COMMIT;'
         psql "$DB" -v ON_ERROR_STOP=1 -c "$sql" >/dev/null
 
@@ -432,13 +330,6 @@ steps:
           [[ "$(value BORZO_API_ENABLED)" == 'true' ]] || fail 'Borzo API enable verification failed.'
           [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='borzo';")" == 't' ]] || fail 'Borzo provider catalog activation failed.'
         fi
-        if [[ "$SHIPROCKET" == 'true' ]]; then
-          [[ "$(value SHIPROCKET_API_ENVIRONMENT)" == 'PRODUCTION' ]] || fail 'Shiprocket environment verification failed.'
-          [[ "$(value SHIPROCKET_API_ENABLED)" == 'true' ]] || fail 'Shiprocket API enable verification failed.'
-          [[ "$(value SHIPROCKET_CREATE_ENABLED)" == 'true' ]] || fail 'Shiprocket create verification failed.'
-          [[ "$(psql "$DB" -At -v ON_ERROR_STOP=1 -c "SELECT is_active FROM delivery_schema.delivery_provider WHERE provider_id='shiprocket';")" == 't' ]] || fail 'Shiprocket provider catalog activation failed.'
-        fi
-
         order_env="$(az containerapp show -g "$RG" -n "$ORDER_APP" --query 'properties.template.containers[0].env' -o json --only-show-errors)"
         order_value() { jq -r --arg name "$1" '.[] | select(.name == $name) | (.value // "")' <<<"$order_env" | tail -1; }
         [[ "$(order_value CRAVES_DOMAIN_EVENT_OUTBOX_ENABLED)" == 'true' ]] || fail 'Order outbox is not enabled.'
@@ -450,7 +341,6 @@ steps:
         echo '============================================================'
         echo 'CRAVES COORDINATED DELIVERY PROVIDER PRODUCTION CUTOVER: PASS'
         echo "Borzo production active: $BORZO"
-        echo "Shiprocket production active: $SHIPROCKET"
         echo 'Shadowfax: blocked until private API contract + adapter are committed'
         echo 'Porter: blocked until Enterprise API onboarding + adapter are committed'
         echo 'Delhivery: blocked until Intracity API product + adapter are verified'

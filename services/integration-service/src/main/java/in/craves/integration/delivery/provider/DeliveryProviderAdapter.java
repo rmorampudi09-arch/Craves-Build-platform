@@ -68,7 +68,7 @@ public interface DeliveryProviderAdapter {
     /**
      * Canonical delivery stop. The original free-form address remains authoritative for providers
      * that accept it directly (for example Borzo). The additive structured fields preserve address
-     * data that Order Service already owns and are required by providers such as Shiprocket.
+     * data that Order Service already owns for providers that need them.
      */
     record Stop(
         String address,

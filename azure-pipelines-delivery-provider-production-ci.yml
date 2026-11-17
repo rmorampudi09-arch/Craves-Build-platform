@@ -44,7 +44,6 @@ steps:
         azure-pipelines-delivery-provider-coordinated-activation.yml
         azure-pipelines-shadowfax-environment.yml
         azure-pipelines-porter-environment.yml
-        azure-pipelines-shiprocket-production-activation.yml
         azure-pipelines-delhivery-environment.yml
       )
 
@@ -64,11 +63,6 @@ steps:
 
       grep -Fq 'enabled: ${BORZO_API_ENABLED:false}' "$integration"
       grep -Fq 'production-activation-approved: ${BORZO_PRODUCTION_ACTIVATION_APPROVED:false}' "$integration"
-      grep -Fq 'enabled: ${SHIPROCKET_API_ENABLED:false}' "$integration"
-      grep -Fq 'create-enabled: ${SHIPROCKET_CREATE_ENABLED:false}' "$integration"
-      grep -Fq 'environment: ${SHIPROCKET_API_ENVIRONMENT:READ_ONLY}' "$integration"
-      grep -Fq 'production-activation-approved: ${SHIPROCKET_PRODUCTION_ACTIVATION_APPROVED:false}' "$integration"
-      grep -Fq 'attribution-approved: ${SHIPROCKET_ATTRIBUTION_APPROVED:false}' "$integration"
       grep -Fq 'enabled: ${CRAVES_DELIVERY_COMMAND_ENABLED:false}' "$integration"
       grep -Fq 'reconciliation-enabled: ${CRAVES_DELIVERY_RECONCILIATION_ENABLED:false}' "$integration"
       grep -Fq 'webhook-processing-enabled: ${CRAVES_DELIVERY_WEBHOOK_PROCESSING_ENABLED:false}' "$integration"
@@ -88,7 +82,7 @@ steps:
         echo "ERROR: Missing multi-provider migration: $migration" >&2
         exit 2
       }
-      for provider in shiprocket shadowfax porter delhivery; do
+      for provider in shadowfax porter delhivery; do
         grep -Fq "'${provider}'" "$migration" || {
           echo "ERROR: $provider is missing from the multi-provider catalog migration." >&2
           exit 2
@@ -107,69 +101,9 @@ steps:
 
   - bash: |
       set -euo pipefail
-
-      shiprocket_dir=services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket
-      test_dir=services/integration-service/src/test/java/in/craves/integration/delivery/shiprocket
-
-      for file in \
-        ShiprocketApiClient.java \
-        ShiprocketAuthClient.java \
-        ShiprocketTransport.java \
-        ShiprocketStatusMapper.java \
-        ShiprocketWebhookInboxRepository.java \
-        ShiprocketWebhookService.java \
-        ShiprocketWebhookNormalizer.java \
-        ShiprocketWebhookController.java
-      do
-        [[ -f "$shiprocket_dir/$file" ]] || {
-          echo "ERROR: Missing Shiprocket source file $file" >&2
-          exit 2
-        }
-      done
-      [[ -f services/integration-service/src/main/java/in/craves/integration/config/ShiprocketProperties.java ]]
-      [[ -f "$test_dir/ShiprocketStatusMapperTest.java" ]]
-      [[ -f "$test_dir/ShiprocketStatusIdSpaceTest.java" ]]
-      [[ -f "$test_dir/ShiprocketWebhookNormalizerTest.java" ]]
-      [[ -f "$test_dir/ShiprocketWebhookServiceTest.java" ]]
-      [[ -f services/integration-service/src/test/java/in/craves/integration/config/ShiprocketPropertiesTest.java ]]
-      [[ -f services/integration-service/src/test/java/in/craves/integration/delivery/production/DeliveryProviderReadinessServiceTest.java ]]
-
-      grep -R -Fq '@PostMapping("/p4")' "$shiprocket_dir"
-      grep -R -Fq 'x-api-key' "$shiprocket_dir"
-      grep -R -Fq 'shipment_status_id' "$shiprocket_dir"
-      grep -R -Fq '_craves_received_at' "$shiprocket_dir"
-
-      if grep -R -Fq '@PostMapping("/shiprocket")' "$shiprocket_dir"; then
-        echo 'ERROR: Shiprocket callback must remain on the provider-neutral /p4 route.' >&2
-        exit 2
-      fi
-    displayName: Verify executable Shiprocket adapter and neutral webhook path
-
-  - bash: |
-      set -euo pipefail
-      shiprocket=azure-pipelines-shiprocket-production-activation.yml
       borzo=azure-pipelines-delivery-provider-production-activation.yml
       coordinated=azure-pipelines-delivery-provider-coordinated-activation.yml
       apim=azure-pipelines-delivery-provider-webhooks-apim.yml
-
-      grep -A6 -F -- '- name: targetEnvironment' "$shiprocket" | grep -Fq 'default: READ_ONLY'
-      grep -A4 -F -- '- name: enableProvider' "$shiprocket" | grep -Fq 'default: false'
-      grep -A4 -F -- '- name: enableCreate' "$shiprocket" | grep -Fq 'default: false'
-      grep -A4 -F -- '- name: confirmProductionActivation' "$shiprocket" | grep -Fq 'default: false'
-      grep -A4 -F -- '- name: attributionApproved' "$shiprocket" | grep -Fq 'default: false'
-      grep -Fq 'SHIPROCKET_API_EMAIL="secretref:${email_secret}"' "$shiprocket"
-      grep -Fq 'SHIPROCKET_API_PASSWORD="secretref:${password_secret}"' "$shiprocket"
-      grep -Fq 'SHIPROCKET_WEBHOOK_TOKEN="secretref:${webhook_secret}"' "$shiprocket"
-      grep -Fq 'SHIPROCKET_CREATE_ENABLED=true' "$shiprocket"
-      grep -Fq '/api/v1/webhooks/delivery/p4' "$shiprocket"
-      grep -Fq 'delivery_provider_pickup_location' "$shiprocket"
-      grep -Fq 'CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true' "$shiprocket"
-      grep -Fq "status NOT IN ('DELIVERED','CANCELLED','RETURNED','FAILED')" "$shiprocket"
-
-      if grep -Fq 'SHIPROCKET_API_AUTH_TOKEN' "$shiprocket"; then
-        echo 'ERROR: Legacy Shiprocket single-token configuration has returned.' >&2
-        exit 2
-      fi
 
       grep -Fq 'default: apim-craves-prodlow-kmqgfy' "$borzo"
       grep -Fq 'CRAVES_DELIVERY_STATUS_CONSUMER_ENABLED=true' "$borzo"
@@ -191,21 +125,12 @@ steps:
       grep -Fq 'expectedStatusSubscriptionDeadLetterCount' "$coordinated"
 
       grep -A3 -F -- '- name: enableBorzoRoute' "$apim" | grep -Fq 'default: true'
-      grep -A3 -F -- '- name: enableShiprocketRoute' "$apim" | grep -Fq 'default: false'
-      grep -Fq "'/api/v1/webhooks/delivery/p4'" "$apim"
-      grep -Fq "'/p4'" "$apim"
       grep -Fq "'/api/v1/webhooks/delivery/borzo'" "$apim"
-
-      if grep -Fq "'/api/v1/webhooks/delivery/shiprocket'" "$apim" || grep -Fq "'/shiprocket'" "$apim"; then
-        echo 'ERROR: APIM contains a provider-named Shiprocket public webhook route.' >&2
-        exit 2
-      fi
 
       if grep -R -Fq 'apim-craves-prodlowkmqgfy' \
         azure-pipelines-delivery-provider-production-activation.yml \
         azure-pipelines-delivery-provider-coordinated-activation.yml \
-        azure-pipelines-delivery-provider-webhooks-apim.yml \
-        azure-pipelines-shiprocket-production-activation.yml; then
+        azure-pipelines-delivery-provider-webhooks-apim.yml; then
         echo 'ERROR: Invalid APIM resource name typo detected.' >&2
         exit 2
       fi
@@ -249,7 +174,6 @@ steps:
         azure-pipelines-delivery-provider-coordinated-activation.yml \
         azure-pipelines-shadowfax-environment.yml \
         azure-pipelines-porter-environment.yml \
-        azure-pipelines-shiprocket-production-activation.yml \
         azure-pipelines-delhivery-environment.yml
       do
         grep -Fq 'AZURE_SERVICE_CONNECTION: Craves-RMORAMPUDI09-Service-Connection' "$file" || {
@@ -268,12 +192,11 @@ steps:
       grep -Fq 'BORZO_API_AUTH_TOKEN=secretref:borzo-api-auth-token' azure-pipelines-delivery-provider-production-activation.yml
       grep -Fq 'BORZO_CALLBACK_TOKEN=secretref:borzo-callback-token' azure-pipelines-delivery-provider-production-activation.yml
 
-      if grep -R -n -E '(SHADOWFAX|PORTER|SHIPROCKET|DELHIVERY|BORZO).*(TOKEN|SECRET|PASSWORD)[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=_-]{24,}' \
+      if grep -R -n -E '(SHADOWFAX|PORTER|DELHIVERY|BORZO).*(TOKEN|SECRET|PASSWORD)[[:space:]]*=[[:space:]]*[A-Za-z0-9+/=_-]{24,}' \
         azure-pipelines-delivery-provider-production-activation.yml \
         azure-pipelines-delivery-provider-coordinated-activation.yml \
         azure-pipelines-shadowfax-environment.yml \
         azure-pipelines-porter-environment.yml \
-        azure-pipelines-shiprocket-production-activation.yml \
         azure-pipelines-delhivery-environment.yml; then
         echo 'ERROR: A delivery provider pipeline appears to contain a plaintext credential.' >&2
         exit 2

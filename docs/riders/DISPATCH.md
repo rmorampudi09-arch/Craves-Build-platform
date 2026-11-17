@@ -115,7 +115,7 @@ Built, switched off (`CRAVES_FLEET_NO_SUPPLY_FAST_PATH_ENABLED`, default false; 
 
 - The stage is open, before its deadline, and at least the settle time old (`CRAVES_FLEET_NO_SUPPLY_SETTLE_SECONDS`, default 3; 0 = none). The opening look came before, and found nobody to ask.
 - **Nobody was ever asked about this order.** An order with even one offer, whatever its rider did, keeps its whole 300 s: "all declined" is never no supply.
-- **No rider is in range.** A rider is in range if they are ACTIVE, on an open shift, their phone called in the last 3 minutes, and their last known position is within the policy radius of the kitchen (5 km), or they have no position yet. In test mode, only pilot riders count, as for offers.
+- **No rider is in range.** A rider is in range if they are ACTIVE, on an open shift, their phone called in the last 3 minutes (a shift whose phone has not called yet counts from its start), and their last known position is within the policy radius of the kitchen (5 km), or they have no position yet. In test mode, only pilot riders count, as for offers.
 
 "In range" is wider than "can hear of an order" (above) on purpose. A rider on a break, on a trip, deciding on another order, last heard from over 45 s ago, with an old or mock fix, with a phone that can't ring, heading home, or with their own distance limits still counts, because they could be free a moment later. While one such rider is in range, the order keeps its 300 s and is offered exactly as before.
 

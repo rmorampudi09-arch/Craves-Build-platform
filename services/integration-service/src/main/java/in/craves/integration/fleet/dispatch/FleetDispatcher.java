@@ -396,8 +396,8 @@ public class FleetDispatcher implements FleetStage {
 
     /**
      * No rider who is, or could shortly be, asked about an order at this kitchen, by Postgres only (never the engine): no
-     * ACTIVE rider on an open shift whose phone called within FIX_WITHIN_SECONDS has their last known position inside the
-     * radius, or no position yet. Wider than nearbyRiders on purpose: a rider on a break, on a trip, deciding on another
+     * ACTIVE rider on an open shift whose phone called within FIX_WITHIN_SECONDS (a shift that hasn't called yet counts
+     * from its start, as the watchdog counts it) has their last known position inside the radius, or no position yet. Wider than nearbyRiders on purpose: a rider on a break, on a trip, deciding on another
      * order, heard from over 45 s ago, with an old or mock fix, a phone that can't ring or their own distance limits still
      * counts as in range. Only test mode leaves a rider out, as it does for offers. No offer history is read.
      */
@@ -410,7 +410,7 @@ public class FleetDispatcher implements FleetStage {
                 JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL
                   AND s.credential_expires_at > now()
                 LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = r.id
-                WHERE r.status = 'ACTIVE' AND s.last_seen_at > now() - make_interval(secs => ?)
+                WHERE r.status = 'ACTIVE' AND COALESCE(s.last_seen_at, s.started_at) > now() - make_interval(secs => ?)
                   AND (p.rider_id IS NULL OR (p.lat BETWEEN ? AND ? AND p.lng BETWEEN ? AND ?))""",
                 (row, n) -> row.getObject("lat") != null
                     && RoadDistanceClient.straightLineMetres(lat, lng, row.getDouble("lat"), row.getDouble("lng")) > radiusM

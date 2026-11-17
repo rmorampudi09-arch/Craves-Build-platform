@@ -804,6 +804,27 @@ class FleetDispatchDatabaseTest {
             + "WHERE t.chef_sub_order_id = ?", Integer.class, chefSubOrderId)).isZero();
     }
 
+    /**
+     * A rider who has just gone on shift, whose phone has not called yet (no heartbeat, no position), is in range: the
+     * order keeps its stage. A shift that never called counts from its start, so after 3 minutes it no longer does.
+     */
+    @Test
+    void withTheNoSupplyFastPathOnARiderJustOnShiftWhosePhoneHasNotCalledYetKeepsTheStage() {
+        ridersFirst();
+        dispatcher.setNoSupplyFastPath(true, 3);
+        UUID rider = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        fleet.db.update("DELETE FROM fleet_schema.rider_position_latest WHERE rider_id = ?", rider);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET last_seen_at = NULL, started_at = now() - INTERVAL '5 seconds' WHERE rider_id = ?", rider);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        stageOpenedAgo(10);
+        stillWaitsForARider("on shift 5 s ago, no call yet");
+        assertThat(count("fleet_schema.trip_offer")).isZero();
+
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET started_at = now() - INTERVAL '200 seconds' WHERE rider_id = ?", rider);
+        assertThat(dispatcher.run(command, OptionalLong::empty, true)).as("never called in over 3 minutes: not in range").isEmpty();
+        assertThat(stages()).containsExactly("CRAVES_FLEET:CLOSED:NO_SUPPLY", "BORZO:OPEN:");
+    }
+
     /** "All declined" is not no supply: an order a rider was asked about keeps its whole stage, whoever is in range later. */
     @Test
     void withTheNoSupplyFastPathOnAnOrderARiderWasAskedAboutKeepsItsWholeStage() {

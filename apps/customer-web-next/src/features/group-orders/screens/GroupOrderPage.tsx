@@ -2,14 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { UtensilsCrossed } from "lucide-react";
 import { signInPath, useSignedIn } from "@/features/auth/lib/use-signed-in";
 import { loadCart } from "@/features/cart/api/cravesCart";
 import { loadKitchenMenu, type Dish } from "@/features/dish/api/dishes";
 import type { AdvancedResult } from "@/shared/lib/advanced-client";
+import { useReturnScroll } from "@/shared/lib/return-scroll";
+import { ProgressiveImage } from "@/shared/components/media/ProgressiveImage";
 import { getKitchenProfile } from "@/shared/lib/kitchen-profile-client";
 import { formatDishPrice } from "@/shared/lib/kitchen-dish-summary";
 import { BackHeader } from "@/shared/components/navigation/BackHeader";
 import { CartStepper } from "@/shared/ui/buttons/CartStepper";
+import { FoodTypeMark } from "@/shared/ui/data-display/FoodTypeMark";
 import { outlineButton, quietButton } from "@/shared/ui/buttons/pill-buttons";
 import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { cancelGroup, getGroup, leaveGroup, lockGroup, removeMyDish, removePerson, reopenGroup, sendToCart, setMyDish } from "../api/group-orders";
@@ -136,9 +140,10 @@ export default function GroupOrderPage({ groupId }: { groupId: string }) {
     setMenu(null);
     loadKitchenMenu(kitchenId, { remember: false }).then(setMenu, () => setMenu("failed"));
   }, [kitchenId]);
-  useEffect(() => {
-    if (open) loadMenu();
-  }, [open, loadMenu]);
+  // The menu also gives the photos in everyone's dishes, so it is read in every state, not only while open.
+  useEffect(loadMenu, [loadMenu]);
+  // Opening a dish remembers this page, so the dish's back arrow returns here (useReturnScroll, as the kitchen page does).
+  const rememberScroll = useReturnScroll(group !== null);
 
   // A confirm step moves focus to its action, and back to the button that opened it (or the title) when it closes.
   const mainRef = useRef<HTMLElement>(null);
@@ -180,7 +185,8 @@ export default function GroupOrderPage({ groupId }: { groupId: string }) {
     setBusy(true);
     setNotice(null);
     const result = await leaveGroup(groupId);
-    if (result.ok) return navigate({ to: "/group-orders" });
+    // Replace: Back must not return to a group the person has just left.
+    if (result.ok) return navigate({ to: "/group-orders", replace: true });
     setBusy(false);
     setAsking(null);
     if (result.status === 401) return navigate({ to: signInPath(`/group-orders/${groupId}`) });
@@ -244,10 +250,12 @@ export default function GroupOrderPage({ groupId }: { groupId: string }) {
   }
 
   const page = (body: ReactNode) => (
-    <main ref={mainRef} className="min-h-screen bg-white pb-16">
+    <div className="min-h-screen bg-white pb-16">
       <BackHeader title="Group order" backTo="/group-orders" backLabel="Back to your group orders" />
-      <div className="mx-auto max-w-2xl px-4 pt-5 md:px-6">{body}</div>
-    </main>
+      <main ref={mainRef} onClickCapture={rememberScroll} className="mx-auto max-w-2xl px-4 pt-5 md:px-6">
+        {body}
+      </main>
+    </div>
   );
 
   if (signedIn === false) {
@@ -289,6 +297,8 @@ export default function GroupOrderPage({ groupId }: { groupId: string }) {
   const host = group.participants.find((person) => person.role === "HOST")?.displayName ?? "The host";
   const active = group.status === "OPEN" || group.status === "LOCKED";
   const tooMany = overOrderLimit(group);
+  // The kitchen's photos for the dishes in everyone's shares (none for a dish no longer on the menu).
+  const photos = new Map(Array.isArray(menu) ? menu.filter((dish) => !dish.imageIsPlaceholder).map((dish) => [dish.id, dish.img]) : []);
   const origin = typeof window === "undefined" ? "" : window.location.origin;
   const link = group.joinCode ? (group.shareUrl ?? `${origin}/g/${group.joinCode}`) : null;
   const status = {
@@ -362,21 +372,36 @@ export default function GroupOrderPage({ groupId }: { groupId: string }) {
             <ul className="mt-3 divide-y divide-[#E5E7EB] border-y border-[#E5E7EB]" aria-label="The kitchen's dishes">
               {menu.map((dish) => {
                 const quantity = mine.get(dish.id) ?? 0;
+                // As a kitchen menu row: name and price on the left, the photo on the right; both open the dish.
                 return (
-                  <li key={dish.id} className="flex min-h-16 items-center gap-3 py-3">
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-base font-semibold leading-snug text-[#1A1A1A]">{dish.name}</span>
-                      <span className="block text-sm tabular-nums text-[#4A4A4A]">{formatDishPrice(dish.price)}</span>
-                    </span>
-                    <CartStepper
-                      name={dish.name}
-                      place="your share"
-                      quantity={quantity}
-                      onAdd={() => void setQuantity(dish.id, 1)}
-                      onChange={(next) => void setQuantity(dish.id, next)}
-                      canAdd={quantity < MAX_DISH_PER_PERSON}
-                      disabled={busy}
-                    />
+                  <li key={dish.id} className="flex gap-4 pb-9 pt-4">
+                    <Link to="/dish/$id" params={{ id: dish.id }} className="group block min-w-0 flex-1 rounded-sm pt-1">
+                      <FoodTypeMark foodType={dish.foodType} veg={dish.veg} />
+                      <span className="mt-2 line-clamp-2 block text-[1.0625rem] font-bold leading-[1.3125rem] text-[#261A15] transition-colors group-hover:text-[#D92714]">{dish.name}</span>
+                      <span className="mt-1 block text-[1.0625rem] font-bold tabular-nums text-[#261A15]">{formatDishPrice(dish.price)}</span>
+                    </Link>
+                    <div className="relative h-[116px] w-[116px] shrink-0">
+                      {/* Repeats the name's link, so it is skipped by screen readers and the Tab key. */}
+                      <Link to="/dish/$id" params={{ id: dish.id }} tabIndex={-1} aria-hidden="true" className="relative block h-full w-full overflow-hidden rounded-[14px] bg-[#F7F5F3]">
+                        {dish.imageIsPlaceholder ? (
+                          <span className="flex h-full w-full items-center justify-center text-[#706864]">
+                            <UtensilsCrossed className="h-7 w-7" aria-hidden="true" />
+                          </span>
+                        ) : (
+                          <ProgressiveImage src={dish.img} alt="" fill sizes="116px" loading="lazy" fallbackLabel="No photo" className="object-cover" />
+                        )}
+                      </Link>
+                      <CartStepper
+                        name={dish.name}
+                        place="your share"
+                        quantity={quantity}
+                        onAdd={() => void setQuantity(dish.id, 1)}
+                        onChange={(next) => void setQuantity(dish.id, next)}
+                        canAdd={quantity < MAX_DISH_PER_PERSON}
+                        disabled={busy}
+                        className="absolute -bottom-5 left-1/2 -translate-x-1/2"
+                      />
+                    </div>
                   </li>
                 );
               })}
@@ -403,10 +428,15 @@ export default function GroupOrderPage({ groupId }: { groupId: string }) {
               {person.items.length ? (
                 <ul className="mt-2 grid gap-1">
                   {person.items.map((item) => (
-                    <li key={item.menuItemId} className="flex min-h-8 items-center gap-3 text-[0.9375rem] text-[#1A1A1A]">
-                      <span className="min-w-0 flex-1">
+                    <li key={item.menuItemId} className="flex min-h-11 items-center gap-3 text-[0.9375rem] text-[#1A1A1A]">
+                      {photos.get(item.menuItemId) ? (
+                        <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#F7F5F3]">
+                          <ProgressiveImage src={photos.get(item.menuItemId)!} alt="" fill sizes="40px" loading="lazy" fallbackLabel="" className="object-cover" />
+                        </span>
+                      ) : null}
+                      <Link to="/dish/$id" params={{ id: item.menuItemId }} className="min-w-0 flex-1 rounded-sm underline-offset-4 hover:underline">
                         {item.quantity} × {item.itemName}
-                      </span>
+                      </Link>
                       <span className="shrink-0 tabular-nums">{rupees(item.lineTotalPaise)}</span>
                       {person.you && open ? (
                         <button type="button" className={quietButton} disabled={busy} aria-label={`Remove ${item.itemName} from your share`} onClick={() => void act(() => removeMyDish(groupId, item.menuItemId), "people")}>

@@ -6,6 +6,7 @@ import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { deleteList, getList, removeDish, shareList, stopSharing, updateList } from "../api/food-lists";
 import { signInPath, useSignedIn } from "@/features/auth/lib/use-signed-in";
 import { BackHeader } from "@/shared/components/navigation/BackHeader";
+import { useReturnScroll } from "@/shared/lib/return-scroll";
 import { outlineButton, quietButton } from "@/shared/ui/buttons/pill-buttons";
 import { DishLine, dishCount } from "../components/ListParts";
 import { ListPaper } from "../components/ListPaper";
@@ -69,6 +70,8 @@ export default function FoodListPage({ listId }: { listId: string }) {
   useEffect(() => {
     if (signedIn) load();
   }, [signedIn, load]);
+  // Opening a dish remembers this list, so the dish's back arrow returns here.
+  const rememberScroll = useReturnScroll(state.kind === "ready");
 
   /** Runs one change; a list in the answer replaces the page's copy, anything else reloads it. */
   async function change(run: () => Promise<{ ok: true; data: unknown } | { ok: false; status: number; code: string }>, done?: string) {
@@ -107,7 +110,8 @@ export default function FoodListPage({ listId }: { listId: string }) {
     setBusy(true);
     setNotice(null);
     const result = await deleteList(listId);
-    if (result.ok) return navigate({ to: "/lists" });
+    // Replace: Back must not return to the list that was just deleted.
+    if (result.ok) return navigate({ to: "/lists", replace: true });
     setBusy(false);
     setAsking(null);
     setNotice({ kind: "error", text: listErrorText(result.code, result.status) });
@@ -140,9 +144,9 @@ export default function FoodListPage({ listId }: { listId: string }) {
   }
 
   return (
-    <main ref={mainRef} className="min-h-screen bg-white pb-16">
+    <div className="min-h-screen bg-white pb-16">
       <BackHeader title="Food list" backTo="/lists" backLabel="Back to your food lists" />
-      <div className="mx-auto max-w-2xl px-4 pt-5 md:px-6">
+      <main ref={mainRef} onClickCapture={rememberScroll} className="mx-auto max-w-2xl px-4 pt-5 md:px-6">
         {state.kind === "loading" ? (
           <p role="status" className="py-16 text-center text-[0.9375rem] text-[#6B6B6B]">
             Opening the list…
@@ -310,7 +314,7 @@ export default function FoodListPage({ listId }: { listId: string }) {
             </div>
           </>
         ) : null}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

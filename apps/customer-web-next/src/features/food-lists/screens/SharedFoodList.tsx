@@ -6,6 +6,7 @@ import { EmptyState } from "@/shared/ui/feedback/EmptyState";
 import { copySharedList, sharedList } from "../api/food-lists";
 import { signInPath, useSignedIn } from "@/features/auth/lib/use-signed-in";
 import { BackHeader } from "@/shared/components/navigation/BackHeader";
+import { useReturnScroll } from "@/shared/lib/return-scroll";
 import { outlineButton } from "@/shared/ui/buttons/pill-buttons";
 import { DishLine, dishCount } from "../components/ListParts";
 import { ListPaper } from "../components/ListPaper";
@@ -26,6 +27,8 @@ export default function SharedFoodList({ token }: { token: string }) {
     void sharedList(token).then((result) => setState(result.ok ? { kind: "ready", list: result.data } : { kind: "failed", code: result.code, status: result.status }));
   }, [token]);
   useEffect(load, [load]);
+  // Opening a dish remembers this list, so the dish's back arrow returns here.
+  const rememberScroll = useReturnScroll(state.kind === "ready");
 
   async function save() {
     setSaving(true);
@@ -39,9 +42,9 @@ export default function SharedFoodList({ token }: { token: string }) {
   }
 
   return (
-    <main className="min-h-screen bg-white pb-16">
+    <div className="min-h-screen bg-white pb-16">
       <BackHeader title="Shared list" backTo={signedIn ? "/lists" : "/"} backLabel={signedIn ? "Back to your food lists" : "Back to Craves"} />
-      <div className="mx-auto max-w-2xl px-4 pt-5 md:px-6">
+      <main onClickCapture={rememberScroll} className="mx-auto max-w-2xl px-4 pt-5 md:px-6">
         {state.kind === "loading" ? (
           <p role="status" className="py-16 text-center text-[0.9375rem] text-[#6B6B6B]">
             Opening the list…
@@ -94,7 +97,7 @@ export default function SharedFoodList({ token }: { token: string }) {
             ) : null}
           </>
         ) : null}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

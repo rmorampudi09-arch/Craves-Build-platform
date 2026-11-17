@@ -50,7 +50,7 @@ function onWatches(watches: FavoriteWatch[]): Set<WatchKey> {
 
 /** The bell, on the same warm round tile as the save heart beside it, 48 px to tap. */
 const ROUND_ACTION =
-  "relative z-10 flex h-12 min-h-12 w-12 min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#F7F5F3] !p-0 !text-[#F62E18] !shadow-none transition-[background-color,color,scale] duration-(--dur-micro) hover:!bg-[#FDEAE8] hover:!text-[#C4200F] motion-safe:active:scale-[0.94] disabled:cursor-wait disabled:opacity-50";
+  "relative z-10 flex h-12 min-h-12 w-12 min-w-12 shrink-0 items-center justify-center rounded-full !border-0 !bg-white !p-0 !text-[#F62E18] !shadow-none transition-[box-shadow,color,scale] duration-(--dur-micro) hover:!shadow-[0_6px_16px_rgba(26,26,26,0.10)] hover:!text-[#C4200F] motion-safe:active:scale-[0.94] disabled:cursor-wait disabled:opacity-50";
 
 function SavedHomeRow({
   entry,

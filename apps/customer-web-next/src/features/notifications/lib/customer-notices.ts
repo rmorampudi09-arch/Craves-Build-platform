@@ -15,7 +15,8 @@ export const NOTICE_CATEGORIES: readonly { id: NoticeCategory; label: string }[]
 export function noticeCategory(notice: Pick<CustomerNotification, "noticeType" | "targetType">): Exclude<NoticeCategory, "ALL"> {
   const target = (notice.targetType ?? "").trim().toUpperCase();
   const type = notice.noticeType.trim().toUpperCase();
-  if (target === "ORDER" || target === "DELIVERY") return "ORDERS";
+  // Order created and Payment successful point at the checkout (one payment, one or more orders): still order news.
+  if (target === "ORDER" || target === "DELIVERY" || target === "CHECKOUT") return "ORDERS";
   if (target === "OFFER" || target === "COUPON" || /OFFER|COUPON|PROMO|DISCOUNT/.test(type)) return "OFFERS";
   if (["KITCHEN", "REWARD", "ACCOUNT", "SYSTEM"].includes(target) || /KITCHEN|REWARD|ACCOUNT|SYSTEM/.test(type)) return "UPDATES";
   return "OTHER";

@@ -1,4 +1,5 @@
-import { Fragment, useMemo, useState, type ReactNode, type UIEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type UIEvent } from "react";
+import { useReducedMotion } from "framer-motion";
 import { Link } from "@tanstack/react-router";
 import { ChefHat, ChevronLeft, ChevronRight, Clock3, MapPin, RefreshCw } from "lucide-react";
 
@@ -14,6 +15,9 @@ import { EmptyState, emptyStateSecondaryAction } from "@/shared/ui/feedback/Empt
 type DiscoveryState = "loading" | "ready" | "error" | "address-required";
 
 const DOTS = 5;
+/** Each food photo's turn on a card before the next slides in (owner, 17 Nov 2026: like Zomato's cards). */
+const SLIDE_MS = 3_000;
+const NO_PHOTOS: readonly string[] = [];
 /**
  * The kitchen photo's shape (owner, 5 Nov 2026: photos were too big for the words). 16:9, the
  * landscape crop DoorDash and Wolt use, leaves the photo about 62% of the card, near the golden
@@ -27,7 +31,7 @@ const CARD_WIDTH = "w-[clamp(248px,74vw,286px)] shrink-0 snap-start lg:w-[calc((
 /** The row runs edge to edge on phones and tablets, and leaves room for focus rings and shadows. */
 const ROW = "-mx-4 flex gap-3 px-4 pb-7 pt-2 md:-mx-7 md:px-7 lg:gap-5";
 const HOME_HEADING = "font-display text-[1.375rem] font-black tracking-[-0.03em] text-[#1A1A1A] md:text-2xl lg:text-[1.75rem]";
-const ARROW_BUTTON = "flex h-12 w-12 shrink-0 items-center justify-center rounded-full !border !border-[#E5E7EB] !bg-white !p-0 !text-[#1A1A1A] !shadow-none hover:!bg-[#F1F3F5]";
+const ARROW_BUTTON = "flex h-12 w-12 shrink-0 items-center justify-center rounded-full !border !border-[#E5E7EB] !bg-white !p-0 !text-[#1A1A1A] !shadow-none hover:!shadow-[0_6px_16px_rgba(26,26,26,0.10)]";
 
 interface KitchensGridProps {
   kitchens: NearbyKitchen[];
@@ -48,16 +52,49 @@ interface KitchensGridProps {
 }
 
 /**
- * The cook's dishes first, then the kitchen's own photos, side by side: people swipe through them (owner,
- * 5 Nov 2026). Nothing moves on its own, so there is no pause button.
+ * The cook's dishes, side by side: people swipe through them, and while the card is on screen they slide on by
+ * themselves every 3 s and loop (owner, 17 Nov 2026). They hold still while the card is hovered, focused or
+ * touched, and never move for people who ask for less motion. No pause button (owner, 5 Nov 2026).
  */
-function KitchenPhotos({ images, priority, aspect }: { images: readonly string[]; priority: boolean; aspect: string }) {
+function KitchenPhotos({ images, priority, aspect, held, delay }: {
+  images: readonly string[];
+  priority: boolean;
+  aspect: string;
+  held: boolean;
+  /** Cards side by side start a little apart, so a row of them never turns all at once. */
+  delay: number;
+}) {
   // A photo that fails to load leaves the strip instead of showing a broken image.
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const photos = useMemo(() => images.filter((src) => !failed.has(src)), [images, failed]);
   const count = photos.length;
   const [index, setIndex] = useState(0);
   const current = Math.min(index, Math.max(count - 1, 0));
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [onScreen, setOnScreen] = useState(false);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || count < 2 || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => setOnScreen(entry.isIntersecting), { threshold: 0.6 });
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [count]);
+
+  useEffect(() => {
+    if (count < 2 || !onScreen || held || reduceMotion) return;
+    let timer: number | undefined;
+    const slide = () => {
+      const strip = stripRef.current;
+      const width = strip?.clientWidth ?? 0;
+      // The last photo slides back to the first.
+      if (strip && width) strip.scrollTo({ left: ((Math.round(strip.scrollLeft / width) + 1) % count) * width, behavior: "smooth" });
+      timer = window.setTimeout(slide, SLIDE_MS);
+    };
+    timer = window.setTimeout(slide, SLIDE_MS + delay);
+    return () => window.clearTimeout(timer);
+  }, [count, onScreen, held, reduceMotion, delay]);
 
   if (!count) {
     return (
@@ -75,6 +112,7 @@ function KitchenPhotos({ images, priority, aspect }: { images: readonly string[]
   return (
     <div className={`relative ${aspect} overflow-hidden bg-[#F7F5F3]`}>
       <div
+        ref={stripRef}
         onScroll={onScroll}
         className="flex h-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
@@ -112,7 +150,7 @@ function ChefCircle({ photoUrl }: { photoUrl: string | null }) {
   // Remember which url failed, so a new url gets its own try.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   return (
-    <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#F7F5F3] ring-2 ring-white shadow-[0_2px_8px_rgba(38,26,21,0.14)]">
+    <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-2 ring-white shadow-[0_2px_8px_rgba(38,26,21,0.14)]">
       {url && url !== failedUrl ? (
         <img src={url} alt="" loading="lazy" decoding="async" draggable={false} onError={() => setFailedUrl(url)} className="h-full w-full object-cover" />
       ) : (
@@ -149,14 +187,21 @@ export function KitchenCard({
 }) {
   const name = kitchen.kitchenName;
   const cook = cookFirstName(kitchen);
-  const images = useMemo(
-    () => [...new Set([...(summary?.imageUrls ?? []), ...kitchen.kitchenPhotoUrls])],
-    [kitchen.kitchenPhotoUrls, summary?.imageUrls],
-  );
+  // Food only: the kitchen's own photos (stove, counter) belong on its page, never on the card (owner, 17 Nov 2026).
+  const images = summary?.imageUrls ?? NO_PHOTOS;
+  const [held, setHeld] = useState(false);
   const details = [cook ? `Cooked by ${cook}` : null, kitchen.areaName, formatDistance(kitchen.distanceMeters)].filter(Boolean).join(" · ");
   return (
     // The heart is the card button's sibling, so neither control sits inside the other.
-    <li className={`group relative list-none transition-[translate] duration-(--dur-component) ease-out motion-safe:hover:-translate-y-0.5 ${className}`}>
+    <li
+      className={`group relative list-none transition-[translate] duration-(--dur-component) ease-out motion-safe:hover:-translate-y-0.5 ${className}`}
+      onPointerEnter={() => setHeld(true)}
+      onPointerLeave={() => setHeld(false)}
+      onFocus={() => setHeld(true)}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setHeld(false);
+      }}
+    >
       <div
         role="button"
         tabIndex={0}
@@ -172,7 +217,7 @@ export function KitchenCard({
         className="flex h-full cursor-pointer flex-col overflow-hidden rounded-[18px] bg-white text-left ring-1 ring-[#EEE9E4] shadow-[0_1px_2px_rgba(38,26,21,0.06),0_6px_18px_rgba(38,26,21,0.07)] transition-shadow duration-(--dur-component) ease-out group-hover:shadow-[0_12px_26px_rgba(38,26,21,0.12)]"
       >
         <div className="relative">
-          <KitchenPhotos images={images} priority={order < 4} aspect={wide ? WIDE_PHOTO : PHOTO} />
+          <KitchenPhotos images={images} priority={order < 4} aspect={wide ? WIDE_PHOTO : PHOTO} held={held} delay={(order % 4) * 700} />
         </div>
         {/* Short lines under the photo: the kitchen; who cooks, where and how far; how soon and from how much. */}
         <div className="flex flex-1 gap-2.5 px-3 pb-3 pt-2.5">

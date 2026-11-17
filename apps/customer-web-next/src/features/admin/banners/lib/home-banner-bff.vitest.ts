@@ -54,4 +54,20 @@ describe("home banner admin BFF", () => {
     const response = await POST(new NextRequest(`${origin}/api/admin/banners`, { method: "POST", headers: { Origin: origin }, body }), context());
     expect(response.status).toBe(400); expect(backend.fetch).not.toHaveBeenCalled();
   });
+  it("forwards the chosen platform, files a page without one under the website, and refuses others", async () => {
+    const upload = async (platform?: string) => {
+      const body = new FormData(); body.set("label", "Craves"); body.set("sortOrder", "0");
+      body.set("file", new File([new Uint8Array([137, 80, 78, 71])], "banner.png", { type: "image/png" }));
+      if (platform) body.set("platform", platform);
+      return POST(new NextRequest(`${origin}/api/admin/banners`, { method: "POST", headers: { Origin: origin }, body }), context());
+    };
+    backend.fetch.mockImplementation(async () => Response.json({}));
+    expect((await upload("APP")).status).toBe(200);
+    expect((backend.fetch.mock.calls[0][2].body as FormData).get("platform")).toBe("APP");
+    expect((await upload()).status).toBe(200);
+    expect((backend.fetch.mock.calls[1][2].body as FormData).get("platform")).toBe("WEB");
+    backend.fetch.mockClear();
+    expect((await upload("TV")).status).toBe(400);
+    expect(backend.fetch).not.toHaveBeenCalled();
+  });
 });

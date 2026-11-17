@@ -43,7 +43,7 @@ function useBuildVersion(): string | null {
 
 function RowIcon({ icon: Icon }: { icon: Row["icon"] }) {
   return (
-    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
       <Icon className="h-5 w-5" aria-hidden="true" />
     </span>
   );
@@ -75,13 +75,13 @@ function Section({ title, rows, children }: { title: string; rows: Row[]; childr
   );
 }
 
-/** Settings, like the app: account, support and legal, the build, and Log out. */
+/** Settings, like the app: account, support and legal, the build, and Sign out. */
 export default function SettingsPage() {
   const signOut = useCustomerSignOut();
   const version = useBuildVersion();
   const signedIn = useSyncExternalStore(subscribeSession, () => getSession() !== null, () => false);
 
-  // A direct visit learns who is signed in, so Log out shows only for them.
+  // A direct visit learns who is signed in, so Sign out shows only for them.
   useEffect(() => {
     void loadSession().catch(() => null);
   }, []);
@@ -93,7 +93,7 @@ export default function SettingsPage() {
           <Link
             to="/profile"
             aria-label="Back to profile"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-shadow hover:shadow-[0_6px_16px_rgba(26,26,26,0.10)]"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Link>
@@ -117,7 +117,7 @@ export default function SettingsPage() {
             onClick={signOut.ask}
             className="mt-8 flex min-h-12 w-full items-center justify-center rounded-full !border !border-[#E5E7EB] !bg-white text-base font-bold !text-[#D92714] !shadow-none hover:!bg-[#FDEAE8]"
           >
-            Log out
+            Sign out
           </button>
         ) : null}
       </main>

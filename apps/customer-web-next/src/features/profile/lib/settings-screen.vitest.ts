@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Settings and the Profile header with a fixture account; no backend is contacted.
 import { createElement, type ReactNode } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const auth = vi.hoisted(() => ({
@@ -53,17 +53,17 @@ describe("Settings", () => {
     expect(screen.getByRole("link", { name: "Back to profile" }).getAttribute("href")).toBe("/profile");
   });
 
-  it("logs out through the same confirm as Profile, and offers no Log out to a guest", async () => {
+  it("signs out through the same confirm as Profile, and offers no Sign out to a guest", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ commitSha: "unknown" })));
     render(createElement(SettingsPage));
-    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Sign out" }));
     await vi.waitFor(() => expect(auth.clearSession).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(/^Version/)).toBeNull();
     cleanup();
     auth.session = null;
     render(createElement(SettingsPage));
-    expect(screen.queryByRole("button", { name: "Log out" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
   });
 });
 

@@ -1,5 +1,5 @@
 import { MealPlanHowItWorks } from "@/features/meal-plans/components/meal-plan-how-it-works";
-import { PreviousPageBack } from "@/features/meal-plans/components/previous-page-back";
+import { PreviousPageBack } from "@/shared/components/navigation/PreviousPageBack";
 import { MealPlanPage } from "../meal-plan-page";
 
 export const metadata = {

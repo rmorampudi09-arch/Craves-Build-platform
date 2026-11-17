@@ -1,38 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CustomerAddress } from "@/features/addresses/lib/address-contract";
 import { indiaBusinessDate, parseCustomerSubscription, type CustomerSubscription, type DayCredit, type DayCreditChoice } from "@/features/meal-plans/lib/subscription-contract";
 import type { SubscriptionOccurrence, SubscriptionPlanPolicy } from "@/features/meal-plans/lib/subscription-lifecycle-contract";
 import type { PublicSubscriptionSchedule } from "@/features/meal-plans/lib/subscription-schedule-contract";
-import { changeDeadline, dayCreditCard, formatMoney, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, pauseDaysLine, pauseInfo, planActions, planDay, resumeDateFor, type PlanAction } from "@/features/meal-plans/lib/meal-plan-copy";
+import { changeDeadline, dayCreditCard, formatMoney, isPastSubscription, MEAL_PLAN_STATUS, MEAL_STATUS, noticeLength, pauseDaysLine, pauseInfo, planActions, planDay, resumeDateFor, type PlanAction } from "@/features/meal-plans/lib/meal-plan-copy";
 import { billingUnit } from "@/features/meal-plans/lib/meal-plan-schedule";
 import { firstDishPhoto } from "@/features/meal-plans/api/plan-cover";
 import { PlanPhoto } from "@/features/meal-plans/components/plan-photo";
+import { formatSlot, PlanScheduleList } from "@/features/meal-plans/components/plan-schedule-list";
 import { Dialog, Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { sessionFetch } from "@/shared/lib/session-fetch";
 
 type Action = "pause" | "resume" | "skip" | "cancel";
 
-const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const clockOf = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "UTC" });
 const mealClock = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kolkata" });
 const card = "rounded-2xl border border-[#E5E7EB] bg-white p-5 sm:p-6";
 const quietButtonBase =
   "inline-flex min-h-11 items-center justify-center rounded-full !border-0 !bg-[#F1F3F5] px-5 text-sm font-bold !shadow-none";
 const quietButton = `${quietButtonBase} !text-[#1A1A1A]`;
-
-function formatSlot(value: string): string {
-  return value.replaceAll("_", " ").toLowerCase().replace(/^\w/, letter => letter.toUpperCase());
-}
-
-/** "13:00:00" in the plan's own time → "1:00 pm". */
-function serviceClock(value: string): string {
-  const [hours, minutes] = value.split(":").map(Number);
-  return clockOf.format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
-}
 
 function upTo(minutes: number | null): string {
   if (minutes === null) return "";
@@ -214,18 +203,8 @@ export function SubscriptionDetails({ subscriptionId, openAction }: { subscripti
     }
   }
 
-  const scheduleGroups = useMemo(() => {
-    if (!schedule) return [];
-    const groups = new Map<string, typeof schedule.items>();
-    for (const entry of schedule.items) {
-      const day = schedule.recurrenceType === "WEEKLY" ? `weekday-${entry.isoDayOfWeek}` : `monthday-${entry.dayOfMonth}`;
-      const key = `${day}:${entry.mealSlotCode}:${entry.serviceTime}`;
-      groups.set(key, [...(groups.get(key) ?? []), entry]);
-    }
-    return [...groups.entries()];
-  }, [schedule]);
-
   const today = indiaBusinessDate();
+  const past = item ? isPastSubscription(item.status) : false;
   const resumeDate = resumeDateFor(new Date(), policy?.resumeLeadMinutes ?? 0, schedule?.items.map(entry => entry.serviceTime).sort()[0] ?? null);
   const pausing = item ? pauseInfo(item, resumeDate, today) : null;
 
@@ -253,6 +232,7 @@ export function SubscriptionDetails({ subscriptionId, openAction }: { subscripti
           <PlanPhoto src={item.planImageUrl ?? (schedule ? firstDishPhoto(schedule.items) : null)} className="h-20 w-20" />
           <div>
             <span className="inline-flex rounded-full bg-[#F1F3F5] px-2.5 py-1 text-xs font-bold text-[#1A1A1A]">{MEAL_PLAN_STATUS[item.status]}</span>
+            <h2 className="mt-2 text-lg font-bold text-[#1A1A1A]">{item.planName ?? "Meal plan"}</h2>
             {item.amount !== null && item.currency && <p className="mt-2 text-[#1A1A1A]">
               <strong className="text-xl">{formatMoney(item.amount, item.currency)}</strong>
               {item.billingPeriod && <span className="text-sm text-[#6B6B6B]"> / {billingUnit(item.billingPeriod)}</span>}
@@ -263,9 +243,11 @@ export function SubscriptionDetails({ subscriptionId, openAction }: { subscripti
         <button type="button" onClick={() => void load()} className={quietButton}>Refresh</button>
       </div>
       <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
-        <div><dt className="text-[#6B6B6B]">Started</dt><dd className="mt-0.5 font-semibold">{planDay(item.startDate)}</dd></div>
-        <div><dt className="text-[#6B6B6B]">Next meal</dt><dd className="mt-0.5 font-semibold">{item.nextServiceDate ? planDay(item.nextServiceDate) : "Not scheduled"}</dd></div>
-        <div><dt className="text-[#6B6B6B]">Ends</dt><dd className="mt-0.5 font-semibold">{item.endDate ? planDay(item.endDate) : "No end date"}</dd></div>
+        <div><dt className="text-[#6B6B6B]">{item.startDate > today ? "Starts" : "Started"}</dt><dd className="mt-0.5 font-semibold">{planDay(item.startDate)}</dd></div>
+        {/* An ended plan has no next meal and nothing left to change. */}
+        {!past && <div><dt className="text-[#6B6B6B]">Next meal</dt><dd className="mt-0.5 font-semibold">{item.nextServiceDate ? planDay(item.nextServiceDate) : "Not scheduled"}</dd></div>}
+        {item.endDate ? <div><dt className="text-[#6B6B6B]">{past ? "Ended" : "Ends"}</dt><dd className="mt-0.5 font-semibold">{planDay(item.endDate)}</dd></div>
+          : !past && <div><dt className="text-[#6B6B6B]">Ends</dt><dd className="mt-0.5 font-semibold">No end date</dd></div>}
         {item.status === "ACTIVE" && item.nextBillingDate && <div><dt className="text-[#6B6B6B]">Renews</dt><dd className="mt-0.5 font-semibold">{planDay(item.nextBillingDate)}</dd></div>}
         <div><dt className="text-[#6B6B6B]">Deliver to</dt><dd className="mt-0.5 font-semibold">{address ? areaLine(address) : item.deliveryAddressId ? "Your saved address" : "Not set"}</dd></div>
       </dl>
@@ -288,7 +270,7 @@ export function SubscriptionDetails({ subscriptionId, openAction }: { subscripti
       </section>;
     })}
 
-    <section className={card}>
+    {!past && <section className={card}>
       <h2 className="text-lg font-bold">Manage meal plan</h2>
       {!policy ? <p className="mt-2 text-sm text-[#6B6B6B]">Plan changes aren’t available right now. Please try again later.</p> : <>
         {deadline && <p className="mt-2 text-sm font-semibold text-[#1A1A1A]">{deadline}</p>}
@@ -304,26 +286,16 @@ export function SubscriptionDetails({ subscriptionId, openAction }: { subscripti
           {references.map(([label, value]) => <div key={label}><dt className="inline font-semibold">{label}: </dt><dd className="inline">{value}</dd></div>)}
         </dl>}
       </>}
-    </section>
+    </section>}
 
     <section className={card}>
       <h2 className="text-lg font-bold">Meal schedule</h2>
-      {!schedule ? <p className="mt-2 text-sm text-[#6B6B6B]">The meal schedule isn’t available right now.</p> : <>
-        <p className="mt-1 text-sm text-[#6B6B6B]">{schedule.recurrenceType === "WEEKLY" ? "Every week" : "Every month"}</p>
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">{scheduleGroups.map(([key, entries]) => {
-          const first = entries[0];
-          const day = schedule.recurrenceType === "WEEKLY" ? WEEKDAYS[(first.isoDayOfWeek ?? 1) - 1] : `Day ${first.dayOfMonth} of the month`;
-          return <article key={key} className="rounded-xl bg-[#F1F3F5] p-4">
-            <p className="text-sm font-semibold text-[#1A1A1A]">{day} · {formatSlot(first.mealSlotCode)} · {serviceClock(first.serviceTime)}</p>
-            <ul className="mt-2 space-y-1">{entries.sort((a, b) => a.sequenceNumber - b.sequenceNumber).map(entry => <li key={`${entry.menuItemId}:${entry.sequenceNumber}`} className="text-sm text-[#1A1A1A]">{entry.itemName ?? "Meal item"} × {entry.quantity}</li>)}</ul>
-          </article>;
-        })}</div>
-      </>}
+      {!schedule ? <p className="mt-2 text-sm text-[#6B6B6B]">The meal schedule isn’t available right now.</p> : <PlanScheduleList schedule={schedule} />}
     </section>
 
     <section className={card}>
       <h2 className="text-lg font-bold">Your meals</h2>
-      {occurrences.length === 0 ? <p className="mt-2 text-sm text-[#6B6B6B]">Your meals will appear here once your plan starts.</p> : <ul className="mt-4 divide-y divide-[#E5E7EB]">{occurrences.map(occurrence => <li key={occurrence.id}>
+      {occurrences.length === 0 ? <p className="mt-2 text-sm text-[#6B6B6B]">{past ? "No meals for this plan." : "Your meals will appear here once your plan starts."}</p> : <ul className="mt-4 divide-y divide-[#E5E7EB]">{occurrences.map(occurrence => <li key={occurrence.id}>
         <button type="button" aria-haspopup="dialog" onClick={() => setMeal(occurrence)} className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl !border-0 !bg-transparent px-1 py-3 text-left !shadow-none hover:!bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30">
           <span>
             <span className="block text-sm font-semibold text-[#1A1A1A]">{planDay(occurrence.serviceDate)} · {formatSlot(occurrence.mealSlotCode)}</span>

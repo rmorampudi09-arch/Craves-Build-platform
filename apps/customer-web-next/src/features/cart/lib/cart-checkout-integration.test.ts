@@ -139,3 +139,9 @@ test("cart rows leave smoothly and the undo snackbar can actually be reached", (
   assert.doesNotMatch(page, /<a\s+href=\{`\/kitchen/);
   assert.doesNotMatch(page, /bg-\[#F62E18\]\/5|bg-\[#FFF8EC\]|#F6B545/);
 });
+
+test("the cart's top shows the chef's picture from the kitchen's public profile (owner, 17 Nov 2026)", () => {
+  const page = source("../screens/Cart.tsx");
+  assert.match(page, /const \{ profile: kitchenProfile \} = useKitchenProfile\(kitchenId\);/);
+  assert.match(page, /<ChefFace photoUrl=\{kitchenProfile\?\.chefPhotoUrl\} name=\{kitchenProfile\?\.displayName \?\? kitchenName\}/);
+});

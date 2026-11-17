@@ -78,7 +78,7 @@ export const ADMIN_TABS: readonly AdminTab[] = [
   { area: "customers", label: "Find a customer", href: "/admin/search", module: "search", summary: "Find a customer or chef by phone, email or a reference. Each search needs a reason." },
   { area: "customers", label: "All users", href: "/admin/explorer/users", module: "users", summary: "Everyone with a Craves account, with role filters." },
   { area: "customers", label: "Reviews to publish", href: "/admin/reviews", module: "customer-reviews", summary: "Customer reviews wait here until you publish, hide or reject them." },
-  { area: "customers", label: "App home pictures", href: "/admin/banners", module: "home-banners", summary: "The pictures at the top of the customer app's home screen." },
+  { area: "customers", label: "Home pictures", href: "/admin/banners", module: "home-banners", summary: "The pictures at the top of the website's home page and the app's home screen, each uploaded on its own." },
   { area: "kitchens", label: "To approve", href: "/admin/chef-reviews", module: "chefs", summary: "New kitchen applications. Check each document, verify the FSSAI licence, then decide." },
   { area: "kitchens", label: "All kitchens", href: "/admin/explorer/chefs", module: "chef-explorer", summary: "Every kitchen application by status, city and date." },
   { area: "kitchens", label: "Meal plans to approve", href: "/admin/subscription-plans", module: "plans", summary: "Meal plans chefs made. Check the dishes and the schedule, then approve." },

@@ -223,7 +223,7 @@ export function EmailSignInForm({
   if (view === "sent")
     return (
       <section className={`${CARD} text-center`}>
-        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F1F3F5]">
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white">
           <Check className="h-8 w-8 text-[#F62E18]" aria-hidden="true" />
         </span>
         <h1 className="mt-4 text-2xl font-bold tracking-tight">{text.sentTitle}</h1>

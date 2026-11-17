@@ -21,7 +21,7 @@ const OPTION =
 function OptionIcon({ green = false, children }: { green?: boolean; children: ReactNode }) {
   return (
     <span
-      className={`flex h-[52px] w-[52px] items-center justify-center rounded-full ${green ? "bg-[#17803D] text-white" : "bg-[#F1F3F5] text-[#6B6B6B]"}`}
+      className={`flex h-[52px] w-[52px] items-center justify-center rounded-full ${green ? "bg-[#17803D] text-white" : "bg-white text-[#6B6B6B]"}`}
     >
       {children}
     </span>
@@ -96,7 +96,7 @@ export function ReferFriend() {
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-4 md:px-6">
           <Link
             to="/profile"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A] transition-colors hover:text-[#F62E18]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#1A1A1A] transition-colors hover:text-[#F62E18]"
             aria-label="Back to profile"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />

@@ -2,6 +2,7 @@ import {
   parseCustomerFavorite,
   parseCustomerFavorites,
 } from "@/features/favorites/lib/customer-favorites-contract";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 
 const listeners = new Set<() => void>();
 let favoriteIds = new Set<string>();
@@ -50,7 +51,7 @@ export async function loadCustomerFavoriteIds(): Promise<Set<string>> {
   if (loadPromise) return loadPromise.then((ids) => new Set(ids));
 
   loadPromise = (async () => {
-    const response = await fetch("/api/customer/favorites", {
+    const response = await sessionFetch("/api/customer/favorites", {
       method: "GET",
       cache: "no-store",
       credentials: "same-origin",
@@ -82,7 +83,7 @@ export async function loadCustomerFavoriteIds(): Promise<Set<string>> {
 }
 
 export async function saveCustomerFavorite(menuItemId: string): Promise<void> {
-  const response = await fetch(
+  const response = await sessionFetch(
     `/api/customer/favorites/${encodeURIComponent(menuItemId)}`,
     {
       method: "PUT",
@@ -103,7 +104,7 @@ export async function saveCustomerFavorite(menuItemId: string): Promise<void> {
 }
 
 export async function removeCustomerFavorite(menuItemId: string): Promise<void> {
-  const response = await fetch(
+  const response = await sessionFetch(
     `/api/customer/favorites/${encodeURIComponent(menuItemId)}`,
     {
       method: "DELETE",

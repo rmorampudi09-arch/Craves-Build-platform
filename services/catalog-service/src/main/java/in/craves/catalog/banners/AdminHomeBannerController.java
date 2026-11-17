@@ -25,8 +25,8 @@ public class AdminHomeBannerController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public HomeBannerService.Banner create(@AuthenticationPrincipal CravesPrincipal principal, @RequestParam String label,
-        @RequestParam(defaultValue = "0") int sortOrder, @RequestParam MultipartFile file) {
-        return service.create(principal, label, sortOrder, file);
+        @RequestParam(defaultValue = "0") int sortOrder, @RequestParam(defaultValue = "WEB") String platform, @RequestParam MultipartFile file) {
+        return service.create(principal, label, sortOrder, platform, file);
     }
 
     @PutMapping("/{id}")

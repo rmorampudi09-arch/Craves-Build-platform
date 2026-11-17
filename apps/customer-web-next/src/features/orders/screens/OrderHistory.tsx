@@ -387,7 +387,7 @@ export default function OrdersPage() {
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 md:px-6">
           <Link
             to="/profile"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-shadow hover:shadow-[0_6px_16px_rgba(26,26,26,0.10)]"
             aria-label="Back to profile"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
@@ -399,7 +399,7 @@ export default function OrdersPage() {
             type="button"
             disabled={refreshing || status !== "ready"}
             onClick={() => void load(true)}
-            className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full !border-0 !bg-[#F1F3F5] !text-[#1A1A1A] !shadow-none disabled:opacity-50"
+            className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full !border-0 !bg-white !text-[#1A1A1A] !shadow-none disabled:opacity-50"
             aria-label="Refresh orders"
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
@@ -413,7 +413,7 @@ export default function OrdersPage() {
           <Link
             to="/notifications"
             aria-label={notificationsLabel(unread)}
-            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FDEAE8] text-[#D92714] transition-colors hover:bg-[#FBD5D0]"
+            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#D92714] transition-shadow hover:shadow-[0_6px_16px_rgba(26,26,26,0.10)]"
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
             <UnreadBadge count={unread} />

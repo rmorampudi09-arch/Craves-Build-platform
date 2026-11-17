@@ -350,7 +350,7 @@ export function CustomerOrderStatus({
                   {!problem && !unpaid ? (
                     <PlacedTick />
                   ) : (
-                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white text-[#1A1A1A]">
                       {problem ? (
                         <AlertTriangle className="h-6 w-6" aria-hidden="true" />
                       ) : (
@@ -514,7 +514,7 @@ export function CustomerOrderStatus({
 
             <section className={`${CARD} p-5`} aria-labelledby="order-address-title">
               <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
                   <MapPin className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
@@ -526,7 +526,7 @@ export function CustomerOrderStatus({
               </div>
               {payment ? (
                 <div className="mt-4 flex items-start gap-3 border-t border-[#E5E7EB] pt-4">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
                     <Wallet className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0">

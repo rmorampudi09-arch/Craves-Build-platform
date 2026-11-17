@@ -67,7 +67,7 @@ export function LanguageOptions({ onChosen }: { onChosen?: (language: Language) 
 export function LanguageWelcome({ onChosen }: { onChosen?: (language: Language) => void }) {
   return (
     <section aria-labelledby="craves-language-title" className="w-full rounded-3xl border border-[#E5E7EB] bg-white p-5 text-[#1A1A1A] sm:p-8">
-      <span aria-hidden="true" className="grid h-12 w-12 place-items-center rounded-2xl bg-[#F1F3F5]">
+      <span aria-hidden="true" className="grid h-12 w-12 place-items-center rounded-2xl bg-white">
         <Globe className="h-6 w-6" />
       </span>
       <h1 id="craves-language-title" className="mt-4 text-[1.625rem] font-bold leading-tight tracking-tight">

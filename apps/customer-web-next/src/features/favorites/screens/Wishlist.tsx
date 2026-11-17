@@ -256,7 +256,7 @@ function WishlistPage() {
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4 md:px-6">
           <Link
             to="/home"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A] transition-all duration-200 hover:-translate-y-px hover:text-[#F62E18] hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#1A1A1A] transition-all duration-200 hover:-translate-y-px hover:text-[#F62E18] hover:shadow-[0_6px_16px_rgba(26,26,26,0.08)]"
             aria-label="Back to home"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />

@@ -266,7 +266,7 @@ export function ChefApplicationEvidenceUploader({
             <article key={requirement.type} className={`rounded-2xl border bg-white p-4 sm:p-5 ${rejected ? "border-red-200" : approved ? "border-emerald-200" : "border-slate-200"}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex min-w-0 gap-3">
-                  <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${approved ? "bg-emerald-50 text-emerald-700" : rejected ? "bg-[#F1F3F5] text-[#C4200F]" : uploaded ? "bg-slate-50 text-primary" : "bg-slate-50 text-slate-700"}`}>
+                  <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${approved ? "bg-white text-emerald-700" : rejected ? "bg-white text-[#C4200F]" : uploaded ? "bg-white text-primary" : "bg-white text-slate-700"}`}>
                     {approved ? <CheckCircle2 className="h-5 w-5" /> : rejected ? <XCircle className="h-5 w-5" /> : uploaded ? <ShieldCheck className="h-5 w-5" /> : <FileUp className="h-5 w-5" />}
                   </div>
                   <div className="min-w-0">

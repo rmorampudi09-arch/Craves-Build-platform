@@ -11,6 +11,9 @@ const notice = (noticeType: string, targetType: string | null = null, targetId: 
 test("chips sort notices the way the app does", () => {
   assert.equal(noticeCategory(notice("PAYMENT_SUCCEEDED", "ORDER")), "ORDERS");
   assert.equal(noticeCategory(notice("RIDER_ASSIGNED", "delivery")), "ORDERS");
+  // order-service sends these two with the checkout as their target.
+  assert.equal(noticeCategory(notice("ORDER_CREATED", "CHECKOUT")), "ORDERS");
+  assert.equal(noticeCategory(notice("PAYMENT_SUCCEEDED", "CHECKOUT")), "ORDERS");
   assert.equal(noticeCategory(notice("WEEKEND_PROMO")), "OFFERS");
   assert.equal(noticeCategory(notice("ANY", "COUPON")), "OFFERS");
   assert.equal(noticeCategory(notice("KITCHEN_LAUNCHED_NEARBY", "KITCHEN")), "UPDATES");
@@ -27,4 +30,6 @@ test("a tap opens the customer's order, its delivery or a kitchen, never a kitch
   assert.equal(noticeHref(notice("CHEF_ORDER_AWAITING_ACCEPTANCE", "ORDER", ID)), null);
   assert.equal(noticeHref(notice("ORDER_DELIVERED", "ORDER", null)), null);
   assert.equal(noticeHref(notice("PROMO", "OFFER", ID)), null);
+  // A checkout id is not an order id, so it opens nothing.
+  assert.equal(noticeHref(notice("PAYMENT_SUCCEEDED", "CHECKOUT", ID)), null);
 });

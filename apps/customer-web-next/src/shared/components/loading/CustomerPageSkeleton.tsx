@@ -869,7 +869,7 @@ export function CustomerRouteSkeleton({
           <Link
             href={backHref}
             aria-label={backLabel}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] hover:bg-[#F1F3F5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] hover:shadow-[0_6px_16px_rgba(26,26,26,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Link>

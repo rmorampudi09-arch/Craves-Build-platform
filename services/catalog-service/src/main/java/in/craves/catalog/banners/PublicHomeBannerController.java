@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -17,9 +18,10 @@ public class PublicHomeBannerController {
     public PublicHomeBannerController(HomeBannerService service) { this.service = service; }
     public record Feed(List<HomeBannerService.Banner> banners) {}
 
+    /** The website asks for WEB and the app for APP; an app or page that names neither gets the website's. */
     @GetMapping
-    public ResponseEntity<Feed> list() {
-        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").body(new Feed(service.published()));
+    public ResponseEntity<Feed> list(@RequestParam(required = false) String platform) {
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").body(new Feed(service.published(platform)));
     }
 
     @GetMapping("/{id}/image")

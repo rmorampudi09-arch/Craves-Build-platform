@@ -26,6 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -326,7 +327,7 @@ public class DeliveryStatusUpdateService {
             return decision;
         }
         DeliveryStatus current = parseStatus(job.status());
-        boolean pickedUp = rank(current) == 0 && repository.pickedUp(job.id());
+        boolean pickedUp = rank(current) == 0 && guardStatements(mode, "PICKED_UP_READ", job, false, () -> repository.pickedUp(job.id()));
         if (!backwards(current, pickedUp, update.status())) {
             return decision;
         }
@@ -346,17 +347,34 @@ public class DeliveryStatusUpdateService {
             || (update.status() != DeliveryStatus.CANCELLED && update.status() != DeliveryStatus.FAILED)
             || isTerminal(parseStatus(job.status()))
             || "craves_fleet".equals(normalize(update.providerId()))
-            || repository.cravesEndedBooking(update.providerId(), update.providerOrderId(), job.chefSubOrderId())) {
+            || guardStatements(mode, "CRAVES_ENDED_READ", job, true,
+                () -> repository.cravesEndedBooking(update.providerId(), update.providerOrderId(), job.chefSubOrderId()))) {
             return;
         }
         log.warn("DELIVERY_STATUS_RANK_GUARD mode={} decision=COURIER_ENDED source={} provider={} jobId={} delivery={} from={} to={} "
             + "providerStatus={}", mode, source, update.providerId(), job.id(), safe(update.providerOrderId()), job.status(),
             update.status(), safe(update.providerStatus()));
-        if ("enforce".equals(mode) && repository.openCourierEndedCase(job.id(), job.orderId(), safe(update.providerId())
-            + " ended booking " + safe(update.providerOrderId()) + " as " + update.status() + " while it was " + job.status())) {
+        String note = safe(update.providerId()) + " ended booking " + safe(update.providerOrderId()) + " as " + update.status()
+            + " while it was " + job.status();
+        if ("enforce".equals(mode) && guardStatements(mode, "CASE_OPEN", job, false,
+            () -> repository.openCourierEndedCase(job.id(), job.orderId(), note))) {
             log.error("CRAVES_ALERT alert=COURIER_ENDED_DELIVERY provider={} orderId={} chefSubOrderId={} jobId={} delivery={} was={} "
                 + "status={}", update.providerId(), job.orderId(), job.chefSubOrderId(), job.id(), safe(update.providerOrderId()),
                 job.status(), update.status());
+        }
+    }
+
+    /**
+     * The guard's own statements, in a savepoint: when one fails the status update goes on as it would without the guard
+     * (ifFailed), with one error line.
+     */
+    private boolean guardStatements(String mode, String step, DeliveryJobState job, boolean ifFailed, Supplier<Boolean> statements) {
+        try {
+            return repository.inSavepoint(statements);
+        } catch (RuntimeException failure) {
+            log.error("DELIVERY_STATUS_RANK_GUARD mode={} decision=GUARD_FAILED step={} jobId={} error={}", mode, step, job.id(),
+                safe(failure.getMessage()));
+            return ifFailed;
         }
     }
 
@@ -379,8 +397,9 @@ public class DeliveryStatusUpdateService {
 
     /**
      * Whether next is an earlier stage than current. pickedUp: for a job that is DELAYED (no stage), whether its parcel
-     * was picked up. Allowed although lower: back to PENDING or SEARCHING from an assigned courier before pickup (the
-     * courier dropped the job and the provider searches again). DELAYED is never earlier.
+     * was picked up. Allowed although lower, before pickup only: from an assigned courier back to PENDING or SEARCHING
+     * (the courier dropped the job and the provider searches again) or to COURIER_ASSIGNED (the provider gave the job to
+     * another rider without a search). DELAYED is never earlier.
      * shortcut: a re-match is told by its status alone and a DELAYED job keeps only the pickup boundary, upgrade with
      * provider clocks and delayed_at.
      */
@@ -391,7 +410,7 @@ public class DeliveryStatusUpdateService {
         }
         int from = rank(current) != 0 ? rank(current) : rank(pickedUp ? DeliveryStatus.PICKED_UP : DeliveryStatus.PENDING);
         boolean rematch = from >= rank(DeliveryStatus.COURIER_ASSIGNED) && from <= rank(DeliveryStatus.AT_PICKUP)
-            && to <= rank(DeliveryStatus.SEARCHING);
+            && to <= rank(DeliveryStatus.COURIER_ASSIGNED);
         return to < from && !rematch;
     }
 

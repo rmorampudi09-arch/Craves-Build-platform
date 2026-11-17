@@ -168,6 +168,38 @@ class DeliveryStatusRankGuardDatabaseTest {
         assertThat(alerts()).isEmpty();
     }
 
+    /** The guard's own statement fails inside the status transaction: the courier's status is still committed. */
+    @Test
+    void shadowStillCommitsTheStatusWhenAGuardStatementFails() {
+        properties.setStatusRankGuard("shadow");
+        database.db.execute("ALTER TABLE delivery_schema.courier_cancel RENAME TO courier_cancel_away");
+
+        assertThat(poll(DeliveryStatus.CANCELLED).applied()).isTrue();
+
+        assertThat(status()).isEqualTo("CANCELLED");
+        assertThat(database.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_event WHERE normalized_status = 'CANCELLED' "
+            + "AND applied", Integer.class)).isEqualTo(1);
+        assertThat(database.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_outbox", Integer.class)).isEqualTo(1);
+        assertThat(lines()).hasSize(1);
+        assertThat(lines().get(0)).startsWith("DELIVERY_STATUS_RANK_GUARD mode=shadow decision=GUARD_FAILED step=CRAVES_ENDED_READ jobId=" + jobId);
+    }
+
+    @Test
+    void enforceStillCommitsTheStatusWhenOpeningTheCaseFailsAndLeavesNoHalfOpenedCase() {
+        properties.setStatusRankGuard("enforce");
+        database.db.execute("ALTER TABLE delivery_schema.delivery_exception_event RENAME TO delivery_exception_event_away");
+
+        assertThat(callback("canceled").applied()).isTrue();
+
+        assertThat(status()).isEqualTo("CANCELLED");
+        assertThat(database.db.queryForObject("SELECT processing_status FROM delivery_schema.delivery_webhook_inbox", String.class))
+            .isEqualTo("PROCESSED");
+        assertThat(cases()).as("the case insert is undone with its failed history row").isZero();
+        assertThat(alerts()).isEmpty();
+        assertThat(lines()).filteredOn(line -> line.contains("decision=GUARD_FAILED")).hasSize(1)
+            .allMatch(line -> line.contains("mode=enforce decision=GUARD_FAILED step=CASE_OPEN jobId=" + jobId));
+    }
+
     private void revive() {
         database.db.update("UPDATE delivery_schema.delivery_job SET status = 'COURIER_ASSIGNED' WHERE id = ?", jobId);
     }

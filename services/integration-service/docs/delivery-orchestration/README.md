@@ -508,8 +508,13 @@ fleet bridge pass on. A new booking (first insert, the switch to Pidge, a fleet 
 | DELIVERED, RETURNED, CANCELLED, FAILED | 100 (final) |
 
 *   An update to a lower rank is `STALE_RANK`.
-*   Except: from COURIER_ASSIGNED, COURIER_TO_PICKUP or AT_PICKUP back to PENDING or SEARCHING. The courier dropped the
-    job before pickup and the provider is searching again.
+*   Except, before pickup only, from COURIER_ASSIGNED, COURIER_TO_PICKUP or AT_PICKUP:
+
+| Back to | Why it is allowed |
+|---|---|
+| PENDING, SEARCHING | The courier dropped the job and the provider is searching again |
+| COURIER_ASSIGNED | The provider gave the job to another rider without a search; the new rider's name, phone and tracking link must reach the order. Neither the Borzo nor the Pidge mapper marks a reassignment, so this is allowed on the status alone, not on proof that either reports it this way |
+
 *   A final status lands from any stage. A final job stays as it is (`TERMINAL_STATUS_PROTECTED`, as before).
 *   DELAYED is not a stage: it is applied as before. A job that is DELAYED counts as PICKED_UP once `picked_up_at` is
     set, otherwise as PENDING.
@@ -528,6 +533,18 @@ The line (WARN, one per update):
 DELIVERY_STATUS_RANK_GUARD mode=shadow decision=STALE_RANK source=WEBHOOK provider=borzo jobId=<uuid> delivery=<booking id> from=PICKED_UP to=COURIER_ASSIGNED providerStatus=courier_assigned
 ```
 
+The guard's own statements (the `picked_up_at` read, the `courier_cancel`/`order_cancelled` read, opening the case) run
+in a savepoint inside the status update's transaction. If one fails, it alone is rolled back, the status update goes on
+as it would with the flag off, and one ERROR line says which (`step=PICKED_UP_READ`, `CRAVES_ENDED_READ` or `CASE_OPEN`):
+
+```text
+DELIVERY_STATUS_RANK_GUARD mode=enforce decision=GUARD_FAILED step=CASE_OPEN jobId=<uuid> error=<message>
+```
+
+A `CASE_OPEN` failure means a courier-side end got no case and no page: open the case by hand for that job.
+
+The flag's value is trimmed and read in any case; empty is `off`; any other word stops start-up.
+
 | Alert | Means | Do |
 |---|---|---|
 | `COURIER_ENDED_DELIVERY` | `provider` cancelled or failed booking `delivery` on its own (`was` is the stage it had reached) and the order is still live | Open the case in the admin's delivery exceptions. Before pickup: book another courier or cancel the order. After pickup (`was` is PICKED_UP or later): call the courier first, the food is with their rider |
@@ -542,8 +559,9 @@ ContainerAppConsoleLogs_CL
 ```
 
 *   `STALE_RANK` rows are updates enforce will drop. Each `from`/`to` pair must be explained: a late callback or a poll
-    behind a callback is expected; a courier that really steps back (for example a new rider without a search, AT_PICKUP
-    to COURIER_ASSIGNED) is not, and needs the table changed before enforce.
+    behind a callback is expected; a courier that really steps back after pickup (for example Borzo's
+    `reattempt_courier_assigned` after a failed drop-off) is not, and needs the table changed before enforce.
+*   `GUARD_FAILED` rows must be zero before enforce.
 *   Shiprocket: code 17 (out for delivery) maps to AT_DROPOFF today, so in-transit codes after it show as
     AT_DROPOFF to IN_TRANSIT. Move 17 to IN_TRANSIT before enforcing with Shiprocket live.
 *   `COURIER_ENDED` rows are the cases and pages enforce will open. Check each was really the courier's own doing.

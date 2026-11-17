@@ -71,16 +71,18 @@ class DeliveryStatusRankGuardTest {
         assertThat(backwards(IN_TRANSIT, false, PICKED_UP)).isTrue();
         assertThat(backwards(AT_DROPOFF, false, IN_TRANSIT)).isTrue();
         assertThat(backwards(RETURNING, false, AT_DROPOFF)).isTrue();
-        assertThat(backwards(AT_PICKUP, false, COURIER_ASSIGNED)).isTrue();
+        assertThat(backwards(AT_PICKUP, false, COURIER_TO_PICKUP)).isTrue();
         assertThat(backwards(SEARCHING, false, PENDING)).isTrue();
-        // The courier dropped the job and the provider searches again: only before pickup.
+        // The courier dropped the job and the provider searches again, or names another rider: only before pickup.
         for (DeliveryStatus assigned : List.of(COURIER_ASSIGNED, COURIER_TO_PICKUP, AT_PICKUP)) {
             assertThat(backwards(assigned, false, SEARCHING)).isFalse();
             assertThat(backwards(assigned, false, PENDING)).isFalse();
+            assertThat(backwards(assigned, false, COURIER_ASSIGNED)).isFalse();
         }
         for (DeliveryStatus after : List.of(PICKED_UP, IN_TRANSIT, AT_DROPOFF, RETURNING)) {
             assertThat(backwards(after, false, SEARCHING)).isTrue();
             assertThat(backwards(after, false, PENDING)).isTrue();
+            assertThat(backwards(after, false, COURIER_ASSIGNED)).isTrue();
         }
         for (DeliveryStatus status : DeliveryStatus.values()) {
             assertThat(backwards(status, true, DELAYED)).as("DELAYED is not a stage").isFalse();
@@ -101,6 +103,47 @@ class DeliveryStatusRankGuardTest {
         assertThat(properties.getStatusRankGuard()).isEqualTo("off");
         properties.setStatusRankGuard("on");
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(properties, "validate")).hasMessageContaining("statusRankGuard");
+    }
+
+    @Test
+    void theFlagIsReadTrimmedAndInAnyCaseAndBlankIsOff() {
+        for (String off : new String[] {"", "  ", null, "OFF", "off "}) {
+            properties.setStatusRankGuard(off);
+            assertThat(properties.getStatusRankGuard()).as("[%s]", off).isEqualTo("off");
+            ReflectionTestUtils.invokeMethod(properties, "validate");
+        }
+        properties.setStatusRankGuard(" Shadow");
+        assertThat(properties.getStatusRankGuard()).isEqualTo("shadow");
+        properties.setStatusRankGuard("ENFORCE ");
+        assertThat(properties.getStatusRankGuard()).isEqualTo("enforce");
+        ReflectionTestUtils.invokeMethod(properties, "validate");
+    }
+
+    @Test
+    void enforceAppliesAnUpdateAsTodayWhenTheGuardsOwnReadFails() {
+        properties.setStatusRankGuard("enforce");
+        job.reset();
+        poll(PICKED_UP);
+        poll(DELAYED);
+        job.broken = true;
+
+        assertThat(poll(COURIER_ASSIGNED).result()).isEqualTo("APPLIED");
+        assertThat(job.status).isEqualTo("COURIER_ASSIGNED");
+    }
+
+    /** A provider that gives the job to another rider before pickup reports COURIER_ASSIGNED again. */
+    @Test
+    void enforceAppliesANewRiderBeforePickupAndRefusesOneAfterPickup() {
+        properties.setStatusRankGuard("enforce");
+        job.reset();
+        poll(COURIER_ASSIGNED);
+        poll(AT_PICKUP);
+
+        assertThat(poll(COURIER_ASSIGNED).applied()).isTrue();
+        assertThat(job.status).isEqualTo("COURIER_ASSIGNED");
+        poll(PICKED_UP);
+        assertThat(poll(COURIER_ASSIGNED).result()).isEqualTo("STALE_RANK");
+        assertThat(job.status).isEqualTo("PICKED_UP");
     }
 
     @Test
@@ -152,7 +195,7 @@ class DeliveryStatusRankGuardTest {
                 if (plain && rank(now) < rank(DeliveryStatus.valueOf(before))) {
                     assertThat(rank(DeliveryStatus.valueOf(before))).as("backwards, run %s %s", run, events)
                         .isBetween(rank(COURIER_ASSIGNED), rank(AT_PICKUP));
-                    assertThat(now).as("backwards, run %s %s", run, events).isEqualTo(SEARCHING);
+                    assertThat(now).as("backwards, run %s %s", run, events).isIn(SEARCHING, COURIER_ASSIGNED);
                 }
                 reached = Math.max(reached, rank(now));
             }
@@ -208,6 +251,7 @@ class DeliveryStatusRankGuardTest {
         String status;
         Instant observedAt;
         boolean pickedUp;
+        boolean broken;
         int rankReads;
         int cancelReads;
 
@@ -245,7 +289,15 @@ class DeliveryStatusRankGuardTest {
         }
 
         @Override
+        public <T> T inSavepoint(java.util.function.Supplier<T> statements) {
+            return statements.get();
+        }
+
+        @Override
         public boolean pickedUp(UUID id) {
+            if (broken) {
+                throw new IllegalStateException("picked_up_at cannot be read");
+            }
             rankReads++;
             return pickedUp;
         }

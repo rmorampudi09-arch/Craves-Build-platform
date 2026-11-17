@@ -5,12 +5,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Savepoint;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -203,6 +206,27 @@ public class DeliveryStatusRepository {
             databaseTimestamp(nextTrackingAt),
             deliveryJobId
         );
+    }
+
+    /**
+     * Rank guard only: runs the guard's own statements so that one failing cannot abort the caller's transaction. In a
+     * transaction they run in a savepoint, rolled back to before the failure is rethrown; outside one they just run.
+     */
+    public <T> T inSavepoint(Supplier<T> statements) {
+        return jdbc.execute((ConnectionCallback<T>) connection -> {
+            if (connection.getAutoCommit()) {
+                return statements.get();
+            }
+            Savepoint savepoint = connection.setSavepoint();
+            try {
+                T result = statements.get();
+                connection.releaseSavepoint(savepoint);
+                return result;
+            } catch (RuntimeException failure) {
+                connection.rollback(savepoint);
+                throw failure;
+            }
+        });
     }
 
     /** Rank guard only: whether the job's parcel was ever picked up (a DELAYED job no longer says which stage it reached). */

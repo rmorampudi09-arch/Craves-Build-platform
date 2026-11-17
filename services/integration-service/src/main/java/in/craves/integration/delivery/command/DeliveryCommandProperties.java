@@ -192,7 +192,10 @@ public class DeliveryCommandProperties {
     public boolean isCourierCancelEnabled() { return courierCancelEnabled; }
     public void setCourierCancelEnabled(boolean courierCancelEnabled) { this.courierCancelEnabled = courierCancelEnabled; }
     public String getStatusRankGuard() { return statusRankGuard; }
-    public void setStatusRankGuard(String statusRankGuard) { this.statusRankGuard = statusRankGuard; }
+    /** Trimmed and lower-cased; unset or blank is off. */
+    public void setStatusRankGuard(String statusRankGuard) {
+        this.statusRankGuard = StringUtils.hasText(statusRankGuard) ? statusRankGuard.trim().toLowerCase(java.util.Locale.ROOT) : "off";
+    }
     public String getBorzoRefusals() { return borzoRefusals; }
     public void setBorzoRefusals(String borzoRefusals) { this.borzoRefusals = borzoRefusals; }
     public String getFullyQualifiedNamespace() { return fullyQualifiedNamespace; }

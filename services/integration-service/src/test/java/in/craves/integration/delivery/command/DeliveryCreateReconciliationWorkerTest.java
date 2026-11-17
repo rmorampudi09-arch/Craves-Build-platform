@@ -22,6 +22,26 @@ import org.junit.jupiter.api.Test;
 class DeliveryCreateReconciliationWorkerTest {
 
     @Test
+    void everyTickRunsTheSweeperFirstWhenThereIsOne() {
+        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
+        DeliveryLeaseRecoveryRepository leaseRecovery = mock(DeliveryLeaseRecoveryRepository.class);
+        DeliveryCommandSweeper sweeper = mock(DeliveryCommandSweeper.class);
+        DeliveryCreateReconciliationWorker worker = new DeliveryCreateReconciliationWorker(commands, mock(DeliveryJobRepository.class),
+            mock(DeliveryProviderRouter.class), mock(DeliveryCommandCompletionService.class), leaseRecovery, new DeliveryCommandProperties());
+
+        worker.reconcilePending();
+        worker.setSweeper(sweeper);
+        worker.reconcilePending();
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(sweeper, leaseRecovery);
+        order.verify(leaseRecovery).deadLetterExhaustedCreateReconciliationLeases(org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyInt());
+        order.verify(sweeper).sweep();
+        order.verify(leaseRecovery).deadLetterExhaustedCreateReconciliationLeases(org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
     void recoversFinalLeasesThenCompletesProviderDeliveryWithoutAnotherCreate() {
         DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
         DeliveryJobRepository deliveryJobs = mock(DeliveryJobRepository.class);

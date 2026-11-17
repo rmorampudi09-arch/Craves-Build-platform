@@ -46,6 +46,9 @@ The courier booking journal (integration, `CRAVES_DELIVERY_BOOKING_JOURNAL_ENABL
 Courier cancel for cancelled orders (integration `CourierCancel`, `CRAVES_DELIVERY_COURIER_CANCEL_ENABLED`) adds
 `COURIER_CANCEL_UNCONFIRMED`; see the same README, "Courier cancel for cancelled orders".
 
+The command sweeper (integration `DeliveryCommandSweeper`, `CRAVES_DELIVERY_COMMAND_SWEEPER_ENABLED`) adds
+`DELIVERY_COMMAND_SWEPT` and `DELIVERY_COURIER_WAIT_CAP`; see the same README, "Command sweeper and courier wait cap".
+
 The status rank guard (integration `DeliveryStatusUpdateService`, `CRAVES_DELIVERY_STATUS_RANK_GUARD=enforce`) adds
 `COURIER_ENDED_DELIVERY`; see the same README, "Status rank guard".
 

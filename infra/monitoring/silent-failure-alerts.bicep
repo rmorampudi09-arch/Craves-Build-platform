@@ -25,6 +25,8 @@ var logAlerts = [
   { code: 'OUTBOX_DEAD_LETTERED', severity: 1, text: '#2 Outbox row dead-lettered (attempts exhausted or lease expired on the final attempt)' }
   { code: 'REFUND_STALLED', severity: 1, text: '#3 Refund REQUESTED for more than 10 minutes' }
   { code: 'DELIVERY_COMMAND_STALLED', severity: 1, text: '#5 Delivery command WAITING_FOR_PROVIDER for more than 10 minutes' }
+  { code: 'DELIVERY_COMMAND_SWEPT', severity: 2, text: 'Command sweeper: a due delivery command had no Service Bus message and was sent one. Many at once, or sent=false: check the delivery-command queue and its consumer' }
+  { code: 'DELIVERY_COURIER_WAIT_CAP', severity: 1, text: 'Command sweeper: an order had no courier past its promised ready time plus the cap (20 minutes) and its delivery command has stopped. Book a courier by hand or cancel the order' }
   { code: 'DELIVERY_HANDOFF_NO_COURIER', severity: 1, text: 'Borzo was cancelled and Pidge refused or cancelled the fallback booking: the order has no courier until ops books one or cancels it' }
   { code: 'DELIVERY_HANDOFF_STALLED', severity: 1, text: 'Borzo was cancelled and the Pidge fallback booking is still unresolved about 10 minutes later (it keeps retrying)' }
   { code: 'COURIER_ACCOUNT_REFUSED', severity: 1, text: 'Booking journal: a courier refused a booking for its key, contract or balance; orders go to the next courier until it is fixed' }

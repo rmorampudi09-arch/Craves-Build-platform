@@ -94,7 +94,9 @@ public class DeliveryStatusUpdateService {
             update.providerId(),
             update.providerOrderId()
         ).orElseThrow(() -> new UnmatchedDeliveryJobException(
-            "No delivery job matches provider order " + safe(update.providerOrderId())
+            "No delivery job matches provider order " + safe(update.providerOrderId()),
+            update.providerId(),
+            update.providerOrderId()
         ));
 
         DeliveryJobState job = repository.lockJob(discovered.id())
@@ -454,8 +456,26 @@ public class DeliveryStatusUpdateService {
     ) {}
 
     public static class UnmatchedDeliveryJobException extends RuntimeException {
+        private final String providerId;
+        private final String providerOrderId;
+
         public UnmatchedDeliveryJobException(String message) {
+            this(message, null, null);
+        }
+
+        /** With the courier and its booking id, when it was the booking that matched no job. */
+        public UnmatchedDeliveryJobException(String message, String providerId, String providerOrderId) {
             super(message);
+            this.providerId = providerId;
+            this.providerOrderId = providerOrderId;
+        }
+
+        public String providerId() {
+            return providerId;
+        }
+
+        public String providerOrderId() {
+            return providerOrderId;
         }
     }
 

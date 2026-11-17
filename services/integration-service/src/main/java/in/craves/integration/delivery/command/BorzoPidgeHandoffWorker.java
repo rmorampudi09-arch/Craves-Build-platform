@@ -207,7 +207,15 @@ public class BorzoPidgeHandoffWorker {
             // Borzo is kept while Pidge could not be booked for this order: an attempt of its own would not begin.
             List<Attempt> earlier = pidgeAttempts(job.chefSubOrderId());
             if (earlier.stream().noneMatch(BorzoPidgeHandoffWorker::unresolved) && !ProviderCreateAttemptRepository.bookable(earlier)) {
-                throw new IllegalStateException("Pidge may not be booked again for this order");
+                if (earlier.stream().anyMatch(row -> ProviderCreateAttemptRepository.ORPHAN_SUSPECT.equals(row.state()))) {
+                    // That attempt may yet turn out refused, or be cancelled: tried again.
+                    throw new IllegalStateException("Pidge may not be booked again for this order");
+                }
+                // Nothing will change that: a retry would get the same answer every time.
+                handoffs.manualReview(job.id(), "Pidge may not be booked again for this order; Borzo was kept");
+                log.error("Delivery handoff requires manual review jobId={} phase={} reason=Pidge may not be booked again for this order",
+                    job.id(), handoff.state());
+                return;
             }
         }
         requireCommercialOrder(job);

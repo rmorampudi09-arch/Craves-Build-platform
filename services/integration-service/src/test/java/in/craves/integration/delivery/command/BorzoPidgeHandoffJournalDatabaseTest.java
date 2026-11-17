@@ -164,6 +164,26 @@ class BorzoPidgeHandoffJournalDatabaseTest {
         verify(handoffs).retry(eq(job.id()), eq("PROCESSING_BORZO"), any(), any());
     }
 
+    @Test
+    void aHandoffWhosePidgeAttemptsAreUsedUpGoesToAPersonAtOnceAndBorzoIsKept() {
+        for (int refusal = 0; refusal < 3; refusal++) {
+            journal.move(journal.begin(job.chefSubOrderId(), "pidge").orElseThrow(), Set.of("INTENT"), "REJECTED", "refused", null);
+        }
+        Handoff borzoPhase = new Handoff(handoff.deliveryJobId(), "1250032", "PROCESSING_BORZO", 1, handoff.dueAt(), false, false);
+        when(handoffs.claimDue(1)).thenReturn(List.of(borzoPhase), List.of());
+        when(borzoProperties.isEnabled()).thenReturn(true);
+        when(borzoProperties.productionReady()).thenReturn(true);
+        when(borzo.readOrder("1250032")).thenReturn(new ProviderDelivery("borzo", "1250032", null, DeliveryStatus.SEARCHING, "available",
+            null, null, null, null, Instant.now()));
+
+        worker.processDue();
+
+        verify(handoffs).manualReview(eq(job.id()), any());
+        verify(handoffs, never()).retry(any(), any(), any(), any());
+        verify(borzo, never()).cancel(any());
+        verify(handoffs, never()).markCancelIntent(any());
+    }
+
     private static ProviderDelivery delivery(DeliveryStatus status) {
         return new ProviderDelivery("pidge", "pidge-42", null, status, status.name(), null, null, null, null, Instant.now());
     }

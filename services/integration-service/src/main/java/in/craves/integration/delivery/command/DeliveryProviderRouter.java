@@ -503,17 +503,7 @@ public class DeliveryProviderRouter {
             ProviderDelivery delivery = Objects.requireNonNull(
                 reconciliation.delivery(), "reconciled provider delivery is required"
             );
-            AssignmentResponse assignment = existingAssignment(command.chefSubOrderId());
-            CandidateScore selected = selectedCandidate(assignment, providerId);
-            return new RoutingResult(
-                providerId,
-                delivery,
-                assignment,
-                selected.candidateId(),
-                List.of(),
-                List.of(new CreateAudit(providerId, true, "Recovered by provider reconciliation")),
-                clientReference
-            );
+            return recovered(command.chefSubOrderId(), providerId, clientReference, delivery);
         }
 
         if (reconciliation.status() == CreateReconciliationStatus.NOT_FOUND) {
@@ -530,6 +520,25 @@ public class DeliveryProviderRouter {
             clientReference,
             attemptedAt,
             safeDetail(reconciliation.detail(), "Provider create reconciliation is inconclusive")
+        );
+    }
+
+    /** The routing result for a journalled attempt's booking, fetched from its courier, that is to become the order's job. */
+    public RoutingResult recovered(Attempt attempt, ProviderDelivery delivery) {
+        return recovered(attempt.chefSubOrderId(), normalize(attempt.providerId()), attempt.clientRef(), delivery);
+    }
+
+    private RoutingResult recovered(UUID chefSubOrderId, String providerId, String clientReference, ProviderDelivery delivery) {
+        AssignmentResponse assignment = existingAssignment(chefSubOrderId);
+        CandidateScore selected = selectedCandidate(assignment, providerId);
+        return new RoutingResult(
+            providerId,
+            delivery,
+            assignment,
+            selected.candidateId(),
+            List.of(),
+            List.of(new CreateAudit(providerId, true, "Recovered by provider reconciliation")),
+            clientReference
         );
     }
 

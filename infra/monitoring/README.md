@@ -38,7 +38,8 @@ The CH-03 internal-call codes (`INTERNAL_CALL_*`) use the same rules.
 
 The courier booking journal (integration, `CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED`) adds `COURIER_ACCOUNT_REFUSED`
 (`BorzoApiClient`), `COURIER_ORPHAN_BOOKING_FOUND` and `COURIER_REJECTED_BOOKING_EXISTS`
-(`DeliveryCreateReconciliationWorker`, `DeliveryCommandCompletionService`, `DeliveryCommandWorker`), and `COURIER_UNRESOLVED_BOOKING` and
+(`DeliveryCreateReconciliationWorker`, `DeliveryCommandCompletionService`, `DeliveryCommandWorker`, `CourierStrayBookings`),
+`COURIER_STRAY_BOOKING_UNSETTLED` (`CourierStrayBookings`), and `COURIER_UNRESOLVED_BOOKING` and
 `COURIER_REJECTED_RATE` (`IntegrationAlertMonitor`). What each means and what to do is in
 `services/integration-service/docs/delivery-orchestration/README.md`, "Booking journal".
 

@@ -109,7 +109,7 @@ class ProviderCreateAttemptRepositoryDatabaseTest {
         Attempt stray = journal.find("pidge", attempt.clientRef()).orElseThrow();
         assertThat(stray.state()).isEqualTo(ORPHAN_SUSPECT);
         assertThat(stray.providerRef()).isEqualTo("PG-1");
-        assertThat(journal.claimDueChecks(5)).as("its id is known: nothing to look up").isEmpty();
+        assertThat(journal.claimDueChecks(5)).as("due at once: it is cancelled or made the job").hasSize(1);
     }
 
     @Test

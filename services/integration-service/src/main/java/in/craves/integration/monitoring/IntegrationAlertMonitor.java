@@ -54,6 +54,22 @@ public class IntegrationAlertMonitor {
             WHERE status = 'PENDING' AND created_at < now() - INTERVAL '1 hour'
               AND created_at > now() - (? * INTERVAL '1 day')
             """);
+        // The courier booking journal (V191; empty until CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED). updated_at is the state's age.
+        checks.put("COURIER_UNRESOLVED_BOOKING", """
+            SELECT count(*) FROM delivery_schema.provider_create_attempt
+            WHERE created_at > now() - (? * INTERVAL '1 day') AND updated_at < now() - INTERVAL '10 minutes'
+              AND (state IN ('INTENT', 'UNKNOWN')
+                   OR (state = 'ORPHAN_SUSPECT' AND provider_ref IS NULL AND updated_at > now() - INTERVAL '2 hours'))
+            """);
+        // A courier refusing over 20% of at least 3 bookings in 15 minutes: an empty wallet or a changed key, not bad luck.
+        checks.put("COURIER_REJECTED_RATE", """
+            SELECT count(*) FROM (
+                SELECT provider_id FROM delivery_schema.provider_create_attempt
+                WHERE created_at > now() - INTERVAL '15 minutes' AND created_at > now() - (? * INTERVAL '1 day')
+                GROUP BY provider_id
+                HAVING count(*) >= 3 AND count(*) FILTER (WHERE state = 'REJECTED') * 5 > count(*)
+            ) refusing
+            """);
         return Map.copyOf(checks);
     }
 

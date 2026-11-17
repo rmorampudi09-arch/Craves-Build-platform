@@ -236,7 +236,12 @@ public class ShiprocketApiClient implements DeliveryProviderAdapter {
                 new IllegalStateException("Shiprocket create returned no AWB; reconciliation is required")
             );
         }
-        return mapCreatedDelivery(clientReference, awb, selectedQuote, response);
+        try {
+            return mapCreatedDelivery(clientReference, awb, selectedQuote, response);
+        } catch (RuntimeException ex) {
+            // The AWB exists: a failure reading the answer is not a refusal (see DeliveryProviderAdapter.create).
+            throw new ProviderCreateUncertainException(PROVIDER_ID, clientReference, attemptedAt, ex);
+        }
     }
 
     @Override

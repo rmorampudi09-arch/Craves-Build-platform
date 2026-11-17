@@ -15,6 +15,10 @@ public class DeliveryCommandProperties {
     private boolean trackingReconciliationEnabled = false;
     private boolean statusPublisherEnabled = false;
     private boolean borzoPidgeHandoffEnabled = false;
+    /** Journal every courier booking attempt before the call (provider_create_attempt, V191); off keeps today's behaviour. */
+    private boolean bookingJournalEnabled = false;
+    /** With the journal on, how a Borzo refusal is read: verify (refused, then one lookup), trust (refused) or unknown (as today). */
+    private String borzoRefusals = "verify";
     private String fullyQualifiedNamespace = "";
     private String connectionString = "";
     private String topicName = "craves-domain-events";
@@ -96,6 +100,9 @@ public class DeliveryCommandProperties {
         if (reconciliationStaleMinutes < 1 || reconciliationStaleMinutes > 120) {
             throw new IllegalStateException("Delivery reconciliationStaleMinutes must be between 1 and 120");
         }
+        if (!java.util.Set.of("verify", "trust", "unknown").contains(borzoRefusals)) {
+            throw new IllegalStateException("Delivery borzoRefusals must be verify, trust or unknown");
+        }
         validateBatch(webhookBatchSize, "webhookBatchSize");
         validateInterval(webhookProcessingIntervalMs, "webhookProcessingIntervalMs");
         validateAttempts(maxWebhookAttempts, "maxWebhookAttempts");
@@ -173,6 +180,10 @@ public class DeliveryCommandProperties {
     public void setStatusPublisherEnabled(boolean statusPublisherEnabled) { this.statusPublisherEnabled = statusPublisherEnabled; }
     public boolean isBorzoPidgeHandoffEnabled() { return borzoPidgeHandoffEnabled; }
     public void setBorzoPidgeHandoffEnabled(boolean enabled) { this.borzoPidgeHandoffEnabled = enabled; }
+    public boolean isBookingJournalEnabled() { return bookingJournalEnabled; }
+    public void setBookingJournalEnabled(boolean bookingJournalEnabled) { this.bookingJournalEnabled = bookingJournalEnabled; }
+    public String getBorzoRefusals() { return borzoRefusals; }
+    public void setBorzoRefusals(String borzoRefusals) { this.borzoRefusals = borzoRefusals; }
     public String getFullyQualifiedNamespace() { return fullyQualifiedNamespace; }
     public void setFullyQualifiedNamespace(String fullyQualifiedNamespace) { this.fullyQualifiedNamespace = fullyQualifiedNamespace; }
     public String getConnectionString() { return connectionString; }

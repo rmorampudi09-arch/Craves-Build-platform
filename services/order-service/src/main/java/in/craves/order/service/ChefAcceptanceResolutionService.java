@@ -4,6 +4,7 @@ import in.craves.order.event.RefundRequestedEventFactory;
 import in.craves.order.event.RefundRequestedEventSource;
 import in.craves.order.event.SerializedDomainEvent;
 import in.craves.order.exception.OrderApiException;
+import in.craves.order.outbox.OrderCancelledEventWriter;
 import in.craves.order.outbox.OrderDomainOutboxRepository;
 import in.craves.order.security.CravesPrincipal;
 import in.craves.order.subscription.SubscriptionOrderRepository;
@@ -35,6 +36,7 @@ public class ChefAcceptanceResolutionService {
     private final OrderDomainOutboxRepository domainOutboxRepository;
     private final NotificationOutboxRepository notificationOutboxRepository;
     private final SubscriptionOrderRepository subscriptionOrderRepository;
+    private final OrderCancelledEventWriter orderCancelled;
 
     public ChefAcceptanceResolutionService(
         JdbcTemplate jdbcTemplate,
@@ -42,7 +44,8 @@ public class ChefAcceptanceResolutionService {
         RefundRequestedEventFactory refundEventFactory,
         OrderDomainOutboxRepository domainOutboxRepository,
         NotificationOutboxRepository notificationOutboxRepository,
-        SubscriptionOrderRepository subscriptionOrderRepository
+        SubscriptionOrderRepository subscriptionOrderRepository,
+        OrderCancelledEventWriter orderCancelled
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.orderService = orderService;
@@ -50,6 +53,7 @@ public class ChefAcceptanceResolutionService {
         this.domainOutboxRepository = domainOutboxRepository;
         this.notificationOutboxRepository = notificationOutboxRepository;
         this.subscriptionOrderRepository = subscriptionOrderRepository;
+        this.orderCancelled = orderCancelled;
     }
 
     @Transactional
@@ -233,6 +237,8 @@ public class ChefAcceptanceResolutionService {
             actorIdentityId,
             rejectionCode
         );
+        // The chef's decline or silence cancels the chef order; the refund below is a separate event.
+        orderCancelled.write(order.orderId(), rejectionCode);
 
         // A meal-plan order has no checkout: the plan paid for it, so instead of a refund its day is added to the end.
         if (order.checkoutId() == null) {

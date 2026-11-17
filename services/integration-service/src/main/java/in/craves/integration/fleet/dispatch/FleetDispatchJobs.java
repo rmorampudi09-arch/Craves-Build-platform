@@ -12,6 +12,7 @@ import in.craves.integration.delivery.command.DeliveryCommandRepository;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter;
+import in.craves.integration.delivery.command.ProviderCreateAttemptRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.fleet.FleetConfiguration;
@@ -119,6 +120,13 @@ public class FleetDispatchJobs {
 
     /** Delivery Intelligence lists the riders an order was offered to on its courier's assignment (a bean whenever the fleet is). */
     private FleetIntelligence intelligence;
+    private ProviderCreateAttemptRepository journal;
+
+    /** The courier booking journal (V191); used only while CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED is on. */
+    @Autowired(required = false)
+    public void setJournal(ProviderCreateAttemptRepository journal) {
+        this.journal = journal;
+    }
 
     @Autowired(required = false)
     public void setIntelligence(FleetIntelligence intelligence) {
@@ -431,6 +439,15 @@ public class FleetDispatchJobs {
                     : stage.openedAt().minusSeconds(FleetDispatcher.BORZO_WINDOW_SECONDS))
                 : router.route(command.message());
         } catch (DeliveryCreateReconciliationPendingException uncertain) {
+            if (journal != null && journal.enabled()) {
+                // No command reconciles this path, and the open row would block ops from sending the order to another courier.
+                try {
+                    journal.giveUp(stage.chefSubOrderId(), Instant.now().plusSeconds(20));
+                } catch (RuntimeException journalFailure) {
+                    LOGGER.error("FLEET_HANDBACK trip={} chefSubOrderId={}: the unanswered booking could not be marked for lookup",
+                        stage.tripId(), stage.chefSubOrderId(), journalFailure);
+                }
+            }
             return toOpsQueue(stage, "UNCERTAIN_CREATE_" + uncertain.providerId().toUpperCase(java.util.Locale.ROOT));
         } catch (RuntimeException notNow) {
             LOGGER.info("FLEET_HANDBACK_WAITING trip={} stage={} reason={}", stage.tripId(), stage.provider(), notNow.getMessage());
@@ -441,6 +458,15 @@ public class FleetDispatchJobs {
         }
         Boolean switched = transaction.execute(status -> switchJob(stage, routed));
         if (!Boolean.TRUE.equals(switched)) {
+            if (journal != null && journal.enabled()) {
+                // The booking is real and nobody's: kept on the journal with its id. Never in the way of the alert below.
+                try {
+                    journal.stray(stage.chefSubOrderId(), routed.providerId(), routed.delivery().providerDeliveryId());
+                } catch (RuntimeException journalFailure) {
+                    LOGGER.error("FLEET_COURIER_UNRECORDED trip={} provider={} delivery={}: not kept on the booking journal", stage.tripId(),
+                        routed.providerId(), routed.delivery().providerDeliveryId(), journalFailure);
+                }
+            }
             alerts.opsAlert("FLEET_COURIER_UNRECORDED", "Courier booked but not recorded, order " + stage.orderCode(),
                 "A " + routed.providerId() + " courier was booked for this order but its delivery changed meanwhile. Cancel "
                     + routed.providerId() + " delivery " + routed.delivery().providerDeliveryId() + " if it is not needed.",
@@ -495,6 +521,10 @@ public class FleetDispatchJobs {
         List<String> failed = routed.createAudit().stream().filter(audit -> !audit.successful())
             .map(DeliveryCommandModels.CreateAudit::providerId).distinct().toList();
         assignments.markAssigned(routed.intelligenceAssignment().assignmentId(), routed.executedCandidateId(), failed);
+        if (journal != null && journal.enabled()) {
+            // In the job's transaction, as DeliveryCommandCompletionService.complete does.
+            journal.confirm(stage.chefSubOrderId(), routed.providerId(), delivery.providerDeliveryId());
+        }
         if ("borzo".equals(routed.providerId()) && "BORZO".equals(stage.provider()) && router.borzoTimedPolicyReady()
             && (delivery.status() == DeliveryStatus.PENDING || delivery.status() == DeliveryStatus.SEARCHING
                 || delivery.status() == DeliveryStatus.DELAYED)) {

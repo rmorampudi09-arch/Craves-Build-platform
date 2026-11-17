@@ -250,6 +250,16 @@ public class DeliveryCommandRepository {
                                              String clientReference,
                                              Instant attemptedAt,
                                              String safeError) {
+        return markReconciliationPending(commandId, providerId, clientReference, attemptedAt, safeError, Duration.ZERO);
+    }
+
+    /** firstLookAfter: a courier's list may lag a new booking, so "not found" is trusted only from a look made this much later. */
+    public boolean markReconciliationPending(UUID commandId,
+                                             String providerId,
+                                             String clientReference,
+                                             Instant attemptedAt,
+                                             String safeError,
+                                             Duration firstLookAfter) {
         return jdbc.update("""
             UPDATE delivery_schema.delivery_command
             SET status = 'RECONCILIATION_PENDING',
@@ -259,7 +269,7 @@ public class DeliveryCommandRepository {
                 reconciliation_started_at = ?,
                 reconciliation_attempt_count = 0,
                 reconciliation_processing_started_at = NULL,
-                next_reconciliation_at = now(),
+                next_reconciliation_at = now() + make_interval(secs => ?),
                 next_provider_retry_at = NULL,
                 last_error = ?,
                 updated_at = now()
@@ -268,9 +278,43 @@ public class DeliveryCommandRepository {
             providerId,
             clientReference,
             toDatabaseTimestamp(attemptedAt),
+            firstLookAfter.toSeconds(),
             truncate(safeError, 2000),
             commandId
         ) == 1;
+    }
+
+    /**
+     * The booking this command waited on is resolved without a job (refused, not found, or given up as an orphan suspect):
+     * the command is due at once for the next courier. WAITING_FOR_PROVIDER costs none of its delivery attempts when claimed,
+     * and DELIVERY_COMMAND_STALLED watches it. The caller sends the message that runs it.
+     */
+    public boolean makeDueFromReconciliation(UUID commandId, String resolvedClientReference) {
+        return jdbc.update("""
+            UPDATE delivery_schema.delivery_command
+            SET status = 'WAITING_FOR_PROVIDER',
+                next_provider_retry_at = now(),
+                provider_wait_started_at = COALESCE(provider_wait_started_at, now()),
+                reconciliation_processing_started_at = NULL,
+                next_reconciliation_at = NULL,
+                updated_at = now()
+            WHERE id = ? AND status = 'RECONCILIATION_PENDING' AND reconciliation_client_reference = ?
+            """, commandId, resolvedClientReference) == 1;
+    }
+
+    /**
+     * Look at the command again at nextAt without counting this claim as a look: nothing was asked of the courier. Only
+     * for the claim that counted claimedLook, so a worker whose lease lapsed cannot undo another's claim.
+     */
+    public void deferReconciliation(UUID commandId, Instant nextAt, int claimedLook) {
+        jdbc.update("""
+            UPDATE delivery_schema.delivery_command
+            SET reconciliation_processing_started_at = NULL,
+                next_reconciliation_at = ?,
+                reconciliation_attempt_count = GREATEST(reconciliation_attempt_count - 1, 0),
+                updated_at = now()
+            WHERE id = ? AND status = 'RECONCILIATION_PENDING' AND reconciliation_attempt_count = ?
+            """, toDatabaseTimestamp(nextAt), commandId, claimedLook);
     }
 
     @Transactional

@@ -69,15 +69,22 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         this.objectMapper = objectMapper;
         this.statusMapper = statusMapper;
 
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Math.multiplyExact(properties.getConnectTimeoutSeconds(), 1000));
-        requestFactory.setReadTimeout(Math.multiplyExact(properties.getReadTimeoutSeconds(), 1000));
-
-        RestClient.Builder configured = restClientBuilder.requestFactory(requestFactory);
+        RestClient.Builder configured = restClientBuilder.requestFactory(requestFactory(properties));
         if (StringUtils.hasText(properties.getAuthToken())) {
             configured.defaultHeader(AUTH_HEADER, properties.getAuthToken());
         }
         this.restClient = configured.build();
+    }
+
+    /**
+     * Sends a request body as a stream, so the JDK never sends a POST a second time on its own (BorzoSendOnceTest). Keep it
+     * unbuffered: a buffered body may be re-sent when the server has closed the connection, and the booking made twice.
+     */
+    static SimpleClientHttpRequestFactory requestFactory(BorzoProperties properties) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Math.multiplyExact(properties.getConnectTimeoutSeconds(), 1000));
+        requestFactory.setReadTimeout(Math.multiplyExact(properties.getReadTimeoutSeconds(), 1000));
+        return requestFactory;
     }
 
     BorzoApiClient(BorzoProperties properties,

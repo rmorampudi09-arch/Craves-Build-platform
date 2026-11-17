@@ -1,6 +1,7 @@
 package in.craves.integration.monitoring;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -14,6 +15,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.slf4j.LoggerFactory;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** Every alert count runs on the migrated schema, and the courier booking journal's two counts see what they should. */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
@@ -100,6 +102,9 @@ class IntegrationAlertMonitorDatabaseTest {
         logged.start();
         ((Logger) LoggerFactory.getLogger(IntegrationAlertMonitor.class)).addAppender(logged);
         try {
+            // In one transaction that is rolled back, so the dropped constraint and every row are back afterwards.
+            new TransactionTemplate(database.transactions).executeWithoutResult(status -> {
+            status.setRollbackOnly();
             // Held by a rider and by a live Borzo job; the next three are held by their rider alone.
             Held withCourier = held("ASSIGNED", "+919000000011");
             job(withCourier, "borzo", "BZ-1", "COURIER_ASSIGNED");
@@ -132,6 +137,15 @@ class IntegrationAlertMonitorDatabaseTest {
                 line("COURIER_JOB", withCourier, "borzo", "BZ-1"),
                 line("STRAY_BOOKING", withStray, "pidge", "PG-3"),
                 line("SECOND_RIDER", lower, "craves_fleet", higher.trip().toString()));
+
+            // A query that fails is logged, never thrown: the job's next run is not lost.
+            database.db.execute("ALTER TABLE fleet_schema.trip RENAME TO trip_away");
+            assertThatCode(monitor::check).doesNotThrowAnyException();
+            assertThat(doubleHolds(logged)).hasSize(3);
+            });
+            assertThat(database.db.queryForObject("SELECT count(*) FROM pg_constraint WHERE conrelid = 'fleet_schema.trip'::regclass "
+                + "AND conname = 'trip_chef_sub_order_id_key' AND contype = 'u'", Integer.class)).as("the schema is as it was").isEqualTo(1);
+            assertThat(database.db.queryForObject("SELECT count(*) FROM fleet_schema.trip", Integer.class)).isZero();
         } finally {
             ((Logger) LoggerFactory.getLogger(IntegrationAlertMonitor.class)).detachAppender(logged);
         }

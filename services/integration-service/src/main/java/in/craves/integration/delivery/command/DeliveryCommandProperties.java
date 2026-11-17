@@ -19,6 +19,8 @@ public class DeliveryCommandProperties {
     private boolean bookingJournalEnabled = false;
     /** With the journal on, how a Borzo refusal is read: verify (refused, then one lookup), trust (refused) or unknown (as today). */
     private String borzoRefusals = "verify";
+    /** Cancel a cancelled order's courier whatever the fleet flag, Shiprocket too, confirmed by fetching it (CourierCancel); off keeps today's behaviour. */
+    private boolean courierCancelEnabled = false;
     private String fullyQualifiedNamespace = "";
     private String connectionString = "";
     private String topicName = "craves-domain-events";
@@ -182,6 +184,8 @@ public class DeliveryCommandProperties {
     public void setBorzoPidgeHandoffEnabled(boolean enabled) { this.borzoPidgeHandoffEnabled = enabled; }
     public boolean isBookingJournalEnabled() { return bookingJournalEnabled; }
     public void setBookingJournalEnabled(boolean bookingJournalEnabled) { this.bookingJournalEnabled = bookingJournalEnabled; }
+    public boolean isCourierCancelEnabled() { return courierCancelEnabled; }
+    public void setCourierCancelEnabled(boolean courierCancelEnabled) { this.courierCancelEnabled = courierCancelEnabled; }
     public String getBorzoRefusals() { return borzoRefusals; }
     public void setBorzoRefusals(String borzoRefusals) { this.borzoRefusals = borzoRefusals; }
     public String getFullyQualifiedNamespace() { return fullyQualifiedNamespace; }

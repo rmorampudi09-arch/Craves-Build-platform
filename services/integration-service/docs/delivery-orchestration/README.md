@@ -93,6 +93,7 @@ Default:
 CRAVES_DELIVERY_UNKNOWN_PROXIMITY_SCORE=50.0
 CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED=false
 CRAVES_DELIVERY_BORZO_REFUSALS=verify
+CRAVES_DELIVERY_COURIER_CANCEL_ENABLED=false
 ```
 
 When a future adapter supplies a genuine normalized pickup distance or ETA, the full proximity formula
@@ -452,6 +453,39 @@ nothing (or wait a minute and run it again):
 SELECT delivery_job_id, state, attempt_count FROM delivery_schema.delivery_borzo_pidge_handoff
 WHERE state IN ('BORZO_CANCELLED', 'PROCESSING_PIDGE', 'PIDGE_RECONCILIATION_PENDING');
 ```
+
+## Courier cancel for cancelled orders
+
+`CRAVES_DELIVERY_COURIER_CANCEL_ENABLED` (default `false`). Off, nothing below happens: a cancelled order's Borzo or Pidge
+courier is cancelled only while the fleet is on (`FleetCourierCancel`), on the courier's answer alone, and Shiprocket is
+never cancelled.
+
+On (`CourierCancel`), fleet on or off:
+
+*   Every 5 s, each live Borzo, Pidge or Shiprocket booking of an order order-service cancelled (`ORDER_CANCELLED`; a
+    refund alone never cancels a courier) gets one attempt. Ops cancelling a delivery (fleet admin) goes the same way and
+    gets the reason back at once when it fails.
+*   One attempt, claimed in `delivery_schema.courier_cancel` before any call so two replicas never both act:
+
+| Step | Outcome |
+|---|---|
+| Fetch the booking | Cannot be read: the attempt failed, nothing is cancelled |
+| It is already cancelled | Recorded; the delivery job hears it at once |
+| The courier has picked up, is in transit or at drop-off, or the booking is over | Never cancelled. `COURIER_CANCEL_UNCONFIRMED`, once, and no further attempt |
+| Cancel, then fetch again | Cancelled only when the courier's record says so, whatever the cancel call answered. Otherwise the attempt failed |
+
+*   A failed attempt is tried again after 3 minutes, 3 times in all; after the third, `COURIER_CANCEL_UNCONFIRMED`, once.
+    With the fleet on, ops's app gets the same push as before.
+*   A Borzo booking waiting for its switch to Pidge stops waiting first; one mid-switch is left to finish, then cancelled.
+
+| Alert | Means | Do |
+|---|---|---|
+| `COURIER_CANCEL_UNCONFIRMED` | The order was cancelled (or ops cancelled the delivery) and the courier still shows booking `delivery` live; `reason` says why | Cancel it in that courier's dashboard or call them. If their courier has the food, call the courier |
+
+Shiprocket's cancel needs its production activation approval; without it every attempt fails and the alert fires.
+Not covered: the Borzo-to-Pidge handoff's own cancels and the manual Borzo endpoint, which work as before.
+
+Rollback: unset the flag. `courier_cancel` rows stay and both paths read them.
 
 ## Safe rollout
 

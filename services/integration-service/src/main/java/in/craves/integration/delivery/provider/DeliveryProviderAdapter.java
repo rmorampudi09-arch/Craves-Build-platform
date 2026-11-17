@@ -17,6 +17,11 @@ public interface DeliveryProviderAdapter {
 
     ProviderQuote quote(QuoteRequest request);
 
+    /**
+     * Books the delivery. Once the provider may have accepted the request, every failure, including one in this adapter's
+     * own handling of the answer, must be raised as ProviderCreateUncertainException: the caller reads any other exception
+     * as "nothing was booked" and moves to the next provider.
+     */
     ProviderDelivery create(CreateDeliveryRequest request);
 
     ProviderDelivery cancel(String providerDeliveryId);
@@ -341,5 +346,23 @@ public interface DeliveryProviderAdapter {
         public String providerId() { return providerId; }
         public String clientReference() { return clientReference; }
         public Instant attemptedAt() { return attemptedAt; }
+    }
+
+    /**
+     * Raised when the provider definitely created nothing: it refused the request, or the request never left. The caller
+     * may move to the next provider at once. verifyLater asks for one later lookup, to check that reading of the answer.
+     */
+    class ProviderCreateRejectedException extends RuntimeException {
+        private final String providerId;
+        private final boolean verifyLater;
+
+        public ProviderCreateRejectedException(String providerId, boolean verifyLater, String message, Throwable cause) {
+            super(message, cause);
+            this.providerId = Objects.requireNonNull(providerId, "providerId is required");
+            this.verifyLater = verifyLater;
+        }
+
+        public String providerId() { return providerId; }
+        public boolean verifyLater() { return verifyLater; }
     }
 }

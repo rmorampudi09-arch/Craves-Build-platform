@@ -14,10 +14,12 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryComm
 import in.craves.integration.delivery.command.DeliveryCommandModels.QuoteAudit;
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
 import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
+import in.craves.integration.delivery.command.ProviderCreateAttemptRepository.Attempt;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateDeliveryRequest;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationStatus;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateRejectedException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderQuote;
@@ -34,6 +36,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -46,6 +51,9 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class DeliveryProviderRouter {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeliveryProviderRouter.class);
+    /** A new order may take a moment to show in a courier's list, so a refusal is looked up no sooner than this. */
+    static final Duration REFUSAL_LOOKUP_AFTER = Duration.ofSeconds(20);
     private final Map<String, DeliveryProviderAdapter> adapters;
     private final DeliveryProviderCatalogRepository providerCatalog;
     private final DeliveryIntelligenceService intelligenceService;
@@ -56,6 +64,7 @@ public class DeliveryProviderRouter {
     private final BorzoProperties borzoProperties;
     private final FleetStage fleetStage;
     private ProviderGuard providerGuard;
+    private ProviderCreateAttemptRepository journal;
 
     @Autowired
     public DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
@@ -112,6 +121,16 @@ public class DeliveryProviderRouter {
     @Autowired(required = false)
     void setProviderGuard(ProviderGuard providerGuard) {
         this.providerGuard = providerGuard;
+    }
+
+    /** The booking journal (V191); every branch on it is behind journal.enabled(), CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED. */
+    @Autowired(required = false)
+    public void setJournal(ProviderCreateAttemptRepository journal) {
+        this.journal = journal;
+    }
+
+    private boolean journalOn() {
+        return journal != null && journal.enabled();
     }
 
     public boolean borzoTimedPolicyReady() {
@@ -172,8 +191,22 @@ public class DeliveryProviderRouter {
             throw new DeliveryProviderTemporarilyUnavailableException(
                 "Borzo selection window has not been durably initialized");
         }
+        // Look before booking: an unresolved earlier attempt goes to the reconciliation worker before anyone is quoted.
+        Map<String, List<Attempt>> attempts = journalOn() ? attemptsByCourier(command.chefSubOrderId()) : Map.of();
+        // A refusal in this window sends the order to Pidge at once. A window ops opens later lets Borzo be tried again.
         boolean borzoWindowOpen = borzoReady && borzoWindowStartedAt != null
-            && clock.instant().isBefore(borzoWindowStartedAt.plusSeconds(120));
+            && clock.instant().isBefore(borzoWindowStartedAt.plusSeconds(120))
+            && !(journalOn() && attempts.containsKey("borzo") && (!bookable(attempts, "borzo")
+                || attempts.get("borzo").stream().anyMatch(row -> !row.createdAt().isBefore(borzoWindowStartedAt))));
+        Set<String> bookableOnly = null;
+        if (journalOn()) {
+            List<String> deployed = timedPolicy ? List.of(borzoWindowOpen ? "borzo" : "pidge")
+                : activeProviderIds.stream().map(DeliveryProviderRouter::normalize).filter(adapters::containsKey).toList();
+            bookableOnly = deployed.stream().filter(providerId -> bookable(attempts, providerId)).collect(Collectors.toSet());
+            if (bookableOnly.isEmpty() && !deployed.isEmpty()) {
+                throw new DeliveryRoutingException("No courier may be booked again for this order");
+            }
+        }
 
         List<QuoteAudit> quoteAudit = new ArrayList<>();
         List<Callable<QuoteOutcome>> tasks = new ArrayList<>();
@@ -181,6 +214,9 @@ public class DeliveryProviderRouter {
         for (String configuredProviderId : activeProviderIds) {
             String providerId = normalize(configuredProviderId);
             if (timedPolicy && !(borzoWindowOpen ? "borzo" : "pidge").equals(providerId)) {
+                continue;
+            }
+            if (bookableOnly != null && adapters.containsKey(providerId) && !bookableOnly.contains(providerId)) {
                 continue;
             }
             DeliveryProviderAdapter adapter = adapters.get(providerId);
@@ -249,9 +285,14 @@ public class DeliveryProviderRouter {
             );
         }
 
+        if (journalOn()) {
+            // A courier that already refused this order is tried again only after those not yet tried.
+            candidates = candidates.stream()
+                .sorted(Comparator.comparing(candidate -> attempts.containsKey(candidate.outcome().providerId()))).toList();
+        }
+
         List<CreateAudit> createAudit = new ArrayList<>();
         int maximumAttempts = Math.min(properties.getMaxProviderAttempts(), candidates.size());
-        String clientReference = clientReference(command.chefSubOrderId());
 
         for (int index = 0; index < maximumAttempts; index++) {
             RankedQuoteOutcome ranked = candidates.get(index);
@@ -262,6 +303,9 @@ public class DeliveryProviderRouter {
                     "Borzo selection window expired before booking",
                     borzoWindowStartedAt.plusSeconds(120));
             }
+            // Journalled and committed before the call, outside the try: a database error is never read as a refusal.
+            Attempt attempt = journalOn() ? beginAttempt(command.chefSubOrderId(), candidate.providerId()) : null;
+            String clientReference = attempt == null ? clientReference(command.chefSubOrderId()) : attempt.clientRef();
             try {
                 ProviderDelivery delivery = candidate.adapter().create(
                     new CreateDeliveryRequest(
@@ -272,7 +316,12 @@ public class DeliveryProviderRouter {
                 );
                 if (delivery == null || delivery.providerDeliveryId() == null
                     || delivery.providerDeliveryId().isBlank()) {
-                    throw new IllegalStateException("Provider returned no delivery identifier");
+                    IllegalStateException noId = new IllegalStateException("Provider returned no delivery identifier");
+                    if (attempt != null) {
+                        // An answer without an id may still be a booking.
+                        throw new ProviderCreateUncertainException(candidate.providerId(), clientReference, attempt.createdAt(), noId);
+                    }
+                    throw noId;
                 }
                 createAudit.add(new CreateAudit(candidate.providerId(), true, null));
                 return new RoutingResult(
@@ -287,6 +336,10 @@ public class DeliveryProviderRouter {
                 createAudit.add(new CreateAudit(
                     candidate.providerId(), false, "Provider create outcome requires reconciliation"
                 ));
+                if (attempt != null) {
+                    record(attempt, ProviderCreateAttemptRepository.UNKNOWN, safeMessage(ex.getCause() == null ? ex : ex.getCause()), null);
+                    throw pending(attempt, "Provider create response was not received; fallback is blocked", ex);
+                }
                 throw new DeliveryCreateReconciliationPendingException(
                     ex.providerId(),
                     ex.clientReference(),
@@ -296,12 +349,108 @@ public class DeliveryProviderRouter {
                 );
             } catch (RuntimeException ex) {
                 createAudit.add(new CreateAudit(candidate.providerId(), false, safeMessage(ex)));
+                if (attempt != null) {
+                    // Every adapter raises ProviderCreateUncertainException when a booking may exist; anything else booked nothing.
+                    boolean recorded = record(attempt, ProviderCreateAttemptRepository.REJECTED, safeMessage(ex),
+                        ex instanceof ProviderCreateRejectedException refusal && refusal.verifyLater()
+                            ? clock.instant().plus(REFUSAL_LOOKUP_AFTER) : null);
+                    if (recorded && timedPolicy && "borzo".equals(candidate.providerId())) {
+                        // The worker waits a second and runs again; the journal row then closes Borzo's window.
+                        throw new DeliveryProviderTemporarilyUnavailableException("Borzo refused the booking; Pidge is next", clock.instant());
+                    }
+                }
             }
         }
 
         throw new DeliveryRoutingException(
             "Delivery creation failed across " + maximumAttempts + " intelligently ranked provider attempt(s)"
         );
+    }
+
+    private Map<String, List<Attempt>> attemptsByCourier(UUID chefSubOrderId) {
+        List<Attempt> rows = journal.forOrder(chefSubOrderId);
+        for (Attempt row : rows) {
+            if (unresolved(row)) {
+                throw pending(row, "An earlier booking attempt is unresolved; it is looked up before any other booking", null);
+            }
+        }
+        return rows.stream().collect(Collectors.groupingBy(Attempt::providerId));
+    }
+
+    private Attempt beginAttempt(UUID chefSubOrderId, String providerId) {
+        Optional<Attempt> begun = journal.begin(chefSubOrderId, providerId);
+        if (begun.isPresent()) {
+            return begun.get();
+        }
+        // An index or the cap refused it: another pass got there first.
+        for (Attempt row : journal.forOrder(chefSubOrderId)) {
+            if (unresolved(row)) {
+                throw pending(row, "Another booking attempt for this order is unresolved", null);
+            }
+        }
+        throw new DeliveryProviderTemporarilyUnavailableException("Booking journal is busy for this order");
+    }
+
+    /**
+     * The courier has answered; the answer goes on the attempt. If that write fails the attempt stays INTENT, which blocks
+     * every other booking for the order until the reconciliation worker has looked: safe, so the answer's own handling goes on.
+     */
+    private boolean record(Attempt attempt, String state, String error, Instant nextCheckAt) {
+        try {
+            if (journal.move(attempt, Set.of(ProviderCreateAttemptRepository.INTENT), state, error, nextCheckAt)) {
+                if (ProviderCreateAttemptRepository.REJECTED.equals(state)) {
+                    log.warn("Courier refused the booking chefSubOrderId={} provider={} clientRef={}: {}", attempt.chefSubOrderId(),
+                        attempt.providerId(), attempt.clientRef(), error);
+                }
+                return true;
+            }
+            log.error("Courier booking journal: attempt was no longer INTENT when its answer ({}) arrived chefSubOrderId={} provider={} "
+                + "clientRef={}", state, attempt.chefSubOrderId(), attempt.providerId(), attempt.clientRef());
+        } catch (RuntimeException journalFailure) {
+            log.error("Courier booking journal: answer {} could not be recorded chefSubOrderId={} provider={} clientRef={} answer={}", state,
+                attempt.chefSubOrderId(), attempt.providerId(), attempt.clientRef(), error, journalFailure);
+        }
+        return false;
+    }
+
+    private static boolean unresolved(Attempt row) {
+        return ProviderCreateAttemptRepository.INTENT.equals(row.state()) || ProviderCreateAttemptRepository.UNKNOWN.equals(row.state());
+    }
+
+    private static boolean bookable(Map<String, List<Attempt>> attempts, String providerId) {
+        return ProviderCreateAttemptRepository.bookable(attempts.getOrDefault(providerId, List.of()));
+    }
+
+    private static DeliveryCreateReconciliationPendingException pending(Attempt row, String message, Throwable cause) {
+        return new DeliveryCreateReconciliationPendingException(row.providerId(), row.clientRef(), row.createdAt(), message, cause);
+    }
+
+    /**
+     * With the journal on: whether some courier other than this one may still be booked for the order. When none may,
+     * an unanswered booking is the order's only chance and is not given up as an orphan.
+     */
+    public boolean anotherCourierBookable(UUID chefSubOrderId, String exceptProviderId) {
+        Map<String, List<Attempt>> attempts = journal.forOrder(chefSubOrderId).stream().collect(Collectors.groupingBy(Attempt::providerId));
+        String except = normalize(exceptProviderId);
+        return providerCatalog.activeProviderIds().stream().map(DeliveryProviderRouter::normalize)
+            .filter(providerId -> !providerId.equals(except) && adapters.containsKey(providerId))
+            // The timed policy has one next courier: Pidge, after Borzo.
+            .filter(providerId -> !properties.isBorzoPidgeHandoffEnabled() || ("borzo".equals(except) && "pidge".equals(providerId)))
+            .anyMatch(providerId -> bookable(attempts, providerId));
+    }
+
+    /** A read-only look for one journalled attempt at its courier; inconclusive when the courier cannot be asked. */
+    public CreateReconciliationResult lookup(String providerId, String clientReference, Instant attemptedAt) {
+        DeliveryProviderAdapter adapter = adapters.get(normalize(providerId));
+        if (adapter == null) {
+            return CreateReconciliationResult.inconclusive("The provider adapter is not deployed");
+        }
+        try {
+            CreateReconciliationResult result = adapter.reconcileCreate(clientReference, attemptedAt);
+            return result == null ? CreateReconciliationResult.inconclusive("Provider lookup returned no result") : result;
+        } catch (RuntimeException ex) {
+            return CreateReconciliationResult.inconclusive(safeMessage(ex));
+        }
     }
 
     /**

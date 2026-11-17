@@ -47,6 +47,8 @@ class FleetDispatchStatementsDatabaseTest {
     static final int OPENING_BEFORE = 47;
     static final int NEXT_ROUND_BEFORE = 49;
     static final int WAITING_BEFORE = 4;
+    /** The opening look today, with the policy read from the database. */
+    static final int OPENING_NOW = 12;
 
     final FleetDatabase fleet = new FleetDatabase();
     final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
@@ -91,8 +93,22 @@ class FleetDispatchStatementsDatabaseTest {
         assertThat(now[1]).as("the look while a rider decides: one fewer, the policy").isEqualTo(WAITING_BEFORE - 1);
     }
 
-    /** The looks at one order: the one that opens it, one while its rider decides, and the one after a decline. */
+    /** CRAVES_FLEET_GPS_RULE reads its two terms in the candidate statement: enforce (and shadow, the same statement) costs what off costs. */
+    @Test
+    void theGpsRuleAddsNoStatementToALook() {
+        assertThat(looks(0, "enforce")).containsExactly(OPENING_NOW, WAITING_BEFORE, NEXT_ROUND_BEFORE - 32);
+    }
+
     private int[] looks(int policyCacheSeconds) {
+        int[] now = looks(policyCacheSeconds, "off");
+        if (policyCacheSeconds == 0) {
+            assertThat(now[0]).as("OPENING_NOW is the look with the GPS rule off").isEqualTo(OPENING_NOW);
+        }
+        return now;
+    }
+
+    /** The looks at one order: the one that opens it, one while its rider decides, and the one after a decline. */
+    private int[] looks(int policyCacheSeconds, String gpsRule) {
         JdbcTemplate db = new JdbcTemplate(counted);
         RoadDistanceClient roads = mock(RoadDistanceClient.class);
         when(roads.meters(anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(3500);
@@ -100,6 +116,7 @@ class FleetDispatchStatementsDatabaseTest {
         policies.setDispatchPolicyCacheSeconds(policyCacheSeconds);
         FleetDispatcher dispatcher = new FleetDispatcher(db, new DataSourceTransactionManager(counted), policies,
             new FleetTestMode(db, FleetDatabase.properties(false)), roads, mock(RiderPushClient.class), json);
+        dispatcher.setGpsRule(gpsRule);
         FleetDispatchFixtures.policy(fleet.db, "live", 20, 300, 1, 0, 1500);
         FleetDispatchFixtures.kitchen(fleet.db, chefSubOrderId, false);
         for (int i = 1; i <= RIDERS_IN_BAND; i++) {

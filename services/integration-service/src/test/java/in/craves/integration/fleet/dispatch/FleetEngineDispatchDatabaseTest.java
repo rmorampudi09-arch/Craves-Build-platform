@@ -121,6 +121,22 @@ class FleetEngineDispatchDatabaseTest {
             .containsExactlyInAnyOrder(near, second, third);
     }
 
+    /** CRAVES_FLEET_GPS_RULE=enforce: the engine doesn't know the rule, so Postgres leaves out its rider with an old fix. */
+    @Test
+    void withTheGpsRuleEnforcedAnEngineRiderWithAnOldFixIsPassedOver() {
+        FleetDispatchFixtures.fix(fleet.db, near, KITCHEN_LAT + 0.001, KITCHEN_LNG, 90, false);
+        FleetDispatchFixtures.seen(fleet.db, near, 5);
+        when(engine.rank(any(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyInt(), any(), any(), anyInt())).thenReturn(Optional.of(List.of(
+            new Candidate(near, 111, KITCHEN_LAT + 0.001, KITCHEN_LNG, false, 0, 0, 0, false),
+            new Candidate(second, 556, KITCHEN_LAT + 0.005, KITCHEN_LNG, false, 0, 0, 0, false))));
+        FleetDispatcher dispatcher = dispatcher(false, true, true);
+        dispatcher.setGpsRule("enforce");
+
+        assertThatThrownBy(() -> dispatcher.run(command, () -> OptionalLong.of(9000), true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(offeredRiders()).containsExactly(second);
+    }
+
     @Test
     void withoutAnAnswerFromTheEngineDispatchRanksRidersItself() {
         when(engine.rank(any(), anyDouble(), anyDouble(), anyDouble(), anyDouble(), anyInt(), any(), any(), anyInt())).thenReturn(Optional.empty());

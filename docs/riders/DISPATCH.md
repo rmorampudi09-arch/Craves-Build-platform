@@ -35,6 +35,13 @@ A rider hears of an order only if all of these hold:
 - They are in the pilot zone, only while test mode is on (`CRAVES_FLEET_TEST_MODE`). Production runs with it off, so every eligible rider hears of every kitchen's orders.
 - With rider choices on: the ride to the kitchen and the drop are within the rider's own limits. The kitchen ride is measured as the offer shows it, straight line × detour.
 
+**A fresher, more accurate fix (built, switched off: `CRAVES_FLEET_GPS_RULE`).** A fix up to 3 minutes old can place a rider a kilometre from where they are, and how accurate the fix is plays no part today. With the switch on `enforce`, the third line above also asks for a fix under 60 s old and accurate to 250 m; the call in the last 45 s, the real fix and the phone that can ring stay as they are. It is a setting, not a policy column, like the 45 s and the 3 minutes it tightens (constants in `FleetDispatcher`), so the notice trigger (§7) can't check it: the person switching it on does.
+
+- **`shadow` first.** Nobody's offers change. Each look that would leave a rider out logs `FLEET_GPS_RULE` with counts only (old fix, inaccurate fix, both). A phone standing still can call every 10 s and send no new fix, so the count of old fixes is the thing to read before enforcing.
+- **The order still waits.** Under the built-in rule an order whose only nearby riders have an old or inaccurate fix keeps its 5 minutes with riders and is offered at the first look after a fresh, accurate one. (A policy with a fixed number of rounds, not in use, would send it on at once, as it does today when nobody is eligible.)
+- **`enforce` is not a penalty.** A rider left out gets no offer row: it is not a decline or an ask, nothing is recorded against them, their earnings per hour and time free (fair turns) are untouched, and they hear of orders again with their next fresh, accurate fix. No count is kept per rider.
+- **Notice.** `enforce` changes who can hear of an order. Until riders are live it may start at once (the owner's decision). From go-live it needs 14 days' notice, with the rule worded in the app under Terms → "How you get orders": a location under 1 minute old, accurate to 250 m (Telangana s.13(2) [1]). The app doesn't show this rule or tell a rider left out why (not built).
+
 ### In what order
 
 - **Nearest first** (fair band 0): by straight-line distance to the kitchen. With `CRAVES_FLEET_ROAD_RANKING_ENABLED`, the 5 nearest are re-ranked by road distance.

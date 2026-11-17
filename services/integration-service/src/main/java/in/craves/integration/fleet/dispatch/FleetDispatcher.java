@@ -357,7 +357,9 @@ public class FleetDispatcher implements FleetStage {
             + "AND provider = 'CRAVES_FLEET' AND state = 'OPEN'", outcome, tripId) != 1) {
             return false;
         }
-        jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'WITHDRAWN', decided_at = now() WHERE trip_id = ? AND state = 'ACTIVE'", tripId);
+        // An offer already out of time ran out; it was not withdrawn (the 5 s tick may not have marked it yet).
+        jdbc.update("UPDATE fleet_schema.trip_offer SET state = CASE WHEN expires_at <= now() THEN 'EXPIRED' ELSE 'WITHDRAWN' END, "
+            + "decided_at = now() WHERE trip_id = ? AND state = 'ACTIVE'", tripId);
         String next = borzoNext ? "BORZO" : "PIDGE";
         if (jdbc.update("UPDATE fleet_schema.trip SET provider = ?, version = version + 1, updated_at = now() WHERE id = ? "
             + "AND state = 'SEARCHING' AND provider = 'CRAVES_FLEET'", next, tripId) != 1) {

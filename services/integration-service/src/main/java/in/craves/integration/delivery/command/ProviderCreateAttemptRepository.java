@@ -79,6 +79,12 @@ public class ProviderCreateAttemptRepository {
             providerId == null ? null : providerId.toLowerCase(java.util.Locale.ROOT), clientRef).stream().findFirst();
     }
 
+    /** The attempt whose booking this is, once a confirm, a stray or a lookup has put the courier's id on it (V193 index). */
+    public Optional<Attempt> findByProviderRef(String providerId, String providerRef) {
+        return jdbc.query("SELECT " + COLUMNS + " FROM " + TABLE + " WHERE provider_id = ? AND provider_ref = ? ORDER BY attempt_no DESC",
+            ROW, providerId, providerRef).stream().findFirst();
+    }
+
     /** The next attempt for the order and courier, as INTENT, committed before the caller calls the courier. Empty when an index or the cap refuses it. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<Attempt> begin(UUID chefSubOrderId, String providerId) {
@@ -122,9 +128,9 @@ public class ProviderCreateAttemptRepository {
             providerRef, chefSubOrderId, providerId, clientRef) == 1;
     }
 
-    /** A booking that was made but is not the order's job (another job got there first): kept on record for a person to cancel. */
+    /** A booking that was made but is not the order's job (another job got there first): kept on record, and due for CourierStrayBookings. */
     public boolean stray(UUID chefSubOrderId, String providerId, String clientRef, String providerRef) {
-        return jdbc.update("UPDATE " + TABLE + " SET state = 'ORPHAN_SUSPECT', provider_ref = ?, next_check_at = NULL, updated_at = now() "
+        return jdbc.update("UPDATE " + TABLE + " SET state = 'ORPHAN_SUSPECT', provider_ref = ?, next_check_at = now(), updated_at = now() "
             + "WHERE chef_sub_order_id = ? AND provider_id = ? AND client_ref = ? AND state IN ('INTENT', 'UNKNOWN')", providerRef,
             chefSubOrderId, providerId, clientRef) == 1;
     }
@@ -184,9 +190,11 @@ public class ProviderCreateAttemptRepository {
     /**
      * A lookup found the booking at the courier: its id is kept, and the courier is no longer bookable for the order.
      * False when the row already names a booking (it became the job meanwhile), so nothing was found that is new.
+     * An orphan suspect is due at once for CourierStrayBookings; a refusal that exists after all stays with a person.
      */
     public boolean foundAt(Attempt attempt, String providerRef) {
-        return jdbc.update("UPDATE " + TABLE + " SET provider_ref = ?, next_check_at = NULL WHERE chef_sub_order_id = ? AND provider_id = ? "
+        return jdbc.update("UPDATE " + TABLE + " SET provider_ref = ?, next_check_at = CASE WHEN state = 'ORPHAN_SUSPECT' THEN now() END "
+            + "WHERE chef_sub_order_id = ? AND provider_id = ? "
             + "AND attempt_no = ? AND provider_ref IS NULL", providerRef, attempt.chefSubOrderId(), attempt.providerId(),
             attempt.attemptNo()) == 1;
     }

@@ -339,7 +339,7 @@ courier is called. Each attempt sends its own reference: the order id in base 36
 | `UNKNOWN` | The answer was lost. The reconciliation worker looks the booking up. |
 | `ADOPTED` | A lookup found the booking and it became the delivery job. |
 | `ORPHAN_SUSPECT` | A booking may exist that the order does not use. Re-checked for 2 hours. |
-| `CANCELLED` | The booking was made and then cancelled with the courier. Today only the handoff writes it, when the order stopped being eligible. |
+| `CANCELLED` | The booking was made and then cancelled with the courier: by the handoff when the order stopped being eligible, or because it was a stray booking (below). |
 
 What changes for an order:
 
@@ -366,9 +366,49 @@ What changes for an order:
   An attempt Pidge rejected or cancelled ends the handoff as before (`DELIVERY_HANDOFF_NO_COURIER`). Borzo is not
   cancelled while Pidge may not be booked for the order (an earlier Pidge booking still on record, or three refusals).
 
-Not covered yet: a courier callback for a booking that is not on record, cancelling a stray booking automatically, and
-courier cancels while the fleet is off. The reconciliation worker's own lease is still
-`CRAVES_DELIVERY_RECONCILIATION_STALE_MINUTES`.
+- **A handoff that can never book Pidge goes to a person at once.** When the order's Pidge attempts are used up, or a
+  Pidge booking for it was confirmed or cancelled earlier, the handoff moves to `MANUAL_REVIEW` and Borzo is kept. While a
+  Pidge attempt is still an orphan suspect it is tried again, as before.
+
+### Stray bookings
+
+A stray booking is an `ORPHAN_SUSPECT` attempt that names the courier's booking id: the journal gave the attempt up, or
+another job got there first, and the booking exists. The journal check (every 15 seconds, one replica per row, at most
+every 5 minutes per row, for 2 hours) reads the booking from the courier and then:
+
+| The courier and the order say | What happens |
+|---|---|
+| The booking is already cancelled | The attempt becomes `CANCELLED` |
+| The order has no delivery job, and its command is `SCHEDULED`, `WAITING_FOR_PROVIDER` or `FAILED` | The booking becomes the job (`ADOPTED`) and the command completes, unless order-service cancelled the order meanwhile (checked again under the lock). Adoption and a pass claiming the command exclude each other |
+| No job, and the command is `PROCESSING` or `RECONCILIATION_PENDING` | Looked at again at the next check |
+| No job, and the command is `DEAD_LETTER` | Left to a person, as `COURIER_ORPHAN_BOOKING_FOUND` said |
+| The order has a job (or was cancelled by order-service) | The booking is cancelled with the courier and read again. Cancelled: `CANCELLED`. Not cancelled: `COURIER_STRAY_BOOKING_UNSETTLED`, once, and no further try |
+| The order's own courier is gone (its job is cancelled, failed or returned, or a handoff cancelled Borzo and did not finish) | Not cancelled: `COURIER_STRAY_BOOKING_UNSETTLED` |
+| The stray courier has picked up, or its booking has ended | Never cancelled, also when the order was cancelled: `COURIER_STRAY_BOOKING_UNSETTLED` |
+| No job, and it is a Pidge order still `PENDING` (created, never dispatched) | Cancelled with Pidge, not adopted |
+| A Borzo-to-Pidge handoff is in progress for the job | Looked at again at the next check |
+
+An attempt recorded as `REJECTED` whose booking exists is not touched: `COURIER_REJECTED_BOOKING_EXISTS` and a person.
+
+### Callbacks for a booking that is not a delivery job
+
+Without the journal such a callback is retried 10 times and then dead-lettered. With it, for Borzo and Pidge:
+
+- The booking is read from the courier, and the reference it was made under is looked up in the journal. A callback's
+  own content decides nothing.
+- **The attempt is `INTENT` or `UNKNOWN`** (the pass, the lookup or the handoff has yet to record the booking): the
+  callback waits. It is tried again every 30 seconds without counting an attempt, for up to 30 minutes from when it
+  arrived, and is applied in the ordinary way once the job exists. This covers a callback that arrives before its
+  booking is committed, and a Pidge callback during a Borzo-to-Pidge handoff.
+- **The attempt is `ORPHAN_SUSPECT`**: the booking id is put on the attempt (with `COURIER_ORPHAN_BOOKING_FOUND`), which
+  makes it a stray booking, and the callback waits the same way.
+- **The attempt is `CANCELLED`**: the callback is marked processed (`STRAY_BOOKING_CANCELLED`).
+- Anything else (no such booking, a booking made before the journal, another courier, the courier unreachable, a callback
+  older than 30 minutes): retried and dead-lettered as before.
+
+Not covered yet: moving a job to a stray booking when the job's own courier is gone (a person is told instead),
+courier cancels while the fleet is off, a Shiprocket cancel, and confirming order and ops cancels by reading the booking
+back. The reconciliation worker's own lease is still `CRAVES_DELIVERY_RECONCILIATION_STALE_MINUTES`.
 
 `CRAVES_DELIVERY_BORZO_REFUSALS` is read only with the journal on:
 
@@ -383,8 +423,9 @@ Alerts (`CRAVES_ALERT alert=<CODE> ...` log lines; the rules are in `infra/monit
 | Code | Meaning | What to do |
 |---|---|---|
 | `COURIER_ACCOUNT_REFUSED` | A courier refused for its key, contract or balance | Fix the key or top up. Orders go to the next courier meanwhile |
-| `COURIER_ORPHAN_BOOKING_FOUND` | A courier holds a booking the order does not use | Cancel booking `providerRef` in that courier's dashboard. Only if `orderHasJob=false` and `commandStatus=DEAD_LETTER` is it the order's only courier: keep it and tell engineering |
-| `COURIER_REJECTED_BOOKING_EXISTS` | A booking recorded as refused or not found exists | As above. Also set `CRAVES_DELIVERY_BORZO_REFUSALS=unknown` and tell engineering |
+| `COURIER_ORPHAN_BOOKING_FOUND` | A courier holds a booking the order does not use | Nothing yet: Craves cancels it or makes it the order's delivery within a minute, and says so if it cannot (next row). Only if `orderHasJob=false` and `commandStatus=DEAD_LETTER` is it left alone as the order's only courier: keep it and tell engineering |
+| `COURIER_STRAY_BOOKING_UNSETTLED` | Craves could not cancel or adopt a stray booking; `reason` says why | Look at booking `providerRef` in that courier's dashboard. Cancel it there or call the courier; if `reason` says it may be the order's only courier, keep it and tell engineering |
+| `COURIER_REJECTED_BOOKING_EXISTS` | A booking recorded as refused or not found exists | Cancel booking `providerRef` in that courier's dashboard (this one is not cancelled automatically). Also set `CRAVES_DELIVERY_BORZO_REFUSALS=unknown` and tell engineering |
 | `COURIER_UNRESOLVED_BOOKING` | An attempt has been unresolved for over 10 minutes | Run the query below; look for the reference in the courier's dashboard |
 | `COURIER_REJECTED_RATE` | A courier refused over 20% of at least 3 bookings in 15 minutes | Check that courier's account and status |
 
@@ -400,7 +441,7 @@ Before switching it on in production:
 2. Run `scripts/delivery/borzo-sandbox-order-list-check.py` once against Borzo's sandbox. The lookup trusts Borzo's order
    list to be newest first and to show a new order within 20 seconds.
 3. Confirm `CRAVES_DELIVERY_COMMAND_ENABLED` and `CRAVES_DELIVERY_RECONCILIATION_ENABLED` are on.
-4. Have someone watch the alerts. A stray booking is cancelled by a person until that is automated.
+4. Have someone watch the alerts. A stray booking is cancelled automatically; one that could not be is `COURIER_STRAY_BOOKING_UNSETTLED`.
 
 Rollback: unset the flag. Orders already waiting on a lookup finish on the old path with the reference they sent. Journal
 rows stay; if the flag goes on again, an unresolved row is looked up before its order is booked. One check first: with

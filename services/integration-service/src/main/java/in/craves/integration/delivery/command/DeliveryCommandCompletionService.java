@@ -9,6 +9,7 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelop
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -161,6 +162,20 @@ public class DeliveryCommandCompletionService {
         );
         commands.markCompleted(command.commandId());
         return new CompletionReceipt(deliveryJobId, false);
+    }
+
+    /**
+     * A booking the journal had given up becomes the order's job (CourierStrayBookings). Empty, with nothing written,
+     * when a pass or a lookup holds the command, the order has a job by now, or order-service has cancelled it (a cancel
+     * is a row of its own and leaves the command's status alone until a pass claims it).
+     */
+    @Transactional
+    public Optional<CompletionReceipt> adoptStray(DeliveryCommandMessage command, RoutingResult found) {
+        if (!commands.lockIdle(command.commandId()) || deliveryJobs.findIdByChefSubOrderId(command.chefSubOrderId()).isPresent()
+            || commands.orderCancelled(command.chefSubOrderId())) {
+            return Optional.empty();
+        }
+        return Optional.of(complete(command, found, null));
     }
 
     public record CompletionReceipt(UUID deliveryJobId, boolean duplicate) {}

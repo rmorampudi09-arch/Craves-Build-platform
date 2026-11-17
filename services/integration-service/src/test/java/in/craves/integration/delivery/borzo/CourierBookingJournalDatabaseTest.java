@@ -29,6 +29,7 @@ import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus
 import in.craves.integration.delivery.DeliveryIntelligenceModels.Momentum;
 import in.craves.integration.delivery.DeliveryIntelligenceService;
 import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
+import in.craves.integration.delivery.command.CourierStrayBookings;
 import in.craves.integration.delivery.command.DeliveryCommandCompletionService;
 import in.craves.integration.delivery.command.DeliveryCommandCompletionService.StaleCommandLeaseException;
 import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
@@ -140,6 +141,8 @@ class CourierBookingJournalDatabaseTest {
             new DeliveryLeaseRecoveryRepository(database.db), properties);
         reconciliation.setJournal(journal);
         reconciliation.setPublisher(publisher);
+        reconciliation.setStrayBookings(new CourierStrayBookings(database.db, journal, commands, router, completion,
+            List.of(borzoClient, pidge)));
 
         Stop pickup = new Stop("Madhapur, Hyderabad", "Chef", "919999999991", new BigDecimal("17.4483"), new BigDecimal("78.3915"), null, null, null);
         Stop drop = new Stop("Gachibowli, Hyderabad", "Customer", "919999999992", new BigDecimal("17.4401"), new BigDecimal("78.3489"), null, null, null);
@@ -224,15 +227,183 @@ class CourierBookingJournalDatabaseTest {
         assertThat(worker.process(message).providerId()).isEqualTo("pidge");
         borzo.verify();
 
-        // The orphan suspect's re-check finds the booking after all: its id is kept and a person is told.
+        // The orphan suspect's re-check finds the booking after all: its id is kept, a person is told, and it is due at once.
         database.db.update("UPDATE delivery_schema.provider_create_attempt SET next_check_at = now() WHERE provider_id = 'borzo'");
         borzo.reset();
-        borzo.expect(requestTo(startsWith(BORZO + "/orders"))).andRespond(withSuccess("{\"is_successful\":true,\"orders_count\":1,\"orders\":["
-            + "{\"order_id\":1250032,\"status\":\"available\",\"created_datetime\":\"" + java.time.OffsetDateTime.now() + "\","
-            + "\"points\":[{},{\"client_order_id\":\"" + row("borzo").get("client_ref") + "\"}]}]}", MediaType.APPLICATION_JSON));
+        borzo.expect(requestTo(startsWith(BORZO + "/orders"))).andRespond(withSuccess(borzoOrder("available"), MediaType.APPLICATION_JSON));
+        // The order is on Pidge, so the next tick reads the booking, cancels it and reads it again.
+        borzoShows("available");
+        borzo.expect(ExpectedCount.once(), requestTo(BORZO + "/cancel-order")).andExpect(jsonPath("$.order_id").value(1250032))
+            .andRespond(withSuccess("{\"is_successful\":true,\"order\":{\"order_id\":1250032,\"status\":\"canceled\"}}", MediaType.APPLICATION_JSON));
+        borzoShows("canceled");
         reconciliation.reconcilePending();
         assertThat(row("borzo")).containsEntry("state", "ORPHAN_SUSPECT").containsEntry("provider_ref", "1250032");
+        assertThat(secondsUntil("borzo", "next_check_at")).isLessThanOrEqualTo(0);
+
+        reconciliation.reconcilePending();
+        assertThat(row("borzo")).containsEntry("state", "CANCELLED").containsEntry("provider_ref", "1250032");
         assertThat(row("borzo").get("next_check_at")).isNull();
+        assertThat(jobProvider()).isEqualTo("pidge");
+        borzo.verify();
+    }
+
+    @Test
+    void aStrayBookingTheCourierWillNotCancelIsLeftToAPersonAfterOneTry() {
+        pidgesTurn();
+        assertThat(worker.process(message).providerId()).isEqualTo("pidge");
+        Attempt stray = journal.begin(chefSubOrderId, "borzo").orElseThrow();
+        journal.stray(chefSubOrderId, "borzo", stray.clientRef(), "1250032");
+        borzoShows("available");
+        borzo.expect(ExpectedCount.once(), requestTo(BORZO + "/cancel-order"))
+            .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"is_successful\":false,\"errors\":[\"order_cannot_be_canceled\"]}"));
+        borzoShows("available");
+
+        reconciliation.reconcilePending();
+        reconciliation.reconcilePending();
+
+        assertThat(row("borzo")).as("still on record as a booking nobody uses").containsEntry("state", "ORPHAN_SUSPECT")
+            .containsEntry("provider_ref", "1250032");
+        assertThat(row("borzo").get("next_check_at")).as("not tried again").isNull();
+        borzo.verify();
+    }
+
+    @Test
+    void aStrayBookingWhoseCourierHasTheFoodIsNotCancelled() {
+        pidgesTurn();
+        worker.process(message);
+        Attempt stray = journal.begin(chefSubOrderId, "borzo").orElseThrow();
+        journal.stray(chefSubOrderId, "borzo", stray.clientRef(), "1250032");
+        borzoShows("active");
+
+        reconciliation.reconcilePending();
+
+        assertThat(row("borzo")).containsEntry("state", "ORPHAN_SUSPECT");
+        assertThat(row("borzo").get("next_check_at")).isNull();
+        borzo.verify();
+    }
+
+    @Test
+    void aStrayBookingOfAnOrderWithNoJobBecomesItsJobUnlessSomethingHoldsTheCommand() {
+        Attempt given = journal.begin(chefSubOrderId, "borzo").orElseThrow();
+        journal.move(given, Set.of("INTENT"), "ORPHAN_SUSPECT", "no answer", null);
+        journal.foundAt(given, "1250032");
+        borzo.expect(ExpectedCount.times(3), requestTo(startsWith(BORZO + "/orders")))
+            .andRespond(withSuccess(borzoOrder("available"), MediaType.APPLICATION_JSON));
+        borzo.expect(ExpectedCount.times(3), requestTo(startsWith(BORZO + "/courier")))
+            .andRespond(withSuccess("{\"is_successful\":true,\"courier\":null}", MediaType.APPLICATION_JSON));
+
+        // A pass holds the command: it may be booking another courier, so nothing is decided.
+        commands.claim(message.commandId(), 5, 3).orElseThrow();
+        reconciliation.reconcilePending();
+        assertThat(row("borzo")).containsEntry("state", "ORPHAN_SUSPECT");
+        assertThat(secondsUntil("borzo", "next_check_at")).isBetween(295, 300);
+
+        // The command is dead: nothing says the order still wants a courier, so a person decides.
+        database.db.update("UPDATE delivery_schema.delivery_command SET status = 'DEAD_LETTER', processing_started_at = NULL");
+        database.db.update("UPDATE delivery_schema.provider_create_attempt SET next_check_at = now()");
+        reconciliation.reconcilePending();
+        assertThat(row("borzo")).containsEntry("state", "ORPHAN_SUSPECT");
+        assertThat(row("borzo").get("next_check_at")).isNull();
+        assertThat(database.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
+
+        // The command is waiting to book the next courier: this booking is the order's job instead.
+        database.db.update("UPDATE delivery_schema.delivery_command SET status = 'WAITING_FOR_PROVIDER', next_provider_retry_at = now(), provider_wait_started_at = now()");
+        database.db.update("UPDATE delivery_schema.provider_create_attempt SET next_check_at = now()");
+        reconciliation.reconcilePending();
+        assertThat(row("borzo")).containsEntry("state", "ADOPTED").containsEntry("provider_ref", "1250032");
+        assertThat(jobProvider()).isEqualTo("borzo");
+        assertThat(commandStatus()).isEqualTo("COMPLETED");
+        assertThat(worker.process(message).duplicate()).as("the command's own message finds the job").isTrue();
+        assertThat(pidge.references).as("nobody else was booked").isEmpty();
+        borzo.verify();
+    }
+
+    @Test
+    void aStrayBookingBorzoHasOnlyJustTakenIsAdoptedLikeAnyOther() {
+        Attempt given = journal.begin(chefSubOrderId, "borzo").orElseThrow();
+        journal.move(given, Set.of("INTENT"), "ORPHAN_SUSPECT", "no answer", null);
+        journal.foundAt(given, "1250032");
+        database.db.update("UPDATE delivery_schema.delivery_command SET status = 'WAITING_FOR_PROVIDER', next_provider_retry_at = now(), provider_wait_started_at = now()");
+        borzoShows("new");
+
+        reconciliation.reconcilePending();
+
+        assertThat(row("borzo")).containsEntry("state", "ADOPTED").containsEntry("provider_ref", "1250032");
+        assertThat(database.db.queryForMap("SELECT provider_id, status FROM delivery_schema.delivery_job"))
+            .containsEntry("provider_id", "borzo").containsEntry("status", "PENDING");
+        assertThat(commandStatus()).isEqualTo("COMPLETED");
+        borzo.verify();
+    }
+
+    @Test
+    void aStrayBookingIsNotMadeTheJobOfAnOrderCancelledMeanwhile() {
+        Attempt given = journal.begin(chefSubOrderId, "pidge").orElseThrow();
+        journal.move(given, Set.of("INTENT"), "ORPHAN_SUSPECT", "no answer", null);
+        journal.foundAt(given, "PG-1");
+        database.db.update("UPDATE delivery_schema.delivery_command SET status = 'WAITING_FOR_PROVIDER', next_provider_retry_at = now(), provider_wait_started_at = now()");
+        RoutingResult found = router.recovered(given, pidge.delivery("PG-1"));
+        // The cancel lands after the stray-booking check read the order as live: the command's status is still idle.
+        commands.recordOrderCancelled(chefSubOrderId, "Customer cancelled", Instant.now());
+
+        assertThat(completion.adoptStray(message, found)).isEmpty();
+
+        assertThat(database.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
+        assertThat(row("pidge")).containsEntry("state", "ORPHAN_SUSPECT");
+        assertThat(commandStatus()).isEqualTo("WAITING_FOR_PROVIDER");
+    }
+
+    @Test
+    void adoptingAStrayBookingAndAPassClaimingTheCommandExcludeEachOther() throws Exception {
+        database.db.update("UPDATE delivery_schema.delivery_command SET status = 'WAITING_FOR_PROVIDER', next_provider_retry_at = now(), provider_wait_started_at = now()");
+        var transaction = new org.springframework.transaction.support.TransactionTemplate(database.transactions);
+        ExecutorService other = Executors.newSingleThreadExecutor();
+        try {
+            var claim = transaction.execute(status -> {
+                assertThat(commands.lockIdle(message.commandId())).isTrue();
+                var waiting = other.submit(() -> commands.claim(message.commandId(), 5, 3));
+                assertThatThrownBy(() -> waiting.get(300, java.util.concurrent.TimeUnit.MILLISECONDS)).as("the claim waits for the adoption")
+                    .isInstanceOf(java.util.concurrent.TimeoutException.class);
+                commands.markCompleted(message.commandId());
+                return waiting;
+            });
+            assertThat(claim.get()).as("and then finds the command completed").isEmpty();
+
+            database.db.update("UPDATE delivery_schema.delivery_command SET status = 'PROCESSING', processing_started_at = now()");
+            assertThat(commands.lockIdle(message.commandId())).as("a pass holds the command: no adoption").isFalse();
+        } finally {
+            other.shutdownNow();
+        }
+    }
+
+    /** A pass books just as its lease lapses and a second pass claims the command: one booking, and it becomes the job. */
+    @Test
+    void aPassThatLosesItsLeaseWhileBookingLosesNoBookingAndMakesNoSecondOne() {
+        pidgesTurn();
+        List<String> secondPass = new java.util.ArrayList<>();
+        pidge.duringCreate = () -> {
+            leaseAgeSeconds(181);
+            secondPass.add(worker.process(message).providerId());
+        };
+
+        assertThatThrownBy(() -> worker.process(message)).isInstanceOf(DeliveryCommandTransientException.class)
+            .hasMessageContaining("Another pass has taken over");
+
+        assertThat(secondPass).as("the second pass books nobody: the first one's attempt is unresolved").containsExactly("RECONCILIATION_PENDING");
+        assertThat(commandStatus()).isEqualTo("RECONCILIATION_PENDING");
+        assertThat(row("pidge")).containsEntry("state", "INTENT");
+        assertThat(database.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
+
+        pidge.lookup = CreateReconciliationResult.found(pidge.delivery("PG-1"));
+        look();
+
+        assertThat(row("pidge")).containsEntry("state", "ADOPTED").containsEntry("provider_ref", "PG-1");
+        assertThat(database.db.queryForList("SELECT provider_id, provider_delivery_id FROM delivery_schema.delivery_job"))
+            .as("exactly one job, and it is the first pass's booking").containsExactly(Map.of("provider_id", "pidge", "provider_delivery_id", "PG-1"));
+        assertThat(commandStatus()).isEqualTo("COMPLETED");
+        assertThat(pidge.references).as("one booking call").hasSize(1);
+        assertThat(journal.forOrder(chefSubOrderId)).as("one attempt").hasSize(1);
+        assertThat(worker.process(message).duplicate()).as("the first pass's retry finds the job").isTrue();
     }
 
     @Test
@@ -435,6 +606,21 @@ class CourierBookingJournalDatabaseTest {
     private void borzoHasNoSuchOrder() {
         borzo.expect(ExpectedCount.once(), requestTo(startsWith(BORZO + "/orders")))
             .andRespond(withSuccess("{\"is_successful\":true,\"orders_count\":0,\"orders\":[]}", MediaType.APPLICATION_JSON));
+    }
+
+    /** Borzo's order 1250032, booked under the Borzo attempt's reference, as its order list shows it. */
+    private String borzoOrder(String status) {
+        return "{\"is_successful\":true,\"orders_count\":1,\"orders\":[{\"order_id\":1250032,\"status\":\"" + status
+            + "\",\"created_datetime\":\"" + java.time.OffsetDateTime.now() + "\",\"points\":[{},{\"client_order_id\":\""
+            + row("borzo").get("client_ref") + "\"}]}]}";
+    }
+
+    /** One read of the booking by its id: the order, then its courier. */
+    private void borzoShows(String status) {
+        borzo.expect(ExpectedCount.once(), requestTo(startsWith(BORZO + "/orders?order_id=1250032")))
+            .andRespond(withSuccess(borzoOrder(status), MediaType.APPLICATION_JSON));
+        borzo.expect(ExpectedCount.once(), requestTo(startsWith(BORZO + "/courier?order_id=1250032")))
+            .andRespond(withSuccess("{\"is_successful\":true,\"courier\":null}", MediaType.APPLICATION_JSON));
     }
 
     /** One reconciliation tick with the command's next look due now. */

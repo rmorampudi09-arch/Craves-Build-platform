@@ -222,6 +222,15 @@ public class DeliveryCommandRepository {
         return jdbc.update(sql + " AND status = 'PROCESSING' AND processing_started_at = ?", fenced);
     }
 
+    /**
+     * Locks, inside the caller's transaction, a command that no pass or lookup holds (the statuses ops may take over,
+     * FleetOpsService.takeOverCommand, less DEAD_LETTER). A claim waits for the lock and then sees what the caller wrote.
+     */
+    public boolean lockIdle(UUID commandId) {
+        return !jdbc.queryForList("SELECT 1 FROM delivery_schema.delivery_command WHERE id = ? "
+            + "AND status IN ('SCHEDULED', 'WAITING_FOR_PROVIDER', 'FAILED') FOR UPDATE", Integer.class, commandId).isEmpty();
+    }
+
     public Instant startBorzoWindow(UUID commandId) {
         OffsetDateTime startedAt = jdbc.queryForObject("""
             UPDATE delivery_schema.delivery_command

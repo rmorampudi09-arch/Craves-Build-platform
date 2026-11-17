@@ -1,11 +1,14 @@
 package in.craves.integration.delivery.status;
 
+import in.craves.integration.delivery.command.CourierStrayBookings;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.status.DeliveryStatusUpdateService.UnmatchedDeliveryJobException;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.WebhookWorkItem;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -24,6 +27,18 @@ public class DeliveryWebhookProcessor {
     private final DeliveryLeaseRecoveryRepository leaseRecovery;
     private final DeliveryStatusUpdateService statusService;
     private final DeliveryCommandProperties properties;
+    // shortcut: a waiting callback asks the courier again on each retry, up to 60 times; keep the reference on the inbox
+    // row instead if a courier's API budget ever feels it.
+    private static final int PARK_RETRY_SECONDS = 30;
+    /** Longer than an unanswered booking takes to be given up and found again (15 minutes, then a 5-minute check). */
+    private static final int PARK_FOR_MINUTES = 30;
+    private CourierStrayBookings strayBookings;
+
+    /** Used only while CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED is on. */
+    @Autowired(required = false)
+    public void setStrayBookings(CourierStrayBookings strayBookings) {
+        this.strayBookings = strayBookings;
+    }
 
     public DeliveryWebhookProcessor(DeliveryStatusRepository repository,
                                     DeliveryLeaseRecoveryRepository leaseRecovery,
@@ -74,24 +89,58 @@ public class DeliveryWebhookProcessor {
                 result.duplicate(),
                 result.result()
             );
+        } catch (UnmatchedDeliveryJobException unmatched) {
+            if (!parked(workItem, unmatched)) {
+                failed(workItem, unmatched);
+            }
         } catch (RuntimeException ex) {
-            long delaySeconds = retryDelaySeconds(workItem.attemptCount());
-            repository.markWebhookFailed(
-                workItem.id(),
-                workItem.attemptCount(),
-                properties.getMaxWebhookAttempts(),
-                Instant.now().plusSeconds(delaySeconds),
-                safeMessage(ex)
-            );
-            log.error(
-                "Delivery webhook processing failed inboxId={} provider={} providerEventId={} attempt={}",
-                workItem.id(),
-                workItem.providerId(),
-                workItem.providerEventId(),
-                workItem.attemptCount(),
-                ex
-            );
+            failed(workItem, ex);
         }
+    }
+
+    /**
+     * Journal on only. The callback's booking is no delivery job's: it waits while the booking is being recorded, adopted
+     * or cancelled, and is done once Craves has cancelled the booking. False: handle it as a failure, as before.
+     */
+    private boolean parked(WebhookWorkItem workItem, UnmatchedDeliveryJobException unmatched) {
+        if (strayBookings == null || !strayBookings.enabled() || unmatched.providerOrderId() == null) {
+            return false;
+        }
+        try {
+            CourierStrayBookings.Callback decision = strayBookings.onCallback(unmatched.providerId(), unmatched.providerOrderId());
+            if (decision == CourierStrayBookings.Callback.SETTLED) {
+                repository.markWebhookProcessed(workItem.id(), null, unmatched.providerOrderId(), null, null, "STRAY_BOOKING_CANCELLED");
+            } else if (decision != CourierStrayBookings.Callback.WAIT
+                || !repository.parkWebhook(workItem.id(), PARK_RETRY_SECONDS, PARK_FOR_MINUTES)) {
+                return false;
+            }
+            log.info("Delivery webhook for a booking that is no delivery job's inboxId={} provider={} providerOrderId={} decision={}",
+                workItem.id(), workItem.providerId(), unmatched.providerOrderId(), decision);
+            return true;
+        } catch (RuntimeException ex) {
+            log.warn("Delivery webhook's booking could not be looked up inboxId={} provider={}: {}", workItem.id(), workItem.providerId(),
+                safeMessage(ex));
+            return false;
+        }
+    }
+
+    private void failed(WebhookWorkItem workItem, RuntimeException ex) {
+        long delaySeconds = retryDelaySeconds(workItem.attemptCount());
+        repository.markWebhookFailed(
+            workItem.id(),
+            workItem.attemptCount(),
+            properties.getMaxWebhookAttempts(),
+            Instant.now().plusSeconds(delaySeconds),
+            safeMessage(ex)
+        );
+        log.error(
+            "Delivery webhook processing failed inboxId={} provider={} providerEventId={} attempt={}",
+            workItem.id(),
+            workItem.providerId(),
+            workItem.providerEventId(),
+            workItem.attemptCount(),
+            ex
+        );
     }
 
     private long retryDelaySeconds(int attemptCount) {

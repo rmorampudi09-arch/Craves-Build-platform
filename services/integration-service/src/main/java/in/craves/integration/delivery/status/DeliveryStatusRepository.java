@@ -242,6 +242,21 @@ public class DeliveryStatusRepository {
             """, inboxId);
     }
 
+    /**
+     * The callback's booking is still being recorded or resolved (CourierStrayBookings): tried again later without
+     * counting this attempt. False once the callback is older than maxAgeMinutes, so that it ends like any other.
+     */
+    public boolean parkWebhook(UUID inboxId, int retrySeconds, int maxAgeMinutes) {
+        return jdbc.update("""
+            UPDATE delivery_schema.delivery_webhook_inbox
+            SET processing_status = 'FAILED', next_attempt_at = now() + make_interval(secs => ?),
+                attempt_count = GREATEST(0, attempt_count - 1),
+                processing_started_at = NULL, processing_result = 'BOOKING_NOT_ON_RECORD',
+                error_message = NULL
+            WHERE id = ? AND processing_status = 'PROCESSING' AND received_at > now() - make_interval(mins => ?)
+            """, retrySeconds, inboxId, maxAgeMinutes) == 1;
+    }
+
     public void markWebhookDuplicate(UUID inboxId,
                                      String processingResult) {
         jdbc.update("""

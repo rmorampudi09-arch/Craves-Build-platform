@@ -61,6 +61,14 @@ public class DeliveryCreateReconciliationWorker {
         this.journal = journal;
     }
 
+    private CourierStrayBookings strayBookings;
+
+    /** Adopts or cancels a booking the journal found that is not the order's job; reached only with the journal on. */
+    @Autowired(required = false)
+    public void setStrayBookings(CourierStrayBookings strayBookings) {
+        this.strayBookings = strayBookings;
+    }
+
     /** Sends the message that runs a command made due here; a bean only while delivery commands are enabled. */
     @Autowired(required = false)
     public void setPublisher(DeliveryServiceBusPublisher publisher) {
@@ -134,6 +142,14 @@ public class DeliveryCreateReconciliationWorker {
 
     private void check(Attempt row) {
         boolean orphan = ProviderCreateAttemptRepository.ORPHAN_SUSPECT.equals(row.state());
+        if (orphan && row.providerRef() != null && strayBookings != null) {
+            // The booking exists and is not the order's job: adopted or cancelled, not looked up again.
+            if (!strayBookings.resolve(row) && row.updatedAt().isBefore(Instant.now().minus(ORPHAN_RECHECK_FOR))) {
+                log.error("CRAVES_ALERT alert=COURIER_UNRESOLVED_BOOKING provider={} chefSubOrderId={} clientRef={} state={} reason=stray-"
+                    + "booking-not-settled providerRef={}", row.providerId(), row.chefSubOrderId(), row.clientRef(), row.state(), row.providerRef());
+            }
+            return;
+        }
         CreateReconciliationResult result = router.lookup(row.providerId(), row.clientRef(), row.createdAt());
         if (result.status() == CreateReconciliationStatus.FOUND) {
             String booking = result.delivery().providerDeliveryId();

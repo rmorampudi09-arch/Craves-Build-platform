@@ -198,6 +198,21 @@ craves:
     sweeper-enabled: ${CRAVES_DELIVERY_COMMAND_SWEEPER_ENABLED:false}
     sweeper-margin-seconds: ${CRAVES_DELIVERY_COMMAND_SWEEPER_MARGIN_SECONDS:15}
     courier-wait-cap-minutes: ${CRAVES_DELIVERY_COURIER_WAIT_CAP_MINUTES:20}
+    # Webhook-first courier tracking (README, "Webhook-first tracking"): off keeps the poll every tracking-poll-seconds.
+    webhook-first-tracking-enabled: ${CRAVES_DELIVERY_WEBHOOK_FIRST_TRACKING_ENABLED:false}
+    # Only read with webhook-first tracking on: seconds without a callback or a poll before a job is polled, by stage, and
+    # the longest callbacks may put a poll off after the last one.
+    tracking-quiet-searching-seconds: ${CRAVES_DELIVERY_TRACKING_QUIET_SEARCHING_SECONDS:120}
+    tracking-quiet-assigned-seconds: ${CRAVES_DELIVERY_TRACKING_QUIET_ASSIGNED_SECONDS:180}
+    tracking-quiet-picked-up-seconds: ${CRAVES_DELIVERY_TRACKING_QUIET_PICKED_UP_SECONDS:300}
+    tracking-safety-poll-seconds: ${CRAVES_DELIVERY_TRACKING_SAFETY_POLL_SECONDS:900}
+    # Courier API call count and its alerts (README, "Courier API usage"): off writes and logs nothing.
+    provider-api-usage-enabled: ${CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED:false}
+    provider-api-usage-alert-percent: ${CRAVES_DELIVERY_PROVIDER_API_USAGE_ALERT_PERCENT:70}
+    # Calls a day (India); 0 counts without alerting.
+    provider-api-daily-caps:
+      borzo: ${CRAVES_DELIVERY_BORZO_DAILY_API_CAP:5000}
+      pidge: ${CRAVES_DELIVERY_PIDGE_DAILY_API_CAP:0}
     fully-qualified-namespace: ${SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
     connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
     topic-name: ${SERVICE_BUS_TOPIC_NAME:craves-domain-events}

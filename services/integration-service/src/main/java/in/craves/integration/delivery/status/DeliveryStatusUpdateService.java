@@ -10,6 +10,7 @@ import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
 import in.craves.integration.delivery.command.BorzoPidgeHandoffWorker;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderStatusUpdate;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
 import in.craves.integration.delivery.provider.DeliveryWebhookNormalizer;
@@ -142,6 +143,7 @@ public class DeliveryStatusUpdateService {
             retainBorzoIfAccepted(job, update);
         }
 
+        callbackHeard(job, decision.applied() ? update.status() : parseStatus(job.status()));
         repository.markWebhookProcessed(
             workItem.id(),
             job.id(),
@@ -243,7 +245,46 @@ public class DeliveryStatusUpdateService {
 
         applyAndPublish(job, update, "TRACK");
         retainBorzoIfAccepted(job, update);
+        if (properties.isWebhookFirstTrackingEnabled()) {
+            // Counted per courier in the logs: a rising number means that courier's callbacks are not arriving.
+            log.info("DELIVERY_TRACKING_POLL_SAW_FIRST provider={} jobId={} from={} to={}", update.providerId(), job.id(), job.status(),
+                update.status());
+        }
         return new ProcessingResult(job.id(), true, false, "APPLIED");
+    }
+
+    /**
+     * Webhook-first tracking: whether a poll's reading differs from what the job holds (decide()'s NO_STATE_CHANGE test).
+     * True when the job cannot be found, so that nothing is skipped on a doubt.
+     */
+    public boolean pollHasNews(TrackingWorkItem workItem, ProviderDelivery delivery) {
+        return repository.findJobByProviderOrder(workItem.providerId(), workItem.providerDeliveryId())
+            .map(job -> !sameState(job, delivery.status(), delivery.providerStatus(), delivery.trackingUrl()))
+            .orElse(true);
+    }
+
+    /**
+     * Webhook-first tracking, under the job's row lock: a callback was heard, so the job's poll waits for the stage's
+     * quiet period. In a savepoint: when it fails the callback is handled as it would be without it, with one error line.
+     */
+    private void callbackHeard(DeliveryJobState job, DeliveryStatus stage) {
+        if (!properties.isWebhookFirstTrackingEnabled()) {
+            return;
+        }
+        try {
+            repository.inSavepoint(() -> repository.deferTrackingAfterCallback(job.id(), Instant.now(), quietSeconds(stage),
+                properties.getTrackingSafetyPollSeconds()));
+        } catch (RuntimeException failure) {
+            log.error("DELIVERY_WEBHOOK_FIRST_TRACKING step=CALLBACK_HEARD failed jobId={} error={}", job.id(), safe(failure.getMessage()));
+        }
+    }
+
+    /** Webhook-first tracking: seconds with no callback and no poll before a job at this stage is polled. */
+    long quietSeconds(DeliveryStatus stage) {
+        int rank = rank(stage);
+        return rank >= rank(DeliveryStatus.PICKED_UP) ? properties.getTrackingQuietPickedUpSeconds()
+            : rank >= rank(DeliveryStatus.COURIER_ASSIGNED) ? properties.getTrackingQuietAssignedSeconds()
+            : properties.getTrackingQuietSearchingSeconds();
     }
 
     private void retainBorzoIfAccepted(DeliveryJobState job, ProviderStatusUpdate update) {
@@ -427,24 +468,30 @@ public class DeliveryStatusUpdateService {
         if (isTerminal(current) && current != update.status()) {
             return Decision.ignored("TERMINAL_STATUS_PROTECTED");
         }
-        if (current == update.status()
-            && Objects.equals(
-                normalize(job.providerStatus()),
-                normalize(update.providerStatus())
-            )
-            && Objects.equals(
-                normalize(job.trackingUrl()),
-                normalize(update.trackingUrl())
-            )) {
+        if (sameState(job, update.status(), update.providerStatus(), update.trackingUrl())) {
             return Decision.ignored("NO_STATE_CHANGE");
         }
         return Decision.accepted();
     }
 
+    private static boolean sameState(DeliveryJobState job, DeliveryStatus status, String providerStatus, String trackingUrl) {
+        return parseStatus(job.status()) == status
+            && Objects.equals(
+                normalize(job.providerStatus()),
+                normalize(providerStatus)
+            )
+            && Objects.equals(
+                normalize(job.trackingUrl()),
+                normalize(trackingUrl)
+            );
+    }
+
     private Instant nextTrackingAt(DeliveryStatus status) {
         return isTerminal(status)
             ? null
-            : Instant.now().plusSeconds(properties.getTrackingPollSeconds());
+            : Instant.now().plusSeconds(properties.isWebhookFirstTrackingEnabled()
+                ? quietSeconds(status)
+                : properties.getTrackingPollSeconds());
     }
 
     private DeliveryWebhookNormalizer normalizer(String providerId) {

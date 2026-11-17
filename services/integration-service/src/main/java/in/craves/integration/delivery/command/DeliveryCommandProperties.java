@@ -29,6 +29,23 @@ public class DeliveryCommandProperties {
     private int sweeperMarginSeconds = 15;
     /** A command still without a courier this long after its promised ready time is ended and a person is told. */
     private int courierWaitCapMinutes = 20;
+    /**
+     * Webhook-first courier tracking: a job is polled only after its quiet period with no callback and no poll, and at
+     * least every trackingSafetyPollSeconds while callbacks arrive; off keeps the poll every trackingPollSeconds.
+     */
+    private boolean webhookFirstTrackingEnabled = false;
+    /** Webhook-first only: the quiet period before a rider is assigned, from assignment to pickup, and after pickup. */
+    private int trackingQuietSearchingSeconds = 120;
+    private int trackingQuietAssignedSeconds = 180;
+    private int trackingQuietPickedUpSeconds = 300;
+    /** Webhook-first only: callbacks never put a job's poll off for longer than this after its last poll. */
+    private int trackingSafetyPollSeconds = 900;
+    /** Sum courier API calls per day in provider_api_usage and alert on high usage and HTTP 429 (IntegrationAlertMonitor); off: neither. */
+    private boolean providerApiUsageEnabled = false;
+    /** Courier id -> calls allowed per day in India; none or 0 means counted but never alerted. */
+    private java.util.Map<String, Integer> providerApiDailyCaps = new java.util.HashMap<>(java.util.Map.of("borzo", 5000));
+    /** The share of a courier's daily cap at which COURIER_API_USAGE_HIGH is raised, once a day. */
+    private int providerApiUsageAlertPercent = 70;
     private String fullyQualifiedNamespace = "";
     private String connectionString = "";
     private String topicName = "craves-domain-events";
@@ -132,6 +149,15 @@ public class DeliveryCommandProperties {
         if (trackingPollSeconds < 10 || trackingPollSeconds > 3600) {
             throw new IllegalStateException("Delivery trackingPollSeconds must be between 10 and 3600");
         }
+        validateRetry(trackingQuietSearchingSeconds, "trackingQuietSearchingSeconds");
+        validateRetry(trackingQuietAssignedSeconds, "trackingQuietAssignedSeconds");
+        validateRetry(trackingQuietPickedUpSeconds, "trackingQuietPickedUpSeconds");
+        if (trackingSafetyPollSeconds < 60 || trackingSafetyPollSeconds > 7200) {
+            throw new IllegalStateException("Delivery trackingSafetyPollSeconds must be between 60 and 7200");
+        }
+        if (providerApiUsageAlertPercent < 1 || providerApiUsageAlertPercent > 100) {
+            throw new IllegalStateException("Delivery providerApiUsageAlertPercent must be between 1 and 100");
+        }
         validateAttempts(maxTrackingAttempts, "maxTrackingAttempts");
         validateRetry(trackingRetryBaseSeconds, "trackingRetryBaseSeconds");
         validateStale(trackingStaleMinutes, "trackingStaleMinutes");
@@ -214,6 +240,22 @@ public class DeliveryCommandProperties {
     public void setStatusRankGuard(String statusRankGuard) {
         this.statusRankGuard = StringUtils.hasText(statusRankGuard) ? statusRankGuard.trim().toLowerCase(java.util.Locale.ROOT) : "off";
     }
+    public boolean isWebhookFirstTrackingEnabled() { return webhookFirstTrackingEnabled; }
+    public void setWebhookFirstTrackingEnabled(boolean webhookFirstTrackingEnabled) { this.webhookFirstTrackingEnabled = webhookFirstTrackingEnabled; }
+    public int getTrackingQuietSearchingSeconds() { return trackingQuietSearchingSeconds; }
+    public void setTrackingQuietSearchingSeconds(int trackingQuietSearchingSeconds) { this.trackingQuietSearchingSeconds = trackingQuietSearchingSeconds; }
+    public int getTrackingQuietAssignedSeconds() { return trackingQuietAssignedSeconds; }
+    public void setTrackingQuietAssignedSeconds(int trackingQuietAssignedSeconds) { this.trackingQuietAssignedSeconds = trackingQuietAssignedSeconds; }
+    public int getTrackingQuietPickedUpSeconds() { return trackingQuietPickedUpSeconds; }
+    public void setTrackingQuietPickedUpSeconds(int trackingQuietPickedUpSeconds) { this.trackingQuietPickedUpSeconds = trackingQuietPickedUpSeconds; }
+    public int getTrackingSafetyPollSeconds() { return trackingSafetyPollSeconds; }
+    public void setTrackingSafetyPollSeconds(int trackingSafetyPollSeconds) { this.trackingSafetyPollSeconds = trackingSafetyPollSeconds; }
+    public boolean isProviderApiUsageEnabled() { return providerApiUsageEnabled; }
+    public void setProviderApiUsageEnabled(boolean providerApiUsageEnabled) { this.providerApiUsageEnabled = providerApiUsageEnabled; }
+    public java.util.Map<String, Integer> getProviderApiDailyCaps() { return providerApiDailyCaps; }
+    public void setProviderApiDailyCaps(java.util.Map<String, Integer> providerApiDailyCaps) { this.providerApiDailyCaps = providerApiDailyCaps; }
+    public int getProviderApiUsageAlertPercent() { return providerApiUsageAlertPercent; }
+    public void setProviderApiUsageAlertPercent(int providerApiUsageAlertPercent) { this.providerApiUsageAlertPercent = providerApiUsageAlertPercent; }
     public String getBorzoRefusals() { return borzoRefusals; }
     public void setBorzoRefusals(String borzoRefusals) { this.borzoRefusals = borzoRefusals; }
     public String getFullyQualifiedNamespace() { return fullyQualifiedNamespace; }

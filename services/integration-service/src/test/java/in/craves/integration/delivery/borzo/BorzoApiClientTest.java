@@ -323,6 +323,34 @@ class BorzoApiClientTest {
         server.verify();
     }
 
+    /** Webhook-first tracking's poll: the courier is read only for a reading that changes the job and has a rider. */
+    @Test
+    void webhookFirstPollReadsTheCourierOnlyForNewsAboutARiderAndEveryRequestIsCounted() {
+        String assigned = """
+            {"is_successful":true,"orders":[{"order_id":1250032,"status":"active","points":[{},{"delivery":{"status":"courier_assigned"}}]}]}
+            """;
+        server.expect(requestTo(BASE_URL + "/orders?order_id=1250032&count=1")).andRespond(withSuccess(assigned, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/orders?order_id=1250032&count=1")).andRespond(withSuccess(assigned, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/courier?order_id=1250032"))
+            .andRespond(withSuccess("{\"is_successful\":true,\"courier\":{\"courier_id\":7,\"name\":\"Asha\"}}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/orders?order_id=1250032&count=1")).andRespond(withSuccess("""
+            {"is_successful":true,"orders":[{"order_id":1250032,"status":"available"}]}
+            """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(BASE_URL + "/orders?order_id=1250032&count=1"))
+            .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).contentType(MediaType.APPLICATION_JSON).body("{}"));
+        in.craves.integration.delivery.provider.CourierApiUsage.drainCalls();
+        in.craves.integration.delivery.provider.CourierApiUsage.drainRateLimited();
+
+        assertThat(client.track("1250032", delivery -> false).courier()).as("nothing new").isNull();
+        assertThat(client.track("1250032", delivery -> true).courier().name()).isEqualTo("Asha");
+        assertThat(client.track("1250032", delivery -> true).courier()).as("still searching: there is no rider to read").isNull();
+        assertThatThrownBy(() -> client.track("1250032", delivery -> true)).isInstanceOf(BorzoApiClient.BorzoApiException.class);
+
+        server.verify();
+        assertThat(in.craves.integration.delivery.provider.CourierApiUsage.drainCalls()).containsEntry("borzo", 5L);
+        assertThat(in.craves.integration.delivery.provider.CourierApiUsage.drainRateLimited()).containsEntry("borzo", 1L);
+    }
+
     @Test
     void serverErrorAfterCreateRequestRequiresReconciliation() {
         server.expect(requestTo(BASE_URL + "/create-order"))

@@ -83,9 +83,15 @@ public class DeliveryTrackingReconciliationWorker {
                         + workItem.providerId()
                 );
             }
-            TrackingSnapshot snapshot = adapter.track(
-                workItem.providerDeliveryId()
-            );
+            boolean webhookFirst = properties.isWebhookFirstTrackingEnabled();
+            TrackingSnapshot snapshot = webhookFirst
+                ? adapter.track(workItem.providerDeliveryId(), delivery -> statusService.pollHasNews(workItem, delivery))
+                : adapter.track(
+                    workItem.providerDeliveryId()
+                );
+            if (webhookFirst) {
+                markPolled(workItem);
+            }
             DeliveryStatusUpdateService.ProcessingResult result =
                 statusService.processTracking(workItem, snapshot);
             log.info(
@@ -112,6 +118,16 @@ public class DeliveryTrackingReconciliationWorker {
                 workItem.attemptCount(),
                 ex
             );
+        }
+    }
+
+    /** Webhook-first tracking: last_polled_at bounds how long callbacks may put the next poll off. Its own statement; a failure only logs. */
+    private void markPolled(TrackingWorkItem workItem) {
+        try {
+            repository.markTrackingPolled(workItem.deliveryJobId(), Instant.now());
+        } catch (RuntimeException failure) {
+            log.error("DELIVERY_WEBHOOK_FIRST_TRACKING step=MARK_POLLED failed jobId={} error={}", workItem.deliveryJobId(),
+                safeMessage(failure));
         }
     }
 

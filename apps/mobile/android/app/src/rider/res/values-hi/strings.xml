@@ -29,6 +29,8 @@
     <string name="rider_trip_ended_released">Craves ऑप्स टीम ने यह ऑर्डर Borzo या Pidge को दे दिया। अब तक की ट्रिप के पैसे आपको मिलेंगे।</string>
     <string name="rider_trip_ended_handed">Craves ऑप्स टीम ने यह ऑर्डर दूसरे राइडर को दे दिया। अब तक की ट्रिप के पैसे आपको मिलेंगे।</string>
     <string name="rider_trip_ended_order_cancelled">कस्टमर का ऑर्डर रद्द हो गया। अब तक की ट्रिप के पैसे आपको मिलेंगे।</string>
+    <string name="rider_trip_assigned_title">Craves ऑप्स टीम ने आपको एक ऑर्डर दिया है</string>
+    <string name="rider_trip_assigned_body">ट्रिप शुरू करने के लिए Craves Riders खोलें।</string>
     <!-- "Reached the kitchen?" (app 1.3.3, R-03): the heads-up while Google Maps is in front. -->
     <string name="rider_channel_reached">किचन पहुँच गए?</string>
     <string name="rider_reached_title">%1$s पहुँच गए?</string>

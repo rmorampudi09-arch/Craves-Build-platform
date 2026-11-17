@@ -11,7 +11,8 @@ import com.google.firebase.messaging.RemoteMessage
  * APPROVE or FIXES when ops decided the application: an open app checks at once (JS riderAccount), and the notice opens
  * it on the next step; type=TRIP_ENDED (app 1.3.0) with tripId and reason CANCELLED, RELEASED, HANDED_TO_RIDER or
  * ORDER_CANCELLED when the rider's trip ended without them: an open app reads its trip again (JS riderTripEnded), and the
- * notice says why and that the trip so far is paid.
+ * notice says why and that the trip so far is paid; type=TRIP_ASSIGNED with tripId when ops gave the rider a trip: an
+ * open app reads its trip at once (JS riderTripAssigned), and the phone rings once per trip. Any other type is dropped.
  */
 class RiderMessagingService : FirebaseMessagingService() {
 
@@ -49,6 +50,15 @@ class RiderMessagingService : FirebaseMessagingService() {
           RiderText.fromServer(this, data["title"]) ?: RiderText.get(this, R.string.rider_trip_ended_title),
           RiderText.fromServer(this, data["body"]) ?: RiderText.get(this, why))
       }
+      "TRIP_ASSIGNED" -> {
+        val tripId = data["tripId"] ?: return
+        RiderEvents.emit(TRIP_ASSIGNED_EVENT) { Arguments.createMap().apply { putString("tripId", tripId) } }
+        if (RiderOffers.firstAssigned(tripId)) {
+          RiderOffers.assigned(this, tripId,
+            RiderText.fromServer(this, data["title"]) ?: RiderText.get(this, R.string.rider_trip_assigned_title),
+            RiderText.fromServer(this, data["body"]) ?: RiderText.get(this, R.string.rider_trip_assigned_body))
+        }
+      }
     }
   }
 
@@ -64,5 +74,6 @@ class RiderMessagingService : FirebaseMessagingService() {
     const val ACCOUNT_TAG = "account"
     const val ACCOUNT_EVENT = "riderAccount"
     const val TRIP_ENDED_EVENT = "riderTripEnded"
+    const val TRIP_ASSIGNED_EVENT = "riderTripAssigned"
   }
 }

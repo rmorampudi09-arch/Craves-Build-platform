@@ -39,6 +39,9 @@ craves:
     # Ops may give a rider's trip before pickup to another rider (a new trip). Switch on only once order-service from the
     # same release is live: an older one refuses the rider-to-rider handoff, and the order would keep the first rider.
     rider-handover-enabled: ${CRAVES_FLEET_RIDER_HANDOVER_ENABLED:false}
+    # The rider ops gave a trip to gets a TRIP_ASSIGNED push at once (R22 item 15). Switch on only once riders have the app
+    # build that rings on it: an older app drops the push, and the trip still reaches it on its next /locations call.
+    ops-assign-push-enabled: ${CRAVES_FLEET_OPS_ASSIGN_PUSH_ENABLED:false}
     # Trip steps may come from the phone's native outbox with the shift credential instead of a JWT (P2-01): only the
     # rider's trip in progress or one that ended during the shift. Keep false until the security review signs it off.
     trip-shift-credential-enabled: ${CRAVES_FLEET_TRIP_SHIFT_CREDENTIAL_ENABLED:false}

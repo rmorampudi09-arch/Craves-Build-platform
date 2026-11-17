@@ -74,16 +74,21 @@ public class FleetOpsService {
     private final FleetAdminService admin;
     private final FleetCourierCancel couriers;
     private final boolean riderHandover;
+    private final boolean assignPush;
     private final ObjectMapper json = new ObjectMapper();
 
     /**
      * riderHandover (craves.fleet.rider-handover-enabled, off by default): a rider's trip before pickup may go to another
      * rider. Switch it on only once order-service accepts a Craves rider to Craves rider handoff (the same release).
+     * assignPush (craves.fleet.ops-assign-push-enabled, off by default): the rider ops gave a trip to gets a TRIP_ASSIGNED
+     * push once the change has committed. Switch it on only once riders have the app build that rings on it.
      */
     public FleetOpsService(JdbcTemplate jdbc, PlatformTransactionManager transactions, FleetPolicyStore policies, FleetTestMode testMode,
                            FleetDispatcher dispatcher, FleetTripService trips, FleetTripPay pay, FleetStatusBridge bridge,
                            FleetAdminService admin, FleetCourierCancel couriers,
-                           @Value("${craves.fleet.rider-handover-enabled:false}") boolean riderHandover) {
+                           @Value("${craves.fleet.rider-handover-enabled:false}") boolean riderHandover,
+                           @Value("${craves.fleet.ops-assign-push-enabled:false}") boolean assignPush) {
+        this.assignPush = assignPush;
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
         this.policies = policies;
@@ -196,6 +201,9 @@ public class FleetOpsService {
             Current trip = current(tripId);
             UUID released = trip.riderOnTrip() ? trip.riderId() : null;
             UUID now = input.riderId() != null ? toRider(trip, input.riderId(), by) : toCourier(trip, input.provider(), by);
+            if (assignPush && input.riderId() != null) {
+                trips.tellAssigned(now); // sent once this transaction has committed; the same key again doesn't get here
+            }
             return new Done(view(now), input.riderId() != null ? input.riderId() : released, tripId.toString(),
                 "Gave order " + trip.orderCode() + " to " + target + (released != null && input.riderId() != null ? " from rider " + released : "")
                     + ": " + reason);

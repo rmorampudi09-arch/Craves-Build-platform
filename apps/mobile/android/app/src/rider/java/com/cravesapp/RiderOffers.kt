@@ -66,6 +66,8 @@ object RiderOffers {
   private val receipts = LinkedHashMap<String, Pair<String, Long>>()
   /** Trips whose end a notice already told the rider of, so a later one from the other source doesn't repeat it. */
   private val endsTold = LinkedHashSet<String>()
+  /** Trips ops gave this rider that already rang (the TRIP_ASSIGNED push), so the same push twice rings once. */
+  private val assignedTold = LinkedHashSet<String>()
   /** The server's clock minus the phone's, in ms, from the last /locations answer (RiderOnlineService); null until one. */
   @Volatile var serverOffsetMs: Long? = null
   private val ISO_INSTANT = Regex("""(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)""")
@@ -207,6 +209,20 @@ object RiderOffers {
     synchronized(this) {
       endsTold.add(tripId).also { while (endsTold.size > MAX_RECEIPTS) endsTold.remove(endsTold.first()) }
     }
+
+  /** True the first time the TRIP_ASSIGNED push tells of this trip: FCM may deliver one push twice. */
+  fun firstAssigned(tripId: String): Boolean =
+    synchronized(this) {
+      assignedTold.add(tripId).also { while (assignedTold.size > MAX_RECEIPTS) assignedTold.remove(assignedTold.first()) }
+    }
+
+  /**
+   * Ops gave this rider a trip (the TRIP_ASSIGNED push): rings once on the offers channel, like the test ring. There is
+   * nothing to accept, so no countdown and no full screen; the tap opens the app, which shows the trip. One per trip.
+   */
+  fun assigned(context: Context, tripId: String, title: String, body: String) {
+    post(context, "assigned-$tripId", title, body, 10 * 60_000L, openAppIntent(context, null), offer = false)
+  }
 
   /**
    * Stops ringing for offers the server no longer lists (accepted, declined, taken or expired). Offers that first

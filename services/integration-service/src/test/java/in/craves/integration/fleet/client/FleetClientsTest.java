@@ -160,6 +160,27 @@ class FleetClientsTest {
         server.verify();
     }
 
+    /** R22 item 15: ops gave the rider a trip, a TRIP_ASSIGNED data message that carries the trip id and nothing about anyone. */
+    @Test
+    void theOpsAssignPushIsATripAssignedDataMessageWithOnlyTheTripId() {
+        UUID tripId = UUID.randomUUID();
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://notification.internal");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(ExpectedCount.once(), requestTo("http://notification.internal/internal/v1/push/realtime"))
+            .andExpect(method(HttpMethod.POST)).andExpect(header("X-Craves-Internal-Key", "secret"))
+            .andExpect(jsonPath("$.app").value("rider")).andExpect(jsonPath("$.token").value("fcm-token"))
+            .andExpect(jsonPath("$.data.length()").value(2)).andExpect(jsonPath("$.data.type").value("TRIP_ASSIGNED"))
+            .andExpect(jsonPath("$.data.tripId").value(tripId.toString())).andExpect(jsonPath("$.ttlSeconds").value(600))
+            .andExpect(jsonPath("$.collapseKey").value("trip-assigned-" + tripId))
+            .andExpect(jsonPath("$.notification.title").value("Craves ops gave you an order"))
+            .andRespond(withSuccess("{\"messageId\":\"projects/craves/messages/4\"}", MediaType.APPLICATION_JSON));
+        RiderPushClient client = new RiderPushClient(builder.build(), "secret");
+
+        assertThat(client.tripAssigned("fcm-token", tripId)).isEqualTo("SENT");
+        assertThat(new RiderPushClient(null, null).tripAssigned("fcm-token", tripId)).isEqualTo("OFF");
+        server.verify();
+    }
+
     /** P6-04: ops's decision on an application, an ACCOUNT data message the phone words in the rider's language. */
     @Test
     void theDecisionPushIsAnAccountDataMessage() {

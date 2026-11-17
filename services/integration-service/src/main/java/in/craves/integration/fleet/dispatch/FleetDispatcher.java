@@ -85,6 +85,11 @@ public class FleetDispatcher implements FleetStage {
     static final int TIMING_RIDERS = 3;
     static final int SEEN_WITHIN_SECONDS = 45;
     static final int FIX_WITHIN_SECONDS = 180;
+    /** CRAVES_FLEET_GPS_RULE (R22 9): the newest fix must also be this fresh and this accurate (rider_position_latest p). */
+    static final int GPS_RULE_FIX_SECONDS = 60;
+    static final int GPS_RULE_ACCURACY_M = 250;
+    private static final String GPS_FRESH = "p.recorded_at > now() - make_interval(secs => " + GPS_RULE_FIX_SECONDS + ")";
+    private static final String GPS_ACCURATE = "p.accuracy_m <= " + GPS_RULE_ACCURACY_M;
     /** Heading home (Phase 5): the drop must leave the rider at least this much nearer home (straight lines, metres). */
     static final int HOME_PROGRESS_M = 500;
     /** Heading home: the trip may add to the ride home at most this, or a quarter of the way home if that is more. */
@@ -153,6 +158,13 @@ public class FleetDispatcher implements FleetStage {
      */
     private boolean expiryWake;
     /**
+     * CRAVES_FLEET_GPS_RULE, off | shadow | enforce (off by default): a rider is a candidate only with a fix under
+     * GPS_RULE_FIX_SECONDS old and accurate to GPS_RULE_ACCURACY_M, on top of HEARD_FROM. shadow asks the same riders as
+     * off and logs how many the rule would leave out of each look (FLEET_GPS_RULE: counts only, no rider). enforce leaves
+     * them out: no offer row, nothing recorded, and they are candidates again with their next fresh, accurate fix.
+     */
+    private String gpsRule = "off";
+    /**
      * CRAVES_FLEET_NO_SUPPLY_FAST_PATH_ENABLED (off by default; docs/riders/DISPATCH.md §2, "No rider in range"): with no
      * limit on rounds, an order nobody was ever asked about, with no rider in range at all (noRiderInRange), goes on to the
      * courier once its stage is noSupplySettleSeconds old, not at the deadline. An order any rider could still hear of
@@ -211,6 +223,16 @@ public class FleetDispatcher implements FleetStage {
     @Value("${craves.fleet.offer-expiry-wake-enabled:false}")
     public void setExpiryWake(boolean expiryWake) {
         this.expiryWake = expiryWake;
+    }
+
+    /** Trimmed and lower-cased; unset or blank is off; any other value stops start-up. */
+    @Value("${craves.fleet.gps-rule:off}")
+    public void setGpsRule(String gpsRule) {
+        String rule = gpsRule == null || gpsRule.isBlank() ? "off" : gpsRule.trim().toLowerCase(Locale.ROOT);
+        if (!Set.of("off", "shadow", "enforce").contains(rule)) {
+            throw new IllegalStateException("craves.fleet.gps-rule must be off, shadow or enforce");
+        }
+        this.gpsRule = rule;
     }
 
     @Autowired
@@ -548,9 +570,16 @@ public class FleetDispatcher implements FleetStage {
                 return free;
             }
         }
-        List<Candidate> riders = ranked(nearbyRiders(kitchenLat, kitchenLng, policy.radiusM(), dropM, policy.pickupDetourPercent(), dropLat,
-            dropLng).stream().filter(rider -> !exclude.contains(rider.riderId())).toList(), policy, kitchenLat, kitchenLng, chefSubOrderId,
-            rankBy);
+        int[] gpsFailed = new int[3];
+        List<Candidate> nearby = nearbyRiders(kitchenLat, kitchenLng, policy.radiusM(), dropM, policy.pickupDetourPercent(), dropLat,
+            dropLng, exclude, gpsFailed).stream().filter(rider -> !exclude.contains(rider.riderId())).toList();
+        if (gpsFailed[0] + gpsFailed[1] + gpsFailed[2] > 0) {
+            // passing: riders who meet the rule too. Counted before test mode's list, which would cost a statement a rider.
+            LOGGER.info("FLEET_GPS_RULE mode={} chefSubOrderId={} round={} passing={} stale={} inaccurate={} both={}", gpsRule, chefSubOrderId,
+                round, nearby.size() - ("shadow".equals(gpsRule) ? gpsFailed[0] + gpsFailed[1] + gpsFailed[2] : 0), gpsFailed[0],
+                gpsFailed[1], gpsFailed[2]);
+        }
+        List<Candidate> riders = ranked(nearby, policy, kitchenLat, kitchenLng, chefSubOrderId, rankBy);
         if (answer.isPresent() && !riders.isEmpty()) {
             LOGGER.warn("FLEET_ENGINE_FOUND_NOBODY chefSubOrderId={} round={} javaRiders={}", chefSubOrderId, round, riders.size());
         }
@@ -592,7 +621,10 @@ public class FleetDispatcher implements FleetStage {
         }
         Set<UUID> free = Set.copyOf(jdbc.queryForList("SELECT r.id FROM fleet_schema.rider r WHERE r.id = ANY(CAST(? AS uuid[])) AND "
                 + FREE_NOW + " AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip_offer o WHERE o.rider_id = r.id AND o.state = 'ACTIVE' "
-                + "AND o.expires_at > now())", UUID.class,
+                + "AND o.expires_at > now())"
+                // The engine doesn't know the GPS rule: enforced, Postgres leaves out its riders who fail it.
+                + ("enforce".equals(gpsRule) ? " AND EXISTS (SELECT 1 FROM fleet_schema.rider_position_latest p WHERE p.rider_id = r.id AND "
+                    + GPS_FRESH + " AND " + GPS_ACCURATE + ")" : ""), UUID.class,
             riders.stream().map(rider -> rider.riderId().toString()).collect(Collectors.joining(",", "{", "}"))));
         return riders.stream().filter(rider -> free.contains(rider.riderId())).toList();
     }
@@ -939,11 +971,26 @@ public class FleetDispatcher implements FleetStage {
      * order that takes them home (homeNearerM). Declines play no part.
      */
     private List<Candidate> nearbyRiders(double lat, double lng, int radiusM, int dropM, int detourPercent, Double dropLat, Double dropLng) {
+        // Whether riders are near (the courier quote, ops) and food timing never apply the GPS rule: null.
+        return nearbyRiders(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, Set.of(), null);
+    }
+
+    /**
+     * As above, for choosing whom to offer an order (gpsFailed not null). With CRAVES_FLEET_GPS_RULE on, gpsFailed counts
+     * the riders in range, not in exclude, who meet everything above but not the rule: [0] fix too old, [1] too
+     * inaccurate, [2] both. shadow keeps them; enforce leaves them out, as if out of range. The same statement either way.
+     */
+    private List<Candidate> nearbyRiders(double lat, double lng, int radiusM, int dropM, int detourPercent, Double dropLat, Double dropLng,
+                                         Set<UUID> exclude, int[] gpsFailed) {
+        boolean gps = gpsFailed != null && !"off".equals(gpsRule);
+        boolean enforce = "enforce".equals(gpsRule);
         double dLat = radiusM / 111_320.0;
         double dLng = radiusM / (111_320.0 * Math.max(0.01, Math.cos(Math.toRadians(lat))));
         boolean choices = riderChoices && dropM >= 0;
         return jdbc.query("""
-                SELECT r.id, p.lat, p.lng, r.max_pickup_m, r.home_lat, r.home_lng, s.heading_home_until > now() AS heading_home
+                SELECT r.id, p.lat, p.lng, r.max_pickup_m, r.home_lat, r.home_lng, s.heading_home_until > now() AS heading_home"""
+                // Off: only the line break this text had, so the statement is the one it was.
+                + (gps ? ", NOT " + GPS_FRESH + " AS fix_stale, NOT " + GPS_ACCURATE + " AS fix_inaccurate\n" : "\n") + """
                 FROM fleet_schema.rider r
                 JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL
                   AND s.credential_expires_at > now() AND\s""" + FleetShiftService.BREAK_ENDS.formatted("s.id") + """
@@ -968,6 +1015,14 @@ public class FleetDispatcher implements FleetStage {
                         homeNearerM = homeNearerM(row.getDouble("lat"), row.getDouble("lng"), lat, lng, dropLat, dropLng,
                             row.getDouble("home_lat"), row.getDouble("home_lng"));
                         if (homeNearerM == null) {
+                            return null;
+                        }
+                    }
+                    if (gps && (row.getBoolean("fix_stale") || row.getBoolean("fix_inaccurate"))) {
+                        if (metres <= radiusM && !exclude.contains(row.getObject("id", UUID.class))) {
+                            gpsFailed[row.getBoolean("fix_stale") ? row.getBoolean("fix_inaccurate") ? 2 : 0 : 1]++;
+                        }
+                        if (enforce) {
                             return null;
                         }
                     }

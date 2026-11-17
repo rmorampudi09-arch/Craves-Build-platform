@@ -86,5 +86,9 @@ class DeliveryTrackingReconciliationWorkerTest {
         verify(leaseRecovery).deadLetterExhaustedTrackingLeases(20, 5);
         verify(adapter).track("1250032");
         verify(statusService).processTracking(workItem, snapshot);
+        // Webhook-first tracking is off: the plain poll, and nothing of the new schedule is read or written.
+        verify(adapter, org.mockito.Mockito.never()).track(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+        verify(statusService, org.mockito.Mockito.never()).pollHasNews(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(repository, org.mockito.Mockito.never()).markTrackingPolled(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 }

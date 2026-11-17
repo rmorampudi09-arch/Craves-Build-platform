@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.provider.CourierApiUsage;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateRejectedException;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -272,6 +274,15 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         return new TrackingSnapshot(delivery, courier, Instant.now());
     }
 
+    /** Webhook-first tracking: GET /courier only for a reading that changes the job and has a rider; else one call, no courier. */
+    @Override
+    public TrackingSnapshot track(String providerDeliveryId, Predicate<ProviderDelivery> hasNews) {
+        ProviderDelivery delivery = readOrder(providerDeliveryId);
+        boolean rider = delivery.status() != DeliveryStatus.PENDING && delivery.status() != DeliveryStatus.SEARCHING;
+        Courier courier = rider && hasNews.test(delivery) ? readCourier(providerDeliveryId) : null;
+        return new TrackingSnapshot(delivery, courier, Instant.now());
+    }
+
     public Courier readCourier(String providerDeliveryId) {
         requireApiReady();
         long orderId = parseOrderId(providerDeliveryId);
@@ -382,6 +393,7 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
     }
 
     private JsonNode post(String path, JsonNode body) {
+        CourierApiUsage.call(PROVIDER_ID);
         try {
             JsonNode response = restClient.post()
                 .uri(endpoint(path))
@@ -390,6 +402,9 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
                 .body(JsonNode.class);
             return requireBody(response);
         } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 429) {
+                CourierApiUsage.rateLimited(PROVIDER_ID);
+            }
             throw new BorzoApiException(ex.getStatusCode(),
                 "Borzo returned HTTP " + ex.getStatusCode().value(), ex.getResponseBodyAsString(), ex);
         } catch (ResourceAccessException ex) {
@@ -418,6 +433,7 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
     }
 
     private JsonNode get(URI uri) {
+        CourierApiUsage.call(PROVIDER_ID);
         try {
             JsonNode response = restClient.get()
                 .uri(uri)
@@ -425,6 +441,9 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
                 .body(JsonNode.class);
             return requireBody(response);
         } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 429) {
+                CourierApiUsage.rateLimited(PROVIDER_ID);
+            }
             throw new BorzoApiException(ex.getStatusCode(),
                 "Borzo returned HTTP " + ex.getStatusCode().value(), ex.getResponseBodyAsString(), ex);
         } catch (ResourceAccessException ex) {

@@ -34,6 +34,8 @@ var logAlerts = [
   { code: 'COURIER_CANCEL_UNCONFIRMED', severity: 1, text: 'An order was cancelled (or ops cancelled its delivery) and the courier still shows the booking live, or has picked up (reason= says why). Cancel it with the courier' }
   { code: 'COURIER_ENDED_DELIVERY', severity: 1, text: 'Status rank guard (enforce): a courier cancelled or failed a booking Craves did not cancel, for an order that is not cancelled. An ops delivery exception case is open; book another courier or cancel the order' }
   { code: 'COURIER_UNRESOLVED_BOOKING', severity: 1, text: 'Booking journal: a courier booking has been unresolved for over 10 minutes (answer lost and not found either way)' }
+  { code: 'COURIER_API_USAGE_HIGH', severity: 2, text: 'Courier API usage: a courier\'s calls today reached the alert share of its daily cap (provider=, calls=, cap=). Past the cap the courier refuses quotes and bookings' }
+  { code: 'COURIER_API_RATE_LIMITED', severity: 2, text: 'Courier API usage: a courier answered HTTP 429 (provider=, count=); it is refusing calls' }
   { code: 'COURIER_REJECTED_RATE', severity: 2, text: 'Booking journal: a courier refused over 20% of at least 3 bookings in 15 minutes' }
   { code: 'PROVIDER_CIRCUIT_OPEN', severity: 2, text: 'Handbook 104: a delivery provider failed 5 quotes in a row, so its quotes are skipped for 30 seconds (integration ProviderGuard)' }
   { code: 'PAYOUT_STALLED', severity: 1, text: '#7 Chef payout RESERVED for more than 10 minutes' }

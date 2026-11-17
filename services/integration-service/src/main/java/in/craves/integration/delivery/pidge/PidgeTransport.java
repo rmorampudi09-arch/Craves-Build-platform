@@ -3,6 +3,7 @@ package in.craves.integration.delivery.pidge;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.PidgeProperties;
+import in.craves.integration.delivery.provider.CourierApiUsage;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -55,8 +56,10 @@ public class PidgeTransport {
             .POST(HttpRequest.BodyPublishers.ofString(body == null ? "{}" : body.toString()));
         else request.GET();
         try {
+            CourierApiUsage.call("pidge");
             HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
             int status = response.statusCode();
+            if (status == 429) CourierApiUsage.rateLimited("pidge");
             if (status < 200 || status >= 300) {
                 String category = failureCategory(response.body());
                 log.warn("Pidge HTTP failure operation={} status={} category={}", operation(path, mutation), status, category);

@@ -8,7 +8,7 @@ import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService, type NotificationTap} from '../native/riderOnlineService';
 import {RIDER_APP_VERSION} from '../riderConfig';
 import {connection} from '../state/connection';
-import {riderKeys, TRIP_ENDED_EVENT} from '../state/riderQueries';
+import {riderKeys, TRIP_ASSIGNED_EVENT, TRIP_ENDED_EVENT} from '../state/riderQueries';
 import {tripQueue} from '../state/tripQueue';
 import {useStrings} from '../strings/StringsProvider';
 
@@ -111,8 +111,11 @@ export function RiderRuntime({
     riderOnlineService.pendingOffer().then(pending => pending && show(pending));
     // Ops ended the trip, or the order was cancelled (the TRIP_ENDED push): read it again now, not at the next upload.
     const tripEnded = DeviceEventEmitter.addListener(TRIP_ENDED_EVENT, refreshTrip);
+    // Ops gave this rider a trip (the TRIP_ASSIGNED push): the same.
+    const tripAssigned = DeviceEventEmitter.addListener(TRIP_ASSIGNED_EVENT, refreshTrip);
     const offs = [
       () => tripEnded.remove(),
+      () => tripAssigned.remove(),
       riderOnlineService.onOffer(show),
       riderOnlineService.onTripChanged(refreshTrip),
       riderOnlineService.onStatus(status => {

@@ -29,6 +29,8 @@
     <string name="rider_trip_ended_released">Craves ಆಪ್ಸ್ ಟೀಮ್ ಈ ಆರ್ಡರ್ ಅನ್ನು Borzo ಅಥವಾ Pidgeಗೆ ಕೊಟ್ಟಿದೆ. ಇಲ್ಲಿಯವರೆಗಿನ ಟ್ರಿಪ್‌ಗೆ ನಿಮಗೆ ಹಣ ಸಿಗುತ್ತದೆ.</string>
     <string name="rider_trip_ended_handed">Craves ಆಪ್ಸ್ ಟೀಮ್ ಈ ಆರ್ಡರ್ ಅನ್ನು ಬೇರೆ ರೈಡರ್‌ಗೆ ಕೊಟ್ಟಿದೆ. ಇಲ್ಲಿಯವರೆಗಿನ ಟ್ರಿಪ್‌ಗೆ ನಿಮಗೆ ಹಣ ಸಿಗುತ್ತದೆ.</string>
     <string name="rider_trip_ended_order_cancelled">ಕಸ್ಟಮರ್ ಆರ್ಡರ್ ರದ್ದಾಗಿದೆ. ಇಲ್ಲಿಯವರೆಗಿನ ಟ್ರಿಪ್‌ಗೆ ನಿಮಗೆ ಹಣ ಸಿಗುತ್ತದೆ.</string>
+    <string name="rider_trip_assigned_title">Craves ಆಪ್ಸ್ ಟೀಮ್ ನಿಮಗೆ ಒಂದು ಆರ್ಡರ್ ಕೊಟ್ಟಿದೆ</string>
+    <string name="rider_trip_assigned_body">ಟ್ರಿಪ್ ಶುರು ಮಾಡಲು Craves Riders ತೆರೆಯಿರಿ.</string>
     <!-- "Reached the kitchen?" (app 1.3.3, R-03): the heads-up while Google Maps is in front. -->
     <string name="rider_channel_reached">ಕಿಚನ್ ತಲುಪಿದಿರಾ?</string>
     <string name="rider_reached_title">%1$s ತಲುಪಿದಿರಾ?</string>

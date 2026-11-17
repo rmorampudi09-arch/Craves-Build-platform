@@ -10,7 +10,7 @@ import {riderDevice} from '../native/riderDevice';
 import {riderOnlineService} from '../native/riderOnlineService';
 import {RIDER_APP_VERSION} from '../riderConfig';
 import {connection} from '../state/connection';
-import {riderKeys, TRIP_ENDED_EVENT} from '../state/riderQueries';
+import {riderKeys, TRIP_ASSIGNED_EVENT, TRIP_ENDED_EVENT} from '../state/riderQueries';
 import {tripQueue} from '../state/tripQueue';
 import {RiderRuntime} from './RiderRuntime';
 
@@ -229,13 +229,16 @@ describe('RiderRuntime queue', () => {
   });
 });
 
-describe('RiderRuntime trip ended (TRIP_ENDED push)', () => {
+describe.each([
+  ['trip ended (TRIP_ENDED push)', TRIP_ENDED_EVENT],
+  ['trip given by ops (TRIP_ASSIGNED push)', TRIP_ASSIGNED_EVENT],
+])('RiderRuntime %s', (_name, event) => {
   it('reads the trip and Home again at once', async () => {
     const invalidate = jest.spyOn(QueryClient.prototype, 'invalidateQueries');
     const tree = await mount();
     invalidate.mockClear();
     act(() => {
-      DeviceEventEmitter.emit(TRIP_ENDED_EVENT, {tripId: 't1'});
+      DeviceEventEmitter.emit(event, {tripId: 't1'});
     });
     expect(invalidate).toHaveBeenCalledWith({queryKey: riderKeys.activeTrip});
     expect(invalidate).toHaveBeenCalledWith({queryKey: riderKeys.home});

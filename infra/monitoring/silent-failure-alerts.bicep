@@ -17,6 +17,15 @@ param alertEmail string
 
 param namePrefix string = 'craves-prodlow'
 
+@description('Phone numbers to page: national numbers without the country code (India: 10 digits). Empty pages nobody and creates no paging group.')
+param pagePhoneNumbers array = []
+
+@description('Country calling code of pagePhoneNumbers, without the plus sign.')
+param pagePhoneCountryCode string = '91'
+
+@description('Also ring each number with a voice call. False sends an SMS only.')
+param pageVoiceCall bool = false
+
 // code -> [audit #, severity (0 critical .. 4 verbose), description]
 var logAlerts = [
   { code: 'STUCK_ORDER', severity: 1, text: '#13 Non-terminal order with no transition for 90 minutes (order-service sweeper)' }
@@ -48,6 +57,23 @@ var logAlerts = [
   { code: 'INTERNAL_CALL_CONFIG_INVALID', severity: 2, text: 'CH-03 Internal call keys are misconfigured; calls fall back to unsigned' }
 ]
 
+// The alerts that page a phone as well as the email (fix program 1-14). The Service Bus dead-letter alert below pages too.
+var pagedCodes = [
+  'DELIVERY_COMMAND_STALLED'
+  'OUTBOX_DEAD_LETTERED'
+  'COURIER_UNRESOLVED_BOOKING'
+  'COURIER_ENDED_DELIVERY'
+  'COURIER_REJECTED_RATE'
+]
+
+var paging = deployAlerts && !empty(pagePhoneNumbers)
+
+var pagePhones = [for (number, i) in pagePhoneNumbers: {
+  name: 'page-${i + 1}'
+  countryCode: pagePhoneCountryCode
+  phoneNumber: number
+}]
+
 resource actionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = if (deployAlerts) {
   name: '${namePrefix}-oncall'
   location: 'global'
@@ -61,6 +87,17 @@ resource actionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = if (deployAl
         useCommonAlertSchema: true
       }
     ]
+  }
+}
+
+resource pageGroup 'Microsoft.Insights/actionGroups@2023-01-01' = if (paging) {
+  name: '${namePrefix}-page'
+  location: 'global'
+  properties: {
+    groupShortName: 'cravespage'
+    enabled: true
+    smsReceivers: pagePhones
+    voiceReceivers: pageVoiceCall ? pagePhones : []
   }
 }
 
@@ -102,7 +139,10 @@ resource logRules 'Microsoft.Insights/scheduledQueryRules@2022-06-15' = [for ale
     }
     autoMitigate: true
     actions: {
-      actionGroups: [
+      actionGroups: paging && contains(pagedCodes, alert.code) ? [
+        actionGroup.id
+        pageGroup.id
+      ] : [
         actionGroup.id
       ]
     }
@@ -146,7 +186,14 @@ resource deadLetterAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = if (depl
       ]
     }
     autoMitigate: true
-    actions: [
+    actions: paging ? [
+      {
+        actionGroupId: actionGroup.id
+      }
+      {
+        actionGroupId: pageGroup.id
+      }
+    ] : [
       {
         actionGroupId: actionGroup.id
       }

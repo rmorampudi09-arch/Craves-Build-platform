@@ -65,6 +65,89 @@ The delivery-quote circuit breaker (integration `ProviderGuard`, handbook 104, o
 5xx or 429, or quoted slower than the deadline 5 times in a row, so its quotes are skipped for 30 seconds, then one probe
 is let through. It is logged once when the circuit opens; a failed probe keeps it open without another alert line.
 
+## Phone paging (fix program 1-14)
+
+Every rule emails `alertEmail`. With `pagePhoneNumbers` set, a second action group, `<namePrefix>-page`, also sends an
+SMS to each number (and a voice call with `pageVoiceCall=true`) for the alerts below. With `pagePhoneNumbers` empty (the
+default) the paging group is not created and every rule keeps the email group only, exactly as before. Merging a change
+to this folder deploys nothing: no pipeline or workflow reads it, and the rules exist only after the command below.
+
+| The fix program asks for a page on | Rule that pages | Logged by |
+|---|---|---|
+| Double assignment | None yet: `FLEET_DOUBLE_HOLD` arrives with PR #695. Then add it to `pagedCodes` | — |
+| The NO_SUPPLY rate | None yet: nothing logs a `CRAVES_ALERT` for it. `FleetDispatcher` logs `FLEET_STAGE_CLOSED … outcome=NO_SUPPLY` per order, and no rate or threshold is defined | — |
+| Stuck commands | `DELIVERY_COMMAND_STALLED` | `IntegrationAlertMonitor`, `DeliveryCreateReconciliationWorker` |
+| Dead letters | `OUTBOX_DEAD_LETTERED` and the Service Bus `DeadletteredMessages` metric alert | every outbox worker; Azure metric |
+| ORPHAN_SUSPECT over 10 min | `COURIER_UNRESOLVED_BOOKING` | `IntegrationAlertMonitor`, `DeliveryCreateReconciliationWorker` |
+| TERMINAL_CONFLICT | None yet: no delivery code logs it (the status rank guard records `STALE_RANK` only) | — |
+| Courier-side cancels | `COURIER_ENDED_DELIVERY` | `DeliveryStatusUpdateService` |
+| A courier's REJECTED rate over 20% in 15 min | `COURIER_REJECTED_RATE` | `IntegrationAlertMonitor` |
+
+To page on another code, add it to `pagedCodes` in the template. Severities are unchanged.
+
+**How often a phone rings.** Rules are evaluated every 5 minutes over the last 15 (`evaluationFrequency` `PT5M`,
+`windowSize` `PT15M`) with `autoMitigate: true`, so a rule pages once per container app when it fires, stays quiet while the problem
+lasts, and sends one more message when it resolves. The monitor codes are logged again every 5 minutes while their
+problem lasts, so they stay fired until it is fixed. A code logged once per event (`COURIER_ENDED_DELIVERY`,
+`OUTBOX_DEAD_LETTERED`) resolves after its line leaves the window, and a second event from the same app before then
+does not page again: read the email or the logs for the count. `muteActionsDuration` is not set, since it applies to
+rules that do not auto-resolve. Azure also limits how often one number is messaged or called
+([Azure Monitor service limits](https://learn.microsoft.com/azure/azure-monitor/service-limits)).
+
+**Owner decisions before switching it on.** Nothing here is deployed until the owner runs the command.
+
+- Cost: Azure bills alert rules, and each SMS and voice call, per the
+  [Azure Monitor price list](https://azure.microsoft.com/pricing/details/monitor/) for the country code. Check the
+  India rates first.
+- India: Azure lists country code 91 for both SMS and voice; voice calls to India come from a USA number. Azure sends
+  the SMS from its own sender, not Craves's DLT-registered MSG91 sender, so delivery depends on the carrier and on the
+  phone's do-not-disturb setting. Test it on the real phone (below) before relying on it; if SMS does not arrive, use
+  `pageVoiceCall=true`.
+- Who is paged, and whether by SMS only or SMS and voice call. Numbers stay out of this repo: keep the parameters file
+  outside it.
+
+**Deploy.** Put the numbers in a file outside the repo, for example `~/craves-paging.parameters.json`:
+
+```json
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "pagePhoneNumbers": { "value": ["<10-digit number>", "<10-digit number>"] },
+    "pageVoiceCall": { "value": false }
+  }
+}
+```
+
+```bash
+az deployment group create -g <monitoring resource group in subscription 34eefd95> \
+  -f infra/monitoring/silent-failure-alerts.bicep \
+  -p @"$HOME/craves-paging.parameters.json" \
+  -p deployAlerts=true \
+     logAnalyticsWorkspaceId=<workspace resource id> \
+     serviceBusNamespaceId=<service bus namespace resource id> \
+     alertEmail=<on-call email>
+```
+
+Run it with `what-if` in place of `create` first: it should list only the action groups and alert rules. Each number
+gets an SMS saying it was added to the group.
+
+**Test a page without an incident.** In the Azure portal: Monitor → Alerts → Action groups → `<namePrefix>-page` →
+Test, pick a sample type and the SMS (and Voice) notification. The phone gets a message marked as a test; no rule
+fires. To test a whole rule, an operator writes one line in the alert format with a marker, for example
+`CRAVES_ALERT alert=COURIER_REJECTED_RATE drill=true`, to a container app's console log (from `az containerapp exec`,
+`echo` the line to `/proc/1/fd/1`; not yet tried in production). The rule pages within about 5 minutes and resolves by
+itself. The line changes no data.
+
+**Exit test (fix program 1-14): "Each alert fires once in a drill."** For each paging rule in the table, and the
+Service Bus dead-letter alert, cause or write its line once, and record that the phone was paged once and the alert
+resolved. The three rows marked "None yet" cannot pass until their alert exists.
+
+**Roll back.** Run the same command without the parameters file (or with `pagePhoneNumbers=[]`): every rule goes back to
+the email group only. The deployment is incremental, so then delete the unused group:
+`az monitor action-group delete -g <resource group> -n <namePrefix>-page`. A person can also stop SMS to their own phone
+at once by replying `STOP` to one.
+
 ## Tuning
 
 - `CRAVES_MONITORING_ENABLED=false` turns off the order and integration monitors.

@@ -29,6 +29,14 @@ public interface DeliveryProviderAdapter {
     TrackingSnapshot track(String providerDeliveryId);
 
     /**
+     * Webhook-first tracking's poll. hasNews: whether a reading differs from what the job holds; a courier may skip calls
+     * whose answer only a changed job uses.
+     */
+    default TrackingSnapshot track(String providerDeliveryId, java.util.function.Predicate<ProviderDelivery> hasNews) {
+        return track(providerDeliveryId);
+    }
+
+    /**
      * Attempts to locate a delivery that may already have been created by the provider after Craves
      * lost the create response. Implementations must never create a new provider delivery from this
      * method.

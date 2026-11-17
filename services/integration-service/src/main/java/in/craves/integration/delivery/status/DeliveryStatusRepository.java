@@ -425,6 +425,30 @@ public class DeliveryStatusRepository {
         );
     }
 
+    /**
+     * Webhook-first tracking only: a callback for the job was heard at now, so its next poll is quietSeconds from now,
+     * but never later than safetySeconds after its last poll (after its creation, when never polled). A job that is
+     * final, dead-lettered, being polled or waiting to retry a failed poll keeps its schedule.
+     */
+    public int deferTrackingAfterCallback(UUID deliveryJobId, Instant now, long quietSeconds, long safetySeconds) {
+        return jdbc.update("""
+            UPDATE delivery_schema.delivery_job
+            SET last_webhook_at = ?,
+                next_tracking_at = CASE
+                    WHEN next_tracking_at IS NOT NULL AND tracking_attempt_count = 0
+                    THEN LEAST(?::timestamptz + make_interval(secs => ?),
+                               COALESCE(last_polled_at, created_at) + make_interval(secs => ?))
+                    ELSE next_tracking_at
+                END
+            WHERE id = ?
+            """, databaseTimestamp(now), databaseTimestamp(now), (double) quietSeconds, (double) safetySeconds, deliveryJobId);
+    }
+
+    /** Webhook-first tracking only: the courier answered a poll for the job at now. */
+    public void markTrackingPolled(UUID deliveryJobId, Instant now) {
+        jdbc.update("UPDATE delivery_schema.delivery_job SET last_polled_at = ? WHERE id = ?", databaseTimestamp(now), deliveryJobId);
+    }
+
     public void markTrackingFailed(UUID deliveryJobId,
                                    int attemptCount,
                                    int maxAttempts,

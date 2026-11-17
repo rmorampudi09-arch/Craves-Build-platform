@@ -266,7 +266,7 @@ function ChefProfilePage() {
             photoUrl={profile.chefPhotoUrl}
             name={name}
             size={92}
-            className="-mt-[46px] flex bg-[#FFF5E9] font-extrabold text-[#D92714] shadow-[0_6px_14px_rgba(38,26,21,0.08)]"
+            className="-mt-[46px] flex bg-white font-extrabold text-[#D92714] shadow-[0_6px_14px_rgba(38,26,21,0.08)]"
           />
           <h1 ref={titleRef} className="mt-2 font-display text-3xl font-black tracking-[-0.045em] text-[#1A1A1A] md:text-4xl">
             {name}

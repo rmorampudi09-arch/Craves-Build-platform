@@ -57,6 +57,17 @@ describe('customerNotificationsModel', () => {
     expect(filterCustomerNotifications(notices, 'OFFERS')).toEqual([offer]);
   });
 
+  it('counts Order created and Payment successful, which point at the checkout, as orders that open nothing', () => {
+    const created = notice({noticeType: 'ORDER_CREATED', targetType: 'CHECKOUT'});
+    const paid = notice({
+      id: '33333333-3333-4333-8333-333333333333',
+      noticeType: 'PAYMENT_SUCCEEDED',
+      targetType: 'CHECKOUT',
+    });
+    expect(buildCustomerNotificationCategoryCounts([created, paid])).toMatchObject({ORDERS: 2, OTHER: 0});
+    expect(resolveCustomerNotificationDestination(paid)).toBeNull();
+  });
+
   it('groups by Today and Earlier without changing notification identity', () => {
     const today = notice({createdAt: '2026-08-09T08:00:00.000Z'});
     const earlier = notice({

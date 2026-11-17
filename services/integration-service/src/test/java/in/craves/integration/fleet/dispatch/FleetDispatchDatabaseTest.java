@@ -722,6 +722,153 @@ class FleetDispatchDatabaseTest {
     }
 
     /**
+     * The no-supply fast path (CRAVES_FLEET_NO_SUPPLY_FAST_PATH_ENABLED): off, an order with no rider in range waits out its
+     * stage; on, it goes to Borzo once the stage is the settle time old. A rider out of range, one whose phone stopped
+     * calling 3 minutes ago and one test mode leaves out are not in range.
+     */
+    @Test
+    void withTheNoSupplyFastPathOnAnOrderWithNoRiderInRangeGoesToBorzoAfterTheSettleTime() {
+        ridersFirst();
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.06, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.seen(fleet.db, FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false), 200);
+        fleet.db.update("DELETE FROM fleet_schema.test_mode_rider WHERE rider_id = ?",
+            FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false));
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        stageOpenedAgo(10);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).as("off: it waits for a rider, as before")
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
+                waiting -> assertThat(waiting.policyDeadline()).as("the usual 5 s check").isAfter(Instant.now().plusSeconds(4)));
+        assertThat(stages()).containsExactly("CRAVES_FLEET:OPEN:");
+
+        dispatcher.setNoSupplyFastPath(true, 3);
+        assertThat(dispatcher.run(command, OptionalLong::empty, true)).as("on: the courier is next now").isEmpty();
+        assertThat(stages()).containsExactly("CRAVES_FLEET:CLOSED:NO_SUPPLY", "BORZO:OPEN:");
+        assertThat(fleet.db.queryForObject("SELECT provider FROM fleet_schema.trip", String.class)).isEqualTo("BORZO");
+        assertThat(count("fleet_schema.trip_offer")).isZero();
+        verifyNoInteractions(push);
+    }
+
+    /** The settle time: the order looks again as it ends, closes no sooner, and a rider who came online meanwhile is asked. */
+    @Test
+    void withTheNoSupplyFastPathOnARiderWhoComesOnlineInTheSettleTimeIsAsked() {
+        ridersFirst();
+        dispatcher.setNoSupplyFastPath(true, 3);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true))
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
+                waiting -> assertThat(waiting.policyDeadline()).as("looks again as the settle time ends").isEqualTo(fleet.db.queryForObject(
+                    "SELECT opened_at + INTERVAL '3 seconds' FROM fleet_schema.trip_stage", java.sql.Timestamp.class).toInstant()));
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).as("inside the settle time it waits")
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(stages()).containsExactly("CRAVES_FLEET:OPEN:");
+
+        UUID late = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        stageOpenedAgo(3);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(late);
+        assertThat(stages()).containsExactly("CRAVES_FLEET:OPEN:");
+    }
+
+    /**
+     * The fast path never shortens the stage while a rider is in range, though nobody can be asked this moment: on a
+     * break, on a trip, last heard from a minute ago with a mock fix, or deciding on another order.
+     */
+    @Test
+    void withTheNoSupplyFastPathOnAnOrderKeepsItsWholeStageWhileAnyRiderIsInRange() {
+        ridersFirst();
+        dispatcher.setNoSupplyFastPath(true, 3);
+        UUID rider = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.onBreak(fleet.db, rider, 5, 20);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        stageOpenedAgo(10);
+        stillWaitsForARider("on a break");
+
+        UUID busyTrip = fleet.trip(UUID.randomUUID());
+        fleet.db.update("UPDATE fleet_schema.trip SET rider_id = ?, state = 'ASSIGNED' WHERE id = ?", rider, busyTrip);
+        fleet.db.update("DELETE FROM fleet_schema.rider_break WHERE rider_id = ?", rider);
+        stillWaitsForARider("on a trip");
+
+        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT + 0.001, KITCHEN_LNG, 60, true);
+        FleetDispatchFixtures.seen(fleet.db, rider, 60);
+        fleet.db.update("UPDATE fleet_schema.trip SET state = 'DELIVERED', finished_at = now() WHERE id = ?", busyTrip);
+        stillWaitsForARider("heard from a minute ago, with a mock fix");
+
+        UUID otherOrder = UUID.fromString("0bde0202-2222-4222-8222-222222222222");
+        FleetDispatchFixtures.kitchen(fleet.db, otherOrder, true);
+        FleetDispatchFixtures.fix(fleet.db, rider, KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.seen(fleet.db, rider, 5);
+        assertThatThrownBy(() -> dispatcher.run(FleetDispatchFixtures.command(otherOrder), OptionalLong::empty, true))
+            .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(ordersOffered()).containsExactly(otherOrder);
+        stillWaitsForARider("deciding on another order");
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
+            + "WHERE t.chef_sub_order_id = ?", Integer.class, chefSubOrderId)).isZero();
+    }
+
+    /**
+     * A rider who has just gone on shift, whose phone has not called yet (no heartbeat, no position), is in range: the
+     * order keeps its stage. A shift that never called counts from its start, so after 3 minutes it no longer does.
+     */
+    @Test
+    void withTheNoSupplyFastPathOnARiderJustOnShiftWhosePhoneHasNotCalledYetKeepsTheStage() {
+        ridersFirst();
+        dispatcher.setNoSupplyFastPath(true, 3);
+        UUID rider = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        fleet.db.update("DELETE FROM fleet_schema.rider_position_latest WHERE rider_id = ?", rider);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET last_seen_at = NULL, started_at = now() - INTERVAL '5 seconds' WHERE rider_id = ?", rider);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        stageOpenedAgo(10);
+        stillWaitsForARider("on shift 5 s ago, no call yet");
+        assertThat(count("fleet_schema.trip_offer")).isZero();
+
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET started_at = now() - INTERVAL '200 seconds' WHERE rider_id = ?", rider);
+        assertThat(dispatcher.run(command, OptionalLong::empty, true)).as("never called in over 3 minutes: not in range").isEmpty();
+        assertThat(stages()).containsExactly("CRAVES_FLEET:CLOSED:NO_SUPPLY", "BORZO:OPEN:");
+    }
+
+    /** "All declined" is not no supply: an order a rider was asked about keeps its whole stage, whoever is in range later. */
+    @Test
+    void withTheNoSupplyFastPathOnAnOrderARiderWasAskedAboutKeepsItsWholeStage() {
+        ridersFirst();
+        dispatcher.setNoSupplyFastPath(true, 3);
+        UUID only = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE rider_id = ?", only);
+        fleet.db.update("UPDATE fleet_schema.rider_shift SET ended_at = now(), credential_revoked_at = now() WHERE rider_id = ?", only);
+        secondsPass(26, null);
+        stageOpenedAgo(30);
+        stillWaitsForARider("they declined and went offline");
+        assertThat(count("fleet_schema.trip_offer")).isOne();
+
+        fleet.db.update("UPDATE fleet_schema.trip_stage SET opened_at = now() - INTERVAL '301 seconds', deadline_at = now() - INTERVAL '1 second'");
+        assertThat(dispatcher.run(command, OptionalLong::empty, true)).isEmpty();
+        assertThat(stages()).as("only the deadline sends it on").containsExactly("CRAVES_FLEET:CLOSED:NO_ACCEPT", "BORZO:OPEN:");
+    }
+
+    /** A policy with a limit on rounds already sends an order with nobody to ask on at once: the fast path changes nothing there. */
+    @Test
+    void withTheNoSupplyFastPathOnAPolicyWithRoundsEndsAsBefore() {
+        oneAtATime();
+        dispatcher.setNoSupplyFastPath(true, 3);
+        assertThat(dispatcher.run(command, () -> OptionalLong.of(9000), true)).isEmpty();
+        assertThat(stages()).containsExactly("CRAVES_FLEET:CLOSED:NO_RIDERS", "BORZO:OPEN:");
+    }
+
+    /** The order's fleet stage opened this many seconds earlier. */
+    private void stageOpenedAgo(int seconds) {
+        fleet.db.update("UPDATE fleet_schema.trip_stage SET opened_at = opened_at - make_interval(secs => ?) WHERE provider = 'CRAVES_FLEET'",
+            seconds);
+    }
+
+    /** One more look at the order: its fleet stage stays open, and the next look is the usual 5 s away. */
+    private void stillWaitsForARider(String why) {
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).as(why)
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
+                waiting -> assertThat(waiting.policyDeadline()).isAfter(Instant.now().plusSeconds(4)));
+        assertThat(fleet.db.queryForList("SELECT s.state FROM fleet_schema.trip_stage s JOIN fleet_schema.trip t ON t.id = s.trip_id "
+            + "WHERE t.chef_sub_order_id = ?", String.class, chefSubOrderId)).as(why).containsExactly("OPEN");
+    }
+
+    /**
      * More orders than riders: a rider whose offer ran out is asked about the same order again only one look (5 s) later,
      * so another order waiting for riders asks them first, and the orders take turns instead of one keeping the rider.
      */

@@ -106,10 +106,36 @@ With rounds set to 0, the order stays with Craves riders for the whole time they
 
 - **Riders are asked in turn, and then again.** Once every rider in range has been asked, the same riders are asked again. Among the riders who may be asked, those asked the fewest times about this order hear first, so they take turns. A decline and an offer that ran out count the same, and neither changes anything for another order (§1).
 - **Orders take turns with a rider, too.** A rider is asked about the same order again only 5 s (one check) after their time to accept has passed since that offer went out, whether they declined or let it run out. In those 5 s another order waiting for riders asks them. Without the gap, the order whose offer just ran out would ask the same rider again before any other order looked, and with more orders than riders the rest would never be offered to anyone. So with one order and one rider nearby, the rider hears of it every 25 s: 20 s to decide, then 5 s of quiet.
-- **With nobody to ask, the order waits for a rider.** One who comes online, or becomes free, hears of it at the next check (every 5 s).
+- **With nobody to ask, the order waits for a rider.** One who comes online, or becomes free, hears of it at the next check (every 5 s). The one exception is built and switched off: "No rider in range" below.
 - **Only the end of that time sends the order on** to Borzo, then Pidge, then the ops queue. An offer still goes out only with its full time left, so in the last seconds nobody is asked.
 - **No cost guard.** No courier is asked for a quote, and every rider in range may hear of the order.
 - **Unchanged:** declining is free (§1); the emergency stop sends an order waiting for riders on to Borzo at its next check (with the policy cache on, `CRAVES_FLEET_DISPATCH_POLICY_CACHE_SECONDS`, up to 5 s after that); and an order riders can't take at all still goes to Borzo at once (no coordinates, an unknown chef, no rate card in force, severe rain).
+
+### No rider in range
+
+Built, switched off (`CRAVES_FLEET_NO_SUPPLY_FAST_PATH_ENABLED`, default false; research R22 item 7). While it is off, nothing here happens: every order waits its whole 300 s.
+
+**Why.** With no rider in range the order still waits the 5 minutes, so Borzo's search starts 5 minutes late and the food waits, though nobody was ever going to be asked.
+
+**What it does.** With no limit on rounds, an order goes on to Borzo (then Pidge, then the ops queue) before its 300 s are up only when all of these hold at one look, read from Postgres under the lock on the order's stage row (never from the fleet engine or a cache):
+
+- The stage is open, before its deadline, and at least the settle time old (`CRAVES_FLEET_NO_SUPPLY_SETTLE_SECONDS`, default 3; 0 = none). The opening look came before, and found nobody to ask.
+- **Nobody was ever asked about this order.** An order with even one offer, whatever its rider did, keeps its whole 300 s: "all declined" is never no supply.
+- **No rider is in range.** A rider is in range if they are ACTIVE, on an open shift, their phone called in the last 3 minutes (a shift whose phone has not called yet counts from its start), and their last known position is within the policy radius of the kitchen (5 km), or they have no position yet. In test mode, only pilot riders count, as for offers.
+
+"In range" is wider than "can hear of an order" (above) on purpose. A rider on a break, on a trip, deciding on another order, last heard from over 45 s ago, with an old or mock fix, with a phone that can't ring, heading home, or with their own distance limits still counts, because they could be free a moment later. While one such rider is in range, the order keeps its 300 s and is offered exactly as before.
+
+**What stays the same.** Who is asked, in what order, and for how long. The look first offers the order to any rider who can hear of it, and only then checks whether anyone is in range. A rider who comes online during the settle time is asked. No offer history, acceptance rate or score is read; the check counts riders, it never ranks them.
+
+**What changes for riders.** Closing is one-way. A rider who comes online, or rides into range, after the stage closed does not hear of that order; without the fast path they would have, for up to 5 minutes. A rider outside the radius whose trip will end inside it, and one whose phone has been silent for over 3 minutes, are not in range.
+
+**How to see it.** The stage's outcome is `NO_SUPPLY` (`fleet_stage_outcomes` in `PILOT-HEALTH.md` counts it per day) and the log line is `FLEET_STAGE_CLOSED trip=… outcome=NO_SUPPLY next=BORZO`. If the check itself fails, the order waits as before and logs `FLEET_NO_SUPPLY_CHECK_FAILED`.
+
+**Is it a rule under the notice gate?** It is a service switch, not a `dispatch_policy` column, so the table's trigger (§7) does not see it. It changes none of the offer rules the trigger guards: no rider who could be asked loses an offer or any of their time. But riders are told "Borzo only after 5 minutes with riders", and with this on, an order nobody is in range for goes sooner. So:
+- **While no real riders are live** (the owner's decision), it may be switched on without notice.
+- **Once riders are live,** switch it on only after the owner has decided the wording and the notice, which is still open, with the rider app's "How you get orders" text changed to match. Until the owner or the lawyer says otherwise, treat it as a change to how orders are offered: 14 days' notice (Telangana s.13(2) [1]).
+
+**Switching it off:** set it to false. Orders already sent on stay with the courier; every other order waits its whole 300 s again.
 
 ### Rain mode
 
@@ -272,7 +298,7 @@ This is the figure fair turns compare. It is also what the Telangana union and F
 | Riders who see an order at once | 1 | **No race:** each rider decides alone, at their own pace. Three riders racing to tap is speed pressure, and the nearest usually wins [18]. DoorDash, Wolt, Gojek and Uber's normal requests go to one rider at a time [19][21][22][34]. |
 | Time a rider has to accept | 20 s | **The owner's rule.** With one rider at a time, a short window moves the order on to the next rider sooner. Wolt gives 30–60 s and DoorDash 50 s [20][21]; V187 widened the declared range to 20–60 s. |
 | Rounds of offers | No limit (0) | **The owner's rule.** The order stays with Craves riders, the same or other riders again, until their time is up (§2, "No limit on rounds"). |
-| Time Craves riders get before Borzo | 300 s | **The owner's rule: Craves riders get every order for 5 minutes,** and only then Borzo, then Pidge, then the ops queue. With no rider online the order still waits the 5 minutes, so Borzo's search then starts 5 minutes after dispatch (3 minutes later than under the 120 s it replaces). No cost guard: riders hear of every order, whatever a courier would charge. |
+| Time Craves riders get before Borzo | 300 s | **The owner's rule: Craves riders get every order for 5 minutes,** and only then Borzo, then Pidge, then the ops queue. With no rider online the order still waits the 5 minutes, so Borzo's search then starts 5 minutes after dispatch (3 minutes later than under the 120 s it replaces); the switch that ends that wait is built and off (§2, "No rider in range"). No cost guard: riders hear of every order, whatever a courier would charge. |
 | Fair band | 1.5 km | **About 5 minutes' extra ride at most,** paid beyond the free kilometre. The research publishes no band size, so start here and tune with data. |
 
 **In force since 11 Nov 2026, without the 14 days' notice.** Until then the values were those decided on 1 Nov 2026: 30 s to accept, up to 3 rounds, 120 s before Borzo, with the cost guard. The owner decided to start the new rule at once. V187 published the policy in force again with it, in the mode it had (the notice trigger was off for that one migration only), and the built-in values are the same, so the console's mode switch is not a change of rules. Every later change needs its notice again (§11, question 5).

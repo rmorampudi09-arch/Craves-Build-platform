@@ -8,10 +8,10 @@ export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store" };
 const failure = (status: number, code: string) => NextResponse.json({ code }, { status, headers });
 
-/** Home's promo banners: published only, in the admin's order, each with our own image route. */
+/** Home's promo banners: the website's published ones only (the app has its own), in the admin's order, each with our own image route. */
 export async function GET() {
   try {
-    const upstream = await publicApiFetch("/catalog/banners");
+    const upstream = await publicApiFetch("/catalog/banners?platform=WEB");
     const body: unknown = await upstream.json().catch(() => null);
     if (!upstream.ok) {
       const mapped = upstreamFailure(upstream.status, body, "BANNERS_UNAVAILABLE");

@@ -47,7 +47,8 @@ describe("home banners BFF", () => {
         { id: A, label: "Banner 2", src: `/api/catalog/banners/${A}/image` },
       ],
     });
-    expect(upstream).toHaveBeenCalledWith("/catalog/banners");
+    // The website asks for its own banners; the app's never show here.
+    expect(upstream).toHaveBeenCalledWith("/catalog/banners?platform=WEB");
   });
 
   it.each([

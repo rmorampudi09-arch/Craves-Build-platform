@@ -25,16 +25,36 @@ class HomeBannerTest {
     @Test void acceptsOnlyRealSupportedImages() throws Exception {
         var output = new ByteArrayOutputStream(); ImageIO.write(new BufferedImage(100, 50, BufferedImage.TYPE_INT_RGB), "png", output);
         byte[] image = output.toByteArray();
-        assertArrayEquals(image, BannerImageValidator.validate(new MockMultipartFile("file", "banner.png", "image/png", image)));
-        assertThrows(ApiException.class, () -> BannerImageValidator.validate(new MockMultipartFile("file", "banner.jpg", "image/jpeg", image)));
-        assertThrows(ApiException.class, () -> BannerImageValidator.validate(new MockMultipartFile("file", "banner.png", "image/png", "not an image".getBytes())));
-        assertThrows(ApiException.class, () -> BannerImageValidator.validate(new MockMultipartFile("file", "banner.svg", "image/svg+xml", "<svg/>".getBytes())));
-        assertThrows(ApiException.class, () -> BannerImageValidator.validate(new MockMultipartFile("file", "banner.png", "image/png", new byte[BannerImageValidator.MAX_BYTES + 1])));
-        assertThrows(ApiException.class, () -> BannerImageValidator.validate(null));
+        assertArrayEquals(image, BannerImageValidator.validate(new MockMultipartFile("file", "banner.png", "image/png", image), "WEB"));
+        assertThrows(ApiException.class, () -> BannerImageValidator.validate(new MockMultipartFile("file", "banner.jpg", "image/jpeg", image), "WEB"));
+        assertThrows(ApiException.class, () -> BannerImageValidator.validate(new MockMultipartFile("file", "banner.png", "image/png", "not an image".getBytes()), "WEB"));
+        assertThrows(ApiException.class, () -> BannerImageValidator.validate(new MockMultipartFile("file", "banner.svg", "image/svg+xml", "<svg/>".getBytes()), "WEB"));
+        assertThrows(ApiException.class, () -> BannerImageValidator.validate(new MockMultipartFile("file", "banner.png", "image/png", new byte[BannerImageValidator.MAX_BYTES + 1]), "WEB"));
+        assertThrows(ApiException.class, () -> BannerImageValidator.validate(null, "WEB"));
     }
     @Test void rejectsDecompressionBombDimensions() throws Exception {
         var output = new ByteArrayOutputStream(); ImageIO.write(new BufferedImage(4097, 1, BufferedImage.TYPE_INT_RGB), "png", output);
-        assertThrows(ApiException.class, () -> BannerImageValidator.validate(new MockMultipartFile("file", "banner.png", "image/png", output.toByteArray())));
+        assertThrows(ApiException.class, () -> BannerImageValidator.validate(new MockMultipartFile("file", "banner.png", "image/png", output.toByteArray()), "WEB"));
+    }
+    static MockMultipartFile png(int width, int height) throws Exception {
+        var output = new ByteArrayOutputStream(); ImageIO.write(new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", output);
+        return new MockMultipartFile("file", "banner.png", "image/png", output.toByteArray());
+    }
+    @Test void eachPlatformTakesTwoToOnePicturesOnly() throws Exception {
+        for (String platform : List.of("WEB", "APP")) {
+            assertDoesNotThrow(() -> BannerImageValidator.validate(png(1500, 750), platform));
+            assertDoesNotThrow(() -> BannerImageValidator.validate(png(1080, 520), platform)); // within a tenth of 2:1
+            for (int[] size : new int[][]{{800, 800}, {1600, 600}, {750, 1500}}) {
+                var error = assertThrows(ApiException.class, () -> BannerImageValidator.validate(png(size[0], size[1]), platform));
+                assertEquals("BANNER_IMAGE_SHAPE", error.getCode());
+            }
+        }
+    }
+    @Test void aCallerThatNamesNoPlatformGetsTheWebsitesBanners() {
+        assertEquals("WEB", HomeBannerService.platform(null));
+        assertEquals("WEB", HomeBannerService.platform(" "));
+        assertEquals("APP", HomeBannerService.platform(" app "));
+        assertEquals("BANNER_PLATFORM_INVALID", assertThrows(ApiException.class, () -> HomeBannerService.platform("TV")).getCode());
     }
     @Test void restrictsWritesAndReadsWithoutTouchingCustomerRoles() {
         var id = UUID.randomUUID();
@@ -46,7 +66,7 @@ class HomeBannerTest {
         assertDoesNotThrow(() -> HomeBannerService.requireAdmin(new CravesPrincipal(id, null, Set.of("AUDIT_ADMIN")), false));
         var jdbc = mock(JdbcTemplate.class); var service = new HomeBannerService(jdbc);
         assertThrows(ResponseStatusException.class, () -> service.adminList(null));
-        assertThrows(ResponseStatusException.class, () -> service.create(null, "Banner", 0, null));
+        assertThrows(ResponseStatusException.class, () -> service.create(null, "Banner", 0, "APP", null));
         verifyNoInteractions(jdbc);
     }
     @Test void validatesLabelPositionAndUpdateVersion() {
@@ -59,10 +79,21 @@ class HomeBannerTest {
         verifyNoInteractions(jdbc);
     }
     @Test void emptyPublicFeedDoesNotInventContent() throws Exception {
-        var service = mock(HomeBannerService.class); when(service.published()).thenReturn(List.of());
+        var service = mock(HomeBannerService.class); when(service.published(null)).thenReturn(List.of());
         // azure-storage-blob puts an XML converter on the classpath; standalone MockMvc would pick it without an Accept header.
         MockMvcBuilders.standaloneSetup(new PublicHomeBannerController(service)).build().perform(get("/api/v1/catalog/banners").accept(MediaType.APPLICATION_JSON))
             .andExpect(status().isOk()).andExpect(jsonPath("$.banners").isEmpty()).andExpect(header().string("Cache-Control", "no-store"));
+    }
+    @Test void publicFeedPassesTheAskedPlatformOn() throws Exception {
+        var service = mock(HomeBannerService.class); var id = UUID.randomUUID();
+        when(service.published("APP")).thenReturn(List.of(new HomeBannerService.Banner(id, "App promo", "/api/v1/catalog/banners/" + id + "/image", "APP", true, 0, Instant.EPOCH, Instant.EPOCH)));
+        when(service.published(null)).thenReturn(List.of());
+        var mvc = MockMvcBuilders.standaloneSetup(new PublicHomeBannerController(service)).build();
+        mvc.perform(get("/api/v1/catalog/banners").param("platform", "APP").accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.banners[0].label").value("App promo")).andExpect(jsonPath("$.banners[0].platform").value("APP"));
+        mvc.perform(get("/api/v1/catalog/banners").accept(MediaType.APPLICATION_JSON)).andExpect(status().isOk()).andExpect(jsonPath("$.banners").isEmpty());
+        verify(service).published("APP");
+        verify(service).published(null);
     }
     @Test void imageReturnsActualBytesAndDraftIsNotPublic() throws Exception {
         var service = mock(HomeBannerService.class); var id = UUID.randomUUID();

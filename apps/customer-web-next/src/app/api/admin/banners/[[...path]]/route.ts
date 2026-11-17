@@ -38,10 +38,12 @@ async function handle(request: NextRequest, context: { params: Promise<{ path?: 
       const bytes = await boundedBody(request.body, 2 * 1024 * 1024 + 16 * 1024);
       const form = await new Response(bytes as BodyInit, { headers: { "Content-Type": contentType } }).formData();
       const file = form.get("file"), label = form.get("label"), position = form.get("sortOrder");
+      // An admin page from before platforms sends none: its uploads are website banners, as they always were.
+      const platform = form.get("platform") ?? "WEB";
       if (!(file instanceof File) || !["image/jpeg", "image/png"].includes(file.type) || file.size === 0 || file.size > 2 * 1024 * 1024
         || typeof label !== "string" || !label.trim() || label.trim().length > 160 || /[\u0000-\u001f\u007f]/.test(label)
-        || typeof position !== "string" || !/^\d{1,3}$/.test(position)) return failure(400, "Check the label, position and JPEG/PNG image (up to 2 MB).");
-      const safe = new FormData(); safe.set("file", file, "banner-image"); safe.set("label", label.trim()); safe.set("sortOrder", position);
+        || typeof position !== "string" || !/^\d{1,3}$/.test(position) || (platform !== "WEB" && platform !== "APP")) return failure(400, "Check the label, position, platform and JPEG/PNG image (up to 2 MB).");
+      const safe = new FormData(); safe.set("file", file, "banner-image"); safe.set("label", label.trim()); safe.set("sortOrder", position); safe.set("platform", platform);
       body = safe;
     } else if (request.method === "PUT") {
       if (request.headers.get("content-type")?.split(";")[0] !== "application/json") return failure(415, "JSON is required.");
@@ -57,7 +59,7 @@ async function handle(request: NextRequest, context: { params: Promise<{ path?: 
         ? "Platform administrator access is required to change banners." : status === 404
           ? "Banner not found. Refresh the list." : status === 409
           ? "Banner changed or inventory is full. Refresh before retrying." : status === 400 || status === 413
-            ? "Check the banner label, position and valid JPEG/PNG image (up to 2 MB)." : "Banner service is unavailable. No success is assumed.");
+            ? "Check the banner label, position and image: a JPEG or PNG up to 2 MB, twice as wide as it is tall." : "Banner service is unavailable. No success is assumed.");
     }
     if (request.method === "DELETE") { await upstream.body?.cancel(); return new NextResponse(null, { status: 204, headers }); }
     if (path[1] === "image") {

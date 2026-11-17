@@ -36,6 +36,12 @@ az deployment group create -g <monitoring resource group in subscription 34eefd9
 
 The CH-03 internal-call codes (`INTERNAL_CALL_*`) use the same rules.
 
+The courier booking journal (integration, `CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED`) adds `COURIER_ACCOUNT_REFUSED`
+(`BorzoApiClient`), `COURIER_ORPHAN_BOOKING_FOUND` and `COURIER_REJECTED_BOOKING_EXISTS`
+(`DeliveryCreateReconciliationWorker`, `DeliveryCommandCompletionService`), and `COURIER_UNRESOLVED_BOOKING` and
+`COURIER_REJECTED_RATE` (`IntegrationAlertMonitor`). What each means and what to do is in
+`services/integration-service/docs/delivery-orchestration/README.md`, "Booking journal".
+
 The Borzo-to-Pidge handoff (integration `BorzoPidgeHandoffWorker`) adds `DELIVERY_HANDOFF_NO_COURIER` (Borzo cancelled and
 Pidge refused or cancelled the fallback, so the order needs a person) and `DELIVERY_HANDOFF_STALLED` (the Pidge fallback
 is still unresolved about 10 minutes later; it keeps retrying). Both are logged once per order.

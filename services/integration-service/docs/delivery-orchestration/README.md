@@ -91,6 +91,8 @@ Default:
 
 ```text
 CRAVES_DELIVERY_UNKNOWN_PROXIMITY_SCORE=50.0
+CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED=false
+CRAVES_DELIVERY_BORZO_REFUSALS=verify
 ```
 
 When a future adapter supplies a genuine normalized pickup distance or ETA, the full proximity formula
@@ -322,6 +324,71 @@ Coverage includes:
 - Transactional final assignment and delivery-job completion.
 - Worker redelivery idempotency.
 
+## Booking journal
+
+`CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED` (default `false`). Off, nothing below happens and couriers are booked as before.
+
+On, every courier booking attempt is one row in `delivery_schema.provider_create_attempt` (V191), committed before the
+courier is called. Each attempt sends its own reference: the order id in base 36 plus the attempt number, 27 characters.
+
+| State | Meaning |
+|---|---|
+| `INTENT` | The call is about to be made, or was made and no answer was recorded. |
+| `CONFIRMED` | Booked, and it is the order's delivery job (set in the job's transaction). |
+| `REJECTED` | The courier has no booking: it refused, or a lookup found none. |
+| `UNKNOWN` | The answer was lost. The reconciliation worker looks the booking up. |
+| `ADOPTED` | A lookup found the booking and it became the delivery job. |
+| `ORPHAN_SUSPECT` | A booking may exist that the order does not use. Re-checked for 2 hours. |
+| `CANCELLED` | Reserved for the stray-booking handling that follows this change. |
+
+What changes for an order:
+
+- **A refusal moves on at once.** A Borzo answer that its API document lists as "nothing was created" is `REJECTED`, and
+  the next pass, a second later, books Pidge. Borzo is not booked again for that order in the same window. A courier that
+  refused an order three times is not tried for it again.
+- **A lost answer is looked up.** The first look is 20 seconds after the call. "Not found" moves the order on. Found: the
+  booking becomes the job. Still unknown after four looks (about 2 minutes): if another courier can be booked, the row
+  becomes `ORPHAN_SUSPECT` and the order moves on; if not, the order keeps waiting on the old schedule, so a late
+  confirmation is still adopted.
+- **Nothing is booked while an attempt for the order is unresolved.**
+- **Checks afterwards.** One lookup 20 seconds after each refusal, one 5 minutes after each "not found", and orphan
+  suspects after 60 seconds and then every 5 minutes.
+
+`CRAVES_DELIVERY_BORZO_REFUSALS` is read only with the journal on:
+
+| Value | A Borzo refusal is |
+|---|---|
+| `verify` (default) | `REJECTED`, then looked up once |
+| `trust` | `REJECTED`, no lookup (after the first weeks, to save Borzo API calls) |
+| `unknown` | "outcome unknown", as with the journal off |
+
+Alerts (`CRAVES_ALERT alert=<CODE> ...` log lines; the rules are in `infra/monitoring`):
+
+| Code | Meaning | What to do |
+|---|---|---|
+| `COURIER_ACCOUNT_REFUSED` | A courier refused for its key, contract or balance | Fix the key or top up. Orders go to the next courier meanwhile |
+| `COURIER_ORPHAN_BOOKING_FOUND` | A courier holds a booking the order does not use | Cancel booking `providerRef` in that courier's dashboard. Only if `orderHasJob=false` and `commandStatus=DEAD_LETTER` is it the order's only courier: keep it and tell engineering |
+| `COURIER_REJECTED_BOOKING_EXISTS` | A booking recorded as refused or not found exists | As above. Also set `CRAVES_DELIVERY_BORZO_REFUSALS=unknown` and tell engineering |
+| `COURIER_UNRESOLVED_BOOKING` | An attempt has been unresolved for over 10 minutes | Run the query below; look for the reference in the courier's dashboard |
+| `COURIER_REJECTED_RATE` | A courier refused over 20% of at least 3 bookings in 15 minutes | Check that courier's account and status |
+
+```sql
+SELECT chef_sub_order_id, provider_id, attempt_no, client_ref, state, provider_ref, error, created_at, updated_at
+FROM delivery_schema.provider_create_attempt
+WHERE state IN ('INTENT', 'UNKNOWN', 'ORPHAN_SUSPECT') ORDER BY created_at;
+```
+
+Before switching it on in production:
+
+1. Deploy the alert rules (`infra/monitoring`, `deployAlerts=true`) and see one test line reach a person.
+2. Run `scripts/delivery/borzo-sandbox-order-list-check.py` once against Borzo's sandbox. The lookup trusts Borzo's order
+   list to be newest first and to show a new order within 20 seconds.
+3. Confirm `CRAVES_DELIVERY_COMMAND_ENABLED` and `CRAVES_DELIVERY_RECONCILIATION_ENABLED` are on.
+4. Have someone watch the alerts. A stray booking is cancelled by a person until that is automated.
+
+Rollback: unset the flag. Orders already waiting on a lookup finish on the old path with the reference they sent. Journal
+rows stay; if the flag goes on again, an unresolved row is looked up before its order is booked.
+
 ## Safe rollout
 
 1. Deploy and test with `CRAVES_DELIVERY_COMMAND_ENABLED=false`.
@@ -338,10 +405,6 @@ Coverage includes:
 
 - Order Service does not yet publish `CHEF_ACCEPTED_ORDER`.
 - Borzo remains sandbox-only outside a contracted production account.
-- Borzo does not document `client_order_id` as a guaranteed create-order idempotency key. An ambiguous
-  network timeout requires reconciliation before automatic create retry is safe in production.
-- The webhook inbox is signed and idempotent, but inbox-to-delivery-job/status/outbox processing is a
-  separate pending module.
 - Additional providers need real adapters and normalized pickup ETA/distance fields where their APIs
   expose them.
 - Private ingress/APIM restrictions and Key Vault references remain hardening items.

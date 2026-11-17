@@ -10,12 +10,15 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResul
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DeliveryCommandCompletionService {
+    private static final Logger log = LoggerFactory.getLogger(DeliveryCommandCompletionService.class);
     private final DeliveryAssignmentRepository assignments;
     private final DeliveryJobRepository deliveryJobs;
     private final DeliveryOutboxRepository outbox;
@@ -23,6 +26,7 @@ public class DeliveryCommandCompletionService {
     private final ObjectMapper objectMapper;
     private final BorzoPidgeHandoffRepository handoffs;
     private final DeliveryCommandProperties properties;
+    private ProviderCreateAttemptRepository journal;
 
     @Autowired
     public DeliveryCommandCompletionService(DeliveryAssignmentRepository assignments,
@@ -50,10 +54,28 @@ public class DeliveryCommandCompletionService {
             null, new DeliveryCommandProperties());
     }
 
+    /** The booking journal (V191); used only while CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED is on. */
+    @Autowired(required = false)
+    public void setJournal(ProviderCreateAttemptRepository journal) {
+        this.journal = journal;
+    }
+
     @Transactional
     public CompletionReceipt complete(DeliveryCommandMessage command, RoutingResult routingResult) {
+        boolean journalled = journal != null && journal.enabled() && routingResult.delivery() != null;
         UUID existing = deliveryJobs.findIdByChefSubOrderId(command.chefSubOrderId()).orElse(null);
         if (existing != null) {
+            if (journalled) {
+                String booking = routingResult.delivery().providerDeliveryId();
+                boolean strayRow = journal.stray(command.chefSubOrderId(), routingResult.providerId(), booking);
+                // Another job got there first (a rider, or ops): this booking is real and nobody's. Kept, and a person is told.
+                // Not when the journal already has it as the order's job: then this is the same booking, delivered twice.
+                if (strayRow || journal.forOrder(command.chefSubOrderId()).stream().noneMatch(row -> booking.equals(row.providerRef())
+                    && ("CONFIRMED".equals(row.state()) || "ADOPTED".equals(row.state())))) {
+                    log.error("CRAVES_ALERT alert=COURIER_ORPHAN_BOOKING_FOUND provider={} chefSubOrderId={} providerRef={} orderHasJob=true "
+                        + "commandStatus=COMPLETED", routingResult.providerId(), command.chefSubOrderId(), booking);
+                }
+            }
             commands.markCompleted(command.commandId());
             return new CompletionReceipt(existing, true);
         }
@@ -72,6 +94,15 @@ public class DeliveryCommandCompletionService {
         UUID deliveryJobId = deliveryJobs.insert(
             command.orderId(), command.chefSubOrderId(), routingResult
         );
+        if (journalled) {
+            // In the job's transaction, so the journal never says "booked" without a job. No row: a command from before the flag.
+            if (!journal.confirm(command.chefSubOrderId(), routingResult.providerId(), routingResult.delivery().providerDeliveryId())
+                && journal.forOrder(command.chefSubOrderId()).stream().anyMatch(row -> row.providerId().equals(routingResult.providerId()))) {
+                log.warn("Courier booking journal disagrees with the delivery job chefSubOrderId={} provider={} providerRef={}: the booking "
+                    + "is the job, but its attempt was already resolved otherwise", command.chefSubOrderId(), routingResult.providerId(),
+                    routingResult.delivery().providerDeliveryId());
+            }
+        }
         Instant borzoWindowStartedAt = "borzo".equals(routingResult.providerId())
             ? commands.borzoWindowStartedAt(command.commandId()).orElse(null) : null;
         if (borzoWindowStartedAt != null

@@ -171,7 +171,8 @@ paths:
         Sent by the native online service as the offer rings, with the shift credential only. The server keeps the first
         arrival of the rider's own offer (the same rule as LocationBatch.offerReceipts, which still carries a receipt this
         call did not deliver); any other offer, or a repeat, changes nothing and is 204 too. It is never a decline and
-        nothing counts it per rider. 400 VALIDATION_FAILED for an unknown channel; 401 SHIFT_CREDENTIAL_INVALID. While
+        nothing counts it per rider. 400 VALIDATION_FAILED for an unknown channel; 401 SHIFT_CREDENTIAL_INVALID (also for a
+        rider who is not ACTIVE). While
         the switch is off the route does not exist (401 or 404), and the app ignores every failure.
       security: [{shiftCredential: []}]
       parameters: [{$ref: '#/components/parameters/OfferId'}]

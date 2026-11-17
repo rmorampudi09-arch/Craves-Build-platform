@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
@@ -18,6 +19,8 @@ import org.springframework.test.web.servlet.ResultActions;
  * POST /offers/{offerId}/rang (R22 22) against a real database, with CRAVES_FLEET_RING_RECEIPT_ENABLED on; every /locations
  * test runs again with it on, so the switch changes nothing there.
  */
+// Not inherited from the parent: without it this class would run, and fail to start, where there is no database.
+@EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 @ContextConfiguration(classes = FleetRingReceiptController.class)
 @TestPropertySource(properties = "craves.fleet.ring-receipt-enabled=true")
 class FleetRingReceiptApiDatabaseTest extends FleetLocationApiDatabaseTest {
@@ -73,6 +76,11 @@ class FleetRingReceiptApiDatabaseTest extends FleetLocationApiDatabaseTest {
         rang("not-a-credential", mine, "fcm", 0).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("SHIFT_CREDENTIAL_INVALID"));
         mvc.perform(post(path(mine)).contentType(MediaType.APPLICATION_JSON).content("{\"channel\":\"fcm\",\"ageMs\":0}"))
             .andExpect(status().isUnauthorized());
+        // A rider who is no longer ACTIVE, their shift still open: refused, nothing written. (ACTIVE riders: the tests above.)
+        fleet.db.update("UPDATE fleet_schema.rider SET status = 'SUSPENDED' WHERE id = ?", rider.id());
+        rang(rider.credential(), mine, "fcm", 0).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("SHIFT_CREDENTIAL_INVALID"));
+        assertThat(fleet.db.queryForObject("SELECT rang_at IS NULL FROM fleet_schema.trip_offer WHERE id = ?", Boolean.class, mine)).isTrue();
+        fleet.db.update("UPDATE fleet_schema.rider SET status = 'ACTIVE' WHERE id = ?", rider.id());
         fleet.db.update("UPDATE fleet_schema.rider_shift SET ended_at = now(), credential_revoked_at = now() WHERE id = ?", rider.shift());
         rang(rider.credential(), mine, "fcm", 0).andExpect(status().isUnauthorized());
         assertThat(fleet.db.queryForObject("SELECT rang_at IS NULL FROM fleet_schema.trip_offer WHERE id = ?", Boolean.class, mine)).isTrue();

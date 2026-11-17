@@ -136,12 +136,14 @@ public class FleetLocationService {
         ORDER BY o.expires_at""";
     /**
      * One offer's receipt, sent as it rings (R22 22): the same two columns and the same rule as HEARTBEAT's receipt, for the
-     * offer of the rider whose live shift the credential is. A row comes back when the credential is live; its ms, how long
+     * offer of the ACTIVE rider whose live shift the credential is (a rider who isn't ACTIVE is refused like a dead
+     * credential: /locations is what tells their phone why and ends the shift). A row comes back when the credential is live; its ms, how long
      * after the offer went out the receipt got here, only when this call stored the receipt.
      */
     private static final String RANG = """
         WITH shift AS (
-          SELECT s.rider_id FROM fleet_schema.rider_shift s WHERE s.credential_hash = CAST(? AS CHAR(64)) AND s.ended_at IS NULL
+          SELECT s.rider_id FROM fleet_schema.rider_shift s JOIN fleet_schema.rider r ON r.id = s.rider_id AND r.status = 'ACTIVE'
+          WHERE s.credential_hash = CAST(? AS CHAR(64)) AND s.ended_at IS NULL
             AND s.credential_revoked_at IS NULL AND s.credential_expires_at > now()),
         receipt AS (
           UPDATE fleet_schema.trip_offer o

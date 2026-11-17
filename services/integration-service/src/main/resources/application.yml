@@ -190,6 +190,8 @@ craves:
     booking-journal-enabled: ${CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED:false}
     # Only read with the journal on: verify (a Borzo refusal moves on and is looked up once), trust (no lookup), unknown (as today).
     borzo-refusals: ${CRAVES_DELIVERY_BORZO_REFUSALS:verify}
+    # Courier cancel for cancelled orders without the fleet flag, Shiprocket included, confirmed by fetch (CourierCancel): off keeps today's behaviour.
+    courier-cancel-enabled: ${CRAVES_DELIVERY_COURIER_CANCEL_ENABLED:false}
     fully-qualified-namespace: ${SERVICE_BUS_FULLY_QUALIFIED_NAMESPACE:}
     connection-string: ${SERVICE_BUS_CONNECTION_STRING:}
     topic-name: ${SERVICE_BUS_TOPIC_NAME:craves-domain-events}

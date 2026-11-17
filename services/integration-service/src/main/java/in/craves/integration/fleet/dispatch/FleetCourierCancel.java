@@ -1,5 +1,6 @@
 package in.craves.integration.fleet.dispatch;
 
+import in.craves.integration.delivery.command.CourierCancel;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
@@ -21,6 +22,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -54,6 +56,8 @@ public class FleetCourierCancel {
     private final Map<String, DeliveryProviderAdapter> couriers;
     private final DeliveryStatusUpdateService statusUpdates;
     private final RiderPushClient alerts;
+    /** Does the cancelling instead while CRAVES_DELIVERY_COURIER_CANCEL_ENABLED is on; otherwise unused. */
+    private CourierCancel confirmed;
 
     public FleetCourierCancel(JdbcTemplate jdbc, List<DeliveryProviderAdapter> adapters, DeliveryStatusUpdateService statusUpdates,
                               RiderPushClient alerts) {
@@ -64,9 +68,25 @@ public class FleetCourierCancel {
         this.alerts = alerts;
     }
 
+    @Autowired(required = false)
+    public void setConfirmed(CourierCancel confirmed) {
+        this.confirmed = confirmed;
+        // Its alert also reaches ops's app, as FLEET_COURIER_CANCEL_FAILED does.
+        confirmed.opsPush((booking, why) -> push(new Booking(booking.jobId(), booking.orderId(), booking.chefSubOrderId(),
+            booking.provider(), booking.providerDeliveryId(), booking.status()), "borzo".equals(booking.provider()) ? "Borzo"
+            : "pidge".equals(booking.provider()) ? "Pidge" : "Shiprocket", why));
+    }
+
+    private boolean confirmedOn() {
+        return confirmed != null && confirmed.enabled();
+    }
+
     // Its own job on the fleet pool: a courier slow to answer never holds up the dispatch tick.
     @Scheduled(scheduler = FleetConfiguration.FLEET_SCHEDULER, fixedDelayString = "${craves.fleet.dispatch-tick-ms:5000}")
     public void tick() {
+        if (confirmedOn()) {
+            return; // CourierCancel's own tick does it
+        }
         cancelledOrders();
     }
 
@@ -102,8 +122,11 @@ public class FleetCourierCancel {
      */
     public void forOps(UUID tripId, Admin by) {
         Booking booking = jdbc.query(BOOKING + "FROM fleet_schema.trip t JOIN delivery_schema.delivery_job j ON j.chef_sub_order_id = "
-            + "t.chef_sub_order_id WHERE t.id = ? AND " + LIVE, FleetCourierCancel::booking, tripId).stream().findFirst().orElse(null);
-        String refused = booking == null ? null : cancel(booking, OPS_CANCELLED, by);
+            + "t.chef_sub_order_id WHERE t.id = ? AND " + (confirmedOn() ? CourierCancel.LIVE : LIVE), FleetCourierCancel::booking, tripId)
+            .stream().findFirst().orElse(null);
+        String refused = booking == null ? null : confirmedOn() ? confirmed.cancel(new CourierCancel.Booking(booking.jobId(),
+            booking.orderId(), booking.chefSubOrderId(), booking.provider(), booking.providerDeliveryId(), booking.status()),
+            CourierCancel.OPS_CANCELLED, by.id(), by.name()) : cancel(booking, OPS_CANCELLED, by);
         if (refused != null) {
             throw FleetApiException.conflict("TRIP_NOT_CANCELLABLE", refused);
         }
@@ -199,6 +222,11 @@ public class FleetCourierCancel {
         String order = FleetDispatcher.orderCode(booking.chefSubOrderId());
         LOGGER.error("CRAVES_ALERT alert=FLEET_COURIER_CANCEL_FAILED order={} chefSubOrderId={} provider={} delivery={} status={} attempts={} "
             + "reason={}", order, booking.chefSubOrderId(), booking.provider(), booking.providerDeliveryId(), booking.status(), MAX_ATTEMPTS, why);
+        push(booking, courier, why);
+    }
+
+    private void push(Booking booking, String courier, String why) {
+        String order = FleetDispatcher.orderCode(booking.chefSubOrderId());
         alerts.opsAlert("FLEET_COURIER_CANCEL_FAILED", "Cancel " + courier + " by hand, order " + order,
             "Order " + order + " was cancelled, but " + courier + " didn't cancel delivery " + booking.providerDeliveryId() + " after "
                 + MAX_ATTEMPTS + " tries (" + why + "). Cancel it with " + courier + " now. If their courier has the food already, call them.",

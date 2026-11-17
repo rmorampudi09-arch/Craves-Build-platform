@@ -35,10 +35,10 @@ public class WorkerSchedulingConfiguration {
         return pool("refund-", 2);
     }
 
-    // Delivery outbox, Borzo-to-Pidge handoff, create reconciliation and webhook processing.
+    // Delivery outbox, Borzo-to-Pidge handoff, create reconciliation, webhook processing and courier cancels (CourierCancel).
     @Bean(name = DELIVERY_SCHEDULER)
     ThreadPoolTaskScheduler deliveryScheduler() {
-        return pool("delivery-", 4);
+        return pool("delivery-", 5);
     }
 
     // Carrier tracking polls are the slowest calls, so they get a pool of their own.

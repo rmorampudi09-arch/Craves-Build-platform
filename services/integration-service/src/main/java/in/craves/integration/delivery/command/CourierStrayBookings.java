@@ -43,7 +43,7 @@ public class CourierStrayBookings {
     private static final Set<DeliveryStatus> ADOPTABLE = Set.of(DeliveryStatus.PENDING, DeliveryStatus.SEARCHING, DeliveryStatus.COURIER_ASSIGNED,
         DeliveryStatus.COURIER_TO_PICKUP, DeliveryStatus.AT_PICKUP, DeliveryStatus.DELAYED);
     /** The food has left with this courier, or the booking is over: cancelling is no longer the answer. */
-    private static final Set<DeliveryStatus> PAST_CANCELLING = Set.of(DeliveryStatus.PICKED_UP, DeliveryStatus.IN_TRANSIT,
+    static final Set<DeliveryStatus> PAST_CANCELLING = Set.of(DeliveryStatus.PICKED_UP, DeliveryStatus.IN_TRANSIT,
         DeliveryStatus.AT_DROPOFF, DeliveryStatus.DELIVERED, DeliveryStatus.RETURNING, DeliveryStatus.RETURNED, DeliveryStatus.FAILED);
 
     private final JdbcTemplate jdbc;

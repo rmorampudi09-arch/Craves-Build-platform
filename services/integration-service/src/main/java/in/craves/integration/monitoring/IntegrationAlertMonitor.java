@@ -29,6 +29,7 @@ public class IntegrationAlertMonitor {
     private final JdbcTemplate jdbcTemplate;
     private final int lookbackDays;
     private DeliveryCommandProperties deliveryProperties;
+    private boolean fleetDoubleHold;
 
     public IntegrationAlertMonitor(JdbcTemplate jdbcTemplate, @Value("${craves.monitoring.lookback-days:7}") int lookbackDays) {
         this.jdbcTemplate = jdbcTemplate;
@@ -39,6 +40,12 @@ public class IntegrationAlertMonitor {
     @Autowired(required = false)
     public void setDeliveryProperties(DeliveryCommandProperties deliveryProperties) {
         this.deliveryProperties = deliveryProperties;
+    }
+
+    /** CRAVES_FLEET_DOUBLE_HOLD_ALERT_ENABLED (default off): check() also looks for orders a rider and someone else hold. */
+    @Autowired
+    public void setFleetDoubleHold(@Value("${craves.monitoring.fleet-double-hold-enabled:false}") boolean fleetDoubleHold) {
+        this.fleetDoubleHold = fleetDoubleHold;
     }
 
     private static Map<String, String> checks() {
@@ -101,6 +108,45 @@ public class IntegrationAlertMonitor {
         });
         if (deliveryProperties != null && deliveryProperties.isProviderApiUsageEnabled()) {
             courierApiUsage();
+        }
+        if (fleetDoubleHold) {
+            fleetDoubleHold();
+        }
+    }
+
+    /**
+     * One line per order a rider holds (a trip on its way, the rows of trip_one_active_per_rider) that someone else holds
+     * too: the order's delivery job is a live courier's (COURIER_JOB), a courier booking that is not the job has stayed
+     * uncancelled for 2 minutes (STRAY_BOOKING; CourierStrayBookings cancels one within seconds), or a second rider's trip
+     * (SECOND_RIDER). Read-only, at most 20 lines a run. One rider on two trips is not looked for: that index forbids it.
+     */
+    void fleetDoubleHold() {
+        try {
+            jdbcTemplate.query("""
+                WITH held AS (
+                    SELECT id, chef_sub_order_id, rider_id FROM fleet_schema.trip
+                    WHERE state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP') AND rider_id IS NOT NULL
+                      AND updated_at > now() - (? * INTERVAL '1 day')
+                )
+                SELECT 'COURIER_JOB' AS source, h.id, h.chef_sub_order_id, h.rider_id, j.provider_id AS holder,
+                       j.provider_delivery_id AS holder_ref
+                FROM held h JOIN delivery_schema.delivery_job j ON j.chef_sub_order_id = h.chef_sub_order_id
+                WHERE j.provider_id <> 'craves_fleet' AND j.status NOT IN ('DELIVERED', 'CANCELLED', 'FAILED', 'RETURNED')
+                UNION ALL
+                SELECT 'STRAY_BOOKING', h.id, h.chef_sub_order_id, h.rider_id, a.provider_id, a.provider_ref
+                FROM held h JOIN delivery_schema.provider_create_attempt a ON a.chef_sub_order_id = h.chef_sub_order_id
+                WHERE a.state = 'ORPHAN_SUSPECT' AND a.provider_ref IS NOT NULL AND a.updated_at < now() - INTERVAL '2 minutes'
+                UNION ALL
+                SELECT 'SECOND_RIDER', h.id, h.chef_sub_order_id, h.rider_id, 'craves_fleet', other.id::text
+                FROM held h JOIN held other ON other.chef_sub_order_id = h.chef_sub_order_id AND other.id > h.id
+                LIMIT 20
+                """, row -> {
+                LOGGER.error("CRAVES_ALERT alert=FLEET_DOUBLE_HOLD source={} trip={} chefSubOrderId={} rider={} holder={} holderRef={}",
+                    row.getString("source"), row.getString("id"), row.getString("chef_sub_order_id"), row.getString("rider_id"),
+                    row.getString("holder"), row.getString("holder_ref"));
+            }, lookbackDays);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Integration alert check FLEET_DOUBLE_HOLD could not run", exception);
         }
     }
 

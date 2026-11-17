@@ -56,6 +56,10 @@ The courier API call count (integration `IntegrationAlertMonitor`, `CRAVES_DELIV
 `COURIER_API_USAGE_HIGH` (once per courier per day) and `COURIER_API_RATE_LIMITED`; see the same README, "Courier API
 usage".
 
+The double-hold check (integration `IntegrationAlertMonitor`, `CRAVES_FLEET_DOUBLE_HOLD_ALERT_ENABLED`) adds
+`FLEET_DOUBLE_HOLD`: an order a Craves rider holds that a courier booking or a second rider holds too; see
+`docs/riders/BACKEND.md`, the flags table.
+
 The Borzo-to-Pidge handoff (integration `BorzoPidgeHandoffWorker`) adds `DELIVERY_HANDOFF_NO_COURIER` (Borzo cancelled and
 Pidge refused or cancelled the fallback, so the order needs a person) and `DELIVERY_HANDOFF_STALLED` (the Pidge fallback
 is still unresolved about 10 minutes later; it keeps retrying). Both are logged once per order.

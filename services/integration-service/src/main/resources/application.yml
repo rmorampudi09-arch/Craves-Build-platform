@@ -141,6 +141,8 @@ craves:
     enabled: ${CRAVES_MONITORING_ENABLED:true}
     stuck-order-minutes: ${CRAVES_MONITORING_STUCK_ORDER_MINUTES:90}
     lookback-days: ${CRAVES_MONITORING_LOOKBACK_DAYS:7}
+    # 1-12: also log CRAVES_ALERT alert=FLEET_DOUBLE_HOLD for an order a rider and a courier (or a second rider) both hold.
+    fleet-double-hold-enabled: ${CRAVES_FLEET_DOUBLE_HOLD_ALERT_ENABLED:false}
   # CH-03 per-service identity for /internal calls. Empty keys/enforced-paths = monitor only (no behaviour change).
   internal-auth:
     service-name: ${CRAVES_INTERNAL_AUTH_SERVICE_NAME:}

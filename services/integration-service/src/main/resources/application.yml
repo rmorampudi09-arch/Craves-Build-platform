@@ -69,6 +69,12 @@ craves:
     # to 5 s later, so the next rider is asked then. Who hears, in what order, for how long, and the 5 s before the same
     # rider is asked again all stay, so riders need no notice. Off: the 5 s check only, as before.
     offer-expiry-wake-enabled: ${CRAVES_FLEET_OFFER_EXPIRY_WAKE_ENABLED:false}
+    # No rider in range (DISPATCH.md §2): with no limit on rounds, an order nobody was asked about and with no rider on
+    # shift in range at all goes on to Borzo once its stage is settle-seconds old, not after the whole 300 s. An order
+    # any rider could still hear of keeps its 300 s. Off: every order waits the whole stage, as before. Riders are told
+    # "Borzo only after 5 minutes": once riders are live, switch it on only with the owner's wording and notice.
+    no-supply-fast-path-enabled: ${CRAVES_FLEET_NO_SUPPLY_FAST_PATH_ENABLED:false}
+    no-supply-settle-seconds: ${CRAVES_FLEET_NO_SUPPLY_SETTLE_SECONDS:3}
     # Seconds each replica goes on using the dispatch policy it last read, 0 to 5 (more counts as 5); 0 = off, every look
     # at an order reads it from the database. With 5, the emergency stop (mode off), a new version or a withdrawal takes
     # up to 5 s to reach every replica: orders looked at in those seconds are still offered under the policy before.

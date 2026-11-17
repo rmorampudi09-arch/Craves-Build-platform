@@ -145,7 +145,7 @@ itself. The line changes no data.
 
 **Exit test (fix program 1-14): "Each alert fires once in a drill."** For each paging rule in the table, and the
 Service Bus dead-letter alert, cause or write its line once, and record that the phone was paged once and the alert
-resolved. The three rows marked "None yet" cannot pass until their alert exists.
+resolved. The two rows marked "None yet" cannot pass until their alert exists.
 
 **Roll back.** Run the same command without the parameters file (or with `pagePhoneNumbers=[]`): every rule goes back to
 the email group only. The deployment is incremental, so then delete the unused group:

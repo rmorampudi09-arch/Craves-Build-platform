@@ -487,6 +487,93 @@ Not covered: the Borzo-to-Pidge handoff's own cancels and the manual Borzo endpo
 
 Rollback: unset the flag. `courier_cancel` rows stay and both paths read them.
 
+## Status rank guard
+
+`CRAVES_DELIVERY_STATUS_RANK_GUARD` = `off` (default) | `shadow` | `enforce`. Off, nothing below happens and no new
+statement runs. It sits in `DeliveryStatusUpdateService`, after today's checks and under the job's row lock, so it covers
+every courier status update: callbacks, the tracking poll, and the updates `CourierCancel`, the handoff worker and the
+fleet bridge pass on. A new booking (first insert, the switch to Pidge, a fleet handover) starts again and is not judged.
+
+| Status | Rank |
+|---|---|
+| PENDING | 10 |
+| SEARCHING | 20 |
+| COURIER_ASSIGNED | 30 |
+| COURIER_TO_PICKUP | 35 |
+| AT_PICKUP | 40 |
+| PICKED_UP | 50 |
+| IN_TRANSIT | 60 |
+| AT_DROPOFF | 70 |
+| RETURNING | 80 |
+| DELIVERED, RETURNED, CANCELLED, FAILED | 100 (final) |
+
+*   An update to a lower rank is `STALE_RANK`.
+*   Except, before pickup only, from COURIER_ASSIGNED, COURIER_TO_PICKUP or AT_PICKUP:
+
+| Back to | Why it is allowed |
+|---|---|
+| PENDING, SEARCHING | The courier dropped the job and the provider is searching again |
+| COURIER_ASSIGNED | The provider gave the job to another rider without a search; the new rider's name, phone and tracking link must reach the order. Neither the Borzo nor the Pidge mapper marks a reassignment, so this is allowed on the status alone, not on proof that either reports it this way |
+
+*   A final status lands from any stage. A final job stays as it is (`TERMINAL_STATUS_PROTECTED`, as before).
+*   DELAYED is not a stage: it is applied as before. A job that is DELAYED counts as PICKED_UP once `picked_up_at` is
+    set, otherwise as PENDING.
+
+Courier-side end: a CANCELLED or FAILED applied to a live job of Borzo, Pidge or Shiprocket, when Craves holds no
+`courier_cancel` row for that booking and no `order_cancelled` row for the order.
+
+| Mode | Earlier stage | Courier-side end |
+|---|---|---|
+| `shadow` | Applied as today; one `decision=STALE_RANK` line | Applied as today; one `decision=COURIER_ENDED` line |
+| `enforce` | Not applied. A callback is kept in `delivery_event` with `applied = false`, `ignored_reason = STALE_RANK`; a poll just waits for the next one. The same line with `mode=enforce` | Applied, then one `delivery_exception_case` (`PROVIDER_CANCELLED`, `OPEN`, opened by `00000000-0000-0000-0000-000000000000`) in the same transaction, and `COURIER_ENDED_DELIVERY` once. No case when the job already has an active one |
+
+The line (WARN, one per update):
+
+```text
+DELIVERY_STATUS_RANK_GUARD mode=shadow decision=STALE_RANK source=WEBHOOK provider=borzo jobId=<uuid> delivery=<booking id> from=PICKED_UP to=COURIER_ASSIGNED providerStatus=courier_assigned
+```
+
+The guard's own statements (the `picked_up_at` read, the `courier_cancel`/`order_cancelled` read, opening the case) run
+in a savepoint inside the status update's transaction. If one fails, it alone is rolled back, the status update goes on
+as it would with the flag off, and one ERROR line says which (`step=PICKED_UP_READ`, `CRAVES_ENDED_READ` or `CASE_OPEN`):
+
+```text
+DELIVERY_STATUS_RANK_GUARD mode=enforce decision=GUARD_FAILED step=CASE_OPEN jobId=<uuid> error=<message>
+```
+
+A `CASE_OPEN` failure means a courier-side end got no case and no page: open the case by hand for that job.
+
+The flag's value is trimmed and read in any case; empty is `off`; any other word stops start-up.
+
+| Alert | Means | Do |
+|---|---|---|
+| `COURIER_ENDED_DELIVERY` | `provider` cancelled or failed booking `delivery` on its own (`was` is the stage it had reached) and the order is still live | Open the case in the admin's delivery exceptions. Before pickup: book another courier or cancel the order. After pickup (`was` is PICKED_UP or later): call the courier first, the food is with their rider |
+
+Reading a shadow week:
+
+```kusto
+ContainerAppConsoleLogs_CL
+| where Log_s contains "DELIVERY_STATUS_RANK_GUARD mode=shadow"
+| parse Log_s with * "decision=" decision " source=" source " provider=" provider " jobId=" * " from=" from " to=" to " providerStatus=" providerStatus
+| summarize count() by decision, provider, source, from, to, providerStatus
+```
+
+*   `STALE_RANK` rows are updates enforce will drop. Each `from`/`to` pair must be explained: a late callback or a poll
+    behind a callback is expected; a courier that really steps back after pickup (for example Borzo's
+    `reattempt_courier_assigned` after a failed drop-off) is not, and needs the table changed before enforce.
+*   `GUARD_FAILED` rows must be zero before enforce.
+*   Shiprocket: code 17 (out for delivery) maps to AT_DROPOFF today, so in-transit codes after it show as
+    AT_DROPOFF to IN_TRANSIT. Move 17 to IN_TRANSIT before enforcing with Shiprocket live.
+*   `COURIER_ENDED` rows are the cases and pages enforce will open. Check each was really the courier's own doing.
+
+Switch on: set `shadow` for a week of real deliveries; explain every pair; set `enforce`. Rollback: set `off`. Cases
+already opened stay for ops to close.
+
+Not in this guard yet: provider clocks (`status_provider_at`, so a late re-match is told from a real one and a forward
+callback stamped before a poll is no longer dropped as stale), `attempt_no`/`rematched_at`, `delayed_at`, Shiprocket
+codes 17 and 79–83, and booking the next courier automatically after a courier-side end. The manual Borzo cancel
+endpoint writes no `courier_cancel` row, so its cancel opens a case under enforce.
+
 ## Safe rollout
 
 1. Deploy and test with `CRAVES_DELIVERY_COMMAND_ENABLED=false`.

@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
+import ch.qos.logback.core.AppenderBase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
@@ -24,6 +24,7 @@ import in.craves.integration.fleet.trip.FleetTripService;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,19 @@ class FleetGpsRuleDatabaseTest {
     final FleetDatabase fleet = new FleetDatabase();
     final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
     final RoadDistanceClient roads = mock(RoadDistanceClient.class);
-    final ListAppender<ILoggingEvent> logged = new ListAppender<>();
+    /**
+     * The FLEET_GPS_RULE lines. Offer pushes log on the same logger from their own threads (this class's, and ones still
+     * running from classes before it), so the lines are kept in a list that is safe to read while it is written.
+     */
+    final List<String> gpsLines = new CopyOnWriteArrayList<>();
+    final AppenderBase<ILoggingEvent> logged = new AppenderBase<>() {
+        @Override
+        protected void append(ILoggingEvent event) {
+            if (event.getFormattedMessage().startsWith("FLEET_GPS_RULE")) {
+                gpsLines.add(event.getFormattedMessage());
+            }
+        }
+    };
     final FleetDispatcher dispatcher = new FleetDispatcher(fleet.db, fleet.transactions, new FleetPolicyStore(fleet.db, json),
         new FleetTestMode(fleet.db, FleetDatabase.properties(true)), roads, mock(RiderPushClient.class), json);
 
@@ -58,9 +71,9 @@ class FleetGpsRuleDatabaseTest {
     @Test
     void offAndShadowAskAsTodayShadowCountsAndEnforceLeavesOutUntilAFreshAccurateFix() {
         FleetDispatchFixtures.policy(fleet.db, "live"); // three riders at once, nearest first
-        UUID oldFix = rider(1, 0.001, 90, 8);
+        UUID oldFix = rider(1, 0.001, 120, 8);
         UUID coarse = rider(2, 0.002, 5, 400);
-        UUID oldAndCoarse = rider(3, 0.003, 90, 400);
+        UUID oldAndCoarse = rider(3, 0.003, 120, 400);
         UUID good = rider(4, 0.004, 5, 250);
 
         assertThatThrownBy(() -> dispatcher.setGpsRule("on")).isInstanceOf(IllegalStateException.class);
@@ -75,7 +88,7 @@ class FleetGpsRuleDatabaseTest {
             "FLEET_GPS_RULE mode=shadow chefSubOrderId=" + counted + " round=1 passing=1 stale=1 inaccurate=1 both=1");
 
         dispatcher.setGpsRule("enforce");
-        logged.list.clear();
+        gpsLines.clear();
         UUID enforced = UUID.randomUUID();
         assertThat(asked(enforced)).as("enforce: only the rider with a fresh, accurate fix").containsExactly(good);
         assertThat(gpsLines()).containsExactly(
@@ -86,7 +99,7 @@ class FleetGpsRuleDatabaseTest {
         for (UUID rider : List.of(oldFix, coarse, oldAndCoarse)) {
             fleet.db.update("UPDATE fleet_schema.rider_position_latest SET recorded_at = now(), accuracy_m = 30 WHERE rider_id = ?", rider);
         }
-        logged.list.clear();
+        gpsLines.clear();
         assertThat(asked()).as("asked again with the next fresh, accurate fix").containsExactly(oldFix, coarse, oldAndCoarse);
         assertThat(gpsLines()).as("a look that leaves nobody out logs nothing").isEmpty();
     }
@@ -99,7 +112,7 @@ class FleetGpsRuleDatabaseTest {
     void aRiderLeftOutHasNothingRecordedAndKeepsTheirFairTurn() {
         FleetDispatchFixtures.policy(fleet.db, "live", 20, 90, 1, 3, 1500); // one at a time, fair turns within 1.5 km
         UUID nearest = rider(1, 0.001, 5, 8);
-        UUID longestFree = rider(2, 0.005, 90, 8);
+        UUID longestFree = rider(2, 0.005, 120, 8);
         UUID middle = rider(3, 0.003, 5, 8);
         freeFor(nearest, 10);
         freeFor(longestFree, 60);
@@ -137,7 +150,7 @@ class FleetGpsRuleDatabaseTest {
     @Test
     void enforcedARiderWithAnOldFixStillCountsAsNearAndTheOrderWaitsForTheirFreshFix() {
         FleetDispatchFixtures.policy(fleet.db, "live", 20, 300, 1, 0, 0); // the owner's rule: no limit on rounds, 300 s
-        UUID rider = rider(1, 0.001, 100, 8);
+        UUID rider = rider(1, 0.001, 120, 8);
         dispatcher.setGpsRule("enforce");
         UUID order = UUID.randomUUID();
         FleetDispatchFixtures.kitchen(fleet.db, order, true);
@@ -183,6 +196,6 @@ class FleetGpsRuleDatabaseTest {
     }
 
     private List<String> gpsLines() {
-        return logged.list.stream().map(ILoggingEvent::getFormattedMessage).filter(line -> line.startsWith("FLEET_GPS_RULE")).toList();
+        return List.copyOf(gpsLines);
     }
 }

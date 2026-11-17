@@ -272,3 +272,16 @@ test("icons sit on plain white across the customer and chef web, not on grey or 
     .filter((file) => tile.test(readFileSync(new URL(file, root), "utf8")));
   assert.deepEqual(offenders, []);
 });
+
+test("Saved, Addresses and Edit profile renew an expired sign-in instead of failing (craves.in, 17 Nov 2026)", () => {
+  // A plain fetch() gets a 401 once the short sign-in lapses; sessionFetch renews it and retries once.
+  for (const file of [
+    "../features/favorites/api/customerFavorites.ts",
+    "../features/addresses/screens/Addresses.tsx",
+    "../features/profile/components/EditProfileModal.tsx",
+  ]) {
+    const code = source(file);
+    assert.match(code, /sessionFetch\(/, file);
+    assert.doesNotMatch(code, /(?<![\w.])fetch\(/, file);
+  }
+});

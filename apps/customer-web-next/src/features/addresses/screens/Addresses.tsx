@@ -24,6 +24,7 @@ import {
   loadSession,
 } from "@/features/auth/api/cravesAuth";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { CustomerSectionSkeleton } from "@/shared/components/loading/CustomerPageSkeleton";
 import { AddressEditorFlow } from "@/features/addresses/components/AddressEditorFlow";
 import { Dialog, secondaryActionClass } from "@/shared/ui/overlays/overlay";
@@ -72,7 +73,7 @@ export default function AddressesPage() {
   const [message, setMessage] = useState("");
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/customer/addresses", {
+    const response = await sessionFetch("/api/customer/addresses", {
       cache: "no-store",
       credentials: "same-origin",
     });
@@ -135,7 +136,7 @@ export default function AddressesPage() {
 
     setBusy(true);
     try {
-      const response = await fetch(
+      const response = await sessionFetch(
         `/api/customer/addresses/${address.id}/default`,
         {
           method: "PUT",
@@ -166,7 +167,7 @@ export default function AddressesPage() {
     setBusy(true);
     setDeleteError("");
     try {
-      const response = await fetch(`/api/customer/addresses/${address.id}`, {
+      const response = await sessionFetch(`/api/customer/addresses/${address.id}`, {
         method: "DELETE",
         credentials: "same-origin",
       });

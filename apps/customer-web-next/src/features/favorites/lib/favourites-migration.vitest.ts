@@ -43,6 +43,26 @@ describe("legacy on-device wishlist", () => {
     expect(JSON.parse(window.localStorage.getItem(KEY)!)).toEqual([{ id: FAILS }]);
   });
 
+  it("renews a sign-in that lapsed and still loads the saved dishes (Saved said they couldn't be loaded)", async () => {
+    let renewed = false;
+    const fetch = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url) => {
+      if (url === "/api/auth/refresh") {
+        renewed = true;
+        return new Response(null, { status: 200 });
+      }
+      return renewed ? Response.json([favorite(SAVED)]) : Response.json({ message: "Please sign in again." }, { status: 401 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const { loadCustomerFavoriteIds } = await import("@/features/favorites/api/customerFavorites");
+
+    expect([...(await loadCustomerFavoriteIds())]).toEqual([SAVED]);
+    expect(fetch.mock.calls.map(([url, init]) => `${init?.method ?? "GET"} ${url}`)).toEqual([
+      "GET /api/customer/favorites",
+      "POST /api/auth/refresh",
+      "GET /api/customer/favorites",
+    ]);
+  });
+
   it("leaves the device list alone while signed out", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ message: "Please sign in again." }, { status: 401 })));
     const before = window.localStorage.getItem(KEY);

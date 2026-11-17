@@ -455,9 +455,10 @@ export function AddressEditorFlow({
       setMessage("Please complete the highlighted fields.");
       const firstField = Object.keys(errors)[0];
       window.requestAnimationFrame(() => {
-        document
-          .getElementById("address-" + firstField)
-          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        const field = document.getElementById("address-" + firstField);
+        field?.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Focus too, so a keyboard or screen-reader user lands on what needs filling.
+        field?.querySelector<HTMLElement>("input, textarea, select")?.focus({ preventScroll: true });
       });
       return;
     }
@@ -576,17 +577,18 @@ export function AddressEditorFlow({
         >
 
           <div className="flex items-start gap-3 border-b border-[#F1F3F5] px-5 py-5 md:px-7 md:py-6">
-            {step === "details" ? (
+            {/* With a pin already set, the location step goes back to the details instead of only closing. */}
+            {step === "details" || hasCoordinates(draft) ? (
               <button
                 type="button"
-                onClick={() => setStep("locate")}
-                disabled={busy}
+                onClick={() => setStep(step === "details" ? "locate" : "details")}
+                disabled={busy || locating}
                 className={
                   "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] " +
                   actionClass +
                   " disabled:opacity-50"
                 }
-                aria-label="Back"
+                aria-label={step === "details" ? "Back" : "Back to address details"}
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
@@ -920,6 +922,7 @@ export function AddressEditorFlow({
                           <button
                             key={option.value}
                             type="button"
+                            aria-pressed={selected}
                             onClick={() =>
                               setDraft((current) => ({
                                 ...current,

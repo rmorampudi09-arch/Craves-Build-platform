@@ -75,13 +75,13 @@ function Section({ title, rows, children }: { title: string; rows: Row[]; childr
   );
 }
 
-/** Settings, like the app: account, support and legal, the build, and Log out. */
+/** Settings, like the app: account, support and legal, the build, and Sign out. */
 export default function SettingsPage() {
   const signOut = useCustomerSignOut();
   const version = useBuildVersion();
   const signedIn = useSyncExternalStore(subscribeSession, () => getSession() !== null, () => false);
 
-  // A direct visit learns who is signed in, so Log out shows only for them.
+  // A direct visit learns who is signed in, so Sign out shows only for them.
   useEffect(() => {
     void loadSession().catch(() => null);
   }, []);
@@ -117,7 +117,7 @@ export default function SettingsPage() {
             onClick={signOut.ask}
             className="mt-8 flex min-h-12 w-full items-center justify-center rounded-full !border !border-[#E5E7EB] !bg-white text-base font-bold !text-[#D92714] !shadow-none hover:!bg-[#FDEAE8]"
           >
-            Log out
+            Sign out
           </button>
         ) : null}
       </main>

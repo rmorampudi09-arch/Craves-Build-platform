@@ -8,6 +8,7 @@ import {
 import { captureSessionContext, isSessionContextCurrent, setSessionProfile } from "@/features/auth/api/cravesAuth";
 import { EmailVerificationPanel } from "@/features/sign-in/components/EmailVerificationPanel";
 import { Sheet, secondaryActionClass } from "@/shared/ui/overlays/overlay";
+import { sessionFetch } from "@/shared/lib/session-fetch";
 import { RequiredMark } from "@/shared/ui/forms/required-mark";
 
 interface EditProfileModalProps {
@@ -62,7 +63,7 @@ export function EditProfileModal({
     const attempt = ++saveGeneration.current;
     const current = () => attempt === saveGeneration.current && isSessionContextCurrent(context);
     try {
-      const response = await fetch("/api/customer/profile", {
+      const response = await sessionFetch("/api/customer/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",

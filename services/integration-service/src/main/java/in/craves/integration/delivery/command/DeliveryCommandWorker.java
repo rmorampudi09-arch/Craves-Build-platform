@@ -7,6 +7,7 @@ import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandR
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryRoutingException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,6 +18,8 @@ import org.springframework.stereotype.Service;
 public class DeliveryCommandWorker {
     /** The receipt and the command's last error when its order was cancelled before a courier was booked. */
     static final String ORDER_CANCELLED = "ORDER_CANCELLED";
+    /** A courier's list may lag a new booking: with the journal on, the first look for a lost answer waits this long. */
+    static final Duration FIRST_LOOK_AFTER = Duration.ofSeconds(20);
     private final DeliveryCommandRepository commands;
     private final DeliveryJobRepository deliveryJobs;
     private final DeliveryProviderRouter router;
@@ -24,6 +27,7 @@ public class DeliveryCommandWorker {
     private final DeliveryCommandProperties properties;
     private final DeliveryCommandRetryProperties retryProperties;
     private DeliveryCommandScheduler foodTiming;
+    private ProviderCreateAttemptRepository journal;
 
     public DeliveryCommandWorker(DeliveryCommandRepository commands,
                                  DeliveryJobRepository deliveryJobs,
@@ -43,6 +47,12 @@ public class DeliveryCommandWorker {
     @Autowired(required = false)
     public void setFoodTiming(DeliveryCommandScheduler scheduler) {
         this.foodTiming = scheduler;
+    }
+
+    /** The booking journal (V191); used only while CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED is on. */
+    @Autowired(required = false)
+    public void setJournal(ProviderCreateAttemptRepository journal) {
+        this.journal = journal;
     }
 
     public WorkerReceipt process(DeliveryCommandMessage message) {
@@ -96,7 +106,10 @@ public class DeliveryCommandWorker {
                 receipt.deliveryJobId(), receipt.duplicate(), routingResult.providerId()
             );
         } catch (DeliveryCreateReconciliationPendingException ex) {
-            boolean stored = commands.markReconciliationPending(
+            boolean stored = journal != null && journal.enabled()
+                ? commands.markReconciliationPending(command.id(), ex.providerId(), ex.clientReference(), ex.attemptedAt(),
+                    safeMessage(ex), FIRST_LOOK_AFTER)
+                : commands.markReconciliationPending(
                 command.id(),
                 ex.providerId(),
                 ex.clientReference(),
@@ -161,6 +174,20 @@ public class DeliveryCommandWorker {
             return new WorkerReceipt(deliveryJobId, true, "ALREADY_COMPLETED");
         }
         if ("RECONCILIATION_PENDING".equals(command.status())) {
+            // The reconciliation worker sends this message just before it makes the command due. If the message got here
+            // first, or that worker died in between, finish the step here: the booking is already resolved without a job,
+            // and nothing else would run the command.
+            if (journal != null && journal.enabled() && command.reconciliationProviderId() != null
+                && journal.find(command.reconciliationProviderId(), command.reconciliationClientReference())
+                    .filter(row -> ProviderCreateAttemptRepository.REJECTED.equals(row.state())
+                        || ProviderCreateAttemptRepository.ORPHAN_SUSPECT.equals(row.state())).isPresent()) {
+                commands.makeDueFromReconciliation(commandId, command.reconciliationClientReference());
+                throw new DeliveryCommandTransientException(
+                    "Delivery command was made due after reconciliation",
+                    Instant.now().plusSeconds(1),
+                    "reconciled-" + commandId + "-" + UUID.randomUUID()
+                );
+            }
             return new WorkerReceipt(null, true, "RECONCILIATION_PENDING");
         }
         // Another copy of a cancelled order's command (a ready tap or a decline also sends one): done, not a dead letter.
@@ -177,7 +204,12 @@ public class DeliveryCommandWorker {
             throw new DeliveryCommandDeferredException(
                 "Delivery provider is temporarily unavailable",
                 retryAt,
-                "provider-wait-" + command.id() + "-" + command.providerWaitAttemptCount()
+                // The queue drops a repeated message id for 10 minutes. A command that is already due (made due after
+                // reconciliation, or a message a moment ahead of the database clock) must not be put back under an id
+                // its earlier wait used.
+                journal != null && journal.enabled() && !retryAt.isAfter(Instant.now())
+                    ? "provider-due-" + command.id() + "-" + UUID.randomUUID()
+                    : "provider-wait-" + command.id() + "-" + command.providerWaitAttemptCount()
             );
         }
         if ("DEAD_LETTER".equals(command.status())

@@ -27,6 +27,11 @@ var logAlerts = [
   { code: 'DELIVERY_COMMAND_STALLED', severity: 1, text: '#5 Delivery command WAITING_FOR_PROVIDER for more than 10 minutes' }
   { code: 'DELIVERY_HANDOFF_NO_COURIER', severity: 1, text: 'Borzo was cancelled and Pidge refused or cancelled the fallback booking: the order has no courier until ops books one or cancels it' }
   { code: 'DELIVERY_HANDOFF_STALLED', severity: 1, text: 'Borzo was cancelled and the Pidge fallback booking is still unresolved about 10 minutes later (it keeps retrying)' }
+  { code: 'COURIER_ACCOUNT_REFUSED', severity: 1, text: 'Booking journal: a courier refused a booking for its key, contract or balance; orders go to the next courier until it is fixed' }
+  { code: 'COURIER_ORPHAN_BOOKING_FOUND', severity: 1, text: 'Booking journal: a courier holds a booking the order does not use. orderHasJob=true: cancel it with the courier. false: it is the order\'s only courier, keep it' }
+  { code: 'COURIER_REJECTED_BOOKING_EXISTS', severity: 1, text: 'Booking journal: a booking recorded as refused or not found exists at the courier. Handle as an orphan booking and set CRAVES_DELIVERY_BORZO_REFUSALS=unknown' }
+  { code: 'COURIER_UNRESOLVED_BOOKING', severity: 1, text: 'Booking journal: a courier booking has been unresolved for over 10 minutes (answer lost and not found either way)' }
+  { code: 'COURIER_REJECTED_RATE', severity: 2, text: 'Booking journal: a courier refused over 20% of at least 3 bookings in 15 minutes' }
   { code: 'PROVIDER_CIRCUIT_OPEN', severity: 2, text: 'Handbook 104: a delivery provider failed 5 quotes in a row, so its quotes are skipped for 30 seconds (integration ProviderGuard)' }
   { code: 'PAYOUT_STALLED', severity: 1, text: '#7 Chef payout RESERVED for more than 10 minutes' }
   { code: 'LEDGER_OUTBOX_BACKLOG', severity: 3, text: '#8 ledger_outbox rows unpublished for over an hour (no publisher exists yet)' }

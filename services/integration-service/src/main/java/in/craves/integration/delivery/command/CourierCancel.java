@@ -21,7 +21,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
- * With CRAVES_DELIVERY_COURIER_CANCEL_ENABLED: cancels the Borzo, Pidge or Shiprocket courier booked for an order Craves
+ * With CRAVES_DELIVERY_COURIER_CANCEL_ENABLED: cancels the Borzo or Pidge courier booked for an order Craves
  * no longer delivers, whatever the fleet flag. Every 5 s for orders order-service cancelled (delivery_schema.order_cancelled),
  * and for ops (FleetCourierCancel.forOps hands over while the flag is on). The claim is FleetCourierCancel's: one
  * courier_cancel statement stores the intent and the attempt before the courier is called, so two replicas never both call.
@@ -38,7 +38,7 @@ public class CourierCancel {
     public static final String ORDER_CANCELLED = "ORDER_CANCELLED";
     public static final String OPS_CANCELLED = "OPS_CANCELLED";
     /** A courier booking still running. */
-    public static final String LIVE = "j.provider_id IN ('borzo', 'pidge', 'shiprocket') AND j.provider_delivery_id IS NOT NULL "
+    public static final String LIVE = "j.provider_id IN ('borzo', 'pidge') AND j.provider_delivery_id IS NOT NULL "
         + "AND j.status NOT IN ('DELIVERED', 'CANCELLED', 'FAILED', 'RETURNED')";
     private static final Logger log = LoggerFactory.getLogger(CourierCancel.class);
     private static final String ROW = " WHERE provider_id = ? AND provider_delivery_id = ?";

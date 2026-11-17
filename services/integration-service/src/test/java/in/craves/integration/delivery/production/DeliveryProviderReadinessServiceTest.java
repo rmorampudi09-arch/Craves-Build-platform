@@ -5,7 +5,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import in.craves.integration.config.BorzoProperties;
-import in.craves.integration.config.ShiprocketProperties;
 import in.craves.integration.delivery.DeliveryIntelligenceModels.ProviderResponse;
 import in.craves.integration.delivery.DeliveryProviderRepository;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
@@ -22,27 +21,22 @@ class DeliveryProviderReadinessServiceTest {
     @Test
     void matrixKeepsVendorGatedProvidersExplicitlyBlocked() {
         BorzoProperties borzo = mock(BorzoProperties.class);
-        ShiprocketProperties shiprocket = mock(ShiprocketProperties.class);
         DeliveryCommandProperties delivery = mock(DeliveryCommandProperties.class);
         DeliveryProviderRepository providers = mock(DeliveryProviderRepository.class);
         DeliveryProviderPickupLocationRepository pickups = mock(DeliveryProviderPickupLocationRepository.class);
 
         when(borzo.normalizedEnvironment()).thenReturn("SANDBOX");
         when(borzo.normalizedBaseUrl()).thenReturn("https://robotapitest-in.borzodelivery.com/api/business/1.8");
-        when(shiprocket.executionMode()).thenReturn("READ_ONLY");
         when(providers.find("borzo")).thenReturn(Optional.empty());
-        when(providers.find("shiprocket")).thenReturn(Optional.empty());
         when(providers.find("shadowfax")).thenReturn(Optional.empty());
         when(providers.find("porter")).thenReturn(Optional.empty());
         when(providers.find("delhivery")).thenReturn(Optional.empty());
-        when(pickups.countVerified("shiprocket")).thenReturn(0);
         when(pickups.countVerified("shadowfax")).thenReturn(0);
         when(pickups.countVerified("porter")).thenReturn(0);
         when(pickups.countVerified("delhivery")).thenReturn(0);
 
         DeliveryProviderReadinessService service = new DeliveryProviderReadinessService(
             borzo,
-            shiprocket,
             delivery,
             providers,
             pickups,
@@ -62,7 +56,6 @@ class DeliveryProviderReadinessServiceTest {
     @Test
     void vendorContractBlockersRemainAuthoritativeEvenIfCatalogIsAccidentallyActivated() {
         BorzoProperties borzo = mock(BorzoProperties.class);
-        ShiprocketProperties shiprocket = mock(ShiprocketProperties.class);
         DeliveryCommandProperties delivery = mock(DeliveryCommandProperties.class);
         DeliveryProviderRepository providers = mock(DeliveryProviderRepository.class);
         DeliveryProviderPickupLocationRepository pickups = mock(DeliveryProviderPickupLocationRepository.class);
@@ -72,20 +65,16 @@ class DeliveryProviderReadinessServiceTest {
 
         when(borzo.normalizedEnvironment()).thenReturn("SANDBOX");
         when(borzo.normalizedBaseUrl()).thenReturn("https://robotapitest-in.borzodelivery.com/api/business/1.8");
-        when(shiprocket.executionMode()).thenReturn("READ_ONLY");
         when(providers.find("borzo")).thenReturn(Optional.empty());
-        when(providers.find("shiprocket")).thenReturn(Optional.empty());
         when(providers.find("shadowfax")).thenReturn(Optional.of(providerRecord("shadowfax", true)));
         when(providers.find("porter")).thenReturn(Optional.of(providerRecord("porter", true)));
         when(providers.find("delhivery")).thenReturn(Optional.of(providerRecord("delhivery", true)));
-        when(pickups.countVerified("shiprocket")).thenReturn(0);
         when(pickups.countVerified("shadowfax")).thenReturn(5);
         when(pickups.countVerified("porter")).thenReturn(5);
         when(pickups.countVerified("delhivery")).thenReturn(5);
 
         DeliveryProviderReadinessService service = new DeliveryProviderReadinessService(
             borzo,
-            shiprocket,
             delivery,
             providers,
             pickups,
@@ -115,55 +104,6 @@ class DeliveryProviderReadinessServiceTest {
             assertThat(status.providerCreateEnabled()).isFalse();
             assertThat(status.blockers()).contains("INTRACITY_API_PRODUCT_NOT_VERIFIED");
         });
-    }
-
-    @Test
-    void shiprocketCannotBeProductionReadyWithoutCreateGatesAndVerifiedPickup() {
-        BorzoProperties borzo = mock(BorzoProperties.class);
-        ShiprocketProperties shiprocket = mock(ShiprocketProperties.class);
-        DeliveryCommandProperties delivery = mock(DeliveryCommandProperties.class);
-        DeliveryProviderRepository providers = mock(DeliveryProviderRepository.class);
-        DeliveryProviderPickupLocationRepository pickups = mock(DeliveryProviderPickupLocationRepository.class);
-        DeliveryProviderAdapter shiprocketAdapter = mock(DeliveryProviderAdapter.class);
-
-        when(borzo.normalizedEnvironment()).thenReturn("SANDBOX");
-        when(borzo.normalizedBaseUrl()).thenReturn("https://robotapitest-in.borzodelivery.com/api/business/1.8");
-        when(shiprocket.executionMode()).thenReturn("READ_ONLY");
-        when(shiprocketAdapter.providerId()).thenReturn("shiprocket");
-        when(providers.find("borzo")).thenReturn(Optional.empty());
-        when(providers.find("shiprocket")).thenReturn(Optional.empty());
-        when(providers.find("shadowfax")).thenReturn(Optional.empty());
-        when(providers.find("porter")).thenReturn(Optional.empty());
-        when(providers.find("delhivery")).thenReturn(Optional.empty());
-        when(pickups.countVerified("shiprocket")).thenReturn(0);
-
-        DeliveryProviderReadinessService service = new DeliveryProviderReadinessService(
-            borzo,
-            shiprocket,
-            delivery,
-            providers,
-            pickups,
-            List.of(shiprocketAdapter)
-        );
-
-        var status = provider(service.matrix(), "SHIPROCKET");
-
-        assertThat(status.commandAdapterRegistered()).isTrue();
-        assertThat(status.productionReady()).isFalse();
-        assertThat(status.providerCreateEnabled()).isFalse();
-        assertThat(status.blockers()).contains(
-            "SHIPROCKET_API_ENVIRONMENT_NOT_PRODUCTION",
-            "PRODUCTION_ACTIVATION_NOT_APPROVED",
-            "API_CREDENTIALS_NOT_BOUND",
-            "WEBHOOK_TOKEN_NOT_BOUND",
-            "ORDER_EMAIL_NOT_CONFIGURED",
-            "PACKAGE_DIMENSIONS_NOT_CONFIGURED",
-            "COURIER_ATTRIBUTION_NOT_APPROVED",
-            "SHIPROCKET_API_DISABLED",
-            "SHIPROCKET_CREATE_DISABLED",
-            "PROVIDER_CATALOG_INACTIVE",
-            "NO_VERIFIED_CHEF_PICKUP_MAPPING"
-        );
     }
 
     private static DeliveryProviderAdapter adapter(String providerId) {

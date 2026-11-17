@@ -67,4 +67,25 @@ class DeliveryWebhookProcessorTest {
             eq("No delivery job matches provider order 1250032")
         );
     }
+
+    /** A stored callback of a courier this build no longer has (Shiprocket) is marked failed; the batch carries on. */
+    @Test
+    void aStoredCallbackOfARemovedCourierIsMarkedFailedAndTheNextRowIsStillProcessed() {
+        DeliveryStatusRepository repository = mock(DeliveryStatusRepository.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        DeliveryStatusUpdateService statusService = new DeliveryStatusUpdateService(List.of(), repository,
+            mock(in.craves.integration.delivery.command.DeliveryOutboxRepository.class), properties, new ObjectMapper(),
+            mock(in.craves.integration.delivery.command.BorzoPidgeHandoffRepository.class));
+        WebhookWorkItem first = new WebhookWorkItem(UUID.randomUUID(), "shiprocket", "event-1", new ObjectMapper().createObjectNode(), 1);
+        WebhookWorkItem second = new WebhookWorkItem(UUID.randomUUID(), "shiprocket", "event-2", new ObjectMapper().createObjectNode(), 1);
+        when(repository.claimWebhookBatch(properties.getWebhookBatchSize(), properties.getWebhookStaleMinutes(),
+            properties.getMaxWebhookAttempts())).thenReturn(List.of(first, second));
+
+        new DeliveryWebhookProcessor(repository, mock(DeliveryLeaseRecoveryRepository.class), statusService, properties).process();
+
+        for (WebhookWorkItem row : List.of(first, second)) {
+            verify(repository).markWebhookFailed(eq(row.id()), eq(1), eq(properties.getMaxWebhookAttempts()), any(),
+                eq("No webhook normalizer is registered for provider shiprocket"));
+        }
+    }
 }

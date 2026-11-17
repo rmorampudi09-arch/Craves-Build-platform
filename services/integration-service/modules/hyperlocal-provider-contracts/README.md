@@ -6,7 +6,7 @@ This module closes the repository-side work that can be completed safely before 
 
 It does **not** pretend that a provider is executable merely because a Java package, environment variable or Azure DevOps pipeline exists. CRV-ARCH-HLD-002 v2.0 and CRV-FUNC-001 v1.0 require the provider request/response semantics to be verified before a live adapter is enabled.
 
-Borzo and Shiprocket are outside this module because their executable adapters already exist in Integration Service.
+Borzo and Pidge are outside this module because their executable adapters already exist in Integration Service.
 
 ## Provider targets
 

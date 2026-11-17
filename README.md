@@ -46,7 +46,7 @@ Web: Next.js, TypeScript, Tailwind CSS
 Mobile: React Native, TypeScript
 Auth: Firebase Authentication with Craves JWT exchange
 Payments: Cashfree
-Delivery: Shiprocket adapter model
+Delivery: Borzo and Pidge courier adapters, plus the Craves fleet
 Cloud: Microsoft Azure, Azure Container Apps, APIM, ACR, Key Vault
 CI/CD: Azure DevOps/GitHub Actions as explicitly selected per module
 ```

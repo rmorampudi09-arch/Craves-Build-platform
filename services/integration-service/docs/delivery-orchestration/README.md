@@ -417,7 +417,7 @@ Without the journal such a callback is retried 10 times and then dead-lettered. 
   older than 30 minutes): retried and dead-lettered as before.
 
 Not covered yet: moving a job to a stray booking when the job's own courier is gone (a person is told instead),
-courier cancels while the fleet is off, a Shiprocket cancel, and confirming order and ops cancels by reading the booking
+courier cancels while the fleet is off, and confirming order and ops cancels by reading the booking
 back. The reconciliation worker's own lease is still `CRAVES_DELIVERY_RECONCILIATION_STALE_MINUTES`.
 
 `CRAVES_DELIVERY_BORZO_REFUSALS` is read only with the journal on:
@@ -466,12 +466,11 @@ WHERE state IN ('BORZO_CANCELLED', 'PROCESSING_PIDGE', 'PIDGE_RECONCILIATION_PEN
 ## Courier cancel for cancelled orders
 
 `CRAVES_DELIVERY_COURIER_CANCEL_ENABLED` (default `false`). Off, nothing below happens: a cancelled order's Borzo or Pidge
-courier is cancelled only while the fleet is on (`FleetCourierCancel`), on the courier's answer alone, and Shiprocket is
-never cancelled.
+courier is cancelled only while the fleet is on (`FleetCourierCancel`), on the courier's answer alone.
 
 On (`CourierCancel`), fleet on or off:
 
-*   Every 5 s, each live Borzo, Pidge or Shiprocket booking of an order order-service cancelled (`ORDER_CANCELLED`; a
+*   Every 5 s, each live Borzo or Pidge booking of an order order-service cancelled (`ORDER_CANCELLED`; a
     refund alone never cancels a courier) gets one attempt. Ops cancelling a delivery (fleet admin) goes the same way and
     gets the reason back at once when it fails.
 *   One attempt, claimed in `delivery_schema.courier_cancel` before any call so two replicas never both act:
@@ -491,7 +490,6 @@ On (`CourierCancel`), fleet on or off:
 |---|---|---|
 | `COURIER_CANCEL_UNCONFIRMED` | The order was cancelled (or ops cancelled the delivery) and the courier still shows booking `delivery` live; `reason` says why | Cancel it in that courier's dashboard or call them. If their courier has the food, call the courier |
 
-Shiprocket's cancel needs its production activation approval; without it every attempt fails and the alert fires.
 Not covered: the Borzo-to-Pidge handoff's own cancels and the manual Borzo endpoint, which work as before.
 
 Rollback: unset the flag. `courier_cancel` rows stay and both paths read them.
@@ -528,7 +526,7 @@ fleet bridge pass on. A new booking (first insert, the switch to Pidge, a fleet 
 *   DELAYED is not a stage: it is applied as before. A job that is DELAYED counts as PICKED_UP once `picked_up_at` is
     set, otherwise as PENDING.
 
-Courier-side end: a CANCELLED or FAILED applied to a live job of Borzo, Pidge or Shiprocket, when Craves holds no
+Courier-side end: a CANCELLED or FAILED applied to a live job of Borzo or Pidge, when Craves holds no
 `courier_cancel` row for that booking and no `order_cancelled` row for the order.
 
 | Mode | Earlier stage | Courier-side end |
@@ -571,16 +569,14 @@ ContainerAppConsoleLogs_CL
     behind a callback is expected; a courier that really steps back after pickup (for example Borzo's
     `reattempt_courier_assigned` after a failed drop-off) is not, and needs the table changed before enforce.
 *   `GUARD_FAILED` rows must be zero before enforce.
-*   Shiprocket: code 17 (out for delivery) maps to AT_DROPOFF today, so in-transit codes after it show as
-    AT_DROPOFF to IN_TRANSIT. Move 17 to IN_TRANSIT before enforcing with Shiprocket live.
 *   `COURIER_ENDED` rows are the cases and pages enforce will open. Check each was really the courier's own doing.
 
 Switch on: set `shadow` for a week of real deliveries; explain every pair; set `enforce`. Rollback: set `off`. Cases
 already opened stay for ops to close.
 
 Not in this guard yet: provider clocks (`status_provider_at`, so a late re-match is told from a real one and a forward
-callback stamped before a poll is no longer dropped as stale), `attempt_no`/`rematched_at`, `delayed_at`, Shiprocket
-codes 17 and 79–83, and booking the next courier automatically after a courier-side end. The manual Borzo cancel
+callback stamped before a poll is no longer dropped as stale), `attempt_no`/`rematched_at`, `delayed_at`,
+and booking the next courier automatically after a courier-side end. The manual Borzo cancel
 endpoint writes no `courier_cancel` row, so its cancel opens a case under enforce.
 
 ## Webhook-first tracking

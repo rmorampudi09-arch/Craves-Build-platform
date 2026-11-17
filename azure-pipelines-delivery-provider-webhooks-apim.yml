@@ -17,9 +17,6 @@ parameters:
   - name: enableBorzoRoute
     type: boolean
     default: true
-  - name: enableShiprocketRoute
-    type: boolean
-    default: false
   - name: enableDelhiveryRoute
     type: boolean
     default: false
@@ -80,8 +77,7 @@ steps:
 
       # Accept either a single full-route annotation/literal or a Spring MVC route
       # composed in one controller from a class-level @RequestMapping and a
-      # method-level @PostMapping. The latter is how the neutral /p4 webhook is
-      # intentionally implemented.
+      # method-level @PostMapping.
       for path in java_files:
           text = path.read_text(encoding="utf-8")
           if route in text:
@@ -118,7 +114,6 @@ steps:
       }
 
       validate_route '${{ parameters.enableBorzoRoute }}' 'Borzo' '/api/v1/webhooks/delivery/borzo'
-      validate_route '${{ parameters.enableShiprocketRoute }}' 'Provider P4' '/api/v1/webhooks/delivery/p4'
       validate_route '${{ parameters.enableDelhiveryRoute }}' 'Delhivery' '/api/v1/webhooks/delivery/delhivery'
       validate_route '${{ parameters.enablePidgeRoute }}' 'Pidge' '/api/v1/webhooks/delivery/pidge'
     displayName: Validate webhook backend routes before APIM exposure
@@ -139,11 +134,9 @@ steps:
           INTEGRATION_APP='${{ parameters.integrationContainerAppName }}'
           API_VERSION='2022-08-01'
           BORZO_RAW='${{ parameters.enableBorzoRoute }}'
-          SHIPROCKET_RAW='${{ parameters.enableShiprocketRoute }}'
           DELHIVERY_RAW='${{ parameters.enableDelhiveryRoute }}'
           PIDGE_RAW='${{ parameters.enablePidgeRoute }}'
           BORZO="${BORZO_RAW,,}"
-          SHIPROCKET="${SHIPROCKET_RAW,,}"
           DELHIVERY="${DELHIVERY_RAW,,}"
           PIDGE="${PIDGE_RAW,,}"
 
@@ -260,7 +253,6 @@ steps:
           }
 
           ensure_operation "$BORZO" 'Borzo' 'delivery-webhook-borzo' '/borzo'
-          ensure_operation "$SHIPROCKET" 'Provider P4' 'delivery-webhook-provider-p4' '/p4'
           ensure_operation "$DELHIVERY" 'Delhivery' 'delivery-webhook-delhivery' '/delhivery'
           ensure_operation "$PIDGE" 'Pidge' 'delivery-webhook-pidge' '/pidge'
 
@@ -272,7 +264,6 @@ steps:
           echo "API ID: $API_ID"
           echo "Backend: $BACKEND_ROOT"
           [[ "$BORZO" == 'true' ]] && echo "Borzo callback: ${GATEWAY_URL}/${API_PATH}/borzo"
-          [[ "$SHIPROCKET" == 'true' ]] && echo "Provider P4 callback: ${GATEWAY_URL}/${API_PATH}/p4"
           [[ "$DELHIVERY" == 'true' ]] && echo "Delhivery callback: ${GATEWAY_URL}/${API_PATH}/delhivery"
           [[ "$PIDGE" == 'true' ]] && echo "Pidge callback: ${GATEWAY_URL}/${API_PATH}/pidge"
           echo 'Raw webhook body transformation: DISABLED'

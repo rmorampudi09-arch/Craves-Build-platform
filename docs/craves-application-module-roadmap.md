@@ -146,7 +146,7 @@ Customer places order
   -> notification-service notifies customer and chef
 ```
 
-Initial delivery provider priority must be confirmed before implementation. Current intended provider is Shiprocket/Shiprocket Quick or hyperlocal model. Porter/Dunzo/other partners should not be hardcoded until business/vendor confirmation.
+Delivery providers are Borzo and Pidge (the Shiprocket integration was removed in November 2026). Porter/Dunzo/other partners should not be hardcoded until business/vendor confirmation.
 
 ## Integration secret boundary
 
@@ -156,7 +156,7 @@ Secret ownership:
 
 - Firebase private/admin credentials: auth-service only
 - Cashfree app ID/secret/webhook secret: integration-service only
-- Shiprocket credentials/webhook secret: integration-service only
+- Borzo and Pidge credentials/webhook secrets: integration-service only
 - ACS email connection string/sender: notification-service only
 - Database credentials: backend services only through Key Vault/managed identity patterns
 

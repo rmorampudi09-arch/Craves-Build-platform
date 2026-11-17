@@ -36,25 +36,22 @@ steps:
       set -euo pipefail
       cd services/integration-service
       mvn -B -ntp -DskipTests=false verify
-    displayName: Verify Integration pickup provisioning and provider adapters
+    displayName: Verify Integration provider adapters and pickup mapping
 
   - bash: |
       set -euo pipefail
       catalog_v4=services/catalog-service/src/main/resources/db/migration/V4__versioned_delivery_pickup_locations.sql
       catalog_v5=services/catalog-service/src/main/resources/db/migration/V5__harden_pickup_location_lifecycle.sql
       order_ref=services/order-service/src/main/java/in/craves/order/delivery/PickupLocationReference.java
-      integration_service=services/integration-service/src/main/java/in/craves/integration/delivery/shiprocket/ShiprocketPickupProvisioningService.java
 
       test -f "$catalog_v4"
       test -f "$catalog_v5"
       test -f "$order_ref"
-      test -f "$integration_service"
 
       grep -Fq 'pickup_location_provisioning_outbox' "$catalog_v4"
       grep -Fq 'FOR UPDATE SKIP LOCKED' services/catalog-service/src/main/java/in/craves/catalog/service/PickupProvisioningOutboxWorker.java
       grep -Fq 'enabled: ${CRAVES_PICKUP_PROVISIONING_ENABLED:false}' services/catalog-service/src/main/resources/application.yml
       grep -Fq 'PickupLocationReference.fromSnapshot' services/order-service/src/main/java/in/craves/order/event/ChefAcceptedOrderEventFactory.java
-      grep -Fq 'Never retry' "$integration_service" || grep -Fq 'Never blindly retry' "$integration_service"
       grep -Fq 'upsertVerified' services/integration-service/src/main/java/in/craves/integration/delivery/provider/DeliveryProviderPickupLocationRepository.java
     displayName: Verify full-scale pickup safety invariants
 

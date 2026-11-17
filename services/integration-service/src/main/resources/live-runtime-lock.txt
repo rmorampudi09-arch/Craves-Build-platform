@@ -8,11 +8,9 @@ in.craves.integration.admin.AdminIntegrationInvestigationController
 in.craves.integration.admin.deadletters.AdminDeadLetterController
 in.craves.integration.admin.deliveryexceptions.AdminDeliveryExceptionController
 in.craves.integration.admin.deliveryintelligence.AdminDeliveryIntelligenceController
-in.craves.integration.delivery.PickupLocationProvisioningController
 in.craves.integration.delivery.feedback.DeliveryFeedbackController
 in.craves.integration.delivery.pidge.PidgeReadinessController
 in.craves.integration.delivery.pidge.PidgeWebhookController
-in.craves.integration.delivery.shiprocket.ShiprocketWebhookController
 in.craves.integration.erasure.AccountErasureController
 in.craves.integration.finance.catalog.CatalogEligibilityController
 in.craves.integration.fleet.admin.FleetAdminController

@@ -339,7 +339,7 @@ courier is called. Each attempt sends its own reference: the order id in base 36
 | `UNKNOWN` | The answer was lost. The reconciliation worker looks the booking up. |
 | `ADOPTED` | A lookup found the booking and it became the delivery job. |
 | `ORPHAN_SUSPECT` | A booking may exist that the order does not use. Re-checked for 2 hours. |
-| `CANCELLED` | Reserved for the stray-booking handling that follows this change. |
+| `CANCELLED` | The booking was made and then cancelled with the courier. Today only the handoff writes it, when the order stopped being eligible. |
 
 What changes for an order:
 
@@ -353,6 +353,22 @@ What changes for an order:
 - **Nothing is booked while an attempt for the order is unresolved.**
 - **Checks afterwards.** One lookup 20 seconds after each refusal, one 5 minutes after each "not found", and orphan
   suspects after 60 seconds and then every 5 minutes.
+- **A pass that stops answering is taken over after 3 minutes, not 10.** The pass that takes over books nobody: the
+  unresolved attempt is looked up first, and a booking the first pass made is adopted without a second call.
+- **Only the pass that holds the command writes.** Each claim's `processing_started_at` is its lease token. Completing the
+  command, and moving it to a wait, to reconciliation, to failed or to dead letter, change nothing once another pass has
+  claimed it. A pass that finds this out after it booked leaves the booking to the lookup; if a lookup had already
+  written its attempt off, the booking id is kept on the attempt and `COURIER_REJECTED_BOOKING_EXISTS` or
+  `COURIER_ORPHAN_BOOKING_FOUND` is logged at once.
+- **A booking is matched to its attempt by its reference**, not only by order and courier.
+- **The Borzo-to-Pidge handoff journals its Pidge booking.** It books under an attempt's reference, continues that
+  attempt after a lost answer, and marks it `CONFIRMED` or `ADOPTED` in the transaction that moves the job to Pidge.
+  An attempt Pidge rejected or cancelled ends the handoff as before (`DELIVERY_HANDOFF_NO_COURIER`). Borzo is not
+  cancelled while Pidge may not be booked for the order (an earlier Pidge booking still on record, or three refusals).
+
+Not covered yet: a courier callback for a booking that is not on record, cancelling a stray booking automatically, and
+courier cancels while the fleet is off. The reconciliation worker's own lease is still
+`CRAVES_DELIVERY_RECONCILIATION_STALE_MINUTES`.
 
 `CRAVES_DELIVERY_BORZO_REFUSALS` is read only with the journal on:
 
@@ -387,7 +403,14 @@ Before switching it on in production:
 4. Have someone watch the alerts. A stray booking is cancelled by a person until that is automated.
 
 Rollback: unset the flag. Orders already waiting on a lookup finish on the old path with the reference they sent. Journal
-rows stay; if the flag goes on again, an unresolved row is looked up before its order is booked.
+rows stay; if the flag goes on again, an unresolved row is looked up before its order is booked. One check first: with
+the flag off the handoff no longer sees a Pidge booking it began under the journal, so switch off only when this returns
+nothing (or wait a minute and run it again):
+
+```sql
+SELECT delivery_job_id, state, attempt_count FROM delivery_schema.delivery_borzo_pidge_handoff
+WHERE state IN ('BORZO_CANCELLED', 'PROCESSING_PIDGE', 'PIDGE_RECONCILIATION_PENDING');
+```
 
 ## Safe rollout
 

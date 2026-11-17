@@ -7,6 +7,7 @@ import in.craves.integration.delivery.command.DeliveryCommandModels.EventEnvelop
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,13 @@ public class BorzoPidgeHandoffCompletionService {
     private final BorzoPidgeHandoffRepository handoffs;
     private final DeliveryOutboxRepository outbox;
     private final ObjectMapper objectMapper;
+    private ProviderCreateAttemptRepository journal;
+
+    /** The booking journal (V191); used only while CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED is on. */
+    @Autowired(required = false)
+    public void setJournal(ProviderCreateAttemptRepository journal) {
+        this.journal = journal;
+    }
 
     public BorzoPidgeHandoffCompletionService(DeliveryJobRepository jobs,
                                              DeliveryAssignmentRepository assignments,
@@ -33,6 +41,14 @@ public class BorzoPidgeHandoffCompletionService {
     @Transactional
     public void complete(BorzoPidgeHandoffRepository.Handoff handoff,
                          ProviderDelivery pidgeDelivery) {
+        complete(handoff, pidgeDelivery, null);
+    }
+
+    /** journalClientRef: the handoff's booking-journal attempt, confirmed in the transaction that moves the job to Pidge. */
+    @Transactional
+    public void complete(BorzoPidgeHandoffRepository.Handoff handoff,
+                         ProviderDelivery pidgeDelivery,
+                         String journalClientRef) {
         if (!"pidge".equals(pidgeDelivery.providerId())
             || pidgeDelivery.providerDeliveryId() == null
             || pidgeDelivery.providerDeliveryId().isBlank()) {
@@ -56,6 +72,9 @@ public class BorzoPidgeHandoffCompletionService {
         assignments.markBorzoPidgeHandoff(job.assignmentId());
         if (!handoffs.complete(job.id(), pidgeDelivery.providerDeliveryId())) {
             throw new IllegalStateException("Handoff journal could not be completed");
+        }
+        if (journalClientRef != null && journal != null && journal.enabled()) {
+            journal.confirm(job.chefSubOrderId(), "pidge", journalClientRef, pidgeDelivery.providerDeliveryId());
         }
 
         DeliveryStatusChangedData data = new DeliveryStatusChangedData(

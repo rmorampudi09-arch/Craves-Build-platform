@@ -101,8 +101,16 @@ public final class DeliveryCommandModels {
         AssignmentResponse intelligenceAssignment,
         UUID executedCandidateId,
         List<QuoteAudit> quoteAudit,
-        List<CreateAudit> createAudit
-    ) {}
+        List<CreateAudit> createAudit,
+        /** The reference the booking was made or found under; names its booking-journal attempt. Null when not known. */
+        @com.fasterxml.jackson.annotation.JsonIgnore // the job's stored quote snapshot is this record: it stays as it was
+        String clientReference
+    ) {
+        public RoutingResult(String providerId, ProviderDelivery delivery, AssignmentResponse intelligenceAssignment,
+                             UUID executedCandidateId, List<QuoteAudit> quoteAudit, List<CreateAudit> createAudit) {
+            this(providerId, delivery, intelligenceAssignment, executedCandidateId, quoteAudit, createAudit, null);
+        }
+    }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record DeliveryStatusChangedData(

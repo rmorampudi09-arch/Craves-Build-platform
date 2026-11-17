@@ -351,9 +351,9 @@ class FleetDispatchJobsDatabaseTest {
             + "request_context) VALUES (?, ?, ?, 'STOCHASTIC', 'RANKED', 'TEST', '{}')", assignment.assignmentId(), booked, bookedMessage.orderId());
         // The router journals its attempt before it calls the courier.
         when(router.route(bookedMessage)).thenAnswer(call -> {
-            journal.begin(booked, "pidge").orElseThrow();
+            var attempt = journal.begin(booked, "pidge").orElseThrow();
             return new RoutingResult("pidge", new ProviderDelivery("pidge", "PIDGE-90", "PIDGE-90", DeliveryStatus.SEARCHING, "searching",
-                null, null, null, null, Instant.now()), assignment, UUID.randomUUID(), List.of(), List.of());
+                null, null, null, null, Instant.now()), assignment, UUID.randomUUID(), List.of(), List.of(), attempt.clientRef());
         });
 
         UUID unanswered = UUID.randomUUID();

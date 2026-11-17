@@ -30,6 +30,8 @@ public class ProviderCreateAttemptRepository {
     public static final String ORPHAN_SUSPECT = "ORPHAN_SUSPECT";
     /** After this many refusals a courier is used up for the order: the fleet's re-booking retries every 5 seconds. */
     static final int MAX_ATTEMPTS = 3;
+    /** With the journal on, a pass that stopped answering keeps its delivery command this long (a timed pass takes about 2). */
+    public static final int COMMAND_LEASE_MINUTES = 3;
 
     private static final String TABLE = "delivery_schema.provider_create_attempt";
     private static final String COLUMNS = "chef_sub_order_id, provider_id, attempt_no, client_ref, state, provider_ref, created_at, updated_at";
@@ -111,19 +113,20 @@ public class ProviderCreateAttemptRepository {
 
     /**
      * The booking is the order's delivery job: call inside the transaction that writes the job, so a row never says
-     * "booked" without one. At most one row per order and courier is in these states (the per-courier index).
+     * "booked" without one. Matched by the reference the booking was made under, so only that attempt is marked.
      */
-    public boolean confirm(UUID chefSubOrderId, String providerId, String providerRef) {
+    public boolean confirm(UUID chefSubOrderId, String providerId, String clientRef, String providerRef) {
         return jdbc.update("UPDATE " + TABLE + " SET state = CASE WHEN state = 'INTENT' THEN 'CONFIRMED' ELSE 'ADOPTED' END, "
             + "provider_ref = ?, next_check_at = NULL, updated_at = now() "
-            + "WHERE chef_sub_order_id = ? AND provider_id = ? AND state IN ('INTENT', 'UNKNOWN', 'ORPHAN_SUSPECT')",
-            providerRef, chefSubOrderId, providerId) == 1;
+            + "WHERE chef_sub_order_id = ? AND provider_id = ? AND client_ref = ? AND state IN ('INTENT', 'UNKNOWN', 'ORPHAN_SUSPECT')",
+            providerRef, chefSubOrderId, providerId, clientRef) == 1;
     }
 
     /** A booking that was made but is not the order's job (another job got there first): kept on record for a person to cancel. */
-    public boolean stray(UUID chefSubOrderId, String providerId, String providerRef) {
+    public boolean stray(UUID chefSubOrderId, String providerId, String clientRef, String providerRef) {
         return jdbc.update("UPDATE " + TABLE + " SET state = 'ORPHAN_SUSPECT', provider_ref = ?, next_check_at = NULL, updated_at = now() "
-            + "WHERE chef_sub_order_id = ? AND provider_id = ? AND state IN ('INTENT', 'UNKNOWN')", providerRef, chefSubOrderId, providerId) == 1;
+            + "WHERE chef_sub_order_id = ? AND provider_id = ? AND client_ref = ? AND state IN ('INTENT', 'UNKNOWN')", providerRef,
+            chefSubOrderId, providerId, clientRef) == 1;
     }
 
     /** The order's unresolved attempt will never be reconciled by a command (the fleet's re-booking gives up): look for it soon. */
@@ -137,7 +140,8 @@ public class ProviderCreateAttemptRepository {
 
     /**
      * Unresolved rows nobody is working on (the order's command finished or died without resolving them) become orphan
-     * suspects with a lookup due now. 15 minutes is longer than the command's 10-minute lease.
+     * suspects with a lookup due now. 15 minutes is longer than the command's lease. Never an attempt of a Borzo-to-Pidge
+     * handoff that is still booking Pidge: that worker resolves its own.
      */
     public int sweepAbandoned() {
         return jdbc.update("""
@@ -147,8 +151,12 @@ public class ProviderCreateAttemptRepository {
               AND NOT EXISTS (SELECT 1 FROM delivery_schema.delivery_command c
                               WHERE c.chef_sub_order_id = a.chef_sub_order_id
                                 AND (c.status = 'RECONCILIATION_PENDING'
-                                     OR (c.status = 'PROCESSING' AND c.processing_started_at > now() - INTERVAL '10 minutes')))
-            """);
+                                     OR (c.status = 'PROCESSING' AND c.processing_started_at > now() - make_interval(mins => ?))))
+              AND NOT EXISTS (SELECT 1 FROM delivery_schema.delivery_borzo_pidge_handoff h
+                              JOIN delivery_schema.delivery_job j ON j.id = h.delivery_job_id
+                              WHERE j.chef_sub_order_id = a.chef_sub_order_id
+                                AND h.state IN ('BORZO_CANCELLED', 'PROCESSING_PIDGE', 'PIDGE_RECONCILIATION_PENDING'))
+            """, COMMAND_LEASE_MINUTES);
     }
 
     /**

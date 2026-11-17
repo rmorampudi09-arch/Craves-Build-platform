@@ -62,12 +62,24 @@ public class DeliveryCommandCompletionService {
 
     @Transactional
     public CompletionReceipt complete(DeliveryCommandMessage command, RoutingResult routingResult) {
+        return complete(command, routingResult, null);
+    }
+
+    /**
+     * leaseToken: the claim's CommandRecord.processingStartedAt, from a pass of the command worker with the journal on.
+     * Another pass that has taken the command over since makes this throw before anything is written.
+     */
+    @Transactional
+    public CompletionReceipt complete(DeliveryCommandMessage command, RoutingResult routingResult, Instant leaseToken) {
+        if (leaseToken != null && !commands.lockLease(command.commandId(), leaseToken)) {
+            throw new StaleCommandLeaseException();
+        }
         boolean journalled = journal != null && journal.enabled() && routingResult.delivery() != null;
         UUID existing = deliveryJobs.findIdByChefSubOrderId(command.chefSubOrderId()).orElse(null);
         if (existing != null) {
             if (journalled) {
                 String booking = routingResult.delivery().providerDeliveryId();
-                boolean strayRow = journal.stray(command.chefSubOrderId(), routingResult.providerId(), booking);
+                boolean strayRow = journal.stray(command.chefSubOrderId(), routingResult.providerId(), routingResult.clientReference(), booking);
                 // Another job got there first (a rider, or ops): this booking is real and nobody's. Kept, and a person is told.
                 // Not when the journal already has it as the order's job: then this is the same booking, delivered twice.
                 if (strayRow || journal.forOrder(command.chefSubOrderId()).stream().noneMatch(row -> booking.equals(row.providerRef())
@@ -96,8 +108,9 @@ public class DeliveryCommandCompletionService {
         );
         if (journalled) {
             // In the job's transaction, so the journal never says "booked" without a job. No row: a command from before the flag.
-            if (!journal.confirm(command.chefSubOrderId(), routingResult.providerId(), routingResult.delivery().providerDeliveryId())
-                && journal.forOrder(command.chefSubOrderId()).stream().anyMatch(row -> row.providerId().equals(routingResult.providerId()))) {
+            if (!journal.confirm(command.chefSubOrderId(), routingResult.providerId(), routingResult.clientReference(),
+                    routingResult.delivery().providerDeliveryId())
+                && journal.find(routingResult.providerId(), routingResult.clientReference()).isPresent()) {
                 log.warn("Courier booking journal disagrees with the delivery job chefSubOrderId={} provider={} providerRef={}: the booking "
                     + "is the job, but its attempt was already resolved otherwise", command.chefSubOrderId(), routingResult.providerId(),
                     routingResult.delivery().providerDeliveryId());
@@ -151,4 +164,11 @@ public class DeliveryCommandCompletionService {
     }
 
     public record CompletionReceipt(UUID deliveryJobId, boolean duplicate) {}
+
+    /** The pass no longer holds the command (its lease lapsed and another pass claimed it): it may not record its booking. */
+    public static class StaleCommandLeaseException extends RuntimeException {
+        StaleCommandLeaseException() {
+            super("Another pass has taken over this delivery command");
+        }
+    }
 }

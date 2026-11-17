@@ -87,14 +87,15 @@ class ProviderCreateAttemptRepositoryDatabaseTest {
     @Test
     void confirmSaysHowTheBookingWasLearned() {
         Attempt answered = journal.begin(order, "borzo").orElseThrow();
-        assertThat(journal.confirm(order, "borzo", "1250032")).isTrue();
+        assertThat(journal.confirm(order, "borzo", order.toString(), "1250032")).as("a booking made under another reference").isFalse();
+        assertThat(journal.confirm(order, "borzo", answered.clientRef(), "1250032")).isTrue();
         assertThat(journal.find("borzo", answered.clientRef())).map(Attempt::state).contains("CONFIRMED");
-        assertThat(journal.confirm(order, "borzo", "1250032")).as("only once").isFalse();
+        assertThat(journal.confirm(order, "borzo", answered.clientRef(), "1250032")).as("only once").isFalse();
 
         UUID other = UUID.randomUUID();
         Attempt lost = journal.begin(other, "borzo").orElseThrow();
         journal.move(lost, Set.of(INTENT), UNKNOWN, null, null);
-        assertThat(journal.confirm(other, "borzo", "1250033")).isTrue();
+        assertThat(journal.confirm(other, "borzo", lost.clientRef(), "1250033")).isTrue();
         Attempt adopted = journal.find("borzo", lost.clientRef()).orElseThrow();
         assertThat(adopted.state()).isEqualTo("ADOPTED");
         assertThat(adopted.providerRef()).isEqualTo("1250033");
@@ -103,7 +104,8 @@ class ProviderCreateAttemptRepositoryDatabaseTest {
     @Test
     void aStrayBookingIsKeptWithItsIdAndClosesItsCourier() {
         Attempt attempt = journal.begin(order, "pidge").orElseThrow();
-        assertThat(journal.stray(order, "pidge", "PG-1")).isTrue();
+        assertThat(journal.stray(order, "pidge", null, "PG-1")).as("a booking with no journalled reference").isFalse();
+        assertThat(journal.stray(order, "pidge", attempt.clientRef(), "PG-1")).isTrue();
         Attempt stray = journal.find("pidge", attempt.clientRef()).orElseThrow();
         assertThat(stray.state()).isEqualTo(ORPHAN_SUSPECT);
         assertThat(stray.providerRef()).isEqualTo("PG-1");
@@ -184,6 +186,24 @@ class ProviderCreateAttemptRepositoryDatabaseTest {
             + "WHERE chef_sub_order_id = ?", fresh);
         database.db.update("UPDATE delivery_schema.provider_create_attempt SET updated_at = now() - INTERVAL '16 minutes'");
         assertThat(journal.sweepAbandoned()).as("a command whose lease lapsed is nobody's either").isEqualTo(1);
+
+        // A Borzo-to-Pidge handoff that is still booking Pidge resolves its own attempt.
+        UUID handedOff = UUID.randomUUID();
+        Attempt handoffAttempt = journal.begin(handedOff, "pidge").orElseThrow();
+        UUID job = UUID.randomUUID();
+        UUID assignment = UUID.randomUUID();
+        database.db.update("INSERT INTO delivery_schema.delivery_assignment (id, chef_sub_order_id, order_id, strategy, status, scoring_version, "
+            + "request_context) VALUES (?, ?, ?, 'STOCHASTIC', 'RANKED', 'TEST', '{}')", assignment, handedOff, handedOff);
+        database.db.update("INSERT INTO delivery_schema.delivery_job (id, order_id, chef_sub_order_id, assignment_id, provider_id, "
+            + "provider_delivery_id, status, booked_at) VALUES (?, ?, ?, ?, 'borzo', '1250060', 'SEARCHING', now())", job, handedOff, handedOff,
+            assignment);
+        database.db.update("INSERT INTO delivery_schema.delivery_borzo_pidge_handoff (delivery_job_id, borzo_provider_delivery_id, state, "
+            + "started_at, due_at, next_attempt_at, borzo_cancelled_at) VALUES (?, '1250060', 'BORZO_CANCELLED', now(), now() + INTERVAL '2 minutes', now(), now())", job);
+        database.db.update("UPDATE delivery_schema.provider_create_attempt SET updated_at = now() - INTERVAL '16 minutes' WHERE client_ref = ?",
+            handoffAttempt.clientRef());
+        assertThat(journal.sweepAbandoned()).isZero();
+        database.db.update("UPDATE delivery_schema.delivery_borzo_pidge_handoff SET state = 'MANUAL_REVIEW'");
+        assertThat(journal.sweepAbandoned()).as("a handoff that gave up leaves its attempt to the sweep").isEqualTo(1);
     }
 
     private Integer nextCheckInSeconds(Attempt attempt) {

@@ -65,7 +65,7 @@ public class DeliveryCommandRepository {
                    scheduled_sequence_number, service_bus_message_id,
                    reconciliation_provider_id, reconciliation_client_reference,
                    reconciliation_started_at, reconciliation_attempt_count,
-                   provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at
+                   provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at, processing_started_at
             FROM delivery_schema.delivery_command
             WHERE chef_sub_order_id = ?
             """, chefSubOrderId);
@@ -77,7 +77,7 @@ public class DeliveryCommandRepository {
                    scheduled_sequence_number, service_bus_message_id,
                    reconciliation_provider_id, reconciliation_client_reference,
                    reconciliation_started_at, reconciliation_attempt_count,
-                   provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at
+                   provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at, processing_started_at
             FROM delivery_schema.delivery_command
             WHERE id = ?
             """, commandId);
@@ -163,6 +163,16 @@ public class DeliveryCommandRepository {
 
     @Transactional
     public Optional<CommandRecord> claim(UUID commandId, int maximumAttempts) {
+        return claim(commandId, maximumAttempts, 10);
+    }
+
+    /**
+     * leaseMinutes: how long a pass that stopped answering keeps the command. The claim's processing_started_at is the
+     * pass's lease token (CommandRecord.processingStartedAt): a write that carries it changes nothing once another pass
+     * holds the command.
+     */
+    @Transactional
+    public Optional<CommandRecord> claim(UUID commandId, int maximumAttempts, int leaseMinutes) {
         List<CommandRecord> rows = jdbc.query("""
             UPDATE delivery_schema.delivery_command
             SET status = 'PROCESSING',
@@ -181,16 +191,35 @@ public class DeliveryCommandRepository {
                     OR (
                         status = 'PROCESSING'
                         AND attempt_count < ?
-                        AND processing_started_at < now() - interval '10 minutes'
+                        AND processing_started_at < now() - make_interval(mins => ?)
                     )
                   )
             RETURNING id, chef_sub_order_id, order_id, status, attempt_count, payload,
                       scheduled_sequence_number, service_bus_message_id,
                       reconciliation_provider_id, reconciliation_client_reference,
                       reconciliation_started_at, reconciliation_attempt_count,
-                      provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at
-            """, this::mapRow, commandId, maximumAttempts, maximumAttempts);
+                      provider_wait_attempt_count, provider_wait_started_at, next_provider_retry_at, processing_started_at
+            """, this::mapRow, commandId, maximumAttempts, maximumAttempts, leaseMinutes);
         return rows.stream().findFirst();
+    }
+
+    /**
+     * Inside the completing transaction: locks the command and says whether this pass still holds it. A takeover claim
+     * waits on the lock and then finds the command done; one that got there first has changed the token.
+     */
+    public boolean lockLease(UUID commandId, Instant leaseToken) {
+        return !jdbc.queryForList("SELECT 1 FROM delivery_schema.delivery_command WHERE id = ? AND status = 'PROCESSING' "
+            + "AND processing_started_at = ? FOR UPDATE", commandId, toDatabaseTimestamp(leaseToken)).isEmpty();
+    }
+
+    /** With a lease token, only the pass whose claim set it may write; without one the statement runs as it always did. */
+    private int updateHeld(String sql, Instant leaseToken, Object... arguments) {
+        if (leaseToken == null) {
+            return jdbc.update(sql, arguments);
+        }
+        Object[] fenced = java.util.Arrays.copyOf(arguments, arguments.length + 1);
+        fenced[arguments.length] = toDatabaseTimestamp(leaseToken);
+        return jdbc.update(sql + " AND status = 'PROCESSING' AND processing_started_at = ?", fenced);
     }
 
     public Instant startBorzoWindow(UUID commandId) {
@@ -227,7 +256,15 @@ public class DeliveryCommandRepository {
                                     Instant nextRetryAt,
                                     String safeError,
                                     boolean countAttempt) {
-        return jdbc.update("""
+        return markProviderWait(commandId, nextRetryAt, safeError, countAttempt, null);
+    }
+
+    public boolean markProviderWait(UUID commandId,
+                                    Instant nextRetryAt,
+                                    String safeError,
+                                    boolean countAttempt,
+                                    Instant leaseToken) {
+        return updateHeld("""
             UPDATE delivery_schema.delivery_command
             SET status = 'WAITING_FOR_PROVIDER',
                 processing_started_at = NULL,
@@ -238,6 +275,7 @@ public class DeliveryCommandRepository {
                 updated_at = now()
             WHERE id = ? AND status = 'PROCESSING'
             """,
+            leaseToken,
             countAttempt,
             toDatabaseTimestamp(nextRetryAt),
             truncate(safeError, 2000),
@@ -260,7 +298,17 @@ public class DeliveryCommandRepository {
                                              Instant attemptedAt,
                                              String safeError,
                                              Duration firstLookAfter) {
-        return jdbc.update("""
+        return markReconciliationPending(commandId, providerId, clientReference, attemptedAt, safeError, firstLookAfter, null);
+    }
+
+    public boolean markReconciliationPending(UUID commandId,
+                                             String providerId,
+                                             String clientReference,
+                                             Instant attemptedAt,
+                                             String safeError,
+                                             Duration firstLookAfter,
+                                             Instant leaseToken) {
+        return updateHeld("""
             UPDATE delivery_schema.delivery_command
             SET status = 'RECONCILIATION_PENDING',
                 processing_started_at = NULL,
@@ -275,6 +323,7 @@ public class DeliveryCommandRepository {
                 updated_at = now()
             WHERE id = ? AND status = 'PROCESSING'
             """,
+            leaseToken,
             providerId,
             clientReference,
             toDatabaseTimestamp(attemptedAt),
@@ -352,7 +401,8 @@ public class DeliveryCommandRepository {
                       command.reconciliation_attempt_count,
                       command.provider_wait_attempt_count,
                       command.provider_wait_started_at,
-                      command.next_provider_retry_at
+                      command.next_provider_retry_at,
+                      command.processing_started_at
             """, this::mapRow, maximumAttempts, staleMinutes, limit);
     }
 
@@ -396,7 +446,11 @@ public class DeliveryCommandRepository {
     }
 
     public void markFailed(UUID commandId, String safeError) {
-        jdbc.update("""
+        markFailed(commandId, safeError, null);
+    }
+
+    public void markFailed(UUID commandId, String safeError, Instant leaseToken) {
+        updateHeld("""
             UPDATE delivery_schema.delivery_command
             SET status = 'FAILED',
                 processing_started_at = NULL,
@@ -404,11 +458,15 @@ public class DeliveryCommandRepository {
                 last_error = ?,
                 updated_at = now()
             WHERE id = ? AND status = 'PROCESSING'
-            """, truncate(safeError, 2000), commandId);
+            """, leaseToken, truncate(safeError, 2000), commandId);
     }
 
     public void markDeadLetter(UUID commandId, String safeError) {
-        jdbc.update("""
+        markDeadLetter(commandId, safeError, null);
+    }
+
+    public void markDeadLetter(UUID commandId, String safeError, Instant leaseToken) {
+        updateHeld("""
             UPDATE delivery_schema.delivery_command
             SET status = 'DEAD_LETTER',
                 processing_started_at = NULL,
@@ -417,7 +475,7 @@ public class DeliveryCommandRepository {
                 last_error = ?,
                 updated_at = now()
             WHERE id = ?
-            """, truncate(safeError, 2000), commandId);
+            """, leaseToken, truncate(safeError, 2000), commandId);
     }
 
     static OffsetDateTime toDatabaseTimestamp(Instant value) {
@@ -447,7 +505,8 @@ public class DeliveryCommandRepository {
                 rs.getInt("reconciliation_attempt_count"),
                 rs.getInt("provider_wait_attempt_count"),
                 instantOrNull(rs, "provider_wait_started_at"),
-                instantOrNull(rs, "next_provider_retry_at")
+                instantOrNull(rs, "next_provider_retry_at"),
+                instantOrNull(rs, "processing_started_at")
             );
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Stored delivery command payload is invalid", ex);
@@ -489,6 +548,17 @@ public class DeliveryCommandRepository {
         int reconciliationAttemptCount,
         int providerWaitAttemptCount,
         Instant providerWaitStartedAt,
-        Instant nextProviderRetryAt
-    ) {}
+        Instant nextProviderRetryAt,
+        /** The lease token of the claim that returned this record; null on a command no pass holds. */
+        Instant processingStartedAt
+    ) {
+        public CommandRecord(UUID id, UUID chefSubOrderId, UUID orderId, String status, int attemptCount, DeliveryCommandMessage message,
+                             Long scheduledSequenceNumber, String serviceBusMessageId, String reconciliationProviderId,
+                             String reconciliationClientReference, Instant reconciliationStartedAt, int reconciliationAttemptCount,
+                             int providerWaitAttemptCount, Instant providerWaitStartedAt, Instant nextProviderRetryAt) {
+            this(id, chefSubOrderId, orderId, status, attemptCount, message, scheduledSequenceNumber, serviceBusMessageId,
+                reconciliationProviderId, reconciliationClientReference, reconciliationStartedAt, reconciliationAttemptCount,
+                providerWaitAttemptCount, providerWaitStartedAt, nextProviderRetryAt, null);
+        }
+    }
 }

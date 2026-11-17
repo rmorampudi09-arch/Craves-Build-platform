@@ -461,7 +461,8 @@ public class FleetDispatchJobs {
             if (journal != null && journal.enabled()) {
                 // The booking is real and nobody's: kept on the journal with its id. Never in the way of the alert below.
                 try {
-                    journal.stray(stage.chefSubOrderId(), routed.providerId(), routed.delivery().providerDeliveryId());
+                    journal.stray(stage.chefSubOrderId(), routed.providerId(), routed.clientReference(),
+                        routed.delivery().providerDeliveryId());
                 } catch (RuntimeException journalFailure) {
                     LOGGER.error("FLEET_COURIER_UNRECORDED trip={} provider={} delivery={}: not kept on the booking journal", stage.tripId(),
                         routed.providerId(), routed.delivery().providerDeliveryId(), journalFailure);
@@ -523,7 +524,7 @@ public class FleetDispatchJobs {
         assignments.markAssigned(routed.intelligenceAssignment().assignmentId(), routed.executedCandidateId(), failed);
         if (journal != null && journal.enabled()) {
             // In the job's transaction, as DeliveryCommandCompletionService.complete does.
-            journal.confirm(stage.chefSubOrderId(), routed.providerId(), delivery.providerDeliveryId());
+            journal.confirm(stage.chefSubOrderId(), routed.providerId(), routed.clientReference(), delivery.providerDeliveryId());
         }
         if ("borzo".equals(routed.providerId()) && "BORZO".equals(stage.provider()) && router.borzoTimedPolicyReady()
             && (delivery.status() == DeliveryStatus.PENDING || delivery.status() == DeliveryStatus.SEARCHING

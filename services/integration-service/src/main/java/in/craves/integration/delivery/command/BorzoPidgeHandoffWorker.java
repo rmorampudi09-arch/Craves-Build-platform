@@ -4,6 +4,7 @@ import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.config.PidgeProperties;
 import in.craves.integration.delivery.borzo.BorzoApiClient;
 import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository.Handoff;
+import in.craves.integration.delivery.command.ProviderCreateAttemptRepository.Attempt;
 import in.craves.integration.delivery.pidge.PidgeApiClient;
 import in.craves.integration.delivery.pidge.PidgeBookingRepository;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateDeliveryRequest;
@@ -18,9 +19,11 @@ import in.craves.integration.delivery.status.DeliveryStatusRepository.TrackingWo
 import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -49,6 +52,32 @@ public class BorzoPidgeHandoffWorker {
     private final PidgeBookingRepository pidgeBookings;
     private final DeliveryStatusUpdateService statusUpdates;
     private final BorzoPidgeHandoffCompletionService completion;
+    private ProviderCreateAttemptRepository journal;
+
+    /** The booking journal (V191); used only while CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED is on. */
+    @Autowired(required = false)
+    public void setJournal(ProviderCreateAttemptRepository journal) {
+        this.journal = journal;
+    }
+
+    private boolean journalOn() {
+        return journal != null && journal.enabled();
+    }
+
+    private List<Attempt> pidgeAttempts(UUID chefSubOrderId) {
+        return journal.forOrder(chefSubOrderId).stream().filter(row -> "pidge".equals(row.providerId())).toList();
+    }
+
+    private static boolean unresolved(Attempt row) {
+        return ProviderCreateAttemptRepository.INTENT.equals(row.state()) || ProviderCreateAttemptRepository.UNKNOWN.equals(row.state());
+    }
+
+    /** The handoff's Pidge attempt is over without a booking; no attempt when the journal is off. */
+    private void close(Attempt attempt, String state, String why) {
+        if (attempt != null) {
+            journal.move(attempt, Set.of(ProviderCreateAttemptRepository.INTENT, ProviderCreateAttemptRepository.UNKNOWN), state, why, null);
+        }
+    }
 
     public BorzoPidgeHandoffWorker(BorzoPidgeHandoffRepository handoffs,
                                   DeliveryJobRepository jobs,
@@ -174,6 +203,13 @@ public class BorzoPidgeHandoffWorker {
         if (!pidgeReady()) {
             throw new IllegalStateException("Pidge is not ready to accept the fallback");
         }
+        if (journalOn()) {
+            // Borzo is kept while Pidge could not be booked for this order: an attempt of its own would not begin.
+            List<Attempt> earlier = pidgeAttempts(job.chefSubOrderId());
+            if (earlier.stream().noneMatch(BorzoPidgeHandoffWorker::unresolved) && !ProviderCreateAttemptRepository.bookable(earlier)) {
+                throw new IllegalStateException("Pidge may not be booked again for this order");
+            }
+        }
         requireCommercialOrder(job);
         ProviderQuote quote = pidge.quote(request(job.chefSubOrderId()));
         if (quote == null || !quote.available()) {
@@ -230,15 +266,28 @@ public class BorzoPidgeHandoffWorker {
             throw new IllegalStateException("Pidge production booking gates are incomplete");
         }
         String reference = job.chefSubOrderId().toString();
-        PidgeBookingRepository.Booking booking = pidgeBookings.find(reference).orElse(null);
+        // With the journal on the booking goes under its own attempt's reference: the unresolved one this handoff began
+        // earlier (PidgeApiClient records pidge_booking before it calls Pidge, so none there means nothing was sent), or a
+        // new one begun just before the call.
+        Attempt attempt = null;
+        if (journalOn()) {
+            attempt = pidgeAttempts(job.chefSubOrderId()).stream().filter(BorzoPidgeHandoffWorker::unresolved).findFirst().orElse(null);
+            if (attempt != null) {
+                reference = attempt.clientRef();
+            } else if (pidgeBookings.find(reference).isEmpty()) {
+                reference = null;
+            } // else a booking this handoff made before the journal was on: it goes on under the order's id, as then
+        }
+        PidgeBookingRepository.Booking booking = reference == null ? null : pidgeBookings.find(reference).orElse(null);
         if (!orderEligibility.eligible(job.chefSubOrderId(), job.orderId(),
             job.id(), job.providerDeliveryId())) {
-            compensateIneligiblePidge(handoff, job, reference, booking, null);
+            compensateIneligiblePidge(handoff, job, reference, booking, null, attempt);
             return;
         }
         ProviderDelivery delivery;
         if (booking != null) {
             if ("REJECTED".equals(booking.state()) || "CANCELLED".equals(booking.state())) {
+                close(attempt, ProviderCreateAttemptRepository.REJECTED, "Pidge rejected or cancelled the booking");
                 throw new PidgeBookingEndedException(job.orderId(),
                     "Pidge booking was definitively rejected or cancelled");
             }
@@ -254,6 +303,12 @@ public class BorzoPidgeHandoffWorker {
                 throw new IllegalStateException("Pidge has no currently available immediate delivery quote");
             }
             requireCommercialOrder(job);
+            if (journalOn() && attempt == null) {
+                // Committed before the call. Refused: Pidge already holds or refused this order's bookings; a person decides.
+                attempt = journal.begin(job.chefSubOrderId(), "pidge").orElseThrow(() -> new PidgeBookingEndedException(job.orderId(),
+                    "Pidge may not be booked again for this order"));
+                reference = attempt.clientRef();
+            }
             delivery = pidge.create(new CreateDeliveryRequest(reference, request, quote));
         }
         if (delivery.status() == DeliveryStatus.UNKNOWN || delivery.status() == DeliveryStatus.PENDING
@@ -263,10 +318,14 @@ public class BorzoPidgeHandoffWorker {
         try {
             requireCommercialOrder(job);
         } catch (CommercialOrderIneligibleException noLongerEligible) {
-            compensateIneligiblePidge(handoff, job, reference, booking, delivery);
+            compensateIneligiblePidge(handoff, job, reference, booking, delivery, attempt);
             return;
         }
-        completion.complete(handoff, delivery);
+        if (attempt == null) {
+            completion.complete(handoff, delivery);
+        } else {
+            completion.complete(handoff, delivery, attempt.clientRef());
+        }
         log.info("Borzo-to-Pidge delivery handoff completed jobId={}", job.id());
     }
 
@@ -274,7 +333,8 @@ public class BorzoPidgeHandoffWorker {
                                            DeliveryJobRepository.HandoffJob job,
                                            String reference,
                                            PidgeBookingRepository.Booking booking,
-                                           ProviderDelivery knownDelivery) {
+                                           ProviderDelivery knownDelivery,
+                                           Attempt attempt) {
         String pidgeId = knownDelivery == null ? null : knownDelivery.providerDeliveryId();
         if (pidgeId == null && booking != null) pidgeId = booking.id();
         if (pidgeId == null && booking != null
@@ -298,6 +358,7 @@ public class BorzoPidgeHandoffWorker {
             }
             pidgeBookings.mark(reference, "CANCELLED");
         }
+        close(attempt, pidgeId != null ? "CANCELLED" : ProviderCreateAttemptRepository.REJECTED, "The order was no longer eligible");
         handoffs.manualReview(job.id(),
             "Commercial order became ineligible; Pidge booking was not retained");
     }

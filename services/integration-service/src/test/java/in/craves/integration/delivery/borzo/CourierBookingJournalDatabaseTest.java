@@ -30,6 +30,10 @@ import in.craves.integration.delivery.DeliveryIntelligenceModels.Momentum;
 import in.craves.integration.delivery.DeliveryIntelligenceService;
 import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
 import in.craves.integration.delivery.command.DeliveryCommandCompletionService;
+import in.craves.integration.delivery.command.DeliveryCommandCompletionService.StaleCommandLeaseException;
+import in.craves.integration.delivery.command.DeliveryCommandModels.RoutingResult;
+import in.craves.integration.delivery.command.DeliveryCommandRepository.CommandRecord;
+import in.craves.integration.delivery.command.DeliveryCommandWorker.DeliveryCommandNonRetryableException;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.command.DeliveryCommandRepository;
@@ -100,6 +104,7 @@ class CourierBookingJournalDatabaseTest {
     DeliveryProviderRouter router;
     DeliveryCommandWorker worker;
     DeliveryCreateReconciliationWorker reconciliation;
+    DeliveryCommandCompletionService completion;
     DeliveryCommandMessage message;
 
     @BeforeEach
@@ -126,7 +131,7 @@ class CourierBookingJournalDatabaseTest {
         router = new DeliveryProviderRouter(List.of(borzoClient, pidge), catalog, intelligence, assignments, properties, quotes,
             Clock.systemUTC(), null);
         router.setJournal(journal);
-        DeliveryCommandCompletionService completion = new DeliveryCommandCompletionService(assignments, jobs,
+        completion = new DeliveryCommandCompletionService(assignments, jobs,
             new DeliveryOutboxRepository(database.db, json), commands, json, mock(BorzoPidgeHandoffRepository.class), properties);
         completion.setJournal(journal);
         worker = new DeliveryCommandWorker(commands, jobs, router, completion, properties, new DeliveryCommandRetryProperties());
@@ -314,6 +319,101 @@ class CourierBookingJournalDatabaseTest {
         assertThat(router.anotherCourierBookable(chefSubOrderId, "borzo")).as("Pidge now holds this order's booking").isFalse();
     }
 
+    /** R23's kill test: the courier answered and the pass died before it recorded the booking. */
+    @Test
+    void aPassThatDiesAfterBookingIsTakenOverAfterThreeMinutesAndItsBookingIsAdoptedWithoutASecondCall() {
+        pidgesTurn();
+        commands.claim(message.commandId(), 5, 3).orElseThrow();
+        RoutingResult booked = router.route(message, Instant.now().minusSeconds(300));
+        assertThat(row("pidge")).containsEntry("state", "INTENT");
+
+        leaseAgeSeconds(170);
+        assertThatThrownBy(() -> worker.process(message)).as("the lease still holds")
+            .isInstanceOf(DeliveryCommandTransientException.class).hasMessageContaining("currently being processed");
+        leaseAgeSeconds(181);
+        assertThat(commands.claim(message.commandId(), 5)).as("with the journal off the lease is 10 minutes, as before").isEmpty();
+        CommandRecord dead = commands.findById(message.commandId()).orElseThrow();
+
+        assertThat(worker.process(message).providerId()).as("the pass that takes over books nobody: it looks first")
+            .isEqualTo("RECONCILIATION_PENDING");
+        assertThat(pidge.references).hasSize(1);
+        assertThatThrownBy(() -> completion.complete(message, booked, dead.processingStartedAt()))
+            .as("the first pass, had it only stalled, may no longer record its booking").isInstanceOf(StaleCommandLeaseException.class);
+        assertThat(database.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
+
+        pidge.lookup = CreateReconciliationResult.found(booked.delivery());
+        look();
+        assertThat(row("pidge")).containsEntry("state", "ADOPTED").containsEntry("provider_ref", "PG-1");
+        assertThat(jobProvider()).isEqualTo("pidge");
+        assertThat(commandStatus()).isEqualTo("COMPLETED");
+        assertThat(pidge.references).as("one booking call only").hasSize(1);
+        assertThat(database.db.queryForObject("SELECT jsonb_exists(quote_snapshot, 'clientReference') FROM delivery_schema.delivery_job",
+            Boolean.class)).as("the job's stored routing is unchanged").isFalse();
+    }
+
+    @Test
+    void aPassWhoseLeaseLapsedChangesNothingOnceAnotherPassHoldsTheCommand() {
+        commands.claim(message.commandId(), 5, 3).orElseThrow();
+        leaseAgeSeconds(181);
+        Instant stale = commands.findById(message.commandId()).orElseThrow().processingStartedAt();
+        Instant live = commands.claim(message.commandId(), 5, 3).orElseThrow().processingStartedAt();
+
+        assertThat(commands.markProviderWait(message.commandId(), Instant.now(), "late", true, stale)).isFalse();
+        assertThat(commands.markReconciliationPending(message.commandId(), "pidge", "ref", Instant.now(), "late",
+            java.time.Duration.ZERO, stale)).isFalse();
+        commands.markFailed(message.commandId(), "late", stale);
+        commands.markDeadLetter(message.commandId(), "late", stale);
+        assertThat(commandStatus()).isEqualTo("PROCESSING");
+        assertThat(commands.lockLease(message.commandId(), stale)).isFalse();
+        assertThat(commands.lockLease(message.commandId(), live)).isTrue();
+        assertThat(commands.markProviderWait(message.commandId(), Instant.now(), "no quote", true, live)).isTrue();
+    }
+
+    @Test
+    void aSupersededPassLeavesItsBookingToTheLookupOrKeepsItsIdWhenTheAttemptWasWrittenOff() {
+        pidgesTurn();
+        // Another pass takes the command over while this one's booking call is out.
+        pidge.duringCreate = () -> database.db.update("UPDATE delivery_schema.delivery_command SET processing_started_at = now() + INTERVAL '1 second'");
+        assertThatThrownBy(() -> worker.process(message)).isInstanceOf(DeliveryCommandTransientException.class)
+            .hasMessageContaining("Another pass has taken over");
+        assertThat(row("pidge")).as("still unresolved: the other pass looks it up and adopts it").containsEntry("state", "INTENT");
+        assertThat(row("pidge").get("provider_ref")).isNull();
+        assertThat(commandStatus()).isEqualTo("PROCESSING");
+        assertThat(database.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_job", Integer.class)).isZero();
+
+        // The same, and a lookup that ran while the call was out has already written the attempt off as not found.
+        journal.move(journal.forOrder(chefSubOrderId).get(0), Set.of("INTENT"), "REJECTED", "not found", null);
+        database.db.update("UPDATE delivery_schema.delivery_command SET processing_started_at = now() - INTERVAL '4 minutes'");
+        pidge.duringCreate = () -> {
+            database.db.update("UPDATE delivery_schema.delivery_command SET processing_started_at = now() + INTERVAL '1 second'");
+            journal.move(journal.forOrder(chefSubOrderId).get(1), Set.of("INTENT"), "REJECTED", "not found", null);
+        };
+        assertThatThrownBy(() -> worker.process(message)).hasMessageContaining("Another pass has taken over");
+        assertThat(row("pidge")).containsEntry("state", "REJECTED").containsEntry("provider_ref", "PG-2");
+        assertThat(router.anotherCourierBookable(chefSubOrderId, "borzo")).as("Pidge holds a booking: never booked again for the order").isFalse();
+    }
+
+    @Test
+    void aDuplicateMessageDoesNotGiveUpACommandWhoseLastPassIsStillRunning() {
+        database.db.update("UPDATE delivery_schema.delivery_command SET status = 'PROCESSING', attempt_count = 5, processing_started_at = now()");
+        assertThatThrownBy(() -> worker.process(message)).isInstanceOf(DeliveryCommandTransientException.class)
+            .hasMessageContaining("currently being processed");
+        assertThat(commandStatus()).isEqualTo("PROCESSING");
+
+        leaseAgeSeconds(181);
+        assertThatThrownBy(() -> worker.process(message)).isInstanceOf(DeliveryCommandNonRetryableException.class);
+        assertThat(commandStatus()).isEqualTo("DEAD_LETTER");
+    }
+
+    /** Borzo's window is over: the timed policy books Pidge. */
+    private void pidgesTurn() {
+        database.db.update("UPDATE delivery_schema.delivery_command SET borzo_window_started_at = now() - INTERVAL '5 minutes'");
+    }
+
+    private void leaseAgeSeconds(int seconds) {
+        database.db.update("UPDATE delivery_schema.delivery_command SET processing_started_at = now() - make_interval(secs => ?)", seconds);
+    }
+
     private void refuseBorzoBeforeTheWindow() {
         journal.begin(chefSubOrderId, "borzo").ifPresent(attempt -> journal.move(attempt, Set.of("INTENT"), "REJECTED", "refused", null));
         database.db.update("UPDATE delivery_schema.provider_create_attempt SET created_at = now() - INTERVAL '10 minutes'");
@@ -410,6 +510,7 @@ class CourierBookingJournalDatabaseTest {
         final List<String> references = new java.util.ArrayList<>();
         int quoteCalls;
         Create create = Create.BOOKS;
+        Runnable duringCreate = () -> { };
         CreateReconciliationResult lookup = CreateReconciliationResult.inconclusive("No Pidge callback names this booking yet");
 
         @Override
@@ -427,6 +528,7 @@ class CourierBookingJournalDatabaseTest {
         @Override
         public ProviderDelivery create(CreateDeliveryRequest request) {
             references.add(request.clientReference());
+            duringCreate.run();
             if (create == Create.LOST) {
                 throw new ProviderCreateUncertainException("pidge", request.clientReference(), Instant.now(), new RuntimeException("timeout"));
             }

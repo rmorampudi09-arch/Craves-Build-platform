@@ -330,7 +330,8 @@ public class DeliveryProviderRouter {
                     assignment,
                     ranked.candidate().candidateId(),
                     List.copyOf(quoteAudit),
-                    List.copyOf(createAudit)
+                    List.copyOf(createAudit),
+                    clientReference
                 );
             } catch (ProviderCreateUncertainException ex) {
                 createAudit.add(new CreateAudit(
@@ -510,7 +511,8 @@ public class DeliveryProviderRouter {
                 assignment,
                 selected.candidateId(),
                 List.of(),
-                List.of(new CreateAudit(providerId, true, "Recovered by provider reconciliation"))
+                List.of(new CreateAudit(providerId, true, "Recovered by provider reconciliation")),
+                clientReference
             );
         }
 

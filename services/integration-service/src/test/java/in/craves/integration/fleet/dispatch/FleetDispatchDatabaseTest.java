@@ -20,8 +20,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import in.craves.integration.delivery.command.DeliveryCommandModels.DeliveryCommandMessage;
 import in.craves.integration.delivery.command.DeliveryCommandRepository;
+import in.craves.integration.delivery.command.DeliveryCommandWake;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryProviderTemporarilyUnavailableException;
+import in.craves.integration.delivery.command.DeliveryServiceBusPublisher;
 import in.craves.integration.delivery.status.DeliveryStatusUpdateService;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetDatabase;
@@ -45,16 +47,19 @@ import java.util.Map;
 import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** The fleet stage of the dispatch chain (PLAN F8a, F9) against a real database. */
@@ -693,6 +698,115 @@ class FleetDispatchDatabaseTest {
 
         assertThat(dispatcher.run(command, OptionalLong::empty, true)).isEmpty();
         assertThat(stages()).containsExactly("CRAVES_FLEET:CLOSED:ALL_DECLINED_OR_EXPIRED", "BORZO:OPEN:");
+    }
+
+    /**
+     * Next rider at once, a decline: from the rider's decline to the next rider's phone being rung takes under a second,
+     * where the order's own next look was 5 s away. The decline's Service Bus message (DeliveryCommandWake) is run here as
+     * DeliveryCommandWorker runs it: claim the command if it is due, ask the fleet stage, store the wait.
+     */
+    @Test
+    void afterADeclineTheNextRiderRingsWithinASecond() throws Exception {
+        ridersFirst();
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        Map<String, Long> rang = new ConcurrentHashMap<>();
+        when(push.offer(anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString(), anyString(), anyInt())).thenAnswer(ring -> {
+            rang.putIfAbsent(ring.getArgument(0), System.nanoTime());
+            return "SENT";
+        });
+        DeliveryCommandRepository commands = new DeliveryCommandRepository(fleet.db, json);
+        commands.createOrFind(command);
+        Consumer<DeliveryCommandMessage> look = message -> commands.claim(message.commandId(), 5).ifPresent(claimed -> {
+            try {
+                dispatcher.run(message, OptionalLong::empty, true);
+            } catch (DeliveryProviderTemporarilyUnavailableException waiting) {
+                commands.markProviderWait(claimed.id(), waiting.policyDeadline(), "Craves riders are deciding on the order", false);
+            }
+        });
+        look.accept(command);
+        assertThat(activeOffers()).containsExactly(nearest);
+        assertThat(fleet.db.queryForObject("SELECT next_provider_retry_at > now() + INTERVAL '4 seconds' FROM delivery_schema.delivery_command",
+            Boolean.class)).as("left alone, the order looks again only 5 s later").isTrue();
+
+        @SuppressWarnings("unchecked")
+        DeliveryServiceBusPublisher publisher = new DeliveryServiceBusPublisher(mock(ObjectProvider.class), mock(ObjectProvider.class), json) {
+            @Override
+            public void publishNow(DeliveryCommandMessage message, String messageId) {
+                look.accept(message);
+            }
+        };
+        FleetPolicyStore policies = new FleetPolicyStore(fleet.db, json);
+        FleetTripService trips = new FleetTripService(fleet.db, new FleetTripPay(fleet.db, policies, json, event -> { }),
+            new FleetStatusBridge(fleet.db, new DeliveryOutboxRepository(fleet.db, json), commands, mock(DeliveryStatusUpdateService.class), json),
+            json, mock(DeliveryCodeClient.class), mock(FleetStorage.class), fleet.transactions, mock(RiderPushClient.class));
+        trips.setCommandWake(new DeliveryCommandWake(fleet.db, publisher, json));
+        UUID identity = fleet.db.queryForObject("SELECT identity_id FROM fleet_schema.rider WHERE id = ?", UUID.class, nearest);
+        UUID offer = fleet.db.queryForObject("SELECT id FROM fleet_schema.trip_offer WHERE rider_id = ?", UUID.class, nearest);
+
+        long declined = System.nanoTime();
+        new TransactionTemplate(fleet.transactions).executeWithoutResult(status -> trips.decline(identity, offer));
+        for (int i = 0; i < 500 && !rang.containsKey("fcm-+919800000002"); i++) {
+            Thread.sleep(10); // the wake runs after the decline commits, on its own thread
+        }
+
+        assertThat(rang).as("the next rider's phone was rung").containsKey("fcm-+919800000002");
+        long ms = (rang.get("fcm-+919800000002") - declined) / 1_000_000;
+        System.out.println("FLEET_NEXT_RIDER_AFTER_DECLINE ms=" + ms);
+        assertThat(ms).as("milliseconds from the decline to the next rider's ring").isLessThan(1_000);
+    }
+
+    /**
+     * Next rider at once, an offer that ran out (CRAVES_FLEET_OFFER_EXPIRY_WAKE_ENABLED): the order looks again as its offer
+     * runs out, not up to 5 s later, and that look asks the next rider. Off (the default), the 5 s check as before.
+     */
+    @Test
+    void withTheExpiryWakeOnTheOrderLooksAgainAsItsOfferRunsOutAndTheNextRiderHears() {
+        ridersFirst();
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID second = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        secondsPass(17, nearest);
+        Instant runsOut = fleet.db.queryForObject("SELECT expires_at FROM fleet_schema.trip_offer WHERE rider_id = ?",
+            (row, n) -> row.getTimestamp("expires_at").toInstant(), nearest);
+
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true))
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
+                waiting -> assertThat(waiting.policyDeadline()).as("off: the 5 s check, 2 s after the offer runs out").isAfter(runsOut.plusSeconds(1)));
+        dispatcher.setExpiryWake(true);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true))
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
+                waiting -> assertThat(waiting.policyDeadline()).as("on: as the offer runs out, 3 s from now").isEqualTo(runsOut));
+        assertThat(activeOffers()).as("until then it is the first rider's alone").containsExactly(nearest);
+
+        secondsPass(4, nearest);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true))
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
+                waiting -> assertThat(waiting.policyDeadline()).as("the new offer has its 20 s: the 5 s check").isAfter(Instant.now().plusSeconds(4)));
+        assertThat(activeOffers()).as("the look at the offer's end asks the next rider").containsExactly(second);
+        assertThat(reason(second)).containsEntry("round", 2).containsEntry("place", 1);
+    }
+
+    /** The expiry wake changes no rule: a rider is asked about the same order again only one look (5 s) after their offer ran out. */
+    @Test
+    void withTheExpiryWakeOnTheSameRiderIsStillAskedAgainOnlyOneLookAfterTheirOfferRanOut() {
+        ridersFirst();
+        UUID only = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        dispatcher.setExpiryWake(true);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).containsExactly(only);
+
+        secondsPass(21, null);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).as("their 20 s are over: nobody else to ask")
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class,
+                waiting -> assertThat(waiting.policyDeadline()).as("no offer is running, so the usual 5 s check").isAfter(Instant.now().plusSeconds(4)));
+        assertThat(activeOffers()).isEmpty();
+        assertThat(count("fleet_schema.trip_offer")).isOne();
+
+        secondsPass(5, null);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).as("26 s after their first offer, the same rider is asked again").containsExactly(only);
+        assertThat(count("fleet_schema.trip_offer")).isEqualTo(2);
     }
 
     /** R16 16 switched off (the default): an offer whose phone never reported ringing holds the next round up, as before. */

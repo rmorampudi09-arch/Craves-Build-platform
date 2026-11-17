@@ -152,6 +152,14 @@ public class FleetDispatcher implements FleetStage {
      * long stay as they are.
      */
     private boolean expiryWake;
+    /**
+     * CRAVES_FLEET_NO_SUPPLY_FAST_PATH_ENABLED (off by default; docs/riders/DISPATCH.md §2, "No rider in range"): with no
+     * limit on rounds, an order nobody was ever asked about, with no rider in range at all (noRiderInRange), goes on to the
+     * courier once its stage is noSupplySettleSeconds old, not at the deadline. An order any rider could still hear of
+     * keeps its whole stage.
+     */
+    private boolean noSupplyFastPath;
+    private int noSupplySettleSeconds;
     private final AtomicLong noRateCardLoggedAt = new AtomicLong();
     /** Phase 5, the fleet engine (craves.fleet.engine.*): the feed while shadow or live, the client while live; else null. */
     private FleetEngineFeed engineFeed;
@@ -203,6 +211,13 @@ public class FleetDispatcher implements FleetStage {
     @Value("${craves.fleet.offer-expiry-wake-enabled:false}")
     public void setExpiryWake(boolean expiryWake) {
         this.expiryWake = expiryWake;
+    }
+
+    @Autowired
+    public void setNoSupplyFastPath(@Value("${craves.fleet.no-supply-fast-path-enabled:false}") boolean enabled,
+                                    @Value("${craves.fleet.no-supply-settle-seconds:3}") int settleSeconds) {
+        this.noSupplyFastPath = enabled;
+        this.noSupplySettleSeconds = Math.max(0, settleSeconds);
     }
 
     @Autowired(required = false)
@@ -318,6 +333,11 @@ public class FleetDispatcher implements FleetStage {
             if (round == null || !round.isEmpty() || policy.wholeStage()) {
                 (round == null ? List.<RingingOffer>of() : round).forEach(offer -> Thread.ofVirtual().name("fleet-offer-push")
                     .start(() -> ring(offer)));
+                // Nobody to ask this look (an empty round here is the whole stage's): with the fast path, is anyone in range at all?
+                if (noSupplyFastPath && round != null && round.isEmpty() && closedForNoSupply(trip.id(), policy, borzoNext)) {
+                    LOGGER.info("FLEET_STAGE_CLOSED trip={} outcome=NO_SUPPLY next={}", trip.id(), borzoNext ? "BORZO" : "PIDGE");
+                    return Optional.empty();
+                }
                 throw riderDeciding(deadline, policy, trip.id());
             }
         }
@@ -346,6 +366,57 @@ public class FleetDispatcher implements FleetStage {
             throw riderDeciding(open.get(0), policy, tripId);
         }
         return closeFleetStage(tripId, outcome, borzoNext, pidgeSeconds());
+    }
+
+    /**
+     * The no-supply fast path: closeFleetStage with outcome NO_SUPPLY when, under the stage row's lock (the lock a round is
+     * sent under, so no offer goes out meanwhile), the stage is open, before its deadline and at least the settle time old,
+     * no offer was ever made for the trip (so never "all declined"), and no rider is in range (noRiderInRange). A
+     * transaction of its own. A failure only logs: the order then waits for riders, as without the fast path.
+     */
+    private boolean closedForNoSupply(UUID tripId, DispatchPolicy policy, boolean borzoNext) {
+        try {
+            return Boolean.TRUE.equals(transaction.execute(status -> {
+                List<double[]> kitchen = jdbc.query("SELECT t.kitchen_lat, t.kitchen_lng FROM fleet_schema.trip_stage s "
+                    + "JOIN fleet_schema.trip t ON t.id = s.trip_id WHERE s.trip_id = ? AND s.provider = 'CRAVES_FLEET' AND s.state = 'OPEN' "
+                    + "AND s.deadline_at > now() AND s.opened_at <= now() - make_interval(secs => ?) FOR UPDATE OF s",
+                    (row, n) -> new double[] {row.getDouble("kitchen_lat"), row.getDouble("kitchen_lng")}, tripId, noSupplySettleSeconds);
+                // Statements of their own, so they see what a worker committed while this one waited for the lock.
+                return !kitchen.isEmpty()
+                    && !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE trip_id = ?)",
+                        Boolean.class, tripId))
+                    && noRiderInRange(kitchen.get(0)[0], kitchen.get(0)[1], policy.radiusM())
+                    && closeFleetStage(tripId, "NO_SUPPLY", borzoNext, policy.pidgeStageSeconds());
+            }));
+        } catch (RuntimeException exception) {
+            LOGGER.warn("FLEET_NO_SUPPLY_CHECK_FAILED trip={} error={}", tripId, exception.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    /**
+     * No rider who is, or could shortly be, asked about an order at this kitchen, by Postgres only (never the engine): no
+     * ACTIVE rider on an open shift whose phone called within FIX_WITHIN_SECONDS has their last known position inside the
+     * radius, or no position yet. Wider than nearbyRiders on purpose: a rider on a break, on a trip, deciding on another
+     * order, heard from over 45 s ago, with an old or mock fix, a phone that can't ring or their own distance limits still
+     * counts as in range. Only test mode leaves a rider out, as it does for offers. No offer history is read.
+     */
+    private boolean noRiderInRange(double lat, double lng, int radiusM) {
+        double dLat = radiusM / 111_320.0;
+        double dLng = radiusM / (111_320.0 * Math.max(0.01, Math.cos(Math.toRadians(lat))));
+        return jdbc.query("""
+                SELECT r.id, p.lat, p.lng
+                FROM fleet_schema.rider r
+                JOIN fleet_schema.rider_shift s ON s.rider_id = r.id AND s.ended_at IS NULL AND s.credential_revoked_at IS NULL
+                  AND s.credential_expires_at > now()
+                LEFT JOIN fleet_schema.rider_position_latest p ON p.rider_id = r.id
+                WHERE r.status = 'ACTIVE' AND s.last_seen_at > now() - make_interval(secs => ?)
+                  AND (p.rider_id IS NULL OR (p.lat BETWEEN ? AND ? AND p.lng BETWEEN ? AND ?))""",
+                (row, n) -> row.getObject("lat") != null
+                    && RoadDistanceClient.straightLineMetres(lat, lng, row.getDouble("lat"), row.getDouble("lng")) > radiusM
+                    ? null : row.getObject("id", UUID.class),
+                FIX_WITHIN_SECONDS, lat - dLat, lat + dLat, lng - dLng, lng + dLng)
+            .stream().noneMatch(rider -> rider != null && testMode.riderAllowed(rider));
     }
 
     /**
@@ -1078,6 +1149,17 @@ public class FleetDispatcher implements FleetStage {
                 + "AND state = 'ACTIVE' AND expires_at > now()", Timestamp.class, tripId);
             if (runsOut != null && runsOut.toInstant().isBefore(check)) {
                 check = runsOut.toInstant();
+            }
+        }
+        if (noSupplyFastPath && rounds && policy.wholeStage()) {
+            // Only a stage younger than the settle time with nobody asked yet, so this wakes once: the look that may find
+            // no rider in range comes as the settle time ends, not up to 5 s later.
+            Timestamp settled = jdbc.queryForObject("SELECT MAX(s.opened_at) + make_interval(secs => ?) FROM fleet_schema.trip_stage s "
+                + "WHERE s.trip_id = ? AND s.provider = 'CRAVES_FLEET' AND s.state = 'OPEN' AND s.opened_at > now() - make_interval(secs => ?) "
+                + "AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip_offer o WHERE o.trip_id = s.trip_id)", Timestamp.class,
+                noSupplySettleSeconds, tripId, noSupplySettleSeconds);
+            if (settled != null && settled.toInstant().isBefore(check)) {
+                check = settled.toInstant();
             }
         }
         return new DeliveryProviderTemporarilyUnavailableException("Craves riders are deciding on the order",

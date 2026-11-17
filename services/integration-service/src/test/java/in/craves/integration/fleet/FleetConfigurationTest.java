@@ -111,6 +111,19 @@ class FleetConfigurationTest {
     }
 
     @Test
+    void theNoSupplyFastPathIsOffUnlessSwitchedOn() {
+        runner.withPropertyValues("craves.fleet.enabled=true").run(context -> {
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "noSupplyFastPath")).isEqualTo(false);
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "noSupplySettleSeconds")).isEqualTo(3);
+        });
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.no-supply-fast-path-enabled=true",
+            "craves.fleet.no-supply-settle-seconds=-4").run(context -> {
+                assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "noSupplyFastPath")).isEqualTo(true);
+                assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "noSupplySettleSeconds")).isEqualTo(0);
+            });
+    }
+
+    @Test
     void theDispatchPolicyIsReadOnEveryLookUnlessTheCacheIsSwitchedOn() {
         runner.withPropertyValues("craves.fleet.enabled=true").run(context ->
             assertThat(ReflectionTestUtils.getField(context.getBean(FleetPolicyStore.class), "cacheNanos")).isEqualTo(0L));

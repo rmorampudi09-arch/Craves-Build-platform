@@ -1,10 +1,13 @@
 package in.craves.integration.monitoring;
 
 import in.craves.integration.config.WorkerSchedulingConfiguration;
+import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.provider.CourierApiUsage;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -25,10 +28,17 @@ public class IntegrationAlertMonitor {
 
     private final JdbcTemplate jdbcTemplate;
     private final int lookbackDays;
+    private DeliveryCommandProperties deliveryProperties;
 
     public IntegrationAlertMonitor(JdbcTemplate jdbcTemplate, @Value("${craves.monitoring.lookback-days:7}") int lookbackDays) {
         this.jdbcTemplate = jdbcTemplate;
         this.lookbackDays = lookbackDays;
+    }
+
+    /** The courier API usage switches (provider-api-usage-enabled, caps); without them, or off, usage is neither written nor alerted. */
+    @Autowired(required = false)
+    public void setDeliveryProperties(DeliveryCommandProperties deliveryProperties) {
+        this.deliveryProperties = deliveryProperties;
     }
 
     private static Map<String, String> checks() {
@@ -87,6 +97,49 @@ public class IntegrationAlertMonitor {
                 }
             } catch (RuntimeException exception) {
                 LOGGER.warn("Integration alert check {} could not run", alert, exception);
+            }
+        });
+        if (deliveryProperties != null && deliveryProperties.isProviderApiUsageEnabled()) {
+            courierApiUsage();
+        }
+    }
+
+    /**
+     * CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED: adds this replica's courier API calls since the last run to the day's
+     * row (India), so the row is the total over all replicas, at most one run behind. COURIER_API_USAGE_HIGH is logged once
+     * per courier per day, by the replica whose update marks the row; COURIER_API_RATE_LIMITED by each replica that saw a 429.
+     */
+    void courierApiUsage() {
+        CourierApiUsage.drainRateLimited().forEach((provider, count) ->
+            LOGGER.error("CRAVES_ALERT alert=COURIER_API_RATE_LIMITED provider={} count={}", provider, count));
+        CourierApiUsage.drainCalls().forEach((provider, calls) -> {
+            try {
+                jdbcTemplate.update("""
+                    INSERT INTO delivery_schema.provider_api_usage (provider_id, day, calls)
+                    VALUES (?, (now() AT TIME ZONE 'Asia/Kolkata')::date, ?)
+                    ON CONFLICT (provider_id, day) DO UPDATE SET calls = provider_api_usage.calls + EXCLUDED.calls
+                    """, provider, calls.intValue());
+            } catch (RuntimeException exception) {
+                CourierApiUsage.putBack(provider, calls);
+                LOGGER.warn("Courier API usage of {} could not be written", provider, exception);
+            }
+        });
+        int percent = deliveryProperties.getProviderApiUsageAlertPercent();
+        deliveryProperties.getProviderApiDailyCaps().forEach((provider, cap) -> {
+            if (cap == null || cap <= 0) {
+                return;
+            }
+            try {
+                jdbcTemplate.queryForList("""
+                    UPDATE delivery_schema.provider_api_usage SET alerted_at = now()
+                    WHERE provider_id = ? AND day = (now() AT TIME ZONE 'Asia/Kolkata')::date AND alerted_at IS NULL
+                      AND calls::bigint * 100 >= ?::bigint * ?
+                    RETURNING calls
+                    """, Integer.class, provider, cap, percent).forEach(calls ->
+                    LOGGER.error("CRAVES_ALERT alert=COURIER_API_USAGE_HIGH provider={} calls={} cap={} percent={}", provider, calls, cap,
+                        percent));
+            } catch (RuntimeException exception) {
+                LOGGER.warn("Courier API usage of {} could not be checked", provider, exception);
             }
         });
     }

@@ -270,6 +270,15 @@ CRAVES_DELIVERY_MAX_AUTO_LOCK_RENEW_MINUTES=5
 CRAVES_DELIVERY_OUTBOX_BATCH_SIZE=20
 CRAVES_DELIVERY_OUTBOX_PUBLISH_INTERVAL_MS=5000
 CRAVES_DELIVERY_UNKNOWN_PROXIMITY_SCORE=50.0
+CRAVES_DELIVERY_WEBHOOK_FIRST_TRACKING_ENABLED=false
+CRAVES_DELIVERY_TRACKING_QUIET_SEARCHING_SECONDS=120
+CRAVES_DELIVERY_TRACKING_QUIET_ASSIGNED_SECONDS=180
+CRAVES_DELIVERY_TRACKING_QUIET_PICKED_UP_SECONDS=300
+CRAVES_DELIVERY_TRACKING_SAFETY_POLL_SECONDS=900
+CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED=false
+CRAVES_DELIVERY_PROVIDER_API_USAGE_ALERT_PERCENT=70
+CRAVES_DELIVERY_BORZO_DAILY_API_CAP=5000
+CRAVES_DELIVERY_PIDGE_DAILY_API_CAP=0
 ```
 
 Do not store `SERVICE_BUS_CONNECTION_STRING` in Azure for the managed-identity deployment.
@@ -573,6 +582,71 @@ Not in this guard yet: provider clocks (`status_provider_at`, so a late re-match
 callback stamped before a poll is no longer dropped as stale), `attempt_no`/`rematched_at`, `delayed_at`, Shiprocket
 codes 17 and 79–83, and booking the next courier automatically after a courier-side end. The manual Borzo cancel
 endpoint writes no `courier_cancel` row, so its cancel opens a case under enforce.
+
+## Webhook-first tracking
+
+`CRAVES_DELIVERY_WEBHOOK_FIRST_TRACKING_ENABLED` = `false` (default) | `true`. Off, nothing below happens and no new
+statement runs: every live job is polled every `CRAVES_DELIVERY_TRACKING_POLL_SECONDS` (60), and a Borzo poll is two
+calls (`GET /orders`, `GET /courier`), about 80 calls for a 40-minute delivery.
+
+On, the tracking worker (`DeliveryTrackingReconciliationWorker`, still every 15 s) polls a job only when it has been
+quiet, and callbacks set the pace:
+
+| Job is | Polled after this long with no callback and no poll | Variable |
+|---|---|---|
+| before a rider (PENDING, SEARCHING, DELAYED) | 120 s | `CRAVES_DELIVERY_TRACKING_QUIET_SEARCHING_SECONDS` |
+| COURIER_ASSIGNED to AT_PICKUP | 180 s | `CRAVES_DELIVERY_TRACKING_QUIET_ASSIGNED_SECONDS` |
+| PICKED_UP and after | 300 s | `CRAVES_DELIVERY_TRACKING_QUIET_PICKED_UP_SECONDS` |
+
+*   A poll, whatever it finds, sets the next poll one quiet period later and writes `delivery_job.last_polled_at`.
+*   A callback for the job, applied or ignored, writes `last_webhook_at` and sets the next poll to one quiet period
+    later, but never later than `CRAVES_DELIVERY_TRACKING_SAFETY_POLL_SECONDS` (900) after the last poll. So a courier
+    whose callbacks keep arriving is still polled every 15 minutes, and a lost callback is found one quiet period after
+    the courier goes silent.
+*   A job waiting to retry a failed poll keeps its retry time; a callback does not shorten it.
+*   A Borzo poll reads the courier (`GET /courier`) only when the order it just read differs from the job and has a
+    rider. A poll that finds nothing new is one call. Status events that carry the rider's name and phone today still do.
+*   `DELIVERY_TRACKING_POLL_SAW_FIRST provider=… jobId=… from=… to=…` is logged when a poll, not a callback, brings a
+    change. A rising count for one courier means its callbacks are not arriving.
+*   The schedule statement in a callback runs in a savepoint and the one in the worker on its own: if either fails, the
+    status update goes on as without it and `DELIVERY_WEBHOOK_FIRST_TRACKING step=… failed` is logged.
+
+The test `WebhookFirstTrackingDatabaseTest` runs 300 Borzo deliveries of 40 minutes through the real worker, status
+service and Borzo client, one in five with no callbacks and one in five with every other callback lost: 2,880 tracking
+calls, 3,480 with a quote and a booking each (today: about 24,000), and every delivery reaches DELIVERED.
+
+Switch on: set the flag; watch `DELIVERY_TRACKING_POLL_SAW_FIRST` and the day's row in `provider_api_usage` (below).
+Rollback: set it to `false`; the 60-second poll is back from each job's next poll. `last_webhook_at` and
+`last_polled_at` (V194) are then no longer written or read.
+
+Not in this yet: one `GET /courier` per assignment whoever saw it (needs a stored courier reference), an executor and
+shorter timeouts per courier so one hanging courier cannot delay the others' polls, an alert for a live job with no
+callback for 20 minutes, and the courier's name in a timed-out quote's log line.
+
+## Courier API usage
+
+Every HTTP request to Borzo and Pidge is counted in memory in the replica that sends it (`CourierApiUsage`).
+Counting writes nothing and cannot fail a call. Shiprocket is not in use and is not counted.
+
+`CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED` = `false` (default) | `true`. On, `IntegrationAlertMonitor` (every 5
+minutes, in each replica) adds the replica's count to `delivery_schema.provider_api_usage`, one row per courier per day
+in India, so the row is the total over all replicas, at most one run behind. It is one write per courier per run, not
+one per call. A replica that stops loses the calls it had not yet added (at most 5 minutes of its own).
+
+| Alert | Raised | Do |
+|---|---|---|
+| `COURIER_API_USAGE_HIGH provider= calls= cap= percent=` | Once per courier per day, when the day's calls reach `CRAVES_DELIVERY_PROVIDER_API_USAGE_ALERT_PERCENT` (70) of the courier's cap | Check webhook-first tracking is on and `DELIVERY_TRACKING_POLL_SAW_FIRST` is not climbing; ask the courier for a higher cap. Past the cap, quotes and bookings for that courier are refused |
+| `COURIER_API_RATE_LIMITED provider= count=` | By each replica, each run in which the courier answered HTTP 429 | The same; the courier is already refusing calls |
+
+Caps, in calls a day: `CRAVES_DELIVERY_BORZO_DAILY_API_CAP` (5000), `CRAVES_DELIVERY_PIDGE_DAILY_API_CAP` (0).
+0 counts without alerting. Borzo's cap is per 24 hours, not per
+calendar day, and it also allows 100 calls a minute, which is not counted: `COURIER_API_RATE_LIMITED` covers both.
+
+```sql
+SELECT * FROM delivery_schema.provider_api_usage ORDER BY day DESC, provider_id;
+```
+
+Switch on: set the flag. Rollback: set it to `false`; the table keeps its rows and nothing reads them.
 
 ## Safe rollout
 

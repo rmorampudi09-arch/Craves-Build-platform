@@ -36,10 +36,12 @@ import in.craves.integration.fleet.client.DeliveryCodeClient;
 import in.craves.integration.fleet.client.RiderPushClient;
 import in.craves.integration.fleet.client.RoadDistanceClient;
 import in.craves.integration.fleet.eta.FleetEta;
+import in.craves.integration.fleet.money.FleetEarnings;
 import in.craves.integration.fleet.trip.FleetStatusBridge;
 import in.craves.integration.fleet.trip.FleetTripModels;
 import in.craves.integration.fleet.trip.FleetTripPay;
 import in.craves.integration.fleet.trip.FleetTripService;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +57,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -477,6 +480,70 @@ class FleetDispatchDatabaseTest {
         assertThat(reason(outside)).containsEntry("place", 1).containsEntry("riders", 1).containsEntry("bandRiders", 1).containsEntry("round", 3);
     }
 
+    /**
+     * A band's standings are read in one statement, and are each rider's own figures, as the three statements a rider gave
+     * them before: today's pay as Home totals it (RANGE_TOTAL_SQL), available online seconds (ONLINE_SECONDS_SQL), and when
+     * they last became free.
+     */
+    @Test
+    void aBandsStandingsReadTogetherAreEachRidersOwnFigures() {
+        FleetDatabase.assumeTodayIsHoursOld(4);
+        UUID earner = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        UUID rested = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        UUID fresh = FleetDispatchFixtures.riderOnShift(fleet, "+919800000003", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        UUID back = FleetDispatchFixtures.riderOnShift(fleet, "+919800000004", KITCHEN_LAT, KITCHEN_LNG, 5, false);
+        day(earner, 30000, 180);
+        day(earner, 12000, 180);
+        // Pay finalised two days ago is not today's.
+        UUID oldTrip = fleet.trip(UUID.randomUUID());
+        fleet.db.update("UPDATE fleet_schema.trip SET rider_id = ?, state = 'DELIVERED', finished_at = now() - INTERVAL '2 days', "
+            + "pay_finalized_at = now() - INTERVAL '2 days' WHERE id = ?", earner, oldTrip);
+        fleet.db.update("INSERT INTO fleet_schema.rider_earning (id, rider_id, trip_id, component, revision, business_key, gross_paise, "
+            + "withheld_paise, net_paise, rate_card_version, withdrawable_at) VALUES (?, ?, ?, 'base', 1, ?, 99900, 0, 99900, '2026-10-v1', now())",
+            UUID.randomUUID(), earner, oldTrip, "fleet-trip-pay/" + oldTrip + "/base/1");
+        day(rested, 5000, 120);
+        FleetDispatchFixtures.onBreak(fleet.db, rested, 40, -20);
+        day(fresh, 0, 10);
+        day(back, 0, 30);
+        // An earlier shift today, ended: its hour counts as online, its start is not when they became free.
+        fleet.db.update("INSERT INTO fleet_schema.rider_shift (id, rider_id, credential_hash, credential_expires_at, started_at, ended_at, "
+            + "last_seen_at) VALUES (?, ?, ?, now() + INTERVAL '8 hours', now() - INTERVAL '3 hours', now() - INTERVAL '2 hours', "
+            + "now() - INTERVAL '2 hours')", UUID.randomUUID(), back, "e".repeat(64));
+
+        List<FleetDispatcher.Candidate> band = dispatcher.fair(Stream.of(earner, rested, fresh, back)
+            .map(rider -> new FleetDispatcher.Candidate(rider, 100, KITCHEN_LAT, KITCHEN_LNG, 100, null, null)).toList(), 1500);
+
+        assertThat(band).hasSize(4);
+        FleetEarnings.Window today = FleetEarnings.window("today", Instant.now());
+        Timestamp from = Timestamp.from(today.from());
+        Timestamp to = Timestamp.from(today.to());
+        for (FleetDispatcher.Candidate rider : band) {
+            UUID id = rider.riderId();
+            assertThat(rider.standing().earnedPaise()).isEqualTo(fleet.db.queryForObject(FleetEarnings.RANGE_TOTAL_SQL,
+                (row, n) -> row.getLong("paise"), id, from, to));
+            assertThat(rider.standing().onlineSeconds()).as("a second or two later")
+                .isCloseTo(fleet.db.queryForObject(FleetEarnings.ONLINE_SECONDS_SQL, Long.class, from, to, id), org.assertj.core.data.Offset.offset(2L));
+            assertThat(rider.standing().freeSince()).isEqualTo(fleet.db.queryForObject("""
+                SELECT GREATEST((SELECT MAX(s.started_at) FROM fleet_schema.rider_shift s WHERE s.rider_id = ? AND s.ended_at IS NULL),
+                                (SELECT MAX(t.finished_at) FROM fleet_schema.trip t WHERE t.rider_id = ?),
+                                (SELECT MAX(b.ends_at) FROM fleet_schema.rider_break b JOIN fleet_schema.rider_shift s ON s.id = b.shift_id
+                                 WHERE s.rider_id = ? AND s.ended_at IS NULL AND b.ends_at <= now()))""",
+                Timestamp.class, id, id, id).toInstant());
+        }
+        Map<UUID, FleetDispatcher.Standing> standings = new java.util.HashMap<>();
+        band.forEach(rider -> standings.put(rider.riderId(), rider.standing()));
+        assertThat(standings.get(earner).earnedPaise()).as("two trips today, not the one two days ago").isEqualTo(42000);
+        assertThat(standings.get(rested).earnedPaise()).isEqualTo(5000);
+        assertThat(standings.get(rested).onlineSeconds()).as("two hours less a 20 minute break").isBetween(5990L, 6010L);
+        assertThat(standings.get(rested).freeSince()).as("since their break ended").isBetween(Instant.now().minusSeconds(1210), Instant.now().minusSeconds(1190));
+        assertThat(standings.get(fresh).earnedPaise()).isZero();
+        assertThat(standings.get(fresh).onlineSeconds()).isBetween(595L, 610L);
+        assertThat(standings.get(back).onlineSeconds()).as("this shift's half hour and the earlier hour").isBetween(5390L, 5410L);
+        assertThat(standings.get(back).freeSince()).as("since this shift began").isBetween(Instant.now().minusSeconds(1810), Instant.now().minusSeconds(1790));
+        assertThat(band.stream().map(FleetDispatcher.Candidate::riderId)).as("least pay per online hour first, then free the longest")
+            .containsExactly(back, fresh, rested, earner);
+    }
+
     /** Equal earnings go to the rider who has waited longest for an order; a break is not waiting. */
     @Test
     void equalEarningsGoToTheRiderFreeTheLongest() {
@@ -685,6 +752,39 @@ class FleetDispatchDatabaseTest {
         assertThat(ordersOffered()).containsExactly(chefSubOrderId);
         assertThat(fleet.db.queryForObject("SELECT max(round) FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
             + "WHERE t.chef_sub_order_id = ?", Integer.class, chefSubOrderId)).isEqualTo(2);
+    }
+
+    /**
+     * A look no longer marks every order's run-out offers EXPIRED under its own lock; the dispatch tick does that for all
+     * (FleetDispatchJobs.expireOffers). Until it has, an offer that ran out is over all the same: its rider is free for
+     * another order, it holds up no round and is not rung again. A look marks only its own trip's and its riders' offers.
+     */
+    @Test
+    void anOfferThatRanOutIsOverBeforeTheTickMarksItAndALookMarksOnlyItsOwn() {
+        ridersFirst();
+        UUID nearest = FleetDispatchFixtures.riderOnShift(fleet, "+919800000001", KITCHEN_LAT + 0.001, KITCHEN_LNG, 5, false);
+        UUID second = FleetDispatchFixtures.riderOnShift(fleet, "+919800000002", KITCHEN_LAT + 0.005, KITCHEN_LNG, 5, false);
+        UUID otherOrder = UUID.fromString("0bde0202-2222-4222-8222-222222222222");
+        FleetDispatchFixtures.kitchen(fleet.db, otherOrder, true);
+        DeliveryCommandMessage other = FleetDispatchFixtures.command(otherOrder);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        secondsPass(21, nearest);
+        assertThat(offerStates(chefSubOrderId)).as("ran out a second ago; the tick has not run").containsExactly("ACTIVE");
+
+        assertThatThrownBy(() -> dispatcher.run(other, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(ordersOffered()).as("a new order asks the rider whose offer ran out").containsExactly(otherOrder);
+        assertThat(activeOffers()).containsExactly(nearest);
+        assertThat(offerStates(chefSubOrderId)).as("the place it held is given up as the rider is asked").containsExactly("EXPIRED");
+
+        secondsPass(21, nearest);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true)).isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(activeOffers()).as("the first order's next round: the rider it has not asked").containsExactly(second);
+        assertThat(offerStates(chefSubOrderId)).containsExactly("EXPIRED", "ACTIVE");
+        assertThat(offerStates(otherOrder)).as("another order's offer to another rider is left to the tick").containsExactly("ACTIVE");
+        verify(push, org.mockito.Mockito.after(500).times(1)).offer(eq("fcm-+919800000002"), org.mockito.ArgumentMatchers.any(), anyString(),
+            anyString(), anyString(), anyInt());
+        verify(push, times(2).description("once for each order, never again for an offer that ran out")).offer(eq("fcm-+919800000001"),
+            org.mockito.ArgumentMatchers.any(), anyString(), anyString(), anyString(), anyInt());
     }
 
     /** The emergency stop still works at once: with dispatch off, an order waiting for riders goes on to Borzo. */
@@ -1099,6 +1199,12 @@ class FleetDispatchDatabaseTest {
     private List<UUID> ordersOffered() {
         return fleet.db.queryForList("SELECT t.chef_sub_order_id FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
             + "WHERE o.state = 'ACTIVE' AND o.expires_at > now()", UUID.class);
+    }
+
+    /** The states of the order's offers, oldest first. */
+    private List<String> offerStates(UUID order) {
+        return fleet.db.queryForList("SELECT o.state FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id "
+            + "WHERE t.chef_sub_order_id = ? ORDER BY o.round", String.class, order);
     }
 
     /** The order's stages in order, as provider:state:outcome. */

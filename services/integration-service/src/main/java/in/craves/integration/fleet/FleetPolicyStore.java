@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -63,6 +64,14 @@ public class FleetPolicyStore {
     private final ObjectMapper json;
     /** Rain mode (R16 19): while it is on, the policy in force runs with its rules (FleetRain.inRain). */
     private FleetRain rain;
+    /**
+     * CRAVES_FLEET_DISPATCH_POLICY_CACHE_SECONDS (0, the default: every read asks the database): how long this replica
+     * goes on using the policy it last read, at most MAX_CACHE_SECONDS. A new version, a withdrawal or the emergency stop
+     * (mode off) written by anyone reaches each replica that much later at most.
+     */
+    static final int MAX_CACHE_SECONDS = 5;
+    private long cacheNanos;
+    private volatile ReadPolicy lastRead;
 
     public FleetPolicyStore(JdbcTemplate jdbc, ObjectMapper json) {
         this.jdbc = jdbc;
@@ -72,6 +81,11 @@ public class FleetPolicyStore {
     @Autowired(required = false)
     public void setRain(FleetRain rain) {
         this.rain = rain;
+    }
+
+    @Value("${craves.fleet.dispatch-policy-cache-seconds:0}")
+    public void setDispatchPolicyCacheSeconds(int seconds) {
+        this.cacheNanos = Duration.ofSeconds(Math.max(0, Math.min(MAX_CACHE_SECONDS, seconds))).toNanos();
     }
 
     /**
@@ -93,7 +107,20 @@ public class FleetPolicyStore {
      * is on, every round sent runs with its rules (at least 45 s to accept, at most 2 rounds); riders' terms keep the policy's.
      */
     public Optional<DispatchPolicy> currentDispatchPolicy() {
-        Optional<DispatchPolicy> policy = jdbc.query("""
+        // Two threads may both read a policy that has just aged out; each result is whole, and either may be kept.
+        ReadPolicy read = lastRead;
+        if (read == null || System.nanoTime() - read.atNanos() >= cacheNanos) {
+            long now = System.nanoTime(); // taken before the read, so the policy is never older than it is counted
+            read = new ReadPolicy(readDispatchPolicy(), now);
+            lastRead = read;
+        }
+        Optional<DispatchPolicy> policy = read.policy();
+        // Rain mode is read on every call, as before: only the policy row is kept.
+        return rain != null && policy.isPresent() && rain.raining() ? policy.map(FleetRain::inRain) : policy;
+    }
+
+    private Optional<DispatchPolicy> readDispatchPolicy() {
+        return jdbc.query("""
             SELECT version, effective_from, mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent,
                    per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds, offers_at_once, offer_rounds, fair_band_m,
                    rank_by_travel_time
@@ -106,7 +133,9 @@ public class FleetPolicyStore {
                 row.getInt("pidge_stage_seconds"), row.getInt("offers_at_once"), row.getInt("offer_rounds"), row.getInt("fair_band_m"),
                 row.getBoolean("rank_by_travel_time")))
             .stream().findFirst();
-        return rain != null && policy.isPresent() && rain.raining() ? policy.map(FleetRain::inRain) : policy;
+    }
+
+    private record ReadPolicy(Optional<DispatchPolicy> policy, long atNanos) {
     }
 
     /** A rate card by version, for pay locked on an offer. */

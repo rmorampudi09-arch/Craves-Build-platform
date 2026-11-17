@@ -69,6 +69,10 @@ craves:
     # to 5 s later, so the next rider is asked then. Who hears, in what order, for how long, and the 5 s before the same
     # rider is asked again all stay, so riders need no notice. Off: the 5 s check only, as before.
     offer-expiry-wake-enabled: ${CRAVES_FLEET_OFFER_EXPIRY_WAKE_ENABLED:false}
+    # Seconds each replica goes on using the dispatch policy it last read, 0 to 5 (more counts as 5); 0 = off, every look
+    # at an order reads it from the database. With 5, the emergency stop (mode off), a new version or a withdrawal takes
+    # up to 5 s to reach every replica: orders looked at in those seconds are still offered under the policy before.
+    dispatch-policy-cache-seconds: ${CRAVES_FLEET_DISPATCH_POLICY_CACHE_SECONDS:0}
     # The fleet engine (Phase 5, services/fleet-engine, docs/riders/SCALE.md). off: nothing is written to Redis. shadow:
     # rider events and every order's ranking go to the engine, which compares and logs (FLEET_ENGINE_SHADOW); offers stay
     # Java's. live: dispatch asks the engine first and ranks itself after reply-timeout-ms. Partitions and key prefix must

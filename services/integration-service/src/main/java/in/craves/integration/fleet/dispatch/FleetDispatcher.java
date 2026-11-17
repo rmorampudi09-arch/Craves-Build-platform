@@ -110,6 +110,24 @@ public class FleetDispatcher implements FleetStage {
     static final Duration CHECK_EVERY = Duration.ofSeconds(10);
     static final Duration ROUND_CHECK_EVERY = Duration.ofSeconds(5);
     static final Set<String> TAKEN = Set.of("ASSIGNED", "AT_PICKUP", "PICKED_UP", "AT_DROP", "DELIVERED", "FAILED", "CANCELLED");
+    /**
+     * standings() for a whole band in one statement, a row per rider: pay as FleetEarnings.RANGE_TOTAL_SQL gives one rider's
+     * and online seconds as ONLINE_SECONDS_SQL does, so fair turns compare what Home shows. Parameters: from, to (online),
+     * from, to (pay), the rider ids as a uuid[] literal.
+     */
+    private static final String STANDINGS_SQL = FleetEarnings.AVAILABLE + """
+        SELECT r.id AS rider_id,
+               (SELECT COALESCE(SUM(e.net_paise), 0) FROM fleet_schema.rider_earning e
+                LEFT JOIN fleet_schema.trip t ON t.id = e.trip_id
+                LEFT JOIN fleet_schema.rider_slot sl ON sl.id = e.slot_id
+                WHERE e.rider_id = r.id AND COALESCE(t.pay_finalized_at, sl.ends_at) >= ?
+                  AND COALESCE(t.pay_finalized_at, sl.ends_at) < ?) AS paise,
+               (SELECT COALESCE(SUM(a.seconds), 0)::bigint FROM available a WHERE a.rider_id = r.id) AS online_seconds,
+               GREATEST((SELECT MAX(s.started_at) FROM fleet_schema.rider_shift s WHERE s.rider_id = r.id AND s.ended_at IS NULL),
+                        (SELECT MAX(t.finished_at) FROM fleet_schema.trip t WHERE t.rider_id = r.id),
+                        (SELECT MAX(b.ends_at) FROM fleet_schema.rider_break b JOIN fleet_schema.rider_shift s ON s.id = b.shift_id
+                         WHERE s.rider_id = r.id AND s.ended_at IS NULL AND b.ends_at <= now())) AS free_since
+        FROM unnest(CAST(? AS uuid[])) AS r(id)""";
 
     private final JdbcTemplate jdbc;
     private final TransactionTemplate transaction;
@@ -339,7 +357,9 @@ public class FleetDispatcher implements FleetStage {
             + "AND provider = 'CRAVES_FLEET' AND state = 'OPEN'", outcome, tripId) != 1) {
             return false;
         }
-        jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'WITHDRAWN', decided_at = now() WHERE trip_id = ? AND state = 'ACTIVE'", tripId);
+        // An offer already out of time ran out; it was not withdrawn (the 5 s tick may not have marked it yet).
+        jdbc.update("UPDATE fleet_schema.trip_offer SET state = CASE WHEN expires_at <= now() THEN 'EXPIRED' ELSE 'WITHDRAWN' END, "
+            + "decided_at = now() WHERE trip_id = ? AND state = 'ACTIVE'", tripId);
         String next = borzoNext ? "BORZO" : "PIDGE";
         if (jdbc.update("UPDATE fleet_schema.trip SET provider = ?, version = version + 1, updated_at = now() WHERE id = ? "
             + "AND state = 'SEARCHING' AND provider = 'CRAVES_FLEET'", next, tripId) != 1) {
@@ -645,18 +665,11 @@ public class FleetDispatcher implements FleetStage {
         Timestamp from = Timestamp.from(today.from());
         Timestamp to = Timestamp.from(today.to());
         Map<UUID, Standing> standings = new HashMap<>();
-        // shortcut: 3 queries per rider in the band, fine for the tens a band holds; one batched query past ~50 riders a band.
-        for (UUID riderId : riderIds) {
-            long earned = jdbc.queryForObject(FleetEarnings.RANGE_TOTAL_SQL, (row, n) -> row.getLong("paise"), riderId, from, to);
-            long online = jdbc.queryForObject(FleetEarnings.ONLINE_SECONDS_SQL, Long.class, from, to, riderId);
-            Timestamp freeSince = jdbc.queryForObject("""
-                SELECT GREATEST((SELECT MAX(s.started_at) FROM fleet_schema.rider_shift s WHERE s.rider_id = ? AND s.ended_at IS NULL),
-                                (SELECT MAX(t.finished_at) FROM fleet_schema.trip t WHERE t.rider_id = ?),
-                                (SELECT MAX(b.ends_at) FROM fleet_schema.rider_break b JOIN fleet_schema.rider_shift s ON s.id = b.shift_id
-                                 WHERE s.rider_id = ? AND s.ended_at IS NULL AND b.ends_at <= now()))""",
-                Timestamp.class, riderId, riderId, riderId);
-            standings.put(riderId, new Standing(earned, online, freeSince == null ? Instant.EPOCH : freeSince.toInstant()));
-        }
+        jdbc.query(STANDINGS_SQL, row -> {
+            Timestamp freeSince = row.getTimestamp("free_since");
+            standings.put(row.getObject("rider_id", UUID.class), new Standing(row.getLong("paise"), row.getLong("online_seconds"),
+                freeSince == null ? Instant.EPOCH : freeSince.toInstant()));
+        }, from, to, from, to, riderIds.stream().map(UUID::toString).collect(Collectors.joining(",", "{", "}")));
         return standings;
     }
 
@@ -765,9 +778,9 @@ public class FleetDispatcher implements FleetStage {
             if (!fits) {
                 return List.<RingingOffer>of();
             }
-            jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'EXPIRED', decided_at = now() WHERE state = 'ACTIVE' AND expires_at <= now()");
+            // An offer past its time is over whether or not the dispatch tick has marked it EXPIRED yet.
             boolean busy = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE trip_id = ? "
-                + "AND state = 'ACTIVE'" + heardOrYoung + ")", Boolean.class, tripId));
+                + "AND state = 'ACTIVE' AND expires_at > now()" + heardOrYoung + ")", Boolean.class, tripId));
             Integer sent = jdbc.queryForObject("SELECT COALESCE(MAX(round), 0) FROM fleet_schema.trip_offer WHERE trip_id = ?",
                 Integer.class, tripId);
             if (busy || sent == null || sent != rounds) {
@@ -775,7 +788,7 @@ public class FleetDispatcher implements FleetStage {
             }
             // Not busy, so any offer still open is one that never rang in time (R16 16): it stays open beside this round.
             List<UUID> unheard = unheardSeconds == 0 ? List.of() : jdbc.queryForList("SELECT id FROM fleet_schema.trip_offer "
-                + "WHERE trip_id = ? AND state = 'ACTIVE' ORDER BY offered_at", UUID.class, tripId);
+                + "WHERE trip_id = ? AND state = 'ACTIVE' AND expires_at > now() ORDER BY offered_at", UUID.class, tripId);
             int inserted = insertOffers(tripId, policy, choice.offers(), rounds + 1);
             if (inserted == 0) {
                 return null;
@@ -897,7 +910,6 @@ public class FleetDispatcher implements FleetStage {
 
     /** The trip, its fleet stage and the offers, in one transaction. Null when another worker already opened this order. */
     private Opened open(DeliveryCommandMessage command, DispatchPolicy policy, Plan plan, boolean borzoNext) {
-        jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'EXPIRED', decided_at = now() WHERE state = 'ACTIVE' AND expires_at <= now()");
         QuoteRequest request = command.deliveryRequest();
         Stop kitchen = request.pickup();
         Stop drop = request.dropoff();
@@ -1005,8 +1017,13 @@ public class FleetDispatcher implements FleetStage {
         // One writer per rider, as accept takes it: wait for an accept of theirs to commit, so the inserts below see it. A
         // statement of its own, because Read Committed re-checks an UPDATE's WHERE but not an INSERT … SELECT's snapshot; in
         // id order, so two dispatches never deadlock.
-        jdbc.queryForList("SELECT id FROM fleet_schema.rider WHERE id = ANY(CAST(? AS uuid[])) ORDER BY id FOR NO KEY UPDATE",
-            planned.stream().map(offer -> offer.riderId().toString()).collect(Collectors.joining(",", "{", "}")));
+        String riders = planned.stream().map(offer -> offer.riderId().toString()).collect(Collectors.joining(",", "{", "}"));
+        jdbc.queryForList("SELECT id FROM fleet_schema.rider WHERE id = ANY(CAST(? AS uuid[])) ORDER BY id FOR NO KEY UPDATE", riders);
+        // The dispatch tick expires offers for everyone (FleetDispatchJobs.expireOffers, every 5 s). Until it has, an offer
+        // that ran out still holds its rider's one ACTIVE place, so the insert below would skip them. Only these riders'
+        // and this trip's are marked here, after the riders' locks: no other order's rows are written under this one's lock.
+        jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'EXPIRED', decided_at = now() WHERE state = 'ACTIVE' AND expires_at <= now() "
+            + "AND (trip_id = ? OR rider_id = ANY(CAST(? AS uuid[])))", tripId, riders);
         int offered = 0;
         for (Planned offer : planned) {
             offered += jdbc.update("""
@@ -1032,7 +1049,8 @@ public class FleetDispatcher implements FleetStage {
     /** The trip's offers riders are deciding on now, ready to ring. */
     private List<RingingOffer> ringing(UUID tripId) {
         return jdbc.query("SELECT " + FleetTripModels.OFFER_COLUMNS
-                + " FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id WHERE o.trip_id = ? AND o.state = 'ACTIVE'",
+                + " FROM fleet_schema.trip_offer o JOIN fleet_schema.trip t ON t.id = o.trip_id WHERE o.trip_id = ? AND o.state = 'ACTIVE' "
+                + "AND o.expires_at > now()",
             (row, n) -> new RingingOffer(row.getObject("rider_id", UUID.class), FleetTripModels.offer(row, json)), tripId);
     }
 

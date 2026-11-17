@@ -160,8 +160,9 @@ public class FleetTripService {
         if (jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'ACCEPTED', decided_at = now() WHERE id = ? AND state = 'ACTIVE'", offerId) != 1) {
             throw expired(); // rolls the stage back open
         }
-        jdbc.update("UPDATE fleet_schema.trip_offer SET state = 'LOST', decided_at = now() WHERE trip_id = ? AND id <> ? AND state = 'ACTIVE'",
-            tripId, offerId);
+        // An offer already out of time ran out; it did not lose to this one (the 5 s tick may not have marked it yet).
+        jdbc.update("UPDATE fleet_schema.trip_offer SET state = CASE WHEN expires_at <= now() THEN 'EXPIRED' ELSE 'LOST' END, "
+            + "decided_at = now() WHERE trip_id = ? AND id <> ? AND state = 'ACTIVE'", tripId, offerId);
         try {
             if (jdbc.update("""
                 UPDATE fleet_schema.trip t SET state = 'ASSIGNED', rider_id = o.rider_id, pickup_distance_m = o.pickup_distance_m,

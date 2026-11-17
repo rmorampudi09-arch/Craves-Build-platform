@@ -1,5 +1,7 @@
 -- Webhook-first courier tracking (CRAVES_DELIVERY_WEBHOOK_FIRST_TRACKING_ENABLED) and the courier API call count
 -- (CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED). Both default off: nothing reads or writes these until then. Additive only.
+-- Give up rather than queue behind a long transaction on a busy table (as V176, V186 and V187 do).
+SET LOCAL lock_timeout = '5s';
 ALTER TABLE delivery_schema.delivery_job
     ADD COLUMN IF NOT EXISTS last_webhook_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS last_polled_at  TIMESTAMPTZ;

@@ -176,6 +176,32 @@ class DeliveryCommandWorkerTest {
         verifyNoInteractions(router, completion);
     }
 
+    /** A message for a command the sweeper ended at the wait cap completes with the sweeper on; off, it is as before. */
+    @Test
+    void aMessageForACommandEndedAtTheWaitCapCompletesOnlyWithTheSweeperOn() {
+        DeliveryCommandRepository commands = mock(DeliveryCommandRepository.class);
+        DeliveryProviderRouter router = mock(DeliveryProviderRouter.class);
+        DeliveryCommandCompletionService completion = mock(DeliveryCommandCompletionService.class);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        properties.setMaxDeliveryAttempts(5);
+        DeliveryCommandWorker worker = new DeliveryCommandWorker(
+            commands, mock(DeliveryJobRepository.class), router, completion, properties, retryProperties()
+        );
+        DeliveryCommandMessage message = command();
+        when(commands.claim(message.commandId(), 5)).thenReturn(Optional.empty());
+        when(commands.findById(message.commandId())).thenReturn(Optional.of(commandRecord(message, "DEAD_LETTER")));
+        when(commands.endedAtWaitCap(message.commandId())).thenReturn(true);
+
+        assertThatThrownBy(() -> worker.process(message)).isInstanceOf(DeliveryCommandWorker.DeliveryCommandNonRetryableException.class);
+        verify(commands, never()).endedAtWaitCap(any());
+        verify(commands).markDeadLetter(message.commandId(), "Delivery command attempt limit exhausted");
+
+        properties.setSweeperEnabled(true);
+        assertThat(worker.process(message).providerId()).isEqualTo("COURIER_WAIT_CAP");
+        verify(commands).markDeadLetter(any(), any());
+        verifyNoInteractions(router, completion);
+    }
+
     /**
      * R16 18's narrowing window: a command due before its riders would meet the food waits before any claim, so no attempt
      * is counted and the chef's ready tap can still start it; once the scheduler says go, it runs as before.

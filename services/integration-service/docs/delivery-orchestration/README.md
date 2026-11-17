@@ -579,6 +579,68 @@ callback stamped before a poll is no longer dropped as stale), `attempt_no`/`rem
 and booking the next courier automatically after a courier-side end. The manual Borzo cancel
 endpoint writes no `courier_cancel` row, so its cancel opens a case under enforce.
 
+## Command sweeper and courier wait cap
+
+`CRAVES_DELIVERY_COMMAND_SWEEPER_ENABLED` (default `false`). Off, nothing below happens. On, it also needs
+`CRAVES_DELIVERY_COMMAND_ENABLED` and `CRAVES_DELIVERY_RECONCILIATION_ENABLED`: the sweep is the last step of the
+create-reconciliation tick (`DeliveryCreateReconciliationWorker`, every 15 s), on every replica, so a tick with slow
+courier lookups delays it. No migration.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `CRAVES_DELIVERY_COMMAND_SWEEPER_MARGIN_SECONDS` | 15 (5 to 3600) | How long a command must be due and unwritten before it is re-sent, and the least time between two re-sends of one command |
+| `CRAVES_DELIVERY_COURIER_WAIT_CAP_MINUTES` | 20 (1 to 1440) | How long after its promised ready time a command may still be without a courier |
+
+A delivery command is run by Service Bus messages. One whose message never comes, or is dropped as a repeated id, stays
+where it is. Each tick the sweeper (`DeliveryCommandSweeper`) looks at commands dispatched in the last 24 hours:
+
+| Status | Re-sent when, plus the margin |
+|---|---|
+| `SCHEDULED` | `dispatch_at` has passed. With food-timed dispatch on and no ready tap: the later of `dispatch_at` and promised ready + 15 min, the longest a hold can run |
+| `WAITING_FOR_PROVIDER` | `next_provider_retry_at` has passed |
+| `FAILED` | its retry delay (30 s doubling to 600 s by attempt) has passed since it failed |
+| `PROCESSING` | its lease has passed (10 min; 3 min with the booking journal) |
+
+*   **Re-send.** One replica claims the command (`FOR UPDATE SKIP LOCKED`, then `updated_at = now()`), then sends one
+    message with a new id `delivery-sweep:<command>:<uuid>` and logs `DELIVERY_COMMAND_SWEPT`. It changes no status:
+    the worker claims, takes over after the lease, or dead-letters at the attempt limit, as for any message. A send
+    that fails is logged with `sent=false` and tried again one margin later.
+*   **Cap.** A command still `WAITING_FOR_PROVIDER`, or due with nobody working on it, once its promised ready time is
+    older than the cap becomes `DEAD_LETTER` with `last_error = COURIER_WAIT_CAP`, is not sent again, and
+    `DELIVERY_COURIER_WAIT_CAP` is logged. Not while Craves riders are deciding (an open `CRAVES_FLEET` stage), not
+    a command a pass holds inside its lease, and never an order that has a delivery job or a booking call whose answer
+    is not known yet (journal `INTENT` or `UNKNOWN`, or an `ORPHAN_SUSPECT` in its 2 hours of lookups): those are
+    re-sent instead, and the takeover or the reconciliation worker finishes them. A
+    message still on its way for it completes without a Service Bus dead letter. Fleet ops can still give the order to
+    a rider; a courier is booked by hand.
+*   **Not swept:** `RECONCILIATION_PENDING` (the reconciliation worker polls it and ends it after its looks), and
+    commands dispatched over 24 hours ago, which stay as they are.
+*   While riders decide, the command's own message runs each round, so a command whose message is lost there is
+    re-sent like any other. A healthy round rewrites the command every 5 to 10 s and is never re-sent.
+*   A re-sent command's `updated_at` moves, so `DELIVERY_COMMAND_STALLED` (10 minutes unwritten) no longer shows it;
+    `DELIVERY_COMMAND_SWEPT` does, each time.
+
+| Alert | Means | Do |
+|---|---|---|
+| `DELIVERY_COMMAND_SWEPT` | A due command had no message and was sent one (`status=` says where it stood) | Nothing for one. Many at once: check the Service Bus queue and the delivery-command consumer. `sent=false`: the send failed, check Service Bus |
+| `DELIVERY_COURIER_WAIT_CAP` | No courier `capMinutes` after the promised ready time; the command has stopped (`was=` its status) | Book a courier by hand or cancel the order with the customer |
+
+Switch on: count what the first ticks will end, then set the flag.
+
+```sql
+SELECT status, count(*) FROM delivery_schema.delivery_command
+WHERE status IN ('SCHEDULED', 'WAITING_FOR_PROVIDER', 'FAILED', 'PROCESSING') AND dispatch_at > now() - INTERVAL '24 hours'
+  AND COALESCE(promised_ready_at, ready_at, dispatch_at) < now() - INTERVAL '20 minutes'
+GROUP BY status;
+```
+
+Rollback: unset the flag. Nothing is re-sent or capped from the next tick. Commands already ended stay `DEAD_LETTER`;
+a late message for one is then dead-lettered as for any dead command.
+
+Not in this yet: a count of re-sends per command (a command is bounded by the margin, its 5 attempts and the cap
+instead), an ops case row for an order that has no delivery job, the stored hold time of a food-timed command, and the
+caps on a retained Borzo search and on the handoff's Pidge phase.
+
 ## Webhook-first tracking
 
 `CRAVES_DELIVERY_WEBHOOK_FIRST_TRACKING_ENABLED` = `false` (default) | `true`. Off, nothing below happens and no new

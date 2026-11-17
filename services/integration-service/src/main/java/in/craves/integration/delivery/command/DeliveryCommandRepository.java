@@ -117,6 +117,12 @@ public class DeliveryCommandRepository {
             + "chef_sub_order_id = ?)", Boolean.class, chefSubOrderId));
     }
 
+    /** Whether the sweeper ended this command at the courier wait cap (DeliveryCommandSweeper). */
+    public boolean endedAtWaitCap(UUID commandId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM delivery_schema.delivery_command WHERE id = ? "
+            + "AND status = 'DEAD_LETTER' AND last_error = ?)", Boolean.class, commandId, DeliveryCommandSweeper.WAIT_CAP));
+    }
+
     /**
      * The promised ready time of a command that no worker has started and no ready tap has moved (accelerateScheduled moves
      * ready_at off the promise); empty otherwise. Only such a command may wait for the food (R16 18).

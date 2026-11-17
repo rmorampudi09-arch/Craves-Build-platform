@@ -69,6 +69,14 @@ public class DeliveryCreateReconciliationWorker {
         this.strayBookings = strayBookings;
     }
 
+    private DeliveryCommandSweeper sweeper;
+
+    /** Re-sends due commands nobody is working on; does nothing unless CRAVES_DELIVERY_COMMAND_SWEEPER_ENABLED is on. */
+    @Autowired(required = false)
+    public void setSweeper(DeliveryCommandSweeper sweeper) {
+        this.sweeper = sweeper;
+    }
+
     /** Sends the message that runs a command made due here; a bean only while delivery commands are enabled. */
     @Autowired(required = false)
     public void setPublisher(DeliveryServiceBusPublisher publisher) {
@@ -95,6 +103,17 @@ public class DeliveryCreateReconciliationWorker {
         fixedDelayString = "${craves.delivery-command.reconciliation-interval-ms:15000}"
     )
     public void reconcilePending() {
+        try {
+            reconcile();
+        } finally {
+            if (sweeper != null) {
+                // Last, so its sends never hold up the lookups. It checks its own flag and never throws.
+                sweeper.sweep();
+            }
+        }
+    }
+
+    private void reconcile() {
         int recovered = leaseRecovery.deadLetterExhaustedCreateReconciliationLeases(
             properties.getMaxReconciliationAttempts(),
             properties.getReconciliationStaleMinutes()

@@ -151,7 +151,7 @@ def run_backend(output, expected):
         raise ValueError("Backend runner requires the explicit GitHub disposable-database acknowledgement")
     for service in SERVICES:
         command = run_command(["mvn", "-B", "-ntp", "-f", f"services/{service}/pom.xml", "clean", "verify",
-            "-DskipTests=false", "-Dmaven.test.skip=false", "-Djunit.jupiter.execution.parallel.enabled=false"], ROOT, output / f"{service}.log", 1200)
+            "-DskipTests=false", "-Dmaven.test.skip=false", "-Djunit.jupiter.execution.parallel.enabled=false"], ROOT, output / f"{service}.log", 2400)  # integration-service alone runs past 20 minutes; the job's own limit is 75
         checked = java_result(service, ROOT / f"services/{service}/target/surefire-reports", manifest["services"][service], ROOT / f"services/{service}/src/test")
         checked["command"] = command
         if command["exitCode"] != 0: checked["status"] = "RED"; checked["issues"].append("Full Maven clean verify did not complete successfully")

@@ -11,7 +11,7 @@ Craves runs its own riders to deliver its chefs' food well, not to squeeze rider
 | **Saying no is free.** Declining or missing an offer is never counted. There is no acceptance rate, no cooldown and no lost place in line. | `POST /offers/{id}/decline` changes only that offer. Dispatch reads no offer history (`FleetDispatcher.nearbyRiders`, `fair`). | Telangana Act 21 of 2026 s.13(3)(b) [1]; Seattle [11]; *Uber v Aslam* [10] |
 | **Only three things decide who hears first:** how near you are to the kitchen, pay per online hour today, and minutes waited. Nothing else counts: no ratings, no acceptance rate, no history before today, no hidden score. "Near" is the straight line, the road, or, where the rules say so, the travel-time model's predicted minutes, which come from where you are and the time, never from who you are (§2). | `FleetDispatcher.ranked`, `byEta`, `fair`, `standings`; the model's inputs (`EtaModel.FEATURES`) | Bologna v Deliveroo [5]; Garante v Foodinho [6][7]; EU Platform Work Directive Art 7 [2] |
 | **Every offer says why it came to you.** | `trip_offer.reason`, the line on the offer card (`whyOffer`), and ops's "Why this rider" column | EU PWD Arts 9 and 11 [2]; CJEU C-203/22 [9]; Amsterdam v Uber and Ola [8] |
-| **The rules are in the app, in your language, and change only with 14 days' notice.** | Terms → "How you get orders" (`offerRulesLines`); refused otherwise (`RULES_NEED_NOTICE` and the V170 trigger, which V174 extends to ranking by travel time); upcoming rules shown in advance (`upcoming.offerRules`) | Telangana s.12, s.13(2) [1] |
+| **The rules are in the app, in your language, and change only with 14 days' notice.** | Terms → "How you get orders" (`offerRulesLines`); refused otherwise (`RULES_NEED_NOTICE` and the table's trigger, which since V192 covers every rules column, §7); upcoming rules shown in advance (`upcoming.offerRules`) | Telangana s.12, s.13(2) [1] |
 | **You choose when and how far you work.** Go online or offline any time. Take a 5 to 60 minute break without going offline. Set the farthest ride to a kitchen and to a customer you'll take. Head home and hear only of orders on your way. None of it counts against you. | `/shift/pause`, `/shift/resume`, `/preferences`, `/home-spot` and `/shift/heading-home`, behind the switch `CRAVES_FLEET_RIDER_CHOICES_ENABLED` | Telangana s.13(3)(b) [1]; NDMA heat advisory [32] |
 | **No speed pressure.** No countdown on a trip except the kitchen's free wait, no lateness penalty, and no delivery promise to customers that you pay for. | Rider screens (WORKPLAN rule 8) | EU PWD Art 12 [2]; India's Labour Ministry against 10-minute delivery [33] |
 | **You see your pay per online hour**, and the fleet's middle figure once five or more riders work that day. | Home (`todayPerHourPaise`, `fleetPerHourPaise`) | Fairwork's fair-pay principle [30] |
@@ -277,6 +277,8 @@ This is the figure fair turns compare. It is also what the Telangana union and F
 
 **Changing them** is a code change (`FleetPolicyStore`), and once a rate card is published it needs 14 days' notice to riders. The emergency stop (off, now) always works and keeps the values riders are shown.
 
+**A new rule gets the notice by default.** Since V192 the table's trigger compares a new version with the one riders are shown column for column. It leaves out only a named list: the version's name, status and dates, who published or withdrew it, the mode, the declared ranges and the six operations values (time to accept, the fleet stage, radius, the two cost-guard values, the Pidge stage). So a column added to `dispatch_policy` later needs 14 days' notice unless it is added to that list on purpose, in the trigger and in `FleetPolicyStoreDatabaseTest.NOT_RULES`. That test reads the columns from the database and fails for any rule the code does not carry (`DispatchRules`, `rules()`, `nextTermsChange()`).
+
 ### When to change them
 
 | What you see | Query (`PILOT-HEALTH.md`) | Change |
@@ -289,7 +291,7 @@ This is the figure fair turns compare. It is also what the Telangana union and F
 | Most kitchens over 10 minutes' wait for two weeks | `kitchen_wait` | Offers timed to the food (§9), once its other conditions hold. |
 | Over 20% of rides to the kitchen are 1.5 times the straight line | `pickup_detour` | Road ranking, or ranking by travel time once a version's ranking passes (§2). Either needs 14 days' notice (WORKPLAN rule 9). |
 
-- **Radius and time to accept** change at once, within their declared ranges. That lets ops shrink the radius on a heat or rain day. Whether either should need notice is a question for the lawyer (§11).
+- **Radius and time to accept** change at once, within their declared ranges, as do the other operations values on the trigger's list (above). That lets ops shrink the radius on a heat or rain day. Whether either should need notice is a question for the lawyer (§11).
 - **Add riders only while pay holds up.** When Deliveroo Spain let riders log in freely, more riders came online, each got fewer orders, and pay fell [28]. Before adding pilot riders, read the fleet's middle pay per online hour in `earnings_per_online_hour`. If it is falling, keep a waitlist. This is a rule for ops, not code.
 
 ## 8. Measuring

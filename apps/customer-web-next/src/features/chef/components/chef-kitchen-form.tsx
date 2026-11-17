@@ -967,7 +967,7 @@ export function ChefKitchenForm() {
       <PageBack />
       <section className="chef-section mt-2 p-5 md:p-7">
         <StepHeader label={text.stepName} onBack={kitchen ? leaveEdit : undefined} />
-        <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><Store className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
+        <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-white"><Store className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">{text.nameTitle}</h1>
         <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{text.nameHelp}</p>
         <label className="mt-6 block text-sm font-semibold text-[#1A1A1A]">{text.kitchenName}<RequiredMark /><input {...inputProps("kitchenName")} aria-required="true" value={form.kitchenName} onChange={(event) => setField("kitchenName", event.target.value)} className={INPUT_CLASS} maxLength={CHEF_KITCHEN_FIELD_LIMITS.kitchenName} /></label>
@@ -999,7 +999,7 @@ export function ChefKitchenForm() {
       <PageBack />
       <section className="chef-section mt-2 p-5 md:p-7">
         <StepHeader label={text.stepAddress} onBack={() => go("name")} />
-        <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><MapPin className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
+        <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-white"><MapPin className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
         <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">{text.addressTitle}</h1>
         <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{text.addressHelp}</p>
         {pinLocked ? null : <button type="button" disabled={locating} onClick={useCurrentLocation} className="chef-btn is-block mt-6"><MapPin className="h-4 w-4" aria-hidden="true" />{locating ? text.findingMine : mapped ? text.refreshLocation : text.useLocation}</button>}
@@ -1064,7 +1064,7 @@ export function ChefKitchenForm() {
     <PageBack />
     <section className="chef-section mt-2 p-5 md:p-7">
       <StepHeader label={text.stepReady} onBack={() => go("address")} />
-      <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5]"><Check className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
+      <span className="mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-white"><Check className="h-7 w-7 text-[#F62E18]" aria-hidden="true" /></span>
       <h1 className="mt-5 text-3xl font-bold text-[#1A1A1A]">{text.readyTitle}</h1>
       <p className="mt-2 text-sm leading-6 text-[#6B6B6B]">{text.readyHelp}</p>
       <div className="mt-6 grid gap-3">

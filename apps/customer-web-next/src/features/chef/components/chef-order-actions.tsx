@@ -243,7 +243,7 @@ function PartnerRow({ partner, now }: { partner: ChefDeliveryPartner | null | un
       {partner?.photoUrl ? (
         <ChefFace photoUrl={partner.photoUrl} name={name} size={40} />
       ) : (
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]" aria-hidden="true">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-[#1A1A1A]" aria-hidden="true">
           <Bike className="h-5 w-5" />
         </span>
       )}

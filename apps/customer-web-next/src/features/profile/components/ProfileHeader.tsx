@@ -19,7 +19,7 @@ export function ProfileHeader({ signedIn = false }: { signedIn?: boolean }) {
       <div className="mx-auto flex min-h-[3.9rem] max-w-5xl items-center gap-3 px-4 py-2.5 md:min-h-[4.4rem] md:px-6">
         <Link
           to="/home"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#1A1A1A] transition-colors hover:!text-[#F62E18]"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] transition-colors hover:!text-[#F62E18]"
           aria-label="Back to home"
         >
           <FaArrowLeft className="text-sm" aria-hidden="true" />
@@ -42,13 +42,13 @@ export function ProfileHeader({ signedIn = false }: { signedIn?: boolean }) {
         <div className="ml-auto flex items-center gap-2">
           <Link
             to="/notifications"
-            className={`${ICON_LINK} bg-[#F1F3F5] text-[#F62E18] hover:bg-white`}
+            className={`${ICON_LINK} bg-white text-[#F62E18]`}
             aria-label={notificationsLabel(unread)}
           >
             <Bell className="h-5 w-5" aria-hidden="true" />
             <UnreadBadge count={unread} />
           </Link>
-          <Link to="/settings" className={`${ICON_LINK} bg-[#F1F3F5] text-[#F62E18] hover:bg-white`} aria-label="Settings">
+          <Link to="/settings" className={`${ICON_LINK} bg-white text-[#F62E18]`} aria-label="Settings">
             <Settings className="h-5 w-5" aria-hidden="true" />
           </Link>
         </div>

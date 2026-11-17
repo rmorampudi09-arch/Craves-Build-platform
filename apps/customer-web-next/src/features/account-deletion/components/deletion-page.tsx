@@ -36,7 +36,7 @@ export function DeletionPage({ side, title, onSignOut, children }: { side: Delet
           <Link
             href={back}
             aria-label={deletionCopy.unavailable.back}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-shadow hover:shadow-[0_6px_16px_rgba(26,26,26,0.10)]"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Link>

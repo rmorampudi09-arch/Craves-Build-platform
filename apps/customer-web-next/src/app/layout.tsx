@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import { CartKitchenReplacementDialogHost } from "@/features/cart/components/CartKitchenReplacementDialogHost";
 import { BottomNav } from "@/features/customer-shell/components/BottomNav";
+import { HoverLabels } from "@/features/customer-shell/components/HoverLabels";
 import { ChefModeGuard } from "@/features/chef/components/ChefModeGuard";
 import { SessionEndedPrompt } from "@/features/auth/components/session-ended-prompt";
 import { NewCustomerProfileGate } from "@/features/profile/components/new-customer-profile-gate";
@@ -94,6 +95,7 @@ export default function RootLayout({
         <MotionPreferences>
           {children}
           <BottomNav />
+          <HoverLabels />
           <CartKitchenReplacementDialogHost />
           <ChefModeGuard />
           <NewCustomerProfileGate />

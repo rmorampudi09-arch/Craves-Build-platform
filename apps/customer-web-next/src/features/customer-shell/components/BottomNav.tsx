@@ -16,6 +16,7 @@ import { AnimateCount } from "@/shared/ui/AnimateCount";
 import { ease } from "@/shared/lib/motion";
 import glass from "@/features/home/screens/HomeReference.module.css";
 import { LiveOrderBubble } from "@/features/customer-shell/components/LiveOrderBubble";
+import { navSectionForPath } from "@/features/customer-shell/lib/nav-sections";
 import {
   cartCount,
   cartCurrency,
@@ -90,26 +91,10 @@ function shouldHide(pathname: string): boolean {
   );
 }
 
+/** The tab bar has no Orders or Alerts tab: those pages sit under Profile, as in the app. */
 function activeKeyForPath(pathname: string): NavKey | null {
-  if (pathname === "/cart" || pathname.startsWith("/cart/")) return "cart";
-  if (
-    pathname === "/subscriptions" ||
-    pathname.startsWith("/subscriptions/")
-  ) {
-    return "subscriptions";
-  }
-  if (pathname === "/profile" || pathname.startsWith("/profile/")) {
-    return "profile";
-  }
-  if (
-    pathname === "/chefs" ||
-    pathname.startsWith("/chefs/") ||
-    pathname.startsWith("/kitchen")
-  ) {
-    return "chefs";
-  }
-  if (pathname === "/home") return "home";
-  return null;
+  const section = navSectionForPath(pathname);
+  return section === "orders" || section === "notifications" ? "profile" : section;
 }
 
 function formatMoney(amount: number, currency: string): string {

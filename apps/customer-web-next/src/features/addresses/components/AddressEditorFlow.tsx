@@ -582,7 +582,7 @@ export function AddressEditorFlow({
                 onClick={() => setStep("locate")}
                 disabled={busy}
                 className={
-                  "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#1A1A1A] " +
+                  "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] " +
                   actionClass +
                   " disabled:opacity-50"
                 }
@@ -620,7 +620,7 @@ export function AddressEditorFlow({
               onClick={() => requestClose()}
               disabled={busy}
               className={
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-[#F1F3F5] !text-[#1A1A1A] " +
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-full !bg-white !text-[#1A1A1A] " +
                 actionClass +
                 " disabled:opacity-50"
               }
@@ -776,7 +776,7 @@ export function AddressEditorFlow({
                     className="mt-4 flex items-start gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-[0_6px_18px_rgba(26,26,26,0.06)]"
                     aria-live="polite"
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
                       {mapResolving ? (
                         <Loader2 className="h-4.5 w-4.5 animate-spin" />
                       ) : (

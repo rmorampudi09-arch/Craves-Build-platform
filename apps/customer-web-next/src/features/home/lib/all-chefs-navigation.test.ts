@@ -13,7 +13,8 @@ test("mobile Chefs navigation opens the dedicated all-chefs page", () => {
   const returnNavigation = source("../../../shared/lib/return-navigation.ts");
 
   assert.match(nav, /href: "\/chefs"/);
-  assert.match(nav, /pathname === "\/chefs"/);
+  // The tab bar marks Kitchens from its page map, on /chefs and every kitchen page (bottom-nav.vitest.ts checks the map).
+  assert.match(nav, /navSectionForPath\(pathname\)/);
   assert.doesNotMatch(nav, /home#nearby-kitchens-heading/);
   assert.match(route, /AllChefsPage/);
   assert.match(page, /discoverKitchens\(/);

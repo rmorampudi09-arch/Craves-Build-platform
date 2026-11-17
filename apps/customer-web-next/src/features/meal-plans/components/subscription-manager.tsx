@@ -32,8 +32,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/navigation
 const LOAD_FAILED = "Check your connection and try again.";
 const rowLink =
   "flex min-h-16 items-center gap-3 rounded-2xl px-4 py-3 text-[#1A1A1A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30";
+// `!` beats the site-wide button skin (craves-theme.css), which otherwise boxes both tabs and hides which is open.
 const tabClass =
-  "min-h-12 flex-1 rounded-none border-b-2 border-transparent text-base font-bold text-[#6B6B6B] data-[state=active]:border-[#F62E18] data-[state=active]:text-[#1A1A1A] data-[state=active]:shadow-none";
+  "min-h-12 flex-1 !rounded-none !border-0 !border-b-2 !border-transparent !bg-transparent text-base font-bold !text-[#6B6B6B] !shadow-none data-[state=active]:!border-[#F62E18] data-[state=active]:!text-[#1A1A1A]";
 
 type Tab = "mine" | "explore";
 
@@ -125,7 +126,7 @@ function MyPlanCard({
 
       {running?.nextMeal ? (
         <div className="mt-4 flex items-center gap-3 border-t border-[#E5E7EB] pt-4">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FDEAE8] text-[#D92714]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#D92714]">
             <Clock3 className="h-5 w-5" aria-hidden="true" />
           </span>
           <p className="min-w-0">
@@ -221,12 +222,8 @@ export function SubscriptionManager() {
 
   const current = (items ?? []).filter((item) => !isPastSubscription(item.status));
   const pastCount = (items?.length ?? 0) - current.length;
-  // Until the customer picks a tab: My plans when a plan is running, else Explore.
-  const tab =
-    chosenTab ??
-    (current.some((item) => item.status === "ACTIVE" || item.status === "PAUSED")
-      ? "mine"
-      : "explore");
+  // Until the customer picks a tab: My plans while any plan is current (one waiting for payment too), else Explore.
+  const tab = chosenTab ?? (current.length > 0 ? "mine" : "explore");
   const today = indiaBusinessDate();
 
   return (

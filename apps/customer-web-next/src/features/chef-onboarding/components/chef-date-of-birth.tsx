@@ -268,7 +268,7 @@ export function DateOfBirthPicker({
                   aria-label={format(text.previous, { month: `${MONTHS[prevMonth.getMonth()]} ${prevMonth.getFullYear()}` })}
                   disabled={!monthAllowed(prevMonth.getFullYear(), prevMonth.getMonth())}
                   onClick={() => step(-1)}
-                  className={`${PLAIN} grid h-11 w-11 place-items-center rounded-full !bg-transparent !text-[#1A1A1A] hover:!bg-[#F1F3F5] disabled:!text-[#B9BEC5]`}
+                  className={`${PLAIN} grid h-11 w-11 place-items-center rounded-full !bg-transparent !text-[#1A1A1A] hover:!shadow-[0_6px_16px_rgba(26,26,26,0.10)] disabled:!text-[#B9BEC5]`}
                 >
                   <ChevronLeft size={20} aria-hidden="true" />
                 </button>
@@ -286,7 +286,7 @@ export function DateOfBirthPicker({
                   aria-label={format(text.next, { month: `${MONTHS[nextMonth.getMonth()]} ${nextMonth.getFullYear()}` })}
                   disabled={!monthAllowed(nextMonth.getFullYear(), nextMonth.getMonth())}
                   onClick={() => step(1)}
-                  className={`${PLAIN} grid h-11 w-11 place-items-center rounded-full !bg-transparent !text-[#1A1A1A] hover:!bg-[#F1F3F5] disabled:!text-[#B9BEC5]`}
+                  className={`${PLAIN} grid h-11 w-11 place-items-center rounded-full !bg-transparent !text-[#1A1A1A] hover:!shadow-[0_6px_16px_rgba(26,26,26,0.10)] disabled:!text-[#B9BEC5]`}
                 >
                   <ChevronRight size={20} aria-hidden="true" />
                 </button>

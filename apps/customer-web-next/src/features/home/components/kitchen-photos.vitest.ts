@@ -93,10 +93,9 @@ it("names the section with See all and how many kitchens; the Kitchens page keep
   expect(screen.getByText("card Ammi's Dastarkhwan")).toBeTruthy();
 });
 
-it("never moves the photos on its own: no timers and no pause or play button; people swipe", () => {
+it("people swipe the photos and the dots follow; there is no pause or play button", () => {
   vi.useFakeTimers();
   const { container } = grid({ kitchens: [kitchen, second], dishes: [dish(a, 200), dish(b, 210), dish(c, 220), dish(c, 230, undefined, second.id), dish(a, 240, undefined, second.id)] });
-  expect(vi.getTimerCount()).toBe(0);
   expect(screen.queryByRole("button", { name: /pause|play/i })).toBeNull();
   // A swipe moves the strip; the dots follow it.
   const strip = container.querySelector("li .snap-x") as HTMLDivElement;

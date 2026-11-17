@@ -14,7 +14,7 @@ export function BackHeader({ title, backTo, backLabel }: { title: string; backTo
     <AutoHideCustomerHeader className="border-b border-[#E5E7EB] bg-white/95 shadow-[0_4px_18px_rgba(26,26,26,0.04)] backdrop-blur-xl">
       <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3 md:px-6">
         <PreviousPageBack>
-          <Link to={backTo} aria-label={backLabel} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-colors hover:bg-[#F1F3F5]">
+          <Link to={backTo} aria-label={backLabel} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#1A1A1A] transition-shadow hover:shadow-[0_6px_16px_rgba(26,26,26,0.10)]">
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Link>
         </PreviousPageBack>

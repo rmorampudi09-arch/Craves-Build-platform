@@ -351,7 +351,7 @@ export default function TrackingPage({ orderId: id }: { orderId: string }) {
 
                 <section className="rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-[0_3px_10px_rgba(0,0,0,0.05)]">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#1A1A1A]">
                       <FaArrowsRotate className="text-base" aria-hidden="true" />
                     </span>
                     <p className="text-sm font-semibold text-[#1A1A1A]">

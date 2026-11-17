@@ -118,7 +118,7 @@ function ProfileSignOutAction({ onSignOut }: ProfileContentProps) {
       aria-label="Sign out"
       className="flex min-h-[76px] w-full items-center gap-3 rounded-2xl !border-[#E5E7EB] !bg-white p-3.5 text-left !shadow-none transition-[box-shadow] hover:!shadow-[0_8px_22px_rgba(26,26,26,0.07)] sm:p-4"
     >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#1A1A1A]">
         <FaRightFromBracket className="text-[18px]" aria-hidden="true" />
       </span>
       <span>
@@ -500,7 +500,7 @@ function ProfileContent({ onSignOut }: ProfileContentProps) {
                 onClick={() => setPasswordOpen(true)}
                 className="flex min-h-[76px] w-full items-center gap-3 rounded-2xl !border-[#E5E7EB] !bg-white p-3.5 text-left !shadow-none transition-[box-shadow] hover:!shadow-[0_8px_22px_rgba(26,26,26,0.07)] sm:p-4"
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
                   <FaKey className="text-[18px]" aria-hidden="true" />
                 </span>
                 <span>

@@ -19,7 +19,7 @@ export function AddressCard({ addressLine, onEdit }: AddressCardProps) {
       className="flex min-h-[76px] items-center justify-between gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-3.5 transition-shadow hover:shadow-[0_8px_22px_rgba(26,26,26,0.07)] sm:p-4"
     >
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-[#F62E18]">
           <FaLocationDot className="text-[19px]" aria-hidden="true" />
         </div>
         <div className="min-w-0">

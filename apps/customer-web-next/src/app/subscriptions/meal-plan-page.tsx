@@ -25,7 +25,7 @@ export function MealPlanPage({
           <Link
             href={back}
             aria-label={backLabel}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#1A1A1A]"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />
           </Link>

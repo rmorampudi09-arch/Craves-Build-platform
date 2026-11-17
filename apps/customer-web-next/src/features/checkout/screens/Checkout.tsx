@@ -631,7 +631,7 @@ export default function CheckoutPage() {
                 <section className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_8px_28px_rgba(26,26,26,0.055)]">
                   <div className="flex items-center justify-between gap-3 border-b border-[#F1F3F5] px-4 py-4 sm:px-5">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#1A1A1A]">
                         <MapPin className="h-5 w-5" aria-hidden="true" />
                       </span>
                       <h2 className="text-base font-bold">Delivery address</h2>
@@ -761,7 +761,7 @@ export default function CheckoutPage() {
 
                 <section className="rounded-[1.45rem] border border-[#E5E7EB] bg-white p-4 shadow-[0_8px_28px_rgba(26,26,26,0.05)] sm:p-5">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#1A1A1A]">
                       <Clock3 className="h-5 w-5" aria-hidden="true" />
                     </span>
                     <h2 className="text-base font-bold">Delivery timing</h2>
@@ -791,7 +791,7 @@ export default function CheckoutPage() {
                 <section className="overflow-hidden rounded-[1.45rem] border border-[#E5E7EB] bg-white shadow-[0_12px_36px_rgba(26,26,26,0.07)]">
                   <div className="border-b border-[#F1F3F5] px-4 py-4 sm:px-5">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F1F3F5] text-[#1A1A1A]">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#1A1A1A]">
                         <ReceiptText className="h-5 w-5" aria-hidden="true" />
                       </span>
                       <h2 className="text-base font-bold">Bill details</h2>

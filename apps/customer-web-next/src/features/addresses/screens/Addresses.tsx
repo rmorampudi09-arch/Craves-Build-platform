@@ -196,7 +196,7 @@ export default function AddressesPage() {
           <Link
             to="/profile"
             aria-label="Back to profile"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#E5E7EB] bg-white transition-[background-color,box-shadow] duration-200 ease-out hover:bg-[#F1F3F5] hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#E5E7EB] bg-white transition-[background-color,box-shadow] duration-200 ease-out hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)]"
           >
             <ArrowLeft className="h-6 w-6 text-[#1A1A1A]" strokeWidth={2.25} />
           </Link>
@@ -246,7 +246,7 @@ export default function AddressesPage() {
                 }`}
               >
                 <div className="flex items-start gap-4">
-                  <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#F1F3F5] text-[#F62E18] md:h-14 md:w-14">
+                  <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[#F62E18] md:h-14 md:w-14">
                     <MapPin className="h-6 w-6 fill-[#F62E18] text-[#F62E18]" strokeWidth={2.1} aria-hidden="true" />
                     <span className="pointer-events-none absolute left-1/2 top-[43%] h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
                   </span>
@@ -300,7 +300,7 @@ export default function AddressesPage() {
                   <button
                     type="button"
                     onClick={() => beginEdit(address)}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl !bg-[#F1F3F5] px-3.5 py-2 text-xs font-black !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none sm:text-sm"
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl !bg-white px-3.5 py-2 text-xs font-black !text-[#1A1A1A] transition-[background-color,box-shadow,transform] duration-200 ease-out hover:-translate-y-0.5 hover:!bg-white hover:shadow-[0_7px_18px_rgba(26,26,26,0.10)] active:translate-y-0 motion-reduce:transform-none sm:text-sm"
                   >
                     <Pencil className="h-4 w-4 text-[#F62E18]" strokeWidth={2.25} />
                     Edit

@@ -124,10 +124,11 @@
   text-decoration: none;
 }
 @media (hover: hover) {
-  .chef-icon-button:hover { background: var(--chef-input); }
+  /* Plain white behind every icon (owner, 17 Nov 2026): hover lifts the button instead of shading it. */
+  .chef-icon-button:hover { box-shadow: 0 6px 16px rgba(26, 26, 26, 0.10); }
 }
 /* On Notifications the bell is the current page, marked like the current tab. */
-.chef-icon-button[aria-current="page"] { background: var(--chef-tint); color: var(--chef-tint-ink); }
+.chef-icon-button[aria-current="page"] { background: var(--chef-surface); box-shadow: 0 1px 4px rgba(26, 26, 26, 0.12); color: var(--chef-tint-ink); }
 /* Holds the account menu's place until the session check says who is signed in. */
 .chef-account-placeholder { height: 3rem; width: 3rem; flex-shrink: 0; border-radius: 999px; background: var(--chef-input); }
 
@@ -202,7 +203,7 @@
     border-radius: 999px;
     transition: background-color 200ms var(--chef-ease);
   }
-  .chef-mobile-nav-link.is-active .chef-mobile-nav-icon { background: var(--chef-tint); color: var(--chef-tint-ink); }
+  .chef-mobile-nav-link.is-active .chef-mobile-nav-icon { background: var(--chef-surface); box-shadow: 0 1px 4px rgba(26, 26, 26, 0.12); color: var(--chef-tint-ink); }
 }
 .chef-mobile-nav-link:focus-visible,
 .chef-desktop-nav-link:focus-visible { outline: 2px solid var(--chef-text); outline-offset: 2px; }
@@ -329,7 +330,7 @@ button.chef-row:active { background: var(--chef-input); }
   flex-shrink: 0;
   place-items: center;
   border-radius: 12px;
-  background: var(--chef-tint);
+  background: var(--chef-surface);
   color: var(--chef-tint-ink);
 }
 .chef-chevron { flex-shrink: 0; color: var(--chef-placeholder); }
@@ -526,7 +527,7 @@ a.chef-stat { transition: background-color 150ms var(--chef-ease); }
   width: 3rem;
   place-items: center;
   border-radius: 14px;
-  background: var(--chef-tint);
+  background: var(--chef-surface);
   color: var(--chef-tint-ink);
 }
 /* The drawing sits on the section's white, like the page it belongs to. */
@@ -1124,7 +1125,7 @@ html:has(.chef-order-banner) { scroll-padding-bottom: 12rem; }
   width: 2.75rem;
   place-items: center;
   border-radius: 14px;
-  background: var(--chef-tint);
+  background: var(--chef-surface);
   color: var(--chef-tint-ink);
 }
 .chef-fix-card.is-urgent .chef-fix-card-icon { background: var(--chef-accent-text); color: #fff; }

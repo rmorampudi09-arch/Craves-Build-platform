@@ -148,7 +148,7 @@ export function HomeSearchOverlay({
           <button
             type="button"
             onClick={onClose}
-            className="!flex !h-11 !w-11 !shrink-0 !items-center !justify-center !rounded-full !bg-[#F1F3F5] !p-0 !text-[#1A1A1A] hover:!text-[#F62E18]"
+            className="!flex !h-11 !w-11 !shrink-0 !items-center !justify-center !rounded-full !bg-white !p-0 !text-[#1A1A1A] hover:!text-[#F62E18]"
             aria-label="Close search"
           >
             <ArrowLeft className="h-5 w-5" aria-hidden="true" />

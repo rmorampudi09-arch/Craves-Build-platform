@@ -63,7 +63,7 @@ function StepList({ steps }: { steps: Step[] }) {
     <ul className="divide-y divide-[#E5E7EB] rounded-2xl border border-[#E5E7EB] bg-white">
       {steps.map(({ icon: Icon, title, body, allowance }) => (
         <li key={title} className="flex gap-4 p-4 sm:p-5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F5]">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white">
             <Icon className="h-5 w-5 text-[#F62E18]" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1 space-y-2">

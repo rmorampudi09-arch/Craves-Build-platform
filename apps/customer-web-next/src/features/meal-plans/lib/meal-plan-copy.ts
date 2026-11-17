@@ -133,6 +133,12 @@ export function resumeDateFor(now: Date, leadMinutes: number, serviceTime: strin
   return dates.find(day => Date.parse(`${day}T${time[1]}:${time[2]}:00+05:30`) - now.getTime() > leadMinutes * 60_000) ?? dates[dates.length - 1];
 }
 
+/** The app's start dates for a new plan: the 7 days from tomorrow (India), tomorrow first. */
+export function startDateChoices(today: string): string[] {
+  const tomorrow = Date.parse(`${today}T00:00:00Z`) + 86_400_000;
+  return Array.from({ length: 7 }, (_, index) => new Date(tomorrow + index * 86_400_000).toISOString().slice(0, 10));
+}
+
 export type PauseInfo = {
   pauseDisabledLabel: string | null;
   pauseMessage: string;

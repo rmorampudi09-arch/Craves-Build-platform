@@ -196,7 +196,7 @@ function StepHeader({
 
 function IconCircle({ children }: { children: React.ReactNode }) {
   return (
-    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F1F3F5] text-[#F62E18]">
+    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#F62E18]">
       {children}
     </span>
   );

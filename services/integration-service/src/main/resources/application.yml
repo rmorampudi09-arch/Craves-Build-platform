@@ -94,6 +94,18 @@ craves:
     # value stops start-up. Margin: 5 to 300 s.
     stage-sweeper: ${CRAVES_FLEET_STAGE_SWEEPER:off}
     stage-sweeper-margin-seconds: ${CRAVES_FLEET_STAGE_SWEEPER_MARGIN_SECONDS:10}
+    # Timers for the fleet stage (R22 4.4; docs/riders/DISPATCH.md "Timers"), off | shadow | on. Needs the Service Bus
+    # queue named below, which a signed-in person creates first (infra/fleet-timers); while it does not exist the sends
+    # fail, are reported once a minute, and dispatch goes on as with off. shadow: each look's next check is also sent as a
+    # message and its arrival logged (FLEET_TIMER mode=shadow); nothing looks. on: that message, or a rider whose trip
+    # ended nearby, starts the order's next look without its delivery command; who is asked, for how long and in what
+    # order stay as they are.
+    timers: ${CRAVES_FLEET_TIMERS:off}
+    timers-queue: ${SERVICE_BUS_FLEET_TIMERS_QUEUE:fleet-timers}
+    # Only with timers on and stage-sweeper on, and only after a week of shadow: once a look's timer message is sent, and
+    # while the timers are being received, the order's command comes back at the retry base (30 s) and at the stage's
+    # deadline, not every 5 s.
+    stage-leaves-command-enabled: ${CRAVES_FLEET_STAGE_LEAVES_COMMAND_ENABLED:false}
     # Seconds each replica goes on using the dispatch policy it last read, 0 to 5 (more counts as 5); 0 = off, every look
     # at an order reads it from the database. With 5, the emergency stop (mode off), a new version or a withdrawal takes
     # up to 5 s to reach every replica: orders looked at in those seconds are still offered under the policy before.

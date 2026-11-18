@@ -64,7 +64,7 @@ public class DeliveryServiceBusConfiguration {
                 : new DefaultAzureCredentialBuilder().build();
         }
 
-        ServiceBusClientBuilder newBuilder() {
+        public ServiceBusClientBuilder newBuilder() {
             ServiceBusClientBuilder builder = new ServiceBusClientBuilder();
             if (StringUtils.hasText(properties.getConnectionString())) {
                 return builder.connectionString(properties.getConnectionString());

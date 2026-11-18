@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.command.DeliveryCommandRepository;
 import in.craves.integration.delivery.command.DeliveryCommandWake;
+import in.craves.integration.fleet.dispatch.FleetTimers;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetStorage;
 import in.craves.integration.fleet.client.DeliveryCodeClient;
@@ -131,6 +132,20 @@ public class FleetTripService {
     @Autowired(required = false)
     public void setCommandWake(DeliveryCommandWake wake) {
         this.commandWake = wake;
+    }
+
+    /** CRAVES_FLEET_TIMERS: a rider whose trip ended is free, so the orders waiting near them look now (off: nothing). */
+    private FleetTimers timers;
+
+    @Autowired(required = false)
+    public void setTimers(FleetTimers timers) {
+        this.timers = timers;
+    }
+
+    private void riderFree(UUID tripId) {
+        if (timers != null) {
+            timers.afterTrip(tripId);
+        }
     }
 
     /**
@@ -483,6 +498,7 @@ public class FleetTripService {
         }
         event(tripId, "FAILED", rider.id(), key, request, withTap(detail, tap), tap.fix());
         pay.finalizePay(tripId, unreachable ? Ending.CUSTOMER_UNREACHABLE : Ending.FAILED_AFTER_PICKUP, true, FAILED_HOLD);
+        riderFree(tripId);
         bridge.publish(tripId);
         return view(tripId);
     }
@@ -497,6 +513,7 @@ public class FleetTripService {
             + "WHERE id = ?", delivered ? "DELIVERED" : "FAILED", delivered ? null : NOT_RECEIVED, tripId);
         event(tripId, delivered ? "DELIVERED" : "FAILED", null, null, null, Map.of("method", "OPS_CHECKED"));
         pay.finalizePay(tripId, Ending.DELIVERED, !delivered, delivered ? null : NOT_RECEIVED_HOLD);
+        riderFree(tripId);
         bridge.publish(tripId);
     }
 
@@ -506,6 +523,7 @@ public class FleetTripService {
             + "WHERE id = ?", tripId);
         event(tripId, "DELIVERED", riderId, key, request, detail, fix);
         pay.finalizePay(tripId, Ending.DELIVERED, held, holdReason);
+        riderFree(tripId);
         bridge.publish(tripId);
     }
 
@@ -545,6 +563,7 @@ public class FleetTripService {
             case "AT_PICKUP" -> Ending.CANCELLED_AT_KITCHEN;
             default -> Ending.FAILED_AFTER_PICKUP;
         }, false, null);
+        riderFree(tripId);
         return Optional.of("CANCELLED");
     }
 

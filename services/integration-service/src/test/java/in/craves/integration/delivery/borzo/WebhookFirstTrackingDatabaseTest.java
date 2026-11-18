@@ -8,7 +8,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
+import in.craves.integration.LoggedEvents;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -64,7 +64,7 @@ class WebhookFirstTrackingDatabaseTest {
             return transaction.execute(tx -> super.processTracking(workItem, snapshot));
         }
     };
-    final ListAppender<ILoggingEvent> logged = new ListAppender<>();
+    final LoggedEvents logged = new LoggedEvents();
     /** Borzo order id -> the delivery status Borzo answers a poll with. */
     final Map<String, String> borzo = new HashMap<>();
     int orderReads;

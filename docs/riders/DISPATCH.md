@@ -138,6 +138,17 @@ Built, switched off (`CRAVES_FLEET_NO_SUPPLY_FAST_PATH_ENABLED`, default false; 
 
 **Switching it off:** set it to false. Orders already sent on stay with the courier; every other order waits its whole 300 s again.
 
+### Timers
+
+**Built, switched off: `CRAVES_FLEET_TIMERS`.** Today the next rider hears of an order when the order's whole delivery command is delivered again, every 5 s. With timers on, each look sends one small message for the moment its next check is due, and that message starts the look. A rider who finishes a trip or ends a break also starts it, at once, for the orders waiting near them, and the order nearest its deadline looks first.
+
+- **The rules do not change.** The look is the same one: who can hear, in what order, one rider at a time, 20 s to accept, 300 s in all, the gap before a rider is asked about the same order again. A free rider is offered nothing directly; each waiting order ranks its own riders, so the rider hears only of an order that would have asked them at its next check anyway. Riders need no notice.
+- **It never ends a search.** At the deadline the look hands the order back to its delivery command, which sends it on to Borzo exactly as today.
+- **Two looks at once ask one rider.** Tested 1,000 times in a row on PostgreSQL.
+- **If a timer is lost,** the stage sweeper (`CRAVES_FLEET_STAGE_SWEEPER`) looks within its margin, and the delivery command still comes back by itself.
+- **Order of switching on:** create the queue (an owner step: `infra/fleet-timers/README.md`); `CRAVES_FLEET_STAGE_SWEEPER=on`; a week of `CRAVES_FLEET_TIMERS=shadow`, reading `FLEET_TIMER mode=shadow ... lateMs= due=` beside the command's own looks; then `on`; and only after that `CRAVES_FLEET_STAGE_LEAVES_COMMAND_ENABLED`, which makes the command come back every 30 s and at the deadline, not every 5 s.
+- **Not done yet:** a rider who has just come online is found at the order's next check, as today (their first position arrives after the shift starts). At 300 orders due in the same instant (16 looks at once, as four replicas), the 99th-percentile time from due to the first ring measured 1.6 to 2.1 s on a 4-core test machine once warm, and 1.8 to 2.9 s on the first, cold run, against R22's 2 s target; the test asserts only that the better of two warm runs is under the 5 s check. The bounding-box candidate query takes most of it (PostGIS candidates are planned to replace it).
+
 ### Search rings
 
 Built, not in use (research R22 item 3-3). **No policy version has rings, so nothing here happens:** every order searches the whole policy radius from its first look, as the rule above says. This section describes what a later policy version could switch on. It does not change the owner's rule of 11 Nov 2026.

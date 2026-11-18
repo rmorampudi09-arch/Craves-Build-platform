@@ -143,19 +143,23 @@ public class FleetDispatchJobs {
 
     @Scheduled(scheduler = FleetConfiguration.FLEET_SCHEDULER, fixedDelayString = "${craves.fleet.dispatch-tick-ms:5000}")
     public void tick() {
-        expireOffers();
-        if (stageSweeper != null) {
-            stageSweeper.sweep();
-        }
-        cancelledOrders();
-        watchdog();
-        courierStages();
-        forgetOffShiftPositions();
-        nudgeSilentShifts();
-        long now = System.currentTimeMillis();
-        if (now >= nextHomeSweepMs) {
-            nextHomeSweepMs = now + HOME_SWEEP_EVERY_MS;
-            forgetUnusedHomes(jdbc);
+        try {
+            expireOffers();
+            cancelledOrders();
+            watchdog();
+            courierStages();
+            forgetOffShiftPositions();
+            nudgeSilentShifts();
+            long now = System.currentTimeMillis();
+            if (now >= nextHomeSweepMs) {
+                nextHomeSweepMs = now + HOME_SWEEP_EVERY_MS;
+                forgetUnusedHomes(jdbc);
+            }
+        } finally {
+            // Last, so its Service Bus sends hold up nothing above; still run if a step above throws.
+            if (stageSweeper != null) {
+                stageSweeper.sweep();
+            }
         }
     }
 

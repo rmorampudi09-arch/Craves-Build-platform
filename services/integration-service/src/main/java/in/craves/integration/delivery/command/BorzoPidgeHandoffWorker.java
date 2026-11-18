@@ -55,6 +55,13 @@ public class BorzoPidgeHandoffWorker {
     private final DeliveryStatusUpdateService statusUpdates;
     private final BorzoPidgeHandoffCompletionService completion;
     private ProviderCreateAttemptRepository journal;
+    private in.craves.integration.delivery.billing.CourierCharges charges;
+
+    /** Courier charge records (V199); written only while CRAVES_DELIVERY_COURIER_CHARGE_ENABLED is on. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCharges(in.craves.integration.delivery.billing.CourierCharges charges) {
+        this.charges = charges;
+    }
     private DeliveryCommandProperties properties;
     private in.craves.integration.delivery.status.DeliveryStatusRepository cases;
 
@@ -364,6 +371,9 @@ public class BorzoPidgeHandoffWorker {
             throw new IllegalStateException("Borzo cancellation was not confirmed by tracking");
         }
         requireStateChange(handoffs.markBorzoCancelled(job.id()), "Borzo cancellation state changed");
+        if (charges != null) {
+            charges.cancelled(job.orderId(), job.chefSubOrderId(), job.id(), cancellation);
+        }
     }
 
     private void bookPidge(Handoff handoff) {

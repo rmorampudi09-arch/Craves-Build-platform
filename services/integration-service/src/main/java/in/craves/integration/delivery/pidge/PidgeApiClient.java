@@ -155,6 +155,11 @@ public class PidgeApiClient implements DeliveryProviderAdapter {
         return new TrackingSnapshot(delivery, courier(order), delivery.observedAt());
     }
 
+    /** The order as Pidge holds it now, for a callback's final status; given up after 8 seconds. */
+    public ProviderDelivery readBack(String id) {
+        return mapOrder(getOrder(requiredId(id), java.time.Duration.ofSeconds(8)));
+    }
+
     /** The rider in a Pidge order or webhook payload (fulfillment.rider), or null before one is assigned. */
     static Courier courier(JsonNode order) {
         JsonNode rider = order.path("fulfillment").path("rider");
@@ -187,7 +192,12 @@ public class PidgeApiClient implements DeliveryProviderAdapter {
     }
 
     JsonNode getOrder(String id) {
-        JsonNode order = transport.get(ROOT + "/order/" + id).path("data");
+        return getOrder(id, null);
+    }
+
+    private JsonNode getOrder(String id, java.time.Duration limit) {
+        String path = ROOT + "/order/" + id;
+        JsonNode order = (limit == null ? transport.get(path) : transport.get(path, limit)).path("data");
         if (!order.isObject() || !id.equals(order.path("id").asText()))
             throw new IllegalStateException("Pidge tracking response identity mismatch");
         return order;

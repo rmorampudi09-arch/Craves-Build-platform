@@ -320,6 +320,29 @@ public class DeliveryStatusRepository {
             """, retrySeconds, inboxId, maxAgeMinutes) == 1;
     }
 
+    /**
+     * A claimed callback nobody could take now: due again after the delay, so that it leaves the head of the inbox, and
+     * the claim is not counted as an attempt. Only for the claim made as attempt attemptCount.
+     */
+    public void releaseWebhook(UUID inboxId, int attemptCount, int delaySeconds) {
+        jdbc.update("""
+            UPDATE delivery_schema.delivery_webhook_inbox
+            SET processing_status = 'FAILED', next_attempt_at = now() + make_interval(secs => ?),
+                attempt_count = GREATEST(0, attempt_count - 1),
+                processing_started_at = NULL, error_message = NULL
+            WHERE id = ? AND processing_status = 'PROCESSING' AND attempt_count = ?
+            """, delaySeconds, inboxId, attemptCount);
+    }
+
+    /** In a transaction: locks the inbox row if the claim made as attempt attemptCount still holds it. */
+    public boolean lockWebhookClaim(UUID inboxId, int attemptCount) {
+        return !jdbc.queryForList("""
+            SELECT 1 FROM delivery_schema.delivery_webhook_inbox
+            WHERE id = ? AND processing_status = 'PROCESSING' AND attempt_count = ?
+            FOR UPDATE
+            """, inboxId, attemptCount).isEmpty();
+    }
+
     public void markWebhookDuplicate(UUID inboxId,
                                      String processingResult) {
         jdbc.update("""

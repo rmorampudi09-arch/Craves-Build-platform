@@ -275,6 +275,7 @@ CRAVES_DELIVERY_TRACKING_QUIET_SEARCHING_SECONDS=120
 CRAVES_DELIVERY_TRACKING_QUIET_ASSIGNED_SECONDS=180
 CRAVES_DELIVERY_TRACKING_QUIET_PICKED_UP_SECONDS=300
 CRAVES_DELIVERY_TRACKING_SAFETY_POLL_SECONDS=900
+CRAVES_DELIVERY_WEBHOOK_VERIFY_FETCH=off
 CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED=false
 CRAVES_DELIVERY_PROVIDER_API_USAGE_ALERT_PERCENT=70
 CRAVES_DELIVERY_BORZO_DAILY_API_CAP=5000
@@ -717,6 +718,49 @@ Switch on: set the flag. Rollback: set it to `false`; the table keeps its rows a
 that courier's webhook check also accepts the previous value and writes
 `COURIER_WEBHOOK_PREVIOUS_SECRET_USED provider=<borzo|pidge>` (no values) for each callback that matched it. Steps are
 in `docs/SECRETS.md`. Empty: only the current value is accepted.
+
+## Callback status read-back
+
+`CRAVES_DELIVERY_WEBHOOK_VERIFY_FETCH` = `off` (default) | `shadow` | `enforce`. The value is trimmed and read in any
+case; empty is `off`; any other word stops start-up.
+
+Off, nothing below exists: `DeliveryWebhookProcessor` handles every callback in its own pass as before, runs no new
+statement, and the read-back bean and its thread are not created.
+
+Shadow and enforce apply to one kind of callback only: a Pidge callback whose status is DELIVERED, CANCELLED, FAILED or
+RETURNED, for a booking that is a delivery job. Borzo callbacks, other Pidge statuses and callbacks that match no job
+are handled as before. The processor hands such a callback to a thread of Pidge's own (`pidge-webhook-read-back`, one
+thread, a queue of 5), which reads the order from Pidge (`GET order/{id}`, given up after 8 seconds, no transaction
+open) and then processes the callback in the usual transaction. Other couriers' callbacks do not wait for it.
+
+| | Shadow | Enforce |
+|---|---|---|
+| Pidge holds the same status | Callback applied as before | Callback applied as before |
+| Pidge holds an earlier stage (its API has yet to show the callback's status) | Callback applied as before; `DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result=BEHIND provider=pidge` | Handled as a read that failed (next row): Pidge is read again on the retry, and the callback is applied once Pidge shows its status |
+| Pidge holds another final status | Callback applied as before; `… result=DIFFERENT …` | The status Pidge holds goes through the status service instead (the rank guard and the other checks decide as usual), and the job's poll schedule is left as it is. The inbox row is `PROCESSED` with `processing_result` `VERIFY_FETCH_DISAGREED_<decision>`; alert `COURIER_WEBHOOK_VERIFY_DISAGREED` |
+| Pidge cannot be read, or gives no known status | Callback applied as before; `… result=FETCH_FAILED …` | Nothing is applied. The row is retried on the usual attempts and back-off with `error_message` `VERIFY_FETCH_FAILED …`; after the last attempt it is `DEAD_LETTER` and `COURIER_WEBHOOK_VERIFY_FAILED` is raised once |
+| The thread's queue is full | The row is due again 10 seconds later, so newer callbacks are claimed first, and the claim is not counted as an attempt; `DELIVERY_WEBHOOK_VERIFY_FETCH result=QUEUE_FULL provider=pidge` | The same |
+
+The shadow lines carry no ids, so they can be counted.
+
+Calls to Pidge added per Pidge delivery: off 0; shadow 1 for each final-status callback, normally 1 a delivery; enforce
+the same, plus 1 for each retry while Pidge cannot be read (at most `CRAVES_DELIVERY_MAX_WEBHOOK_ATTEMPTS`, 10, a
+callback). Borzo: 0 in every mode. The calls are counted with the rest in `CourierApiUsage` ("Courier API usage" above).
+
+| Alert | Raised | Do |
+|---|---|---|
+| `COURIER_WEBHOOK_VERIFY_DISAGREED provider= inboxId= jobId= readBack= result=` | Enforce, once per callback whose final status Pidge's API did not hold | Open the order in Pidge's dashboard and compare with the job. If the job is behind, the tracking poll brings it forward; if Pidge is wrong, raise it with Pidge |
+| `COURIER_WEBHOOK_VERIFY_FAILED provider= inboxId= attempts=` | Enforce, once when a callback is dead-lettered because Pidge could not be read | Check Pidge's API and credentials. The job's status then comes from the tracking poll; the row stays in the inbox |
+
+Neither alert pages a phone. If a pod stops while a callback is on the thread, the row's lease expires and a later pass
+claims it again, as for any callback.
+
+A row that waited for a read-back is written only while the claim it was read under still holds it; a row claimed
+again meanwhile is left to the later pass.
+
+Switch on: set `shadow` and count `result=BEHIND`, `result=DIFFERENT` and `result=FETCH_FAILED` for a few days. Then set
+`enforce`. Rollback: unset the flag; rows already
+on the thread finish, and nothing new is handed to it after the restart.
 
 ## Shared courier breaker
 

@@ -25,13 +25,16 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
@@ -47,8 +50,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * CRAVES_FLEET_POSTGIS_CANDIDATES (R22 #4): on asks the same riders in the same order as off; shadow asks as off and logs
- * counts; without PostGIS it runs as off. Riders are stored first; everything that creates the index, or drops the
- * extension, then runs on one connection in a transaction that is rolled back.
+ * counts; without PostGIS, or without the lock to build the index, it runs as off. The index is built as at start-up,
+ * CONCURRENTLY on a connection of its own, so it is committed (FleetDatabase drops the schema for the next test); looks
+ * run in a transaction that is rolled back.
  */
 @EnabledIfEnvironmentVariable(named = "LEDGER_TEST_JDBC_URL", matches = ".+")
 class FleetPostgisCandidatesDatabaseTest {
@@ -60,6 +64,7 @@ class FleetPostgisCandidatesDatabaseTest {
     final FleetDatabase fleet = new FleetDatabase();
     final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
     final AtomicInteger statements = new AtomicInteger();
+    final List<String> statementText = new CopyOnWriteArrayList<>();
     final Thread looking = Thread.currentThread();
     /** As FleetDispatchStatementsDatabaseTest counts: every statement this thread prepares. */
     final DataSource counted = new DelegatingDataSource(fleet.dataSource) {
@@ -71,6 +76,7 @@ class FleetPostgisCandidatesDatabaseTest {
                     if (Thread.currentThread() == looking
                         && (method.getName().startsWith("prepare") || method.getName().equals("createStatement"))) {
                         statements.incrementAndGet();
+                        statementText.add(args != null && args.length > 0 && args[0] instanceof String text ? text : method.getName());
                     }
                     try {
                         return method.invoke(connection, args);
@@ -119,13 +125,19 @@ class FleetPostgisCandidatesDatabaseTest {
         for (double metres : new double[] {4990, 4993, 4996, 4999.9, 5000.1}) {
             north.add(rider(KITCHEN_LAT + metres / METRES_A_DEGREE, KITCHEN_LNG, 5));
         }
+        java.util.Map<String, FleetDispatcher[]> byGpsRule = new java.util.LinkedHashMap<>();
+        for (String gpsRule : List.of("off", "shadow", "enforce")) {
+            byGpsRule.put(gpsRule, new FleetDispatcher[] {dispatcher("off", gpsRule, true, false), dispatcher("on", gpsRule, true, false)});
+        }
+        assertThat(List.copyOf(lines)).as("on, really").hasSize(3)
+            .allMatch("FLEET_POSTGIS_CANDIDATES mode=on index=rider_position_latest_geog ready"::equals);
         rolledBack(() -> {
             int compared = 0;
             int found = 0;
             Set<Integer> sizes = new java.util.HashSet<>();
-            for (String gpsRule : List.of("off", "shadow", "enforce")) {
-                FleetDispatcher off = dispatcher("off", gpsRule, true, false);
-                FleetDispatcher on = dispatcher("on", gpsRule, true, false);
+            for (FleetDispatcher[] pair : byGpsRule.values()) {
+                FleetDispatcher off = pair[0];
+                FleetDispatcher on = pair[1];
                 for (int radiusM : new int[] {800, 2000, 3500, 5000}) {
                     for (int dropM : new int[] {-1, 3000, 9000}) {
                         for (Set<UUID> exclude : List.of(Set.<UUID>of(), Set.copyOf(all.subList(0, 30)))) {
@@ -157,8 +169,7 @@ class FleetPostgisCandidatesDatabaseTest {
             assertThat(sizes.size()).as("the looks differ").isGreaterThan(10);
             return null;
         });
-        assertThat(fleet.db.queryForObject("SELECT to_regclass('fleet_schema." + FleetDispatcher.POSITION_GEOG_INDEX + "') IS NULL",
-            Boolean.class)).as("rolled back").isTrue();
+        assertThat(indexValid()).as("built at the first start with on, committed, valid").isTrue();
     }
 
     /** Rings 2 km until 100 s, 3.5 km until 200 s, then 5 km; test mode on, one rider not on its list. */
@@ -188,15 +199,28 @@ class FleetPostgisCandidatesDatabaseTest {
             rider(KITCHEN_LAT + 0.0005 * i, KITCHEN_LNG, 5);
         }
         assertThat(looks("off")).containsExactly(12, 4, 17);
+        List<String> off = List.copyOf(statementText);
+        assertThat(off).noneMatch(text -> text.contains("ST_"));
         assertThat(looks("on")).containsExactly(12, 4, 17);
+        // The same statements in the same order; the candidate statement of each look that ranks (2) with one more condition.
+        List<String> on = List.copyOf(statementText);
+        assertThat(on).hasSameSizeAs(off);
+        int widened = 0;
+        for (int i = 0; i < off.size(); i++) {
+            if (!on.get(i).equals(off.get(i))) {
+                assertThat(on.get(i)).isEqualTo(off.get(i) + "\n  AND " + FleetDispatcher.WITHIN_GEOG);
+                widened++;
+            }
+        }
+        assertThat(widened).isEqualTo(2);
         assertThat(looks("shadow")).containsExactly(13, 4, 18);
     }
 
     @Test
     void theIndexAnswersTheStatement() {
         rider(KITCHEN_LAT + 0.005, KITCHEN_LNG, 5);
+        dispatcher("on", "off", false, false);
         rolledBack(() -> {
-            dispatcher("on", "off", false, false);
             db.execute("SET LOCAL enable_seqscan = off");
             assertThat(String.join("\n", db.queryForList("EXPLAIN SELECT p.rider_id FROM fleet_schema.rider_position_latest p WHERE "
                 + FleetDispatcher.WITHIN_GEOG, String.class, KITCHEN_LNG, KITCHEN_LAT, 5051.0))).contains(FleetDispatcher.POSITION_GEOG_INDEX);
@@ -204,40 +228,106 @@ class FleetPostgisCandidatesDatabaseTest {
         });
     }
 
-    /** No PostGIS and no right to create it, as on a server where it is not allow-listed: start-up carries on, as off. */
+    /**
+     * No PostGIS and no right to create it, as on a server where it is not allow-listed: start-up carries on, as off. The
+     * service's role owns the tables (a member of the owner) but is not a superuser.
+     */
     @Test
     void withoutPostgisItStartsRunsAsOffAndSaysSoOnce() {
         variedRiders();
-        rolledBack(() -> {
-            db.execute("DROP EXTENSION postgis CASCADE");
-            db.execute("CREATE ROLE craves_test_no_ddl");
-            db.execute("SET LOCAL ROLE craves_test_no_ddl");
-            FleetDispatcher on = dispatcher("on", "off", true, false);
-            db.execute("RESET ROLE");
+        List<Candidate> today = dispatcher("off", "off", true, false)
+            .nearbyRiders(KITCHEN_LAT, KITCHEN_LNG, 5000, -1, 130, null, null, Set.of(), null);
+        assertThat(today).hasSizeGreaterThan(10);
+        String owner = fleet.db.queryForObject("SELECT current_user", String.class);
+        fleet.db.execute("DROP EXTENSION postgis CASCADE");
+        fleet.db.execute("DROP ROLE IF EXISTS craves_test_no_ddl");
+        fleet.db.execute("CREATE ROLE craves_test_no_ddl");
+        fleet.db.execute("GRANT \"" + owner + "\" TO craves_test_no_ddl");
+        try {
+            JdbcTemplate service = new JdbcTemplate(new DelegatingDataSource(counted) {
+                @Override
+                public Connection getConnection() throws SQLException {
+                    Connection connection = super.getConnection();
+                    try (var statement = connection.createStatement()) {
+                        statement.execute("SET ROLE craves_test_no_ddl");
+                    }
+                    return connection;
+                }
+            });
+            FleetDispatcher on = dispatcher(service, "on", "off", true, false);
             assertThat(List.copyOf(lines)).hasSize(1).first().asString()
                 .startsWith("FLEET_POSTGIS_CANDIDATES mode=on unavailable, running as off: no valid index rider_position_latest_geog; "
                     + "ERROR: permission denied to create extension \"postgis\"");
-            assertThat(db.queryForObject("SELECT count(*) FROM pg_extension WHERE extname = 'postgis'", Integer.class)).isZero();
-            List<Candidate> today = dispatcher("off", "off", true, false)
-                .nearbyRiders(KITCHEN_LAT, KITCHEN_LNG, 5000, -1, 130, null, null, Set.of(), null);
-            assertThat(today).hasSizeGreaterThan(10);
+            assertThat(fleet.db.queryForObject("SELECT count(*) FROM pg_extension WHERE extname = 'postgis'", Integer.class)).isZero();
+            assertThat(indexValid()).isNull();
             // The statement PostGIS is not in: with the other, this would fail here.
             assertThat(on.nearbyRiders(KITCHEN_LAT, KITCHEN_LNG, 5000, -1, 130, null, null, Set.of(), null)).containsExactlyElementsOf(today);
             assertThat(List.copyOf(lines)).hasSize(1);
-            return null;
-        });
-        assertThat(fleet.db.queryForObject("SELECT count(*) FROM pg_extension WHERE extname = 'postgis'", Integer.class)).isOne();
+        } finally {
+            fleet.db.execute("DROP ROLE craves_test_no_ddl");
+            fleet.db.execute("CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public");
+        }
+    }
+
+    /**
+     * A transaction holds a position write: the build waits for it 5 s and gives up, so the service starts as off. While
+     * it waits, other riders' positions are written (a plain CREATE INDEX would hold them). The next start drops the
+     * invalid index the failed build left and builds it.
+     */
+    @Test
+    void aBuildThatCannotHaveItsLockGivesUpAsOffWithoutHoldingWritesAndTheNextStartBuildsIt() throws Exception {
+        UUID held = rider(KITCHEN_LAT + 0.005, KITCHEN_LNG, 5);
+        UUID other = rider(KITCHEN_LAT + 0.006, KITCHEN_LNG, 5);
+        String waiting = "SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'CREATE INDEX CONCURRENTLY%' AND wait_event_type = 'Lock'";
+        FleetDispatcher started;
+        try (Connection writer = fleet.dataSource.getConnection(); var write = writer.createStatement()) {
+            writer.setAutoCommit(false);
+            assertThat(write.executeUpdate("UPDATE fleet_schema.rider_position_latest SET recorded_at = now() WHERE rider_id = '"
+                + held + "'")).isOne();
+            long begun = System.nanoTime();
+            CompletableFuture<FleetDispatcher> starting = CompletableFuture.supplyAsync(() -> dispatcher("on", "off", false, false));
+            while (fleet.db.queryForObject(waiting, Integer.class) == 0) {
+                assertThat(starting).as("the build waits for the lock").isNotDone();
+                Thread.sleep(20);
+            }
+            try (Connection ingest = fleet.dataSource.getConnection(); var position = ingest.createStatement()) {
+                position.execute("SET statement_timeout = '1s'");
+                assertThat(position.executeUpdate("UPDATE fleet_schema.rider_position_latest SET recorded_at = now() WHERE rider_id = '"
+                    + other + "'")).isOne();
+            }
+            assertThat(fleet.db.queryForObject(waiting, Integer.class)).as("written while the build waited").isOne();
+            started = starting.get(30, TimeUnit.SECONDS);
+            assertThat(Duration.ofNanos(System.nanoTime() - begun)).isBetween(Duration.ofMillis(4900), Duration.ofSeconds(15));
+            writer.rollback();
+        }
+        assertThat(List.copyOf(lines)).hasSize(1).first().asString().isEqualTo("FLEET_POSTGIS_CANDIDATES mode=on unavailable, running "
+            + "as off: no valid index rider_position_latest_geog; ERROR: canceling statement due to lock timeout");
+        assertThat(indexValid()).as("left by the failed build").isFalse();
+        assertThat(started.nearbyRiders(KITCHEN_LAT, KITCHEN_LNG, 5000, -1, 130, null, null, Set.of(), null)).hasSize(2);
+        assertThat(List.copyOf(lines)).as("off: no shadow line").hasSize(1);
+        lines.clear();
+        dispatcher("shadow", "off", false, false);
+        assertThat(List.copyOf(lines)).containsExactly("FLEET_POSTGIS_CANDIDATES mode=shadow index=rider_position_latest_geog ready");
+        assertThat(indexValid()).isTrue();
+        lines.clear();
+        dispatcher("on", "off", false, false);
+        assertThat(List.copyOf(lines)).containsExactly("FLEET_POSTGIS_CANDIDATES mode=on index=rider_position_latest_geog ready");
     }
 
     /** PostGIS goes away under a running service: each look falls back to today's statement inside the same transaction. */
     @Test
     void ifThePostgisStatementFailsTodaysStatementAnswersInTheSameTransaction() {
         variedRiders();
+        FleetDispatcher on = dispatcher("on", "off", true, false);
+        FleetDispatcher shadow = dispatcher("shadow", "off", true, false);
+        assertThat(List.copyOf(lines)).as("both really started").containsExactly(
+            "FLEET_POSTGIS_CANDIDATES mode=on index=rider_position_latest_geog ready",
+            "FLEET_POSTGIS_CANDIDATES mode=shadow index=rider_position_latest_geog ready");
         rolledBack(() -> {
             List<Candidate> today = dispatcher("off", "off", true, false)
                 .nearbyRiders(KITCHEN_LAT, KITCHEN_LNG, 5000, -1, 130, null, null, Set.of(), null);
             for (String mode : List.of("on", "shadow")) {
-                FleetDispatcher dispatcher = dispatcher(mode, "off", true, false);
+                FleetDispatcher dispatcher = "on".equals(mode) ? on : shadow;
                 lines.clear();
                 db.execute("SAVEPOINT with_postgis");
                 db.execute("DROP EXTENSION postgis CASCADE");
@@ -301,7 +391,11 @@ class FleetPostgisCandidatesDatabaseTest {
     }
 
     private FleetDispatcher dispatcher(String postgisCandidates, String gpsRule, boolean riderChoices, boolean testMode) {
-        FleetDispatcher dispatcher = new FleetDispatcher(db, transactions, new FleetPolicyStore(db, json),
+        return dispatcher(db, postgisCandidates, gpsRule, riderChoices, testMode);
+    }
+
+    private FleetDispatcher dispatcher(JdbcTemplate db, String postgisCandidates, String gpsRule, boolean riderChoices, boolean testMode) {
+        FleetDispatcher dispatcher = new FleetDispatcher(db, new DataSourceTransactionManager(db.getDataSource()), new FleetPolicyStore(db, json),
             new FleetTestMode(db, FleetDatabase.properties(testMode)), roads, mock(RiderPushClient.class), json, false, riderChoices);
         dispatcher.setGpsRule(gpsRule);
         dispatcher.setPostgisCandidates(postgisCandidates);
@@ -310,10 +404,10 @@ class FleetPostgisCandidatesDatabaseTest {
 
     /** The riders asked, in order, over six looks as the stage ages through both rings, each offer declined. */
     private List<UUID> askedOverTheStage(String postgisCandidates) {
+        FleetDispatcher dispatcher = dispatcher(postgisCandidates, "off", false, true);
         return rolledBack(() -> {
             FleetDispatchFixtures.policyWithRings(db, 20, 300, 0, 2000, 100, 3500, 200);
             FleetDispatchFixtures.kitchen(db, order, true);
-            FleetDispatcher dispatcher = dispatcher(postgisCandidates, "off", false, true);
             look(dispatcher);
             for (int age : List.of(30, 60, 100, 130, 200)) {
                 declinedAndTheStageIs(age);
@@ -323,11 +417,13 @@ class FleetPostgisCandidatesDatabaseTest {
         });
     }
 
+    /** The statements' text is left in statementText, in order. */
     private int[] looks(String postgisCandidates) {
+        FleetDispatcher dispatcher = dispatcher(postgisCandidates, "off", false, false);
+        statementText.clear();
         return rolledBack(() -> {
             FleetDispatchFixtures.policy(db, "live", 20, 300, 1, 0, 1500);
             FleetDispatchFixtures.kitchen(db, order, false);
-            FleetDispatcher dispatcher = dispatcher(postgisCandidates, "off", false, false);
             int opening = look(dispatcher);
             int waiting = look(dispatcher);
             db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now()");
@@ -338,9 +434,11 @@ class FleetPostgisCandidatesDatabaseTest {
     }
 
     private int look(FleetDispatcher dispatcher) {
+        int before = statementText.size();
         statements.set(0);
         assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true))
             .isInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+        assertThat(statementText.size() - before).isEqualTo(statements.get());
         return statements.get();
     }
 
@@ -351,6 +449,12 @@ class FleetPostgisCandidatesDatabaseTest {
             + "expires_at = expires_at - INTERVAL '30 seconds', decided_at = decided_at - INTERVAL '30 seconds'");
         db.update("UPDATE fleet_schema.trip_stage SET opened_at = now() - make_interval(secs => ?) WHERE provider = 'CRAVES_FLEET'",
             ageSeconds);
+    }
+
+    /** As FleetDispatcher reads it: true valid, false there but not valid, null not there. */
+    private Boolean indexValid() {
+        return fleet.db.query("SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.oid = "
+            + "to_regclass('fleet_schema." + FleetDispatcher.POSITION_GEOG_INDEX + "')", rows -> rows.next() ? rows.getBoolean(1) : null);
     }
 
     private <T> T rolledBack(Supplier<T> work) {

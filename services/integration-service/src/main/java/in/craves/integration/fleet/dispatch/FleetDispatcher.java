@@ -28,6 +28,9 @@ import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels;
 import in.craves.integration.fleet.trip.FleetTripModels.Offer;
 import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -267,10 +270,11 @@ public class FleetDispatcher implements FleetStage {
     }
 
     /**
-     * Trimmed and lower-cased; unset or blank is off; any other value stops start-up. shadow or on: creates the PostGIS
-     * extension and the index on rider positions if they are missing (a few thousand rows at most: the build holds
-     * writes to that table for milliseconds, and gives up after 5 s rather than queue). If either cannot be had (PostGIS
-     * not allow-listed on the server, no permission, a lock), start-up carries on and this stays off, with one line.
+     * Trimmed and lower-cased; unset or blank is off; any other value stops start-up. shadow or on: if the index on rider
+     * positions is not there and valid, creates the PostGIS extension and builds the index CONCURRENTLY, so no position
+     * write waits for it; a start that finds it valid runs no DDL and takes no lock. If it cannot be had (PostGIS not
+     * allow-listed on the server, no permission, a lock not granted in 5 s), start-up carries on and this stays off, with
+     * one line.
      */
     @Value("${craves.fleet.postgis-candidates:off}")
     public void setPostgisCandidates(String postgisCandidates) {
@@ -294,24 +298,44 @@ public class FleetDispatcher implements FleetStage {
     private String positionIndexMissing() {
         String why = "no valid index " + POSITION_GEOG_INDEX;
         try {
-            for (String ddl : List.of("CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public", "CREATE INDEX IF NOT EXISTS "
-                + POSITION_GEOG_INDEX + " ON fleet_schema.rider_position_latest USING gist ((" + GEOG.formatted("") + "))")) {
+            Boolean valid = positionIndexValid();
+            if (Boolean.TRUE.equals(valid)) {
+                return null;
+            }
+            List<String> ddl = new ArrayList<>(List.of("CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public"));
+            if (valid != null) {
+                // A build that failed (here or on another replica) leaves an invalid index that IF NOT EXISTS would keep.
+                ddl.add("DROP INDEX CONCURRENTLY IF EXISTS fleet_schema." + POSITION_GEOG_INDEX);
+            }
+            ddl.add("CREATE INDEX CONCURRENTLY IF NOT EXISTS " + POSITION_GEOG_INDEX
+                + " ON fleet_schema.rider_position_latest USING gist ((" + GEOG.formatted("") + "))");
+            // A connection of its own, outside any transaction: CONCURRENTLY cannot run inside one.
+            try (Connection connection = jdbc.getDataSource().getConnection(); Statement statement = connection.createStatement()) {
+                connection.setAutoCommit(true);
+                statement.execute("SET lock_timeout = '5s'");
                 try {
-                    savepoint.executeWithoutResult(status -> {
-                        jdbc.execute("SET LOCAL lock_timeout = '5s'");
-                        jdbc.execute(ddl);
-                    });
-                } catch (RuntimeException failed) {
-                    why += "; " + String.valueOf(org.springframework.core.NestedExceptionUtils.getMostSpecificCause(failed).getMessage())
-                        .lines().findFirst().orElse("");
+                    for (String sql : ddl) {
+                        try {
+                            statement.execute(sql);
+                        } catch (SQLException failed) {
+                            why += "; " + String.valueOf(failed.getMessage()).lines().findFirst().orElse("");
+                        }
+                    }
+                } finally {
+                    statement.execute("RESET lock_timeout");
                 }
             }
-            return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
-                + "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'fleet_schema' AND c.relname = '" + POSITION_GEOG_INDEX
-                + "' AND i.indisvalid)", Boolean.class)) ? null : why;
-        } catch (RuntimeException failed) {
+            return Boolean.TRUE.equals(positionIndexValid()) ? null : why;
+        } catch (RuntimeException | SQLException failed) {
             return why + "; " + failed.getClass().getSimpleName();
         }
+    }
+
+    /** True: the index is there and valid; false: there, not valid (being built, or a build failed); null: not there. */
+    private Boolean positionIndexValid() {
+        return jdbc.query("SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+            + "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'fleet_schema' AND c.relname = ?",
+            rows -> rows.next() ? rows.getBoolean(1) : null, POSITION_GEOG_INDEX);
     }
 
     @Autowired

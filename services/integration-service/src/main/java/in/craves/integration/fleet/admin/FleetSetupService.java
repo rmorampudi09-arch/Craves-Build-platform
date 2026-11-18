@@ -223,10 +223,14 @@ public class FleetSetupService {
             DispatchRules shown = policies.dispatchRules(null);
             args.add(shown.jointMatching());
             args.add(shown.nextOrderOffers());
+            // Search rings (V198) likewise: kept as riders are shown them, never set here.
+            args.addAll(List.of(shown.rings().ring1M(), shown.rings().ring1Seconds(), shown.rings().ring2M(), shown.rings().ring2Seconds()));
             args.add(admin.write(ranges));
             jdbc.update("INSERT INTO fleet_schema.dispatch_policy (version, effective_from, mode, " + String.join(", ", DISPATCH_POLICY_FIELDS)
-                + ", " + String.join(", ", DISPATCH_RULE_FIELDS) + ", rank_by_travel_time, joint_matching, next_order_offers, ranges) "
-                + "VALUES (?, ?, ?, " + "?, ".repeat(DISPATCH_POLICY_FIELDS.size() + DISPATCH_RULE_FIELDS.size() + 3) + "CAST(? AS jsonb))",
+                + ", " + String.join(", ", DISPATCH_RULE_FIELDS) + ", rank_by_travel_time, joint_matching, next_order_offers, "
+                + String.join(", ", FleetPolicyStore.SEARCH_RING_FIELDS) + ", ranges) VALUES (?, ?, ?, "
+                + "?, ".repeat(DISPATCH_POLICY_FIELDS.size() + DISPATCH_RULE_FIELDS.size() + 3 + FleetPolicyStore.SEARCH_RING_FIELDS.size())
+                + "CAST(? AS jsonb))",
                 args.toArray());
             List<String> withdrawn = policies.publishDispatchPolicy(version, by.id());
             DispatchPolicyVersion policy = jdbc.queryForObject("SELECT * FROM fleet_schema.dispatch_policy WHERE version = ?",

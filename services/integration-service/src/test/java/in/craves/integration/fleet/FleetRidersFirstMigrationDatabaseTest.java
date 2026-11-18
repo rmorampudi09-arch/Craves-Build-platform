@@ -56,6 +56,7 @@ class FleetRidersFirstMigrationDatabaseTest {
             + "WHERE version = '2026-10-v1'");
 
         migrateTo("187");
+        searchRingColumns();
 
         assertThat(db.queryForMap("SELECT status, mode, offer_seconds, fleet_stage_seconds, offers_at_once, offer_rounds, fair_band_m, radius_m, "
             + "published_by, withdrawn_at, effective_from = published_at AS at_once, ranges ->> 'offer_seconds' AS offer_range, "
@@ -104,6 +105,7 @@ class FleetRidersFirstMigrationDatabaseTest {
         migrateTo("186");
         policy(month + "-v2", "now() - INTERVAL '1 day'", "off", 40, 60, 3, 1, 0);
         migrateTo("187");
+        searchRingColumns();
         assertThat(store.currentDispatchPolicy().orElseThrow()).extracting(DispatchPolicy::version, DispatchPolicy::mode,
             DispatchPolicy::offerSeconds, DispatchPolicy::fleetStageSeconds, DispatchPolicy::offersAtOnce, DispatchPolicy::offerRounds)
             .containsExactly(month + "-v3", "off", 20, 300, 1, 0);
@@ -116,6 +118,18 @@ class FleetRidersFirstMigrationDatabaseTest {
         assertThat(db.queryForMap("SELECT status, ranges ->> 'offer_seconds' AS offer_range, ranges ->> 'fleet_stage_seconds' AS stage_range "
             + "FROM fleet_schema.dispatch_policy WHERE version = '2026-10-v1'")).as("the seeded draft's declared ranges fit the rule")
             .containsEntry("status", "DRAFT").containsEntry("offer_range", "[20, 60]").containsEntry("stage_range", "[45, 300]");
+    }
+
+    /**
+     * Today's FleetPolicyStore reads the search-ring columns, which V198 adds. The schema here stops at V187 (later
+     * migrations need the schemas dropped above), so V198's own statements are run on it: additive, all 0.
+     */
+    private void searchRingColumns() {
+        try (var sql = getClass().getResourceAsStream("/db/migration/V198__dispatch_policy_search_rings.sql")) {
+            db.execute(new String(sql.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+        } catch (java.io.IOException exception) {
+            throw new java.io.UncheckedIOException(exception);
+        }
     }
 
     private void migrateTo(String version) {

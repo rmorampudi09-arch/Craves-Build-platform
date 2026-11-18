@@ -135,7 +135,7 @@ public class FleetRain {
         return new DispatchPolicy(policy.version(), policy.effectiveFrom(), policy.mode(), Math.max(policy.offerSeconds(), OFFER_SECONDS),
             policy.fleetStageSeconds(), policy.radiusM(), policy.pickupDetourPercent(), policy.perOrderOverheadPaise(),
             policy.costGuardPremiumPaise(), policy.pidgeStageSeconds(), policy.offersAtOnce(), Math.min(policy.offerRounds(), MAX_ROUNDS),
-            policy.fairBandM(), policy.rankByTravelTime());
+            policy.fairBandM(), policy.rankByTravelTime(), policy.rings());
     }
 
     /** The ops setting; when it is off and the automatic switch is on, on while rides run slow. */

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
+import in.craves.integration.LoggedEvents;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.provider.CourierApiUsage;
 import in.craves.integration.fleet.FleetDatabase;
@@ -44,7 +44,7 @@ class IntegrationAlertMonitorDatabaseTest {
 
     @Test
     void courierApiUsageIsWrittenOnlyWithItsFlagSummedOverReplicasAndAlertedOnceADayAtTheShareOfTheCap() {
-        ListAppender<ILoggingEvent> logged = new ListAppender<>();
+        LoggedEvents logged = new LoggedEvents();
         logged.start();
         ((Logger) LoggerFactory.getLogger(IntegrationAlertMonitor.class)).addAppender(logged);
         try {
@@ -98,7 +98,7 @@ class IntegrationAlertMonitorDatabaseTest {
 
     @Test
     void anOrderARiderAndSomeoneElseBothHoldIsLoggedOnlyWithTheFlagOn() {
-        ListAppender<ILoggingEvent> logged = new ListAppender<>();
+        LoggedEvents logged = new LoggedEvents();
         logged.start();
         ((Logger) LoggerFactory.getLogger(IntegrationAlertMonitor.class)).addAppender(logged);
         try {
@@ -178,7 +178,7 @@ class IntegrationAlertMonitorDatabaseTest {
             + " rider=" + held.rider() + " holder=" + holder + " holderRef=" + holderRef;
     }
 
-    private static List<String> doubleHolds(ListAppender<ILoggingEvent> logged) {
+    private static List<String> doubleHolds(LoggedEvents logged) {
         return logged.list.stream().map(ILoggingEvent::getFormattedMessage)
             .filter(line -> line.startsWith("CRAVES_ALERT alert=FLEET_DOUBLE_HOLD ")).toList();
     }
@@ -194,7 +194,7 @@ class IntegrationAlertMonitorDatabaseTest {
             + "WHERE day = (now() AT TIME ZONE 'Asia/Kolkata')::date ORDER BY provider_id");
     }
 
-    private static List<String> alerts(ListAppender<ILoggingEvent> logged) {
+    private static List<String> alerts(LoggedEvents logged) {
         return logged.list.stream().map(ILoggingEvent::getFormattedMessage).filter(line -> line.startsWith("CRAVES_ALERT alert=COURIER_API")).toList();
     }
 

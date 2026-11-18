@@ -14,6 +14,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,6 +27,8 @@ import org.springframework.stereotype.Component;
  * tick this finds open fleet stages whose look is overdue by the margin with no pass holding their command. on: the
  * order's command is sent one message under a new id, and the worker's own claim decides whether a look runs. shadow:
  * counted and logged only. It never looks at an order itself and never writes a command, so it changes no offer.
+ * With CRAVES_FLEET_TIMERS on as well, an overdue stage gets its look here (FleetTimers.look, which needs no command);
+ * the message is sent only where that look could not go on.
  */
 @Component
 @ConditionalOnProperty(name = "craves.fleet.enabled", havingValue = "true")
@@ -68,6 +71,12 @@ public class FleetStageSweeper {
     private final DeliveryCommandProperties commands;
     private final String mode;
     private final int marginSeconds;
+    private FleetTimers timers;
+
+    @Autowired(required = false)
+    public void setTimers(FleetTimers timers) {
+        this.timers = timers;
+    }
 
     public FleetStageSweeper(JdbcTemplate jdbc, ObjectMapper json, ObjectProvider<DeliveryServiceBusPublisher> publisher,
                              DeliveryCommandProperties commands,
@@ -114,7 +123,9 @@ public class FleetStageSweeper {
         String status = stage.get("status") == null ? "NONE" : (String) stage.get("status");
         boolean sent = false;
         String reason = "";
-        if ("on".equals(mode) && publisher != null && RUNNABLE.contains(status)) {
+        if ("on".equals(mode) && timers != null && timers.on() && RUNNABLE.contains(status) && timers.look((UUID) stage.get("trip_id"))) {
+            reason = " looked=true";
+        } else if ("on".equals(mode) && publisher != null && RUNNABLE.contains(status)) {
             try {
                 // A new id each time: the queue drops a repeated one for 10 minutes.
                 publisher.publishNow(json.readValue((String) stage.get("payload"), DeliveryCommandMessage.class),

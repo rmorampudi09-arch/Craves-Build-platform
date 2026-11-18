@@ -50,6 +50,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiPredicate;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -209,6 +211,16 @@ public class FleetDispatcher implements FleetStage {
     private final TransactionTemplate savepoint;
     /** shadow: the candidate queries so far, to alternate which statement runs first. */
     private final AtomicLong shadowLooks = new AtomicLong();
+    /**
+     * CRAVES_FLEET_TIMERS shadow or on (FleetTimers; null while off): sends the fleet-timers message for a look's next
+     * check, true once sent. stageLeavesCommand (CRAVES_FLEET_STAGE_LEAVES_COMMAND_ENABLED, with timers and the sweeper
+     * both on): once that message is sent, the order's command is told to come back at the stage's deadline, not at the
+     * next check, so the timers drive the looks and the command is the backstop.
+     */
+    private BiPredicate<UUID, Instant> timer;
+    private boolean stageLeavesCommand;
+    /** FleetTimers.receiving: the stage is left to the timers only while their messages are being received. */
+    private BooleanSupplier timersReceiving = () -> false;
     private final AtomicLong noRateCardLoggedAt = new AtomicLong();
     /** Phase 5, the fleet engine (craves.fleet.engine.*): the feed while shadow or live, the client while live; else null. */
     private FleetEngineFeed engineFeed;
@@ -373,6 +385,13 @@ public class FleetDispatcher implements FleetStage {
         this.storesNextLook = !"off".equals(FleetStageSweeper.mode(mode));
     }
 
+    /** FleetTimers sets this for itself while CRAVES_FLEET_TIMERS is shadow or on. */
+    void setTimers(BiPredicate<UUID, Instant> timer, boolean stageLeavesCommand, BooleanSupplier receiving) {
+        this.timer = timer;
+        this.stageLeavesCommand = stageLeavesCommand;
+        this.timersReceiving = receiving;
+    }
+
     @Autowired(required = false)
     public void setEngine(FleetEngineFeed feed, FleetEngineClient client) {
         this.engineFeed = feed.on() ? feed : null;
@@ -406,8 +425,55 @@ public class FleetDispatcher implements FleetStage {
         try {
             return look(command, courierQuotePaise, borzoNext);
         } catch (DeliveryProviderTemporarilyUnavailableException deciding) {
-            storeNextLook(command.chefSubOrderId(), deciding.policyDeadline());
+            OpenStage stage = storeNextLook(command.chefSubOrderId(), deciding.policyDeadline());
+            if (timer != null && stage != null && timer.test(stage.tripId(), deciding.policyDeadline()) && stageLeavesCommand
+                && timersReceiving.getAsBoolean() && stage.deadline().isAfter(deciding.policyDeadline())) {
+                throw new DeliveryProviderTemporarilyUnavailableException(deciding.getMessage(), stage.deadline());
+            }
             throw deciding;
+        }
+    }
+
+    /** What a look without the order's command found: riders deciding until next, the command is needed, or no open stage. */
+    public record Look(String outcome, Instant next) {
+        public static final String WAITING = "WAITING";
+        public static final String COMMAND = "COMMAND";
+        public static final String GONE = "GONE";
+    }
+
+    /** Thrown inside carryOn by a look without the command where only the command can go on; never leaves this class. */
+    private static final class NeedsCommand extends RuntimeException {
+        NeedsCommand() {
+            super(null, null, false, false);
+        }
+    }
+
+    /**
+     * One look at a trip's open fleet stage without holding the order's delivery command (R22 4.4), for a timer, a rider
+     * who became free, or the sweeper: under the owner's rule (no limit on rounds) it offers the order to the next rider
+     * exactly as the command's look does, by the same statements under the same stage-row lock, so any number of looks
+     * at once send one round. It never closes a stage and never books anyone: at the deadline, under any other policy, or
+     * where the no-supply fast path may apply, it answers COMMAND and the caller makes the order's command due, because
+     * only the command knows which courier comes next. A cancelled order gets no offer here, as with the command.
+     */
+    public Look matchOrClose(UUID tripId) {
+        TripState trip = jdbc.query("SELECT t.id, t.chef_sub_order_id, t.state, t.provider FROM fleet_schema.trip t WHERE t.id = ? "
+            + "AND t.replaced_at IS NULL AND NOT EXISTS (SELECT 1 FROM delivery_schema.order_cancelled oc WHERE oc.chef_sub_order_id = t.chef_sub_order_id)",
+            FleetDispatcher::tripState, tripId).stream().findFirst().orElse(null);
+        if (trip == null || !"CRAVES_FLEET".equals(trip.provider()) || TAKEN.contains(trip.state())) {
+            return new Look(Look.GONE, null);
+        }
+        try {
+            carryOn(trip, false, OptionalLong::empty, false);
+            return new Look(Look.GONE, null);
+        } catch (DeliveryProviderTemporarilyUnavailableException deciding) {
+            OpenStage stage = storeNextLook(trip.chefSubOrderId(), deciding.policyDeadline());
+            if (timer != null && stage != null) {
+                timer.test(stage.tripId(), deciding.policyDeadline());
+            }
+            return new Look(Look.WAITING, deciding.policyDeadline());
+        } catch (NeedsCommand needed) {
+            return new Look(Look.COMMAND, null);
         }
     }
 
@@ -415,16 +481,19 @@ public class FleetDispatcher implements FleetStage {
      * The time the look just gave for the next one, on the order's open fleet stage. After the look's transactions (riders
      * deciding is also thrown inside one, which rolls back), in a statement of its own; a failure changes nothing of the look.
      */
-    private void storeNextLook(UUID chefSubOrderId, Instant at) {
-        if (!storesNextLook || at == null) {
-            return;
+    private OpenStage storeNextLook(UUID chefSubOrderId, Instant at) {
+        if (!(storesNextLook || timer != null) || at == null) {
+            return null;
         }
         try {
-            jdbc.update("UPDATE fleet_schema.trip_stage s SET next_match_at = now() + make_interval(secs => ?) FROM fleet_schema.trip t "
+            return jdbc.query("UPDATE fleet_schema.trip_stage s SET next_match_at = now() + make_interval(secs => ?) FROM fleet_schema.trip t "
                 + "WHERE t.id = s.trip_id AND t.chef_sub_order_id = ? AND t.replaced_at IS NULL AND s.provider = 'CRAVES_FLEET' "
-                + "AND s.state = 'OPEN'", Math.max(0, Duration.between(Instant.now(), at).toMillis()) / 1000.0, chefSubOrderId);
+                + "AND s.state = 'OPEN' RETURNING s.trip_id, s.deadline_at",
+                (row, n) -> new OpenStage(row.getObject("trip_id", UUID.class), row.getTimestamp("deadline_at").toInstant()),
+                Math.max(0, Duration.between(Instant.now(), at).toMillis()) / 1000.0, chefSubOrderId).stream().findFirst().orElse(null);
         } catch (RuntimeException exception) {
             LOGGER.warn("FLEET_NEXT_LOOK_NOT_STORED chefSubOrderId={} error={}", chefSubOrderId, exception.getClass().getSimpleName());
+            return null;
         }
     }
 
@@ -432,7 +501,7 @@ public class FleetDispatcher implements FleetStage {
         Optional<TripState> existing = trip(command.chefSubOrderId());
         if (existing.isPresent()) {
             // Whatever the policy says now: an open fleet stage is always closed before anyone else is booked.
-            return carryOn(existing.get(), borzoNext, courierQuotePaise);
+            return carryOn(existing.get(), borzoNext, courierQuotePaise, true);
         }
         DispatchPolicy policy = policies.currentDispatchPolicy().orElse(null);
         if (policy == null || "off".equals(policy.mode())) {
@@ -456,7 +525,7 @@ public class FleetDispatcher implements FleetStage {
         Opened opened = transaction.execute(status -> open(command, policy, plan, borzoNext));
         if (opened == null) {
             // Another worker opened the stage for this order a moment ago; follow it.
-            return carryOn(trip(command.chefSubOrderId()).orElseThrow(), borzoNext, courierQuotePaise);
+            return carryOn(trip(command.chefSubOrderId()).orElseThrow(), borzoNext, courierQuotePaise, true);
         }
         if (opened.offers().isEmpty()) {
             if (opened.waiting()) {
@@ -486,9 +555,11 @@ public class FleetDispatcher implements FleetStage {
 
     /**
      * A known order: the rider's job once accepted, nothing once the fleet stage is closed, else wait, send the next round
-     * (a policy with rounds, while the stage lasts) or close the stage.
+     * (a policy with rounds, while the stage lasts) or close the stage. command: the caller holds the order's delivery
+     * command (every look but matchOrClose's); without it this only waits or sends the whole stage's next round, and
+     * throws NeedsCommand where the command's look would close the stage, ask a courier for a quote, or may find no supply.
      */
-    private Optional<UUID> carryOn(TripState trip, boolean borzoNext, Supplier<OptionalLong> courierQuotePaise) {
+    private Optional<UUID> carryOn(TripState trip, boolean borzoNext, Supplier<OptionalLong> courierQuotePaise, boolean command) {
         if ("CRAVES_FLEET".equals(trip.provider()) && TAKEN.contains(trip.state())) {
             return Optional.of(deliveryJob(trip.chefSubOrderId()));
         }
@@ -504,10 +575,20 @@ public class FleetDispatcher implements FleetStage {
         boolean anyOfferOpen = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE trip_id = ? "
             + "AND state = 'ACTIVE' AND expires_at > now()" + heardOrYoung + ")", Boolean.class, trip.id()));
         DispatchPolicy policy = policies.currentDispatchPolicy().orElse(null);
-        if (deadline != null && Instant.now().isBefore(deadline) && anyOfferOpen) {
+        // One clock reading for every deadline test below, so a deadline passing mid-look cannot send a look down two paths.
+        Instant now = Instant.now();
+        if (deadline != null && now.isBefore(deadline) && anyOfferOpen) {
             throw riderDeciding(deadline, policy, trip.id(), stage[1]);
         }
-        if (deadline != null && Instant.now().isBefore(deadline) && policy != null && "live".equals(policy.mode())
+        if (!command) {
+            if (deadline == null) {
+                return Optional.empty(); // closed a moment ago, by an accept or the command
+            }
+            if (!now.isBefore(deadline) || policy == null || !"live".equals(policy.mode()) || !policy.wholeStage()) {
+                throw new NeedsCommand();
+            }
+        }
+        if (deadline != null && now.isBefore(deadline) && policy != null && "live".equals(policy.mode())
             && (policy.offerRounds() > 1 || policy.wholeStage())) {
             List<RingingOffer> round = nextRound(trip.id(), policy, courierQuotePaise);
             // Sent now, or another worker sent this round a moment ago: either way riders are deciding. The whole stage:
@@ -516,20 +597,27 @@ public class FleetDispatcher implements FleetStage {
                 (round == null ? List.<RingingOffer>of() : round).forEach(offer -> Thread.ofVirtual().name("fleet-offer-push")
                     .start(() -> ring(offer)));
                 // Nobody to ask this look (an empty round here is the whole stage's): with the fast path, is anyone in range at all?
-                if (noSupplyFastPath && round != null && round.isEmpty() && closedForNoSupply(trip.id(), policy, borzoNext)) {
+                if (!command && noSupplyFastPath && round != null && round.isEmpty() && !Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE trip_id = ?)", Boolean.class, trip.id()))) {
+                    throw new NeedsCommand(); // nobody was ever asked: the command's look decides whether anyone is in range
+                }
+                if (command && noSupplyFastPath && round != null && round.isEmpty() && closedForNoSupply(trip.id(), policy, borzoNext)) {
                     LOGGER.info("FLEET_STAGE_CLOSED trip={} outcome=NO_SUPPLY next={}", trip.id(), borzoNext ? "BORZO" : "PIDGE");
                     return Optional.empty();
                 }
                 throw riderDeciding(deadline, policy, trip.id(), stage[1]);
             }
         }
-        String outcome = deadline == null || !Instant.now().isBefore(deadline) ? "NO_ACCEPT" : "ALL_DECLINED_OR_EXPIRED";
+        if (!command) {
+            throw new NeedsCommand(); // only the command's look closes a stage
+        }
+        String outcome = deadline == null || !now.isBefore(deadline) ? "NO_ACCEPT" : "ALL_DECLINED_OR_EXPIRED";
         if (Boolean.TRUE.equals(transaction.execute(status -> closeUnlessDeciding(trip.id(), outcome, borzoNext, policy)))) {
             LOGGER.info("FLEET_STAGE_CLOSED trip={} outcome={} next={}", trip.id(), outcome, borzoNext ? "BORZO" : "PIDGE");
             return Optional.empty();
         }
-        TripState now = trip(trip.chefSubOrderId()).orElseThrow();
-        return TAKEN.contains(now.state()) && "CRAVES_FLEET".equals(now.provider()) ? Optional.of(deliveryJob(now.chefSubOrderId()))
+        TripState latest = trip(trip.chefSubOrderId()).orElseThrow();
+        return TAKEN.contains(latest.state()) && "CRAVES_FLEET".equals(latest.provider()) ? Optional.of(deliveryJob(latest.chefSubOrderId()))
             : Optional.empty();
     }
 
@@ -1371,9 +1459,12 @@ public class FleetDispatcher implements FleetStage {
     /** The order's current trip: one ops gave to another rider (V166) is replaced by the new rider's. */
     private Optional<TripState> trip(UUID chefSubOrderId) {
         return jdbc.query("SELECT id, chef_sub_order_id, state, provider FROM fleet_schema.trip WHERE chef_sub_order_id = ? "
-            + "AND replaced_at IS NULL",
-            (row, n) -> new TripState(row.getObject("id", UUID.class), row.getObject("chef_sub_order_id", UUID.class),
-                row.getString("state"), row.getString("provider")), chefSubOrderId).stream().findFirst();
+            + "AND replaced_at IS NULL", FleetDispatcher::tripState, chefSubOrderId).stream().findFirst();
+    }
+
+    private static TripState tripState(ResultSet row, int n) throws SQLException {
+        return new TripState(row.getObject("id", UUID.class), row.getObject("chef_sub_order_id", UUID.class),
+            row.getString("state"), row.getString("provider"));
     }
 
     /**
@@ -1501,6 +1592,10 @@ public class FleetDispatcher implements FleetStage {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Offer pay lines could not be stored", exception);
         }
+    }
+
+    /** The order's open fleet stage, as storeNextLook found it. */
+    private record OpenStage(UUID tripId, Instant deadline) {
     }
 
     record TripState(UUID id, UUID chefSubOrderId, String state, String provider) {

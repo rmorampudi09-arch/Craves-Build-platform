@@ -18,6 +18,7 @@ import in.craves.integration.fleet.admin.FleetOpsController;
 import in.craves.integration.fleet.admin.FleetSetupController;
 import in.craves.integration.fleet.dispatch.FleetDispatcher;
 import in.craves.integration.fleet.dispatch.FleetStageSweeper;
+import in.craves.integration.fleet.dispatch.FleetTimers;
 import in.craves.integration.fleet.money.FleetEarnings;
 import in.craves.integration.fleet.money.FleetMoneyController;
 import in.craves.integration.fleet.money.FleetPayouts;
@@ -124,6 +125,28 @@ class FleetConfigurationTest {
             assertThat(ReflectionTestUtils.getField(context.getBean(FleetStageSweeper.class), "mode")).isEqualTo("shadow");
         });
         runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.stage-sweeper=true").run(context ->
+            assertThat(context).hasFailed());
+    }
+
+    /** No Service Bus here, as where the queue does not exist: on still starts, with nothing to send through. */
+    @Test
+    void theTimersAreOffUnlessSwitchedOnStartWithoutServiceBusAndAnUnknownModeStopsStartUp() {
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.stage-leaves-command-enabled=true").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetTimers.class), "mode")).isEqualTo("off");
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "timer")).isNull();
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "stageLeavesCommand")).isEqualTo(false);
+        });
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.timers= On", "craves.fleet.stage-sweeper=on",
+            "craves.fleet.stage-leaves-command-enabled=true").run(context -> {
+                assertThat(context).hasNotFailed();
+                assertThat(context.getBean(FleetTimers.class).on()).isTrue();
+                assertThat(ReflectionTestUtils.getField(context.getBean(FleetTimers.class), "sender")).isNull();
+                assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "timer")).isNotNull();
+                assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "stageLeavesCommand")).isEqualTo(true);
+                assertThat(ReflectionTestUtils.getField(context.getBean(FleetStageSweeper.class), "timers")).isNotNull();
+            });
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.timers=true").run(context ->
             assertThat(context).hasFailed());
     }
 

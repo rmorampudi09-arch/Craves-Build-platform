@@ -80,8 +80,10 @@ class PidgeCallbackReadBackTest {
         verify(statusService).processWebhook(pidgeFinal);
         verify(statusService, never()).heard(any());
         verify(statusService, never()).hasJob(any());
-        verify(statusService, never()).processWebhook(any(), any());
-        verify(repository, never()).releaseWebhook(any());
+        verify(statusService, never()).processAfterReadBack(any(), any());
+        verify(statusService, never()).failAfterReadBack(any(), anyInt(), any(), any());
+        verify(repository, never()).releaseWebhook(any(), anyInt(), anyInt());
+        verify(repository, never()).lockWebhookClaim(any(), anyInt());
     }
 
     @Configuration(proxyBeanMethods = false)

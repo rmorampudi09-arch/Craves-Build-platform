@@ -25,6 +25,8 @@ import org.springframework.stereotype.Component;
 public class DeliveryWebhookProcessor {
     private static final Logger log = LoggerFactory.getLogger(DeliveryWebhookProcessor.class);
     private static final long MAX_RETRY_SECONDS = 300;
+    /** A callback the read-back thread could not take waits this long, so that newer callbacks are claimed first. */
+    private static final int READ_BACK_QUEUE_FULL_SECONDS = 10;
 
     private final DeliveryStatusRepository repository;
     private final DeliveryLeaseRecoveryRepository leaseRecovery;
@@ -83,7 +85,7 @@ public class DeliveryWebhookProcessor {
         );
         for (WebhookWorkItem workItem : workItems) {
             if (readBack == null || !handedToReadBack(workItem)) {
-                processOne(workItem, null);
+                processOne(workItem, null, false);
             }
         }
     }
@@ -114,7 +116,7 @@ public class DeliveryWebhookProcessor {
                 log.error("Delivery webhook read-back pass failed inboxId={}", workItem.id(), failure);
             }
         })) {
-            repository.releaseWebhook(workItem.id());
+            repository.releaseWebhook(workItem.id(), workItem.attemptCount(), READ_BACK_QUEUE_FULL_SECONDS);
             log.warn("DELIVERY_WEBHOOK_VERIFY_FETCH result=QUEUE_FULL provider=pidge");
         }
         return true;
@@ -134,24 +136,32 @@ public class DeliveryWebhookProcessor {
                 readBackFailed(workItem, ex);
             } else {
                 log.warn("DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result=FETCH_FAILED provider=pidge");
-                processOne(workItem, null);
+                processOne(workItem, null, true);
             }
             return;
         }
+        // Pidge's API has yet to reach the stage its callback names: not a difference, and in enforce read again later.
+        boolean behind = DeliveryStatusUpdateService.rank(read.status()) < DeliveryStatusUpdateService.rank(heard.status());
+        if (enforce && behind) {
+            readBackFailed(workItem, new IllegalStateException("Pidge read-back holds an earlier status"));
+            return;
+        }
         if (enforce) {
-            processOne(workItem, read);
+            processOne(workItem, read, true);
             return;
         }
         if (read.status() != heard.status()) {
-            log.warn("DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result=DIFFERENT provider=pidge");
+            log.warn("DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result={} provider=pidge", behind ? "BEHIND" : "DIFFERENT");
         }
-        processOne(workItem, null);
+        processOne(workItem, null, true);
     }
 
     /** Enforce: the callback's status is not applied; it is tried again, and after the last attempt it is dead-lettered. */
     private void readBackFailed(WebhookWorkItem workItem, RuntimeException ex) {
         try {
-            failed(workItem, new IllegalStateException("VERIFY_FETCH_FAILED " + safeMessage(ex), ex));
+            if (!failed(workItem, new IllegalStateException("VERIFY_FETCH_FAILED " + safeMessage(ex), ex), true)) {
+                return;
+            }
             if (workItem.attemptCount() >= properties.getMaxWebhookAttempts()) {
                 log.error("CRAVES_ALERT alert=COURIER_WEBHOOK_VERIFY_FAILED provider=pidge inboxId={} attempts={}", workItem.id(),
                     workItem.attemptCount());
@@ -167,12 +177,15 @@ public class DeliveryWebhookProcessor {
             || status == DeliveryStatus.RETURNED;
     }
 
-    /** read: the booking as the courier holds it (enforce), or null to apply the callback as it came. */
-    private void processOne(WebhookWorkItem workItem, ProviderDelivery read) {
+    /**
+     * read: the booking as the courier holds it (enforce), or null to apply the callback as it came. afterReadBack: on
+     * the read-back thread, where the row is written only while this pass's claim still holds it.
+     */
+    private void processOne(WebhookWorkItem workItem, ProviderDelivery read, boolean afterReadBack) {
         try {
-            DeliveryStatusUpdateService.ProcessingResult result = read == null
-                ? statusService.processWebhook(workItem)
-                : statusService.processWebhook(workItem, read);
+            DeliveryStatusUpdateService.ProcessingResult result = afterReadBack
+                ? statusService.processAfterReadBack(workItem, read)
+                : statusService.processWebhook(workItem);
             if (result.result() != null && result.result().startsWith("VERIFY_FETCH_DISAGREED")) {
                 log.error("CRAVES_ALERT alert=COURIER_WEBHOOK_VERIFY_DISAGREED provider={} inboxId={} jobId={} readBack={} result={}",
                     workItem.providerId(), workItem.id(), result.deliveryJobId(), read.status(), result.result());
@@ -187,12 +200,14 @@ public class DeliveryWebhookProcessor {
                 result.duplicate(),
                 result.result()
             );
+        } catch (DeliveryStatusUpdateService.StaleWebhookClaimException stale) {
+            log.warn("Delivery webhook was claimed again while it waited for its read-back inboxId={}", workItem.id());
         } catch (UnmatchedDeliveryJobException unmatched) {
             if (!parked(workItem, unmatched)) {
-                failed(workItem, unmatched);
+                failed(workItem, unmatched, afterReadBack);
             }
         } catch (RuntimeException ex) {
-            failed(workItem, ex);
+            failed(workItem, ex, afterReadBack);
         }
     }
 
@@ -222,15 +237,26 @@ public class DeliveryWebhookProcessor {
         }
     }
 
-    private void failed(WebhookWorkItem workItem, RuntimeException ex) {
+    /** False: after a read-back, the row had been claimed again and nothing was written. */
+    private boolean failed(WebhookWorkItem workItem, RuntimeException ex, boolean afterReadBack) {
         long delaySeconds = retryDelaySeconds(workItem.attemptCount());
-        repository.markWebhookFailed(
-            workItem.id(),
-            workItem.attemptCount(),
-            properties.getMaxWebhookAttempts(),
-            Instant.now().plusSeconds(delaySeconds),
-            safeMessage(ex)
-        );
+        if (afterReadBack) {
+            try {
+                statusService.failAfterReadBack(workItem, properties.getMaxWebhookAttempts(), Instant.now().plusSeconds(delaySeconds),
+                    safeMessage(ex));
+            } catch (DeliveryStatusUpdateService.StaleWebhookClaimException stale) {
+                log.warn("Delivery webhook was claimed again while it waited for its read-back inboxId={}", workItem.id());
+                return false;
+            }
+        } else {
+            repository.markWebhookFailed(
+                workItem.id(),
+                workItem.attemptCount(),
+                properties.getMaxWebhookAttempts(),
+                Instant.now().plusSeconds(delaySeconds),
+                safeMessage(ex)
+            );
+        }
         log.error(
             "Delivery webhook processing failed inboxId={} provider={} providerEventId={} attempt={}",
             workItem.id(),
@@ -239,6 +265,7 @@ public class DeliveryWebhookProcessor {
             workItem.attemptCount(),
             ex
         );
+        return true;
     }
 
     private long retryDelaySeconds(int attemptCount) {

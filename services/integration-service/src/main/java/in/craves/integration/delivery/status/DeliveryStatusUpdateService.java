@@ -80,15 +80,35 @@ public class DeliveryStatusUpdateService {
 
     @Transactional
     public ProcessingResult processWebhook(WebhookWorkItem workItem) {
-        return processWebhook(workItem, null);
+        return process(workItem, null);
     }
 
     /**
-     * readBack: the booking as the courier's API holds it, or null. When its status differs from the callback's, the
-     * read-back status is the one decided on and the result starts with VERIFY_FETCH_DISAGREED.
+     * For a callback that waited for a read-back, under the inbox row's lock and only while its claim still holds the
+     * row (StaleWebhookClaimException otherwise). readBack: the booking as the courier's API holds it, or null to apply
+     * the callback as it came. When its status differs from the callback's, the read-back status is the one decided on
+     * and the result starts with VERIFY_FETCH_DISAGREED.
      */
     @Transactional
-    public ProcessingResult processWebhook(WebhookWorkItem workItem, ProviderDelivery readBack) {
+    public ProcessingResult processAfterReadBack(WebhookWorkItem workItem, ProviderDelivery readBack) {
+        requireClaim(workItem);
+        return process(workItem, readBack);
+    }
+
+    /** markWebhookFailed for a callback that waited for a read-back, only while its claim still holds the row. */
+    @Transactional
+    public void failAfterReadBack(WebhookWorkItem workItem, int maxAttempts, Instant nextAttemptAt, String safeError) {
+        requireClaim(workItem);
+        repository.markWebhookFailed(workItem.id(), workItem.attemptCount(), maxAttempts, nextAttemptAt, safeError);
+    }
+
+    private void requireClaim(WebhookWorkItem workItem) {
+        if (!repository.lockWebhookClaim(workItem.id(), workItem.attemptCount())) {
+            throw new StaleWebhookClaimException();
+        }
+    }
+
+    private ProcessingResult process(WebhookWorkItem workItem, ProviderDelivery readBack) {
         DeliveryWebhookNormalizer normalizer = normalizer(workItem.providerId());
         ProviderStatusUpdate heard = normalizer.normalize(workItem.rawPayload());
         ProviderStatusUpdate update = readBack == null || readBack.status() == heard.status() ? heard
@@ -166,7 +186,10 @@ public class DeliveryStatusUpdateService {
             retainBorzoIfAccepted(job, update);
         }
 
-        callbackHeard(job, decision.applied() ? update.status() : parseStatus(job.status()));
+        if (disagreed.isEmpty()) {
+            // A callback whose own status was not the one decided on leaves the job's poll schedule as it is.
+            callbackHeard(job, decision.applied() ? update.status() : parseStatus(job.status()));
+        }
         repository.markWebhookProcessed(
             workItem.id(),
             job.id(),
@@ -648,6 +671,13 @@ public class DeliveryStatusUpdateService {
 
         public String providerOrderId() {
             return providerOrderId;
+        }
+    }
+
+    /** The callback was claimed again by a later pass while this one waited: this one writes nothing. */
+    public static class StaleWebhookClaimException extends RuntimeException {
+        StaleWebhookClaimException() {
+            super("Another pass has claimed this callback");
         }
     }
 

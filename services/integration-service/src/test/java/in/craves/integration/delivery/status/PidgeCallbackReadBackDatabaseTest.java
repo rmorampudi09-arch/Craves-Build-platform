@@ -98,28 +98,41 @@ class PidgeCallbackReadBackDatabaseTest {
     }
 
     @Test
-    void enforceDoesNotApplyADeliveredCallbackThatPidgeDoesNotConfirm() throws InterruptedException {
+    void enforceDoesNotApplyADeliveredCallbackPidgeDoesNotYetShowAndAppliesItOncePidgeDoes() throws InterruptedException {
         mode("enforce");
+        properties.setWebhookFirstTrackingEnabled(true);
         UUID job = job("pidge", "PG-1", DeliveryStatus.IN_TRANSIT);
+        Map<String, Object> schedule = schedule(job);
         UUID callback = pidgeCallback("PG-1", "DELIVERED");
 
         processor.process();
         finishReadBacks();
 
         assertThat(status(job)).isEqualTo("IN_TRANSIT");
-        assertThat(inbox(callback)).containsEntry("processing_status", "PROCESSED");
-        assertThat((String) inbox(callback).get("processing_result")).startsWith("VERIFY_FETCH_DISAGREED_");
+        assertThat(inbox(callback)).as("to be read again").containsEntry("processing_status", "FAILED").containsEntry("attempt_count", 1);
+        assertThat((String) inbox(callback).get("error_message")).startsWith("VERIFY_FETCH_FAILED");
+        assertThat(inbox(callback).get("processing_result")).isNull();
+        assertThat(schedule(job)).as("the job's next poll is not put off").isEqualTo(schedule);
         assertThat(reads).hasValue(1);
-        assertThat(lines).hasSize(1);
-        assertThat(lines.get(0)).startsWith("CRAVES_ALERT alert=COURIER_WEBHOOK_VERIFY_DISAGREED provider=pidge");
+        assertThat(lines).isEmpty();
+
+        pidgeApi = id -> pidge(id, DeliveryStatus.DELIVERED);
+        due(callback);
+        processor.process();
+        finishReadBacks();
+
+        assertThat(status(job)).isEqualTo("DELIVERED");
+        assertThat(inbox(callback)).containsEntry("processing_status", "PROCESSED").containsEntry("processing_result", "APPLIED");
+        assertThat(lines).isEmpty();
     }
 
     @Test
-    void enforceAppliesWhatPidgeHoldsWhenItIsFurtherOnAndTheCallbackWhenTheyAgree() throws InterruptedException {
+    void enforceAppliesTheOtherFinalStatusPidgeHoldsAndTheCallbackWhenTheyAgree() throws InterruptedException {
         mode("enforce");
+        properties.setWebhookFirstTrackingEnabled(true);
         UUID first = job("pidge", "PG-1", DeliveryStatus.IN_TRANSIT);
         UUID second = job("pidge", "PG-2", DeliveryStatus.IN_TRANSIT);
-        pidgeApi = id -> pidge(id, "PG-1".equals(id) ? DeliveryStatus.DELIVERED : DeliveryStatus.AT_DROPOFF);
+        pidgeApi = id -> pidge(id, "PG-1".equals(id) ? DeliveryStatus.DELIVERED : DeliveryStatus.CANCELLED);
         UUID agreed = pidgeCallback("PG-1", "DELIVERED");
         UUID differed = pidgeCallback("PG-2", "DELIVERED");
 
@@ -128,23 +141,111 @@ class PidgeCallbackReadBackDatabaseTest {
 
         assertThat(status(first)).isEqualTo("DELIVERED");
         assertThat(inbox(agreed)).containsEntry("processing_status", "PROCESSED").containsEntry("processing_result", "APPLIED");
-        assertThat(status(second)).isEqualTo("AT_DROPOFF");
-        assertThat(inbox(differed)).containsEntry("processing_result", "VERIFY_FETCH_DISAGREED_APPLIED");
+        assertThat(schedule(first).get("last_webhook_at")).isNotNull();
+        assertThat(status(second)).isEqualTo("CANCELLED");
+        assertThat(inbox(differed)).containsEntry("processing_status", "PROCESSED")
+            .containsEntry("processing_result", "VERIFY_FETCH_DISAGREED_APPLIED");
+        assertThat(schedule(second).get("last_webhook_at")).as("not counted as a callback heard").isNull();
         assertThat(lines).hasSize(1);
+        assertThat(lines.get(0)).startsWith("CRAVES_ALERT alert=COURIER_WEBHOOK_VERIFY_DISAGREED provider=pidge");
+    }
+
+    @Test
+    void aCallbackClaimedAgainWhileItWaitedIsNotWrittenByTheEarlierPass() throws InterruptedException {
+        for (boolean readFails : new boolean[] {false, true}) {
+            mode("enforce");
+            String booking = "PG-" + readFails;
+            UUID job = job("pidge", booking, DeliveryStatus.IN_TRANSIT);
+            CountDownLatch reading = new CountDownLatch(1);
+            CountDownLatch answer = new CountDownLatch(1);
+            pidgeApi = id -> {
+                reading.countDown();
+                try {
+                    answer.await();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                if (readFails) {
+                    throw new IllegalStateException("Pidge response was not received");
+                }
+                return pidge(id, DeliveryStatus.DELIVERED);
+            };
+            UUID callback = pidgeCallback(booking, "DELIVERED");
+            try {
+                processor.process();
+                assertThat(reading.await(10, TimeUnit.SECONDS)).isTrue();
+                // A later pass takes the row over, as it does when a lease runs out.
+                database.db.update("UPDATE delivery_schema.delivery_webhook_inbox SET attempt_count = attempt_count + 1 WHERE id = ?", callback);
+            } finally {
+                answer.countDown();
+            }
+            finishReadBacks();
+
+            assertThat(inbox(callback)).as("readFails=%s", readFails).containsEntry("processing_status", "PROCESSING")
+                .containsEntry("attempt_count", 2);
+            assertThat(inbox(callback).get("error_message")).isNull();
+            assertThat(status(job)).isEqualTo("IN_TRANSIT");
+            assertThat(lines).isEmpty();
+        }
+    }
+
+    @Test
+    void withTheThreadBusyABacklogOfPidgeFinalCallbacksDoesNotHoldBackABorzoCallback() throws InterruptedException {
+        mode("enforce");
+        properties.setWebhookBatchSize(5);
+        CountDownLatch busy = new CountDownLatch(1);
+        Runnable wait = () -> {
+            try {
+                busy.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        };
+        for (int taken = 0; taken <= PidgeCallbackReadBack.QUEUE; taken++) {
+            assertThat(readBack.submit(wait)).isTrue();
+        }
+        for (int older = 1; older <= 6; older++) {
+            job("pidge", "PG-" + older, DeliveryStatus.IN_TRANSIT);
+            UUID callback = pidgeCallback("PG-" + older, "DELIVERED");
+            database.db.update("UPDATE delivery_schema.delivery_webhook_inbox SET received_at = now() - make_interval(mins => 1) WHERE id = ?",
+                callback);
+        }
+        UUID borzoJob = job("borzo", "1250032", DeliveryStatus.SEARCHING);
+        UUID borzoCallback = borzoCallback("1250032", "courier_assigned");
+
+        try {
+            processor.process();
+            assertThat(inbox(borzoCallback)).as("behind a full batch of older rows").containsEntry("processing_status", "RECEIVED");
+
+            processor.process();
+
+            assertThat(inbox(borzoCallback)).containsEntry("processing_status", "PROCESSED").containsEntry("processing_result", "APPLIED");
+            assertThat(status(borzoJob)).isEqualTo("COURIER_ASSIGNED");
+            assertThat(database.db.queryForObject("SELECT count(*) FROM delivery_schema.delivery_webhook_inbox WHERE provider_id = 'pidge' "
+                + "AND processing_status = 'FAILED' AND attempt_count = 0 AND next_attempt_at > now()", Integer.class))
+                .as("every Pidge row waits its turn, uncounted").isEqualTo(6);
+        } finally {
+            busy.countDown();
+        }
     }
 
     @Test
     void shadowAppliesTheCallbackAsBeforeAndWritesOneLineWhenPidgeDiffers() throws InterruptedException {
         mode("shadow");
         UUID job = job("pidge", "PG-1", DeliveryStatus.IN_TRANSIT);
+        UUID other = job("pidge", "PG-2", DeliveryStatus.IN_TRANSIT);
+        pidgeApi = id -> pidge(id, "PG-1".equals(id) ? DeliveryStatus.IN_TRANSIT : DeliveryStatus.CANCELLED);
         UUID callback = pidgeCallback("PG-1", "DELIVERED");
+        pidgeCallback("PG-2", "DELIVERED");
 
         processor.process();
         finishReadBacks();
 
         assertThat(status(job)).isEqualTo("DELIVERED");
+        assertThat(status(other)).isEqualTo("DELIVERED");
         assertThat(inbox(callback)).containsEntry("processing_status", "PROCESSED").containsEntry("processing_result", "APPLIED");
-        assertThat(lines).containsExactly("DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result=DIFFERENT provider=pidge");
+        assertThat(lines).containsExactlyInAnyOrder("DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result=BEHIND provider=pidge",
+            "DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result=DIFFERENT provider=pidge");
     }
 
     @Test
@@ -253,10 +354,13 @@ class PidgeCallbackReadBackDatabaseTest {
             assertThat(inbox(callback).get("error_message")).isNull();
             assertThat(status(job)).isEqualTo("IN_TRANSIT");
             assertThat(lines).containsExactly("DELIVERY_WEBHOOK_VERIFY_FETCH result=QUEUE_FULL provider=pidge");
+            assertThat(database.db.queryForObject("SELECT CAST(ceil(extract(epoch FROM next_attempt_at - now())) AS integer) FROM "
+                + "delivery_schema.delivery_webhook_inbox WHERE id = ?", Integer.class, callback)).isBetween(5, 10);
         } finally {
             busy.countDown();
         }
         finishReadBacks();
+        due(callback);
         processor.process();
         finishReadBacks();
 
@@ -365,6 +469,14 @@ class PidgeCallbackReadBackDatabaseTest {
         database.db.update("INSERT INTO delivery_schema.delivery_webhook_inbox (id, provider_id, provider_event_id, raw_payload) "
             + "VALUES (?, ?, ?, ?::jsonb)", id, provider, "event-" + id, payload.toString());
         return id;
+    }
+
+    private void due(UUID callback) {
+        database.db.update("UPDATE delivery_schema.delivery_webhook_inbox SET next_attempt_at = now() WHERE id = ?", callback);
+    }
+
+    private Map<String, Object> schedule(UUID job) {
+        return database.db.queryForMap("SELECT next_tracking_at, last_webhook_at FROM delivery_schema.delivery_job WHERE id = ?", job);
     }
 
     private Map<String, Object> inbox(UUID callback) {

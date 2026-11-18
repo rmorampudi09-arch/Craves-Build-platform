@@ -735,9 +735,10 @@ open) and then processes the callback in the usual transaction. Other couriers' 
 | | Shadow | Enforce |
 |---|---|---|
 | Pidge holds the same status | Callback applied as before | Callback applied as before |
-| Pidge holds another status | Callback applied as before; `DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result=DIFFERENT provider=pidge` | The status Pidge holds goes through the status service instead (the rank guard and the other checks decide as usual). The inbox row is `PROCESSED` with `processing_result` `VERIFY_FETCH_DISAGREED_<decision>`; alert `COURIER_WEBHOOK_VERIFY_DISAGREED` |
+| Pidge holds an earlier stage (its API has yet to show the callback's status) | Callback applied as before; `DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result=BEHIND provider=pidge` | Handled as a read that failed (next row): Pidge is read again on the retry, and the callback is applied once Pidge shows its status |
+| Pidge holds another final status | Callback applied as before; `… result=DIFFERENT …` | The status Pidge holds goes through the status service instead (the rank guard and the other checks decide as usual), and the job's poll schedule is left as it is. The inbox row is `PROCESSED` with `processing_result` `VERIFY_FETCH_DISAGREED_<decision>`; alert `COURIER_WEBHOOK_VERIFY_DISAGREED` |
 | Pidge cannot be read, or gives no known status | Callback applied as before; `… result=FETCH_FAILED …` | Nothing is applied. The row is retried on the usual attempts and back-off with `error_message` `VERIFY_FETCH_FAILED …`; after the last attempt it is `DEAD_LETTER` and `COURIER_WEBHOOK_VERIFY_FAILED` is raised once |
-| The thread's queue is full | The row is due again at the next pass and the claim is not counted as an attempt; `DELIVERY_WEBHOOK_VERIFY_FETCH result=QUEUE_FULL provider=pidge` | The same |
+| The thread's queue is full | The row is due again 10 seconds later, so newer callbacks are claimed first, and the claim is not counted as an attempt; `DELIVERY_WEBHOOK_VERIFY_FETCH result=QUEUE_FULL provider=pidge` | The same |
 
 The shadow lines carry no ids, so they can be counted.
 
@@ -753,11 +754,12 @@ callback). Borzo: 0 in every mode. The calls are counted with the rest in `Couri
 Neither alert pages a phone. If a pod stops while a callback is on the thread, the row's lease expires and a later pass
 claims it again, as for any callback.
 
-Switch on: set `shadow` and count `result=DIFFERENT` and `result=FETCH_FAILED` for a few days; a callback that arrives
-before Pidge's API shows the same status counts as different. Then set `enforce`. Rollback: unset the flag; rows already
-on the thread finish, and nothing new is handed to it after the restart.
+A row that waited for a read-back is written only while the claim it was read under still holds it; a row claimed
+again meanwhile is left to the later pass.
 
-Not in this yet: the gateway body-size and rate policy for the courier webhook routes (`infra/apim`).
+Switch on: set `shadow` and count `result=BEHIND`, `result=DIFFERENT` and `result=FETCH_FAILED` for a few days. Then set
+`enforce`. Rollback: unset the flag; rows already
+on the thread finish, and nothing new is handed to it after the restart.
 
 ## Shared courier breaker
 

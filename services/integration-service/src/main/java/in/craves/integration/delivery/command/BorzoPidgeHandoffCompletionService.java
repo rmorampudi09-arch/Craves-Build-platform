@@ -19,6 +19,13 @@ public class BorzoPidgeHandoffCompletionService {
     private final DeliveryOutboxRepository outbox;
     private final ObjectMapper objectMapper;
     private ProviderCreateAttemptRepository journal;
+    private in.craves.integration.delivery.billing.CourierCharges charges;
+
+    /** Courier charge records (V199); written only while CRAVES_DELIVERY_COURIER_CHARGE_ENABLED is on. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCharges(in.craves.integration.delivery.billing.CourierCharges charges) {
+        this.charges = charges;
+    }
 
     /** The booking journal (V191); used only while CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED is on. */
     @Autowired(required = false)
@@ -70,6 +77,9 @@ public class BorzoPidgeHandoffCompletionService {
             throw new IllegalStateException("Borzo delivery is no longer eligible for handoff");
         }
         assignments.markBorzoPidgeHandoff(job.assignmentId());
+        if (charges != null) {
+            charges.booked(job.orderId(), job.chefSubOrderId(), job.id(), pidgeDelivery);
+        }
         if (!handoffs.complete(job.id(), pidgeDelivery.providerDeliveryId())) {
             throw new IllegalStateException("Handoff journal could not be completed");
         }

@@ -58,6 +58,13 @@ public class FleetCourierCancel {
     private final RiderPushClient alerts;
     /** Does the cancelling instead while CRAVES_DELIVERY_COURIER_CANCEL_ENABLED is on; otherwise unused. */
     private CourierCancel confirmed;
+    private in.craves.integration.delivery.billing.CourierCharges charges;
+
+    /** Courier charge records (V199); written only while CRAVES_DELIVERY_COURIER_CHARGE_ENABLED is on. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCharges(in.craves.integration.delivery.billing.CourierCharges charges) {
+        this.charges = charges;
+    }
 
     public FleetCourierCancel(JdbcTemplate jdbc, List<DeliveryProviderAdapter> adapters, DeliveryStatusUpdateService statusUpdates,
                               RiderPushClient alerts) {
@@ -186,6 +193,9 @@ public class FleetCourierCancel {
             booking.providerDeliveryId());
         LOGGER.info("FLEET_COURIER_CANCELLED provider={} delivery={} chefSubOrderId={} reason={}", booking.provider(),
             booking.providerDeliveryId(), booking.chefSubOrderId(), reason);
+        if (charges != null) {
+            charges.cancelled(booking.orderId(), booking.chefSubOrderId(), booking.jobId(), answer);
+        }
         try {
             // The delivery job and order-service hear it now; the courier's callback or the tracking poll would bring it later.
             statusUpdates.processTracking(new TrackingWorkItem(booking.jobId(), booking.orderId(), booking.chefSubOrderId(),

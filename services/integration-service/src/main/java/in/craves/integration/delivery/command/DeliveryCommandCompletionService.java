@@ -28,6 +28,7 @@ public class DeliveryCommandCompletionService {
     private final BorzoPidgeHandoffRepository handoffs;
     private final DeliveryCommandProperties properties;
     private ProviderCreateAttemptRepository journal;
+    private in.craves.integration.delivery.billing.CourierCharges charges;
 
     @Autowired
     public DeliveryCommandCompletionService(DeliveryAssignmentRepository assignments,
@@ -59,6 +60,12 @@ public class DeliveryCommandCompletionService {
     @Autowired(required = false)
     public void setJournal(ProviderCreateAttemptRepository journal) {
         this.journal = journal;
+    }
+
+    /** Courier charge records (V199); written only while CRAVES_DELIVERY_COURIER_CHARGE_ENABLED is on. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCharges(in.craves.integration.delivery.billing.CourierCharges charges) {
+        this.charges = charges;
     }
 
     @Transactional
@@ -107,6 +114,10 @@ public class DeliveryCommandCompletionService {
         UUID deliveryJobId = deliveryJobs.insert(
             command.orderId(), command.chefSubOrderId(), routingResult
         );
+        if (charges != null) {
+            // A record only, in a savepoint: it never stops the booking.
+            charges.booked(command.orderId(), command.chefSubOrderId(), deliveryJobId, routingResult.delivery());
+        }
         if (journalled) {
             // In the job's transaction, so the journal never says "booked" without a job. No row: a command from before the flag.
             if (!journal.confirm(command.chefSubOrderId(), routingResult.providerId(), routingResult.clientReference(),

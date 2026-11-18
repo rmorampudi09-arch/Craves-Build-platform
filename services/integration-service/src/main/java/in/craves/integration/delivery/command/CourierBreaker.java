@@ -1,7 +1,17 @@
 package in.craves.integration.delivery.command;
 
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
+import jakarta.annotation.PreDestroy;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,11 +39,20 @@ import org.springframework.web.client.RestClientResponseException;
 public class CourierBreaker {
     private static final Logger log = LoggerFactory.getLogger(CourierBreaker.class);
     private static final String TABLE = "delivery_schema.provider_breaker";
+    /** How long a pass waits for the row, connection included, before it calls the courier without it. */
+    static final long ADMIT_WAIT_MILLIS = 1000;
 
     private final JdbcTemplate jdbc;
     private final int bookingFailures;
     private final int quoteFailures;
     private final int halfOpenSeconds;
+    // The read runs here so that a pass waits ADMIT_WAIT_MILLIS at most, even for a connection (the pool's own wait is
+    // far longer). No second pool: at most 8 reads wait for a connection at once, and a 9th is not started.
+    private final ExecutorService reads = new ThreadPoolExecutor(0, 8, 30, TimeUnit.SECONDS, new SynchronousQueue<>(), task -> {
+        Thread thread = new Thread(task, "courier-breaker-read");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     public CourierBreaker(JdbcTemplate jdbc,
                           @Value("${craves.courier-breaker.booking-failures:3}") int bookingFailures,
@@ -50,15 +69,24 @@ public class CourierBreaker {
         this.halfOpenSeconds = halfOpenSeconds;
     }
 
+    @PreDestroy
+    void stop() {
+        reads.shutdownNow();
+    }
+
     /**
      * One pass's leave to call a courier. refused: the breaker is open, do not call. dirty: the row held failures when it
      * was read, so a success must be written. probe: this pass holds the half-open probe.
      */
-    public record Pass(String providerId, boolean refused, boolean dirty, boolean probe) {}
+    public record Pass(String providerId, boolean refused, boolean dirty, boolean probe, java.sql.Timestamp probeClaimedAt) {
+        public Pass(String providerId, boolean refused, boolean dirty, boolean probe) {
+            this(providerId, refused, dirty, probe, null);
+        }
+    }
 
     private record Row(boolean dirty, boolean open, boolean probeDue) {}
 
-    /** Read once per courier per pass, before its quote. A pass that may book takes the half-open probe when it is due. */
+    /** Read once per courier per pass, just before its quote. A pass that may book takes the half-open probe when it is due. */
     public Pass admit(String providerId) {
         return admit(providerId, true);
     }
@@ -69,6 +97,22 @@ public class CourierBreaker {
     }
 
     private Pass admit(String providerId, boolean mayProbe) {
+        Future<Pass> read = null;
+        try {
+            read = reads.submit(() -> readRow(providerId, mayProbe));
+            return read.get(ADMIT_WAIT_MILLIS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException | RejectedExecutionException unreadable) {
+            log.warn("Courier breaker was not read in time provider={}; the courier is called", providerId, unreadable);
+        }
+        if (read != null) {
+            read.cancel(true);
+        }
+        return new Pass(providerId, false, false, false);
+    }
+
+    private Pass readRow(String providerId, boolean mayProbe) {
         try {
             List<Row> rows = jdbc.query("SELECT booking_failures > 0 OR quote_failures > 0 AS dirty, opened_at IS NOT NULL AS open, "
                 + "opened_at < now() - ? * INTERVAL '1 second' AND (probe_at IS NULL OR probe_at < now() - ? * INTERVAL '1 second') AS probe_due "
@@ -79,32 +123,54 @@ public class CourierBreaker {
                 return new Pass(providerId, false, !rows.isEmpty() && rows.get(0).dirty(), false);
             }
             // Only the replica whose update changes the row probes.
-            boolean probe = mayProbe && rows.get(0).probeDue() && jdbc.update("UPDATE " + TABLE + " SET probe_at = now(), updated_at = now() "
-                + "WHERE provider_id = ? AND opened_at < now() - ? * INTERVAL '1 second' "
-                + "AND (probe_at IS NULL OR probe_at < now() - ? * INTERVAL '1 second')", providerId, halfOpenSeconds, halfOpenSeconds) == 1;
-            return new Pass(providerId, !probe, true, probe);
+            List<java.sql.Timestamp> claim = !mayProbe || !rows.get(0).probeDue() ? List.of()
+                : jdbc.queryForList("UPDATE " + TABLE + " SET probe_at = now(), updated_at = now() "
+                    + "WHERE provider_id = ? AND opened_at < now() - ? * INTERVAL '1 second' "
+                    + "AND (probe_at IS NULL OR probe_at < now() - ? * INTERVAL '1 second') RETURNING probe_at", java.sql.Timestamp.class,
+                    providerId, halfOpenSeconds, halfOpenSeconds);
+            return new Pass(providerId, claim.isEmpty(), true, !claim.isEmpty(), claim.isEmpty() ? null : claim.get(0));
         } catch (RuntimeException unreadable) {
             log.warn("Courier breaker could not be read provider={}; the courier is called", providerId, unreadable);
             return new Pass(providerId, false, false, false);
         }
     }
 
-    /** healthy: TRUE the courier answered, FALSE it is unwell, null the call says nothing about its health. */
-    public void quoted(Pass pass, Boolean healthy) {
+    /**
+     * The pass ended without a verdict on the courier (it was quoted, and another courier or nobody was booked): the probe
+     * goes back, so the next pass that can book takes it at once instead of half-open-seconds later.
+     */
+    public void release(Pass pass) {
+        if (!pass.probe() || pass.probeClaimedAt() == null) {
+            return;
+        }
+        try {
+            // Only this pass's own claim: a slow pass does not clear a probe another replica has taken since.
+            jdbc.update("UPDATE " + TABLE + " SET probe_at = NULL, updated_at = now() WHERE provider_id = ? AND probe_at = ?",
+                pass.providerId(), pass.probeClaimedAt());
+        } catch (RuntimeException unwritable) {
+            log.warn("Courier breaker probe could not be released provider={}", pass.providerId(), unwritable);
+        }
+    }
+
+    /**
+     * healthy: TRUE the courier answered, FALSE it is unwell, null the call says nothing about its health. A waiting order
+     * is quoted again on every pass, so one order's failed quotes count once towards the streak: it takes different orders.
+     */
+    public void quoted(Pass pass, Boolean healthy, UUID chefSubOrderId) {
         if (Boolean.FALSE.equals(healthy)) {
-            failed(pass.providerId(), false);
+            failed(pass.providerId(), false, chefSubOrderId);
         } else if (healthy != null && pass.dirty()) {
             // A breaker that failed bookings opened is not closed by a quote.
-            succeeded(pass, "quote_failures = 0, opened_at = CASE WHEN booking_failures < " + bookingFailures
+            succeeded(pass, "quote_failures = 0, quote_failed_order = NULL, opened_at = CASE WHEN booking_failures < " + bookingFailures
                 + " THEN NULL ELSE opened_at END", "quote_failures > 0");
         }
     }
 
     public void booked(Pass pass, Boolean healthy) {
         if (Boolean.FALSE.equals(healthy)) {
-            failed(pass.providerId(), true);
+            failed(pass.providerId(), true, null);
         } else if (healthy != null && pass.dirty()) {
-            succeeded(pass, "booking_failures = 0, quote_failures = 0, opened_at = NULL, probe_at = NULL",
+            succeeded(pass, "booking_failures = 0, quote_failures = 0, quote_failed_order = NULL, opened_at = NULL, probe_at = NULL",
                 "booking_failures > 0 OR quote_failures > 0");
         }
     }
@@ -134,23 +200,28 @@ public class CourierBreaker {
         }
     }
 
-    private void failed(String providerId, boolean booking) {
+    /** order: the order whose quote failed; null for a booking (the journal already limits those per order). */
+    private void failed(String providerId, boolean booking, UUID order) {
         // A quote's result is written on its executor thread, which the fan-out deadline may have interrupted.
         boolean interrupted = Thread.interrupted();
         try {
             int bookings = booking ? 1 : 0;
             int quotes = 1 - bookings;
-            Boolean opened = jdbc.queryForObject("INSERT INTO " + TABLE + " AS b (provider_id, booking_failures, quote_failures, opened_at) "
-                + "VALUES (?, ?, ?, CASE WHEN ? >= ? OR ? >= ? THEN now() END) "
+            // The order whose quote was counted last adds nothing by failing again.
+            String quoteStep = "CASE WHEN b.quote_failed_order = EXCLUDED.quote_failed_order THEN 0 ELSE EXCLUDED.quote_failures END";
+            Boolean opened = jdbc.queryForObject("INSERT INTO " + TABLE + " AS b (provider_id, booking_failures, quote_failures, "
+                + "quote_failed_order, opened_at) VALUES (?, ?, ?, CAST(? AS uuid), CASE WHEN ? >= ? OR ? >= ? THEN now() END) "
                 + "ON CONFLICT (provider_id) DO UPDATE SET "
                 + "booking_failures = LEAST(b.booking_failures + EXCLUDED.booking_failures, 30000), "
-                + "quote_failures = LEAST(b.quote_failures + EXCLUDED.quote_failures, 30000), "
+                + "quote_failures = LEAST(b.quote_failures + " + quoteStep + ", 30000), "
+                + "quote_failed_order = COALESCE(EXCLUDED.quote_failed_order, b.quote_failed_order), "
                 + "opened_at = CASE WHEN b.opened_at IS NULL AND (b.booking_failures + EXCLUDED.booking_failures >= ? "
-                + "OR b.quote_failures + EXCLUDED.quote_failures >= ?) THEN now() ELSE b.opened_at END, "
+                + "OR b.quote_failures + " + quoteStep + " >= ?) THEN now() ELSE b.opened_at END, "
                 + "probe_at = CASE WHEN b.opened_at IS NULL THEN NULL ELSE b.probe_at END, updated_at = now() "
                 // Each statement is its own transaction, so now() is this statement's: true only where it opened the breaker.
                 + "RETURNING opened_at = now()", Boolean.class,
-                providerId, bookings, quotes, bookings, bookingFailures, quotes, quoteFailures, bookingFailures, quoteFailures);
+                providerId, bookings, quotes, order == null ? null : order.toString(), bookings, bookingFailures, quotes, quoteFailures,
+                bookingFailures, quoteFailures);
             if (Boolean.TRUE.equals(opened)) {
                 log.error("CRAVES_ALERT alert=COURIER_BREAKER_OPEN provider={} failed={} halfOpenSeconds={}",
                     providerId, booking ? "bookings" : "quotes", halfOpenSeconds);

@@ -25,6 +25,8 @@ public class DeliveryCommandProperties {
     private String statusRankGuard = "off";
     /** Re-send due commands nobody is working on and cap the wait on couriers (DeliveryCommandSweeper); off keeps today's behaviour. */
     private boolean sweeperEnabled = false;
+    /** Courier capabilities (README, "Courier capabilities"): off keeps today's routing and handoff. */
+    private boolean courierCapabilitiesEnabled = false;
     /** How long a command must be due and untouched before the sweeper re-sends it. */
     private int sweeperMarginSeconds = 15;
     /** A command still without a courier this long after its promised ready time is ended and a person is told. */
@@ -230,6 +232,8 @@ public class DeliveryCommandProperties {
     public boolean isCourierCancelEnabled() { return courierCancelEnabled; }
     public void setCourierCancelEnabled(boolean courierCancelEnabled) { this.courierCancelEnabled = courierCancelEnabled; }
     public boolean isSweeperEnabled() { return sweeperEnabled; }
+    public boolean isCourierCapabilitiesEnabled() { return courierCapabilitiesEnabled; }
+    public void setCourierCapabilitiesEnabled(boolean courierCapabilitiesEnabled) { this.courierCapabilitiesEnabled = courierCapabilitiesEnabled; }
     public void setSweeperEnabled(boolean sweeperEnabled) { this.sweeperEnabled = sweeperEnabled; }
     public int getSweeperMarginSeconds() { return sweeperMarginSeconds; }
     public void setSweeperMarginSeconds(int sweeperMarginSeconds) { this.sweeperMarginSeconds = sweeperMarginSeconds; }

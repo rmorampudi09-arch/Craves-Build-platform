@@ -49,10 +49,34 @@ class CourierBreakerTest {
 
         assertThat(pass.refused()).isFalse();
         assertThat(pass.dirty()).as("a success is not written to a database that is down").isFalse();
-        breaker.quoted(pass, Boolean.FALSE);
+        breaker.quoted(pass, Boolean.FALSE, java.util.UUID.randomUUID());
         breaker.booked(pass, Boolean.FALSE);
         breaker.booked(new CourierBreaker.Pass("borzo", false, true, false), Boolean.TRUE);
-        breaker.quoted(new CourierBreaker.Pass("borzo", false, true, false), Boolean.TRUE);
+        breaker.quoted(new CourierBreaker.Pass("borzo", false, true, false), Boolean.TRUE, java.util.UUID.randomUUID());
+        breaker.release(new CourierBreaker.Pass("borzo", false, true, true));
+    }
+
+    @Test
+    void aPassWaitsABoundedTimeForAConnectionThenCallsTheCourier() throws Exception {
+        java.util.concurrent.CountDownLatch never = new java.util.concurrent.CountDownLatch(1);
+        DataSource starved = mock(DataSource.class);
+        when(starved.getConnection()).thenAnswer(call -> {
+            never.await();
+            throw new SQLException("no connection");
+        });
+        CourierBreaker breaker = new CourierBreaker(new JdbcTemplate(starved), 3, 5, 30);
+        try {
+            long started = System.nanoTime();
+            CourierBreaker.Pass pass = breaker.admit("borzo");
+            long waitedMillis = (System.nanoTime() - started) / 1_000_000;
+
+            assertThat(pass.refused()).isFalse();
+            assertThat(pass.dirty()).isFalse();
+            assertThat(waitedMillis).isBetween(CourierBreaker.ADMIT_WAIT_MILLIS - 100, CourierBreaker.ADMIT_WAIT_MILLIS + 2000);
+        } finally {
+            never.countDown();
+            breaker.stop();
+        }
     }
 
     @Test

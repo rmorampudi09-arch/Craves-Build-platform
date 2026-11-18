@@ -49,6 +49,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiPredicate;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -188,6 +189,8 @@ public class FleetDispatcher implements FleetStage {
      */
     private BiPredicate<UUID, Instant> timer;
     private boolean stageLeavesCommand;
+    /** FleetTimers.receiving: the stage is left to the timers only while their messages are being received. */
+    private BooleanSupplier timersReceiving = () -> false;
     private final AtomicLong noRateCardLoggedAt = new AtomicLong();
     /** Phase 5, the fleet engine (craves.fleet.engine.*): the feed while shadow or live, the client while live; else null. */
     private FleetEngineFeed engineFeed;
@@ -264,9 +267,10 @@ public class FleetDispatcher implements FleetStage {
     }
 
     /** FleetTimers sets this for itself while CRAVES_FLEET_TIMERS is shadow or on. */
-    void setTimers(BiPredicate<UUID, Instant> timer, boolean stageLeavesCommand) {
+    void setTimers(BiPredicate<UUID, Instant> timer, boolean stageLeavesCommand, BooleanSupplier receiving) {
         this.timer = timer;
         this.stageLeavesCommand = stageLeavesCommand;
+        this.timersReceiving = receiving;
     }
 
     @Autowired(required = false)
@@ -304,7 +308,7 @@ public class FleetDispatcher implements FleetStage {
         } catch (DeliveryProviderTemporarilyUnavailableException deciding) {
             OpenStage stage = storeNextLook(command.chefSubOrderId(), deciding.policyDeadline());
             if (timer != null && stage != null && timer.test(stage.tripId(), deciding.policyDeadline()) && stageLeavesCommand
-                && stage.deadline().isAfter(deciding.policyDeadline())) {
+                && timersReceiving.getAsBoolean() && stage.deadline().isAfter(deciding.policyDeadline())) {
                 throw new DeliveryProviderTemporarilyUnavailableException(deciding.getMessage(), stage.deadline());
             }
             throw deciding;
@@ -452,18 +456,20 @@ public class FleetDispatcher implements FleetStage {
         boolean anyOfferOpen = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE trip_id = ? "
             + "AND state = 'ACTIVE' AND expires_at > now()" + heardOrYoung + ")", Boolean.class, trip.id()));
         DispatchPolicy policy = policies.currentDispatchPolicy().orElse(null);
-        if (deadline != null && Instant.now().isBefore(deadline) && anyOfferOpen) {
+        // One clock reading for every deadline test below, so a deadline passing mid-look cannot send a look down two paths.
+        Instant now = Instant.now();
+        if (deadline != null && now.isBefore(deadline) && anyOfferOpen) {
             throw riderDeciding(deadline, policy, trip.id(), stage[1]);
         }
         if (!command) {
             if (deadline == null) {
                 return Optional.empty(); // closed a moment ago, by an accept or the command
             }
-            if (!Instant.now().isBefore(deadline) || policy == null || !"live".equals(policy.mode()) || !policy.wholeStage()) {
+            if (!now.isBefore(deadline) || policy == null || !"live".equals(policy.mode()) || !policy.wholeStage()) {
                 throw new NeedsCommand();
             }
         }
-        if (deadline != null && Instant.now().isBefore(deadline) && policy != null && "live".equals(policy.mode())
+        if (deadline != null && now.isBefore(deadline) && policy != null && "live".equals(policy.mode())
             && (policy.offerRounds() > 1 || policy.wholeStage())) {
             List<RingingOffer> round = nextRound(trip.id(), policy, courierQuotePaise);
             // Sent now, or another worker sent this round a moment ago: either way riders are deciding. The whole stage:
@@ -483,13 +489,16 @@ public class FleetDispatcher implements FleetStage {
                 throw riderDeciding(deadline, policy, trip.id(), stage[1]);
             }
         }
-        String outcome = deadline == null || !Instant.now().isBefore(deadline) ? "NO_ACCEPT" : "ALL_DECLINED_OR_EXPIRED";
+        if (!command) {
+            throw new NeedsCommand(); // only the command's look closes a stage
+        }
+        String outcome = deadline == null || !now.isBefore(deadline) ? "NO_ACCEPT" : "ALL_DECLINED_OR_EXPIRED";
         if (Boolean.TRUE.equals(transaction.execute(status -> closeUnlessDeciding(trip.id(), outcome, borzoNext, policy)))) {
             LOGGER.info("FLEET_STAGE_CLOSED trip={} outcome={} next={}", trip.id(), outcome, borzoNext ? "BORZO" : "PIDGE");
             return Optional.empty();
         }
-        TripState now = trip(trip.chefSubOrderId()).orElseThrow();
-        return TAKEN.contains(now.state()) && "CRAVES_FLEET".equals(now.provider()) ? Optional.of(deliveryJob(now.chefSubOrderId()))
+        TripState latest = trip(trip.chefSubOrderId()).orElseThrow();
+        return TAKEN.contains(latest.state()) && "CRAVES_FLEET".equals(latest.provider()) ? Optional.of(deliveryJob(latest.chefSubOrderId()))
             : Optional.empty();
     }
 

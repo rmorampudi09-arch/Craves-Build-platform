@@ -1,5 +1,7 @@
 package in.craves.integration.fleet.dispatch;
 
+import com.azure.core.amqp.AmqpRetryMode;
+import com.azure.core.amqp.AmqpRetryOptions;
 import com.azure.messaging.servicebus.ServiceBusMessage;
 import com.azure.messaging.servicebus.ServiceBusProcessorClient;
 import com.azure.messaging.servicebus.ServiceBusSenderClient;
@@ -9,6 +11,7 @@ import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetPolicyStore.DispatchPolicy;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -17,6 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -59,6 +63,10 @@ public class FleetTimers {
     private final String mode;
     private final AtomicLong sendsOffUntilMs = new AtomicLong();
     private final AtomicLong receiveReportedAtMs = new AtomicLong();
+    /** When a receive from the queue last failed (0: never). */
+    private final AtomicLong receiveFailedAtMs = new AtomicLong();
+    /** Whether the queue's consumer is running; the test constructor has no consumer and counts as running. */
+    private BooleanSupplier processorRunning = () -> true;
     /** Sends a trip's timer for a time; null without Service Bus. */
     private BiConsumer<UUID, Instant> sender;
     private ServiceBusSenderClient senderClient;
@@ -72,13 +80,18 @@ public class FleetTimers {
                        @Value("${craves.fleet.stage-leaves-command-enabled:false}") boolean stageLeavesCommand,
                        @Value("${craves.fleet.stage-sweeper:off}") String sweeper) {
         this(jdbc, dispatcher, policies, commandWake.getIfAvailable(), null, mode, stageLeavesCommand, sweeper);
+        processorRunning = () -> processor != null && processor.isRunning();
         DeliveryServiceBusClientFactory factory = serviceBus.getIfAvailable();
         if ("off".equals(this.mode) || factory == null) {
             return;
         }
         try {
             // Building a client opens no connection: a queue that does not exist yet shows on the first send or receive.
-            senderClient = factory.newBuilder().sender().queueName(queue).buildClient();
+            // A send runs on a command worker or the fleet tick: a slow queue may cost it about 4 s once (two tries of 2 s),
+            // then the sends stop for BACK_OFF_MS, not the SDK's default of three tries of a minute.
+            senderClient = factory.newBuilder().retryOptions(new AmqpRetryOptions().setMode(AmqpRetryMode.FIXED)
+                .setTryTimeout(Duration.ofSeconds(2)).setMaxRetries(1).setDelay(Duration.ofMillis(200)))
+                .sender().queueName(queue).buildClient();
             sender = (tripId, at) -> {
                 ServiceBusMessage message = new ServiceBusMessage(tripId + "|" + at.toEpochMilli());
                 if (at.isAfter(Instant.now())) {
@@ -89,14 +102,7 @@ public class FleetTimers {
             };
             processor = factory.newBuilder().processor().queueName(queue).maxConcurrentCalls(CONCURRENT_LOOKS)
                 .processMessage(context -> onMessage(context.getMessage().getBody().toString()))
-                .processError(context -> {
-                    long now = System.currentTimeMillis();
-                    long reported = receiveReportedAtMs.get();
-                    if (now - reported >= BACK_OFF_MS && receiveReportedAtMs.compareAndSet(reported, now)) {
-                        LOGGER.warn("CRAVES_ALERT alert=FLEET_TIMERS_RECEIVE_FAILED queue={} error={}", context.getEntityPath(),
-                            context.getException().getClass().getSimpleName());
-                    }
-                })
+                .processError(context -> receiveFailed(context.getEntityPath(), context.getException()))
                 .buildProcessorClient();
         } catch (RuntimeException exception) {
             LOGGER.error("CRAVES_ALERT alert=FLEET_TIMERS_NOT_STARTED error={}", exception.getClass().getSimpleName());
@@ -118,7 +124,7 @@ public class FleetTimers {
             LOGGER.warn("FLEET_STAGE_LEAVES_COMMAND ignored: it needs craves.fleet.timers=on and craves.fleet.stage-sweeper=on");
         }
         if (!"off".equals(this.mode)) {
-            dispatcher.setTimers(this::schedule, leaves);
+            dispatcher.setTimers(this::schedule, leaves, this::receiving);
         }
     }
 
@@ -151,6 +157,24 @@ public class FleetTimers {
         if (senderClient != null) {
             senderClient.close();
         }
+    }
+
+    /** The consumer reported a failed receive: reported at most once a minute, and receiving() is false for a minute. */
+    void receiveFailed(String queue, Throwable error) {
+        long now = System.currentTimeMillis();
+        receiveFailedAtMs.set(now);
+        long reported = receiveReportedAtMs.get();
+        if (now - reported >= BACK_OFF_MS && receiveReportedAtMs.compareAndSet(reported, now)) {
+            LOGGER.warn("CRAVES_ALERT alert=FLEET_TIMERS_RECEIVE_FAILED queue={} error={}", queue, error.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * The timers are coming back: the consumer runs and no receive failed in the last minute. Only then may the command
+     * leave the fleet stage to them (CRAVES_FLEET_STAGE_LEAVES_COMMAND_ENABLED); otherwise it keeps its 5 s checks.
+     */
+    boolean receiving() {
+        return processorRunning.getAsBoolean() && System.currentTimeMillis() - receiveFailedAtMs.get() >= BACK_OFF_MS;
     }
 
     public boolean on() {

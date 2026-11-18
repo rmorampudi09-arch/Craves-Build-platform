@@ -102,8 +102,9 @@ craves:
     # order stay as they are.
     timers: ${CRAVES_FLEET_TIMERS:off}
     timers-queue: ${SERVICE_BUS_FLEET_TIMERS_QUEUE:fleet-timers}
-    # Only with timers on and stage-sweeper on, and only after a week of shadow: once a look's timer message is sent, the
-    # order's command comes back at the retry base (30 s) and at the stage's deadline, not every 5 s.
+    # Only with timers on and stage-sweeper on, and only after a week of shadow: once a look's timer message is sent, and
+    # while the timers are being received, the order's command comes back at the retry base (30 s) and at the stage's
+    # deadline, not every 5 s.
     stage-leaves-command-enabled: ${CRAVES_FLEET_STAGE_LEAVES_COMMAND_ENABLED:false}
     # Seconds each replica goes on using the dispatch policy it last read, 0 to 5 (more counts as 5); 0 = off, every look
     # at an order reads it from the database. With 5, the emergency stop (mode off), a new version or a withdrawal takes

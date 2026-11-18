@@ -122,7 +122,7 @@ class FleetPilotHealthDatabaseTest {
         assertThat(queries.keySet()).containsExactly("offer_to_ring", "offer_to_ring_by_day", "first_channel", "push_results",
             "shift_survival", "sync_delay", "battery_per_hour", "fleet_stage_outcomes", "batching_candidates", "rider_busy_share",
             "pickup_detour", "fcm_on_time", "offer_outcomes", "earnings_per_online_hour", "offer_rules", "rider_choices", "kitchen_wait",
-            "ready_vs_promise", "courier_assign_minutes", "track_size");
+            "ready_vs_promise", "courier_assign_minutes", "courier_scorecard", "courier_api_calls", "track_size");
         queries.forEach((name, sql) -> assertThat(fleet.db.queryForList(sql)).as(name).isNotEmpty());
 
         assertThat(number(fleet.db.queryForList(queries.get("offer_to_ring_by_day")).get(0), "p95_s")).isCloseTo(19.05, within(0.051));
@@ -247,6 +247,187 @@ class FleetPilotHealthDatabaseTest {
             row -> number(row, "bookings"), row -> number(row, "assigned"), row -> number(row, "p50_assign_min"),
             row -> number(row, "never_assigned"))
             .containsExactly(tuple("all", 3.0, 2.0, 3.5, 1.0), tuple("borzo", 2.0, 1.0, 3.0, 1.0), tuple("pidge", 1.0, 1.0, 4.0, 0.0));
+    }
+
+    /**
+     * courier_scorecard, summed per courier, gives courier_assign_minutes' numbers for the same bookings: the Borzo booking a
+     * switch to Pidge replaced is Borzo's, never assigned, and each booking is timed by its own courier's events.
+     */
+    @Test
+    void theScorecardPerCourierReproducesCourierAssignMinutes() {
+        UUID switched = courierJob("pidge", 10);
+        courierEvent(switched, "borzo", "SEARCHING", 12);
+        courierEvent(switched, "pidge", "COURIER_ASSIGNED", 6);
+        fleet.db.update("INSERT INTO delivery_schema.delivery_borzo_pidge_handoff (delivery_job_id, borzo_provider_delivery_id, started_at, "
+            + "due_at, state, next_attempt_at, pidge_provider_delivery_id, completed_at) VALUES (?, 'B-1', now() - INTERVAL '13 minutes', "
+            + "now() - INTERVAL '11 minutes', 'COMPLETED', now(), 'P-1', now() - INTERVAL '10 minutes')", switched);
+        UUID fromRider = courierJob("borzo", 20);
+        courierEvent(fromRider, "craves_fleet", "COURIER_ASSIGNED", 30);
+        courierEvent(fromRider, "borzo", "COURIER_ASSIGNED", 17);
+        // The journal's rows for the same three bookings, asked for at the times courier_assign_minutes counts from.
+        String journal = "INSERT INTO delivery_schema.provider_create_attempt (chef_sub_order_id, provider_id, attempt_no, client_ref, "
+            + "state, created_at) SELECT j.chef_sub_order_id, ?, 1, ?, 'CONFIRMED', %s FROM delivery_schema.delivery_job j WHERE j.id = ?";
+        fleet.db.update(journal.formatted("j.booked_at"), "pidge", "ref-1", switched);
+        fleet.db.update(journal.formatted("(SELECT h.started_at FROM delivery_schema.delivery_borzo_pidge_handoff h "
+            + "WHERE h.delivery_job_id = j.id)"), "borzo", "ref-2", switched);
+        fleet.db.update(journal.formatted("j.booked_at"), "borzo", "ref-3", fromRider);
+
+        String columns = "courier, bookings, assigned, p50_assign_min, p90_assign_min, never_assigned";
+        List<Map<String, Object>> perBooking = fleet.db.queryForList("SELECT " + columns + " FROM (" + queries().get("courier_scorecard")
+            + ") s WHERE s.day_ist = 'all'");
+        assertThat(perBooking).extracting(row -> row.get("courier"), row -> number(row, "bookings"), row -> number(row, "assigned"),
+            row -> number(row, "p50_assign_min"), row -> number(row, "never_assigned"))
+            .containsExactly(tuple("all", 3.0, 2.0, 3.5, 1.0), tuple("borzo", 2.0, 1.0, 3.0, 1.0), tuple("pidge", 1.0, 1.0, 4.0, 0.0));
+        assertThat(perBooking).isEqualTo(fleet.db.queryForList("SELECT " + columns + " FROM (" + queries().get("courier_assign_minutes")
+            + ") m"));
+    }
+
+    /**
+     * courier_scorecard on known bookings, yesterday in India: Borzo is asked seven times (one refusal, one stray, five
+     * bookings), Pidge once and delivers nothing. 23:50 and 00:10 India time are the same UTC day and two India days.
+     */
+    @Test
+    void theScorecardCountsEachCourierPerIndiaDayAndHourBand() {
+        String scorecard = queries().get("courier_scorecard");
+        assertThat(fleet.db.queryForList(scorecard)).as("no bookings: one row of zeros").singleElement().satisfies(row -> {
+            assertThat(row).containsEntry("day_ist", "all").containsEntry("hour_band", "all").containsEntry("courier", "all")
+                .containsEntry("p50_assign_min", null).containsEntry("in_window_pct", null).containsEntry("failed_pct", null);
+            assertThat(number(row, "attempts")).isZero();
+            assertThat(number(row, "bookings")).isZero();
+        });
+
+        String noon = YESTERDAY.formatted("12:00");
+        UUID delivered = booking("borzo", "CONFIRMED", "B-1", noon);
+        event(delivered, "borzo", "COURIER_ASSIGNED", noon, 60, true);
+        event(delivered, "borzo", "AT_PICKUP", noon, 600, true);
+        event(delivered, "borzo", "PICKED_UP", noon, 900, true);
+        event(delivered, "borzo", "DELIVERED", noon, 1800, true);
+        String halfPast = YESTERDAY.formatted("12:30");
+        UUID cancelledByBorzo = booking("borzo", "CONFIRMED", "B-2", halfPast);
+        event(cancelledByBorzo, "borzo", "COURIER_ASSIGNED", halfPast, 180, true);
+        event(cancelledByBorzo, "borzo", "CANCELLED", halfPast, 480, true);
+        booking("borzo", "REJECTED", null, YESTERDAY.formatted("12:40"));
+        booking("borzo", "CONFIRMED", "B-4", "(" + YESTERDAY.formatted("00:00") + " - INTERVAL '10 minutes')");
+        // Assigned at exactly 120 s, then cancelled by Craves to switch to Pidge: in the window, and not Borzo's failure.
+        String afterMidnight = YESTERDAY.formatted("00:10");
+        UUID switched = booking("borzo", "CONFIRMED", "B-5", afterMidnight);
+        event(switched, "borzo", "COURIER_ASSIGNED", afterMidnight, 120, true);
+        event(switched, "borzo", "CANCELLED", afterMidnight, 200, true);
+        fleet.db.update("INSERT INTO delivery_schema.delivery_borzo_pidge_handoff (delivery_job_id, borzo_provider_delivery_id, started_at, "
+            + "due_at, state, next_attempt_at, borzo_cancel_intent_at) VALUES (?, 'B-5', now() - INTERVAL '2 minutes', now(), "
+            + "'PROCESSING_PIDGE', now(), now())", switched);
+        String evening = YESTERDAY.formatted("19:00");
+        UUID cancelledByCraves = booking("borzo", "CONFIRMED", "B-6", evening);
+        event(cancelledByCraves, "borzo", "COURIER_ASSIGNED", evening, 60, true);
+        event(cancelledByCraves, "borzo", "CANCELLED", evening, 300, true);
+        fleet.db.update("INSERT INTO delivery_schema.courier_cancel (provider_id, provider_delivery_id, chef_sub_order_id, reason) "
+            + "VALUES ('borzo', 'B-6', ?, 'ORDER_CANCELLED')", UUID.randomUUID());
+        booking("borzo", "ORPHAN_SUSPECT", "B-7", YESTERDAY.formatted("19:10"));
+        // Pidge: a courier after 5 minutes, inside its 600 s; a CANCELLED that was not applied does not count; no delivery.
+        UUID pidge = booking("pidge", "ADOPTED", "P-1", noon);
+        event(pidge, "pidge", "COURIER_ASSIGNED", noon, 300, true);
+        event(pidge, "pidge", "CANCELLED", noon, 400, false);
+        // A Craves rider's milestone left on a job is never a courier's.
+        event(pidge, "craves_fleet", "DELIVERED", noon, 500, true);
+
+        List<Map<String, Object>> rows = fleet.db.queryForList(scorecard);
+        String yesterday = fleet.db.queryForObject("SELECT ((now() AT TIME ZONE 'Asia/Kolkata')::date - 1)::text", String.class);
+        String dayBefore = fleet.db.queryForObject("SELECT ((now() AT TIME ZONE 'Asia/Kolkata')::date - 2)::text", String.class);
+        assertThat(rows).extracting(row -> row.get("day_ist"), row -> row.get("hour_band"), row -> row.get("courier"),
+            row -> number(row, "attempts"), row -> number(row, "bookings")).containsExactly(
+            tuple("all", "all", "all", 8.0, 6.0), tuple("all", "all", "borzo", 7.0, 5.0), tuple("all", "all", "pidge", 1.0, 1.0),
+            tuple(yesterday, "dinner", "borzo", 2.0, 1.0), tuple(yesterday, "lunch", "borzo", 3.0, 2.0),
+            tuple(yesterday, "other", "borzo", 1.0, 1.0), tuple(yesterday, "lunch", "pidge", 1.0, 1.0),
+            tuple(dayBefore, "other", "borzo", 1.0, 1.0));
+
+        Map<String, Object> borzo = rows.get(1);
+        assertThat(number(borzo, "refused")).isEqualTo(1);
+        assertThat(number(borzo, "not_used")).as("the stray booking").isEqualTo(1);
+        assertThat(number(borzo, "assigned")).isEqualTo(4);
+        assertThat(number(borzo, "never_assigned")).isEqualTo(1);
+        assertThat(number(borzo, "switched")).isEqualTo(1);
+        assertThat(number(borzo, "in_window")).as("60 s twice and 120 s; 180 s is past Borzo's 120 s").isEqualTo(3);
+        assertThat(number(borzo, "in_window_pct")).as("3 of 5 bookings").isEqualTo(60.0);
+        assertThat(number(borzo, "p50_assign_min")).as("1, 1, 2 and 3 minutes").isEqualTo(1.5);
+        assertThat(number(borzo, "p80_assign_min")).isEqualTo(2.4);
+        assertThat(number(borzo, "p90_assign_min")).isEqualTo(2.7);
+        assertThat(number(borzo, "p80_to_pickup_min")).as("assigned at 1 minute, at the kitchen at 10").isEqualTo(9.0);
+        assertThat(number(borzo, "delivered")).isEqualTo(1);
+        assertThat(number(borzo, "failed_after_assign")).as("Borzo's own cancel, not the two Craves asked for").isEqualTo(1);
+        assertThat(number(borzo, "failed_pct")).as("1 of 4 assigned").isEqualTo(25.0);
+        assertThat(number(borzo, "craves_cancelled")).isEqualTo(1);
+
+        Map<String, Object> pidgeRow = rows.get(2);
+        assertThat(number(pidgeRow, "in_window")).as("300 s is inside Pidge's 600 s").isEqualTo(1);
+        assertThat(number(pidgeRow, "in_window_pct")).isEqualTo(100.0);
+        assertThat(number(pidgeRow, "p50_assign_min")).isEqualTo(5.0);
+        assertThat(pidgeRow).as("never reached a kitchen").containsEntry("p80_to_pickup_min", null);
+        assertThat(number(pidgeRow, "delivered")).as("a courier with no delivery; the rider's DELIVERED is not Pidge's").isZero();
+        assertThat(number(pidgeRow, "failed_after_assign")).as("the CANCELLED that was not applied").isZero();
+        assertThat(number(pidgeRow, "failed_pct")).isEqualTo(0.0);
+    }
+
+    /**
+     * With 20,000 older bookings on record, courier_scorecard finds the 14 days' attempts by the journal's created_at index
+     * and then each order's job and events by their keys: no table is read whole.
+     */
+    @Test
+    void theScorecardReadsOnlyItsWindowThroughIndexes() {
+        fleet.db.update("INSERT INTO delivery_schema.delivery_job (id, chef_sub_order_id, order_id, provider_id, status, booked_at) "
+            + "SELECT gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), 'borzo', 'DELIVERED', now() - INTERVAL '15 days' "
+            + "- make_interval(mins => n) FROM generate_series(1, 20000) n");
+        fleet.db.update("INSERT INTO delivery_schema.provider_create_attempt (chef_sub_order_id, provider_id, attempt_no, client_ref, "
+            + "state, created_at) SELECT chef_sub_order_id, 'borzo', 1, left(id::text, 30), 'CONFIRMED', booked_at "
+            + "FROM delivery_schema.delivery_job");
+        fleet.db.update("INSERT INTO delivery_schema.delivery_event (id, delivery_job_id, provider_id, event_type, normalized_status, "
+            + "payload, occurred_at) SELECT gen_random_uuid(), id, 'borzo', 'DELIVERED', 'DELIVERED', '{}', booked_at "
+            + "FROM delivery_schema.delivery_job");
+        UUID recent = booking("borzo", "CONFIRMED", "B-1", "now() - INTERVAL '1 hour'");
+        event(recent, "borzo", "COURIER_ASSIGNED", "now() - INTERVAL '1 hour'", 60, true);
+        fleet.db.execute("ANALYZE delivery_schema.delivery_job, delivery_schema.provider_create_attempt, delivery_schema.delivery_event");
+
+        String plan = String.join("\n", fleet.db.queryForList("EXPLAIN " + queries().get("courier_scorecard"), String.class));
+        assertThat(plan).contains("provider_create_attempt_created", "delivery_job_chef_sub_order_id_key")
+            .containsPattern("Index Scan (using|on) ix_delivery_event_\\w+")
+            .doesNotContainPattern("Seq Scan on (provider_create_attempt|delivery_job|delivery_event)");
+        assertThat(number(fleet.db.queryForList(queries().get("courier_scorecard")).get(0), "bookings")).isEqualTo(1);
+    }
+
+    @Test
+    void courierApiCallsAreSummedPerCourierAndIndiaDay() {
+        String calls = queries().get("courier_api_calls");
+        assertThat(fleet.db.queryForList(calls)).as("nothing counted yet").singleElement()
+            .satisfies(row -> assertThat(number(row, "calls")).isZero());
+        fleet.db.update("INSERT INTO delivery_schema.provider_api_usage (provider_id, day, calls) VALUES "
+            + "('borzo', (now() AT TIME ZONE 'Asia/Kolkata')::date, 40), ('pidge', (now() AT TIME ZONE 'Asia/Kolkata')::date - 1, 2), "
+            + "('borzo', (now() AT TIME ZONE 'Asia/Kolkata')::date - 14, 900)");
+        assertThat(fleet.db.queryForList(calls)).extracting(row -> row.get("courier"), row -> number(row, "calls"))
+            .as("the day 14 days back is outside the window").containsExactly(tuple("all", 42.0), tuple("borzo", 40.0), tuple("pidge", 2.0));
+    }
+
+    /**
+     * A journal attempt for a new order at this SQL time; a booking that became the order's delivery (CONFIRMED, ADOPTED) also
+     * gets the order's job, whose id is returned.
+     */
+    private UUID booking(String provider, String state, String providerRef, String at) {
+        UUID order = UUID.randomUUID();
+        UUID job = UUID.randomUUID();
+        fleet.db.update("INSERT INTO delivery_schema.provider_create_attempt (chef_sub_order_id, provider_id, attempt_no, client_ref, "
+            + "state, provider_ref, created_at) VALUES (?, ?, 1, ?, ?, ?, " + at + ")", order, provider,
+            job.toString().substring(0, 30), state, providerRef);
+        if (state.equals("CONFIRMED") || state.equals("ADOPTED")) {
+            fleet.db.update("INSERT INTO delivery_schema.delivery_job (id, chef_sub_order_id, order_id, provider_id, "
+                + "provider_delivery_id, status, booked_at) VALUES (?, ?, ?, ?, ?, 'SEARCHING', " + at + ")", job, order,
+                UUID.randomUUID(), provider, providerRef);
+        }
+        return job;
+    }
+
+    /** A courier's event on a job, this many seconds after a SQL time. */
+    private void event(UUID job, String provider, String status, String from, int seconds, boolean applied) {
+        fleet.db.update("INSERT INTO delivery_schema.delivery_event (id, delivery_job_id, provider_id, event_type, normalized_status, "
+            + "payload, occurred_at, applied) VALUES (?, ?, ?, ?, ?, '{}', " + from + " + make_interval(secs => ?), ?)",
+            UUID.randomUUID(), job, provider, status, status, seconds, applied);
     }
 
     /** A delivery job booked with a courier this many minutes ago. */

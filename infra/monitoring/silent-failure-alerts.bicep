@@ -49,6 +49,7 @@ var logAlerts = [
   { code: 'COURIER_API_USAGE_HIGH', severity: 2, text: 'Courier API usage: a courier\'s calls today reached the alert share of its daily cap (provider=, calls=, cap=). Past the cap the courier refuses quotes and bookings' }
   { code: 'COURIER_API_RATE_LIMITED', severity: 2, text: 'Courier API usage: a courier answered HTTP 429 (provider=, count=); it is refusing calls' }
   { code: 'COURIER_REJECTED_RATE', severity: 2, text: 'Booking journal: a courier refused over 20% of at least 3 bookings in 15 minutes' }
+  { code: 'NO_CAPABLE_COURIER', severity: 1, text: 'Courier capabilities: no courier left in the chain can carry an order (a hot-food box after Borzo\'s window), so its command was ended (commandId=, chefSubOrderId=). Book a courier by hand or cancel the order' }
   { code: 'COURIER_BREAKER_OPEN', severity: 2, text: 'Shared courier breaker: a courier failed 3 bookings or 5 quotes in a row over all replicas (provider=, failed=), so new orders skip it until a probe succeeds' }
   { code: 'PROVIDER_CIRCUIT_OPEN', severity: 2, text: 'Handbook 104: a delivery provider failed 5 quotes in a row, so its quotes are skipped for 30 seconds (integration ProviderGuard)' }
   { code: 'PAYOUT_STALLED', severity: 1, text: '#7 Chef payout RESERVED for more than 10 minutes' }
@@ -66,6 +67,7 @@ var pagedCodes = [
   'COURIER_UNRESOLVED_BOOKING'
   'COURIER_ENDED_DELIVERY'
   'COURIER_REJECTED_RATE'
+  'NO_CAPABLE_COURIER'
   'FLEET_DOUBLE_HOLD'
 ]
 

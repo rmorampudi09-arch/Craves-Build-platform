@@ -37,6 +37,8 @@ public class PidgeApiClient implements DeliveryProviderAdapter {
         this.mapper = mapper;
     }
     @Override public String providerId() { return "pidge"; }
+    /** No hot-food box (validate refuses such an order); updated_at on callbacks. */
+    @Override public java.util.Set<Capability> capabilities() { return java.util.Set.of(Capability.PROVIDER_EVENT_TIME); }
 
     /** Chargeable provider quote; does not create an order or dispatch a rider. */
     public ProviderQuote readOnlyQuote(QuoteRequest request) {

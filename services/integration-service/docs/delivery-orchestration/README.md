@@ -914,6 +914,12 @@ view `courier_booking_charge`: the `CANCEL` amount when there is one, otherwise 
 savepoint of the booking's transaction (`DeliveryStatusRepository.inSavepoint`). When it fails, the savepoint is
 rolled back, the booking commits as it would have, and one line says so:
 `CRAVES_ALERT alert=COURIER_CHARGE_NOT_RECORDED provider=... chefSubOrderId=... delivery=... kind=... error=...`.
+The alert thresholds are checked in a second savepoint after the row is written: when that check fails the row stays
+and the line is `CRAVES_ALERT alert=COURIER_CHARGE_THRESHOLD_NOT_CHECKED`.
+
+**Before the flag goes on, check one real Borzo cancel answer.** The `CANCEL` amount is whatever price Borzo's order
+shows once cancelled. If Borzo keeps the original quote there instead of the fee (or 0), every free cancel will show as
+`NOT_ON_INVOICE` at the full booking price, and the `CANCEL` rule has to change first. The same check applies to Pidge.
 
 **Not recorded yet:** the courier's final price at delivery (waiting or return fees), bookings a courier cancelled
 itself, and stray bookings that never became an order's delivery. An invoice line for any of these shows up in the
@@ -972,7 +978,7 @@ No tolerance is applied, and nothing is disputed, paid or adjusted: a person rea
 **Nothing acts on these settings beyond those two alert lines.** The first four are kept so the answers to the open
 commercial questions have a place to live; no code reads them (`CourierChargeMoneyTest` checks that no other source
 names them). A threshold never blocks, delays or reroutes a booking: the line is written after the booking is made.
-The three alert codes are log lines; they reach a phone only once added to `infra/monitoring/silent-failure-alerts.bicep`.
+The four alert codes are log lines; they reach a phone only once added to `infra/monitoring/silent-failure-alerts.bicep`.
 
 The routes are in `contracts/openapi/admin-fleet-v1.yaml` and `infra/apim/rider-fleet/routes.txt`; the gateway serves
 them once its rider-fleet operations are published again.

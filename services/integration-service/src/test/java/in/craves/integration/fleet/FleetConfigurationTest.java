@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.config.SchedulerLagWatchdog;
 import in.craves.integration.delivery.DeliveryAssignmentRepository;
 import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
+import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.command.DeliveryCommandRepository;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter;
@@ -16,6 +17,7 @@ import in.craves.integration.fleet.admin.FleetAdminController;
 import in.craves.integration.fleet.admin.FleetOpsController;
 import in.craves.integration.fleet.admin.FleetSetupController;
 import in.craves.integration.fleet.dispatch.FleetDispatcher;
+import in.craves.integration.fleet.dispatch.FleetStageSweeper;
 import in.craves.integration.fleet.money.FleetEarnings;
 import in.craves.integration.fleet.money.FleetMoneyController;
 import in.craves.integration.fleet.money.FleetPayouts;
@@ -66,6 +68,7 @@ class FleetConfigurationTest {
         // Dispatch hands orders on to Borzo and Pidge through the existing delivery beans.
         .withBean(DeliveryProviderRouter.class, () -> mock(DeliveryProviderRouter.class))
         .withBean(DeliveryCommandRepository.class, () -> mock(DeliveryCommandRepository.class))
+        .withBean(DeliveryCommandProperties.class, DeliveryCommandProperties::new)
         .withBean(DeliveryAssignmentRepository.class, () -> mock(DeliveryAssignmentRepository.class))
         .withBean(BorzoPidgeHandoffRepository.class, () -> mock(BorzoPidgeHandoffRepository.class))
         .withBean(DeliveryOutboxRepository.class, () -> mock(DeliveryOutboxRepository.class))
@@ -108,6 +111,20 @@ class FleetConfigurationTest {
             assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "expiryWake")).isEqualTo(false));
         runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.offer-expiry-wake-enabled=true").run(context ->
             assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "expiryWake")).isEqualTo(true));
+    }
+
+    @Test
+    void theStageSweeperIsOffUnlessSwitchedOnAndAnUnknownModeStopsStartUp() {
+        runner.withPropertyValues("craves.fleet.enabled=true").run(context -> {
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "storesNextLook")).isEqualTo(false);
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetStageSweeper.class), "mode")).isEqualTo("off");
+        });
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.stage-sweeper= Shadow").run(context -> {
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetDispatcher.class), "storesNextLook")).isEqualTo(true);
+            assertThat(ReflectionTestUtils.getField(context.getBean(FleetStageSweeper.class), "mode")).isEqualTo("shadow");
+        });
+        runner.withPropertyValues("craves.fleet.enabled=true", "craves.fleet.stage-sweeper=true").run(context ->
+            assertThat(context).hasFailed());
     }
 
     @Test

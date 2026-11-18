@@ -45,6 +45,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -146,6 +147,24 @@ class CourierChargeDatabaseTest {
         book(delivery("borzo", "BZ-2", "92233720368547758.08", null));
         assertThat(count("delivery_job")).isEqualTo(2);
         assertThat(alerts).hasSize(2);
+    }
+
+    @Test
+    void aThresholdThatCannotBeCheckedLeavesTheChargeRowAndTheBooking() {
+        // The settings read fails in the database, inside the booking's transaction.
+        JdbcTemplate failing = new JdbcTemplate(database.dataSource) {
+            @Override
+            public List<Map<String, Object>> queryForList(String sql, Object... args) {
+                return sql.contains("courier_billing_setting") ? super.queryForList("SELECT 1 / 0") : super.queryForList(sql, args);
+            }
+        };
+        completion.setCharges(new CourierCharges(failing, properties, new DeliveryStatusRepository(failing, json)));
+        book(delivery("borzo", "BZ-1", "61.50", null));
+        assertThat(count("delivery_job")).isEqualTo(1);
+        assertThat(database.db.queryForList(CHARGES)).extracting(row -> row.get("kind") + " " + row.get("amount_paise"))
+            .as("the charge is kept").containsExactly("BOOKING 6150");
+        assertThat(alerts).hasSize(1).first().asString()
+            .startsWith("CRAVES_ALERT alert=COURIER_CHARGE_THRESHOLD_NOT_CHECKED provider=borzo").contains("delivery=BZ-1");
     }
 
     @Test

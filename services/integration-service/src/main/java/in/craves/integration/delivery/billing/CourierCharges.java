@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 /**
  * With CRAVES_DELIVERY_COURIER_CHARGE_ENABLED: keeps what a courier company shows as its price for a booking
  * (delivery_schema.courier_charge, V199), from the courier's answer the caller already holds. A record only: it calls no
- * courier, pays nobody and changes no booking. Its statements run in a savepoint and every failure ends in one
+ * courier, pays nobody and changes no booking. Its statements run in savepoints and every failure ends in one
  * CRAVES_ALERT line, so the booking or cancel that called it goes on as it would without it. Off, nothing is read or written.
  */
 @Component
@@ -68,18 +68,24 @@ public class CourierCharges {
         }
         try {
             Long paise = paise(price(delivery));
-            savepoints.inSavepoint(() -> {
-                int written = jdbc.update("""
-                    INSERT INTO delivery_schema.courier_charge
-                        (provider_id, provider_delivery_id, chef_sub_order_id, order_id, delivery_job_id, kind, amount_paise, source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'API')
-                    ON CONFLICT (provider_id, provider_delivery_id, kind) WHERE kind IN ('BOOKING', 'CANCEL') DO NOTHING
-                    """, delivery.providerId(), delivery.providerDeliveryId(), chefSubOrderId, orderId, deliveryJobId, kind, paise);
-                if (written == 1 && paise != null && BOOKING.equals(kind)) {
-                    thresholds(delivery, chefSubOrderId, paise);
+            boolean written = Boolean.TRUE.equals(savepoints.inSavepoint(() -> jdbc.update("""
+                INSERT INTO delivery_schema.courier_charge
+                    (provider_id, provider_delivery_id, chef_sub_order_id, order_id, delivery_job_id, kind, amount_paise, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'API')
+                ON CONFLICT (provider_id, provider_delivery_id, kind) WHERE kind IN ('BOOKING', 'CANCEL') DO NOTHING
+                """, delivery.providerId(), delivery.providerDeliveryId(), chefSubOrderId, orderId, deliveryJobId, kind, paise) == 1));
+            if (written && paise != null && BOOKING.equals(kind)) {
+                try {
+                    // A savepoint of its own: a threshold that cannot be checked leaves the charge row written.
+                    savepoints.inSavepoint(() -> {
+                        thresholds(delivery, chefSubOrderId, paise);
+                        return null;
+                    });
+                } catch (RuntimeException failure) {
+                    log.error("CRAVES_ALERT alert=COURIER_CHARGE_THRESHOLD_NOT_CHECKED provider={} chefSubOrderId={} delivery={} error={}",
+                        delivery.providerId(), chefSubOrderId, delivery.providerDeliveryId(), safe(failure));
                 }
-                return null;
-            });
+            }
         } catch (RuntimeException failure) {
             log.error("CRAVES_ALERT alert=COURIER_CHARGE_NOT_RECORDED provider={} chefSubOrderId={} delivery={} kind={} error={}",
                 delivery.providerId(), chefSubOrderId, delivery.providerDeliveryId(), kind, safe(failure));

@@ -87,6 +87,13 @@ craves:
     # "Borzo only after 5 minutes": once riders are live, switch it on only with the owner's wording and notice.
     no-supply-fast-path-enabled: ${CRAVES_FLEET_NO_SUPPLY_FAST_PATH_ENABLED:false}
     no-supply-settle-seconds: ${CRAVES_FLEET_NO_SUPPLY_SETTLE_SECONDS:3}
+    # Fleet stage sweeper (R22 4.4, 4.7), off | shadow | on: each look stores when the order's next one is due
+    # (trip_stage.next_match_at), and every dispatch tick finds open fleet stages overdue by the margin with nobody working
+    # on them. on sends the order's delivery command one message (the worker's own claim decides whether a look runs);
+    # shadow only logs FLEET_SWEEPER_CAUGHT. It changes no offer rule. Off: nothing is stored or swept, as before. Any other
+    # value stops start-up. Margin: 5 to 300 s.
+    stage-sweeper: ${CRAVES_FLEET_STAGE_SWEEPER:off}
+    stage-sweeper-margin-seconds: ${CRAVES_FLEET_STAGE_SWEEPER_MARGIN_SECONDS:10}
     # Seconds each replica goes on using the dispatch policy it last read, 0 to 5 (more counts as 5); 0 = off, every look
     # at an order reads it from the database. With 5, the emergency stop (mode off), a new version or a withdrawal takes
     # up to 5 s to reach every replica: orders looked at in those seconds are still offered under the policy before.

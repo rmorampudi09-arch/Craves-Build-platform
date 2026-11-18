@@ -49,6 +49,9 @@ Courier cancel for cancelled orders (integration `CourierCancel`, `CRAVES_DELIVE
 The command sweeper (integration `DeliveryCommandSweeper`, `CRAVES_DELIVERY_COMMAND_SWEEPER_ENABLED`) adds
 `DELIVERY_COMMAND_SWEPT` and `DELIVERY_COURIER_WAIT_CAP`; see the same README, "Command sweeper and courier wait cap".
 
+The fleet stage sweeper (integration `FleetStageSweeper`, `CRAVES_FLEET_STAGE_SWEEPER`) adds `FLEET_SWEEPER_CAUGHT` (email, not
+paged); see `docs/riders/BACKEND.md`, "Dispatch chain" step 5a.
+
 The status rank guard (integration `DeliveryStatusUpdateService`, `CRAVES_DELIVERY_STATUS_RANK_GUARD=enforce`) adds
 `COURIER_ENDED_DELIVERY`; see the same README, "Status rank guard".
 

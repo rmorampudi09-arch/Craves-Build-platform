@@ -542,6 +542,36 @@ class CourierBookingJournalDatabaseTest {
         borzo.verify();
     }
 
+    /**
+     * Borzo is down for the whole of its window: the hot-box order waits inside the window and is ended after it. Nothing
+     * was ever booked, so nothing can exist at a courier.
+     */
+    @Test
+    void aHotBoxOrderWaitsWhileBorzoIsDownInItsWindowAndIsEndedOnceTheWindowIsOver() {
+        properties.setCourierCapabilitiesEnabled(true);
+        borzo.expect(ExpectedCount.once(), requestTo(BORZO + "/calculate-order")).andRespond(withServerError());
+        UUID hotBox = UUID.randomUUID();
+        DeliveryCommandMessage order = new DeliveryCommandMessage(UUID.randomUUID(), UUID.randomUUID(), orderId, orderId, hotBox,
+            message.readyAt(), message.dispatchAt(), hotBox.toString(), 4.6, "Madhapur", 8, 4,
+            new QuoteRequest("Packaged food", 2000, true, message.deliveryRequest().pickup(), message.deliveryRequest().dropoff()));
+        commands.createOrFind(order);
+
+        assertThatThrownBy(() -> worker.process(order)).isInstanceOf(DeliveryCommandTransientException.class)
+            .hasMessageContaining("borzo has no available quote");
+        assertThat(database.db.queryForObject("SELECT status FROM delivery_schema.delivery_command WHERE chef_sub_order_id = ?",
+            String.class, hotBox)).isEqualTo("WAITING_FOR_PROVIDER");
+
+        database.db.update("UPDATE delivery_schema.delivery_command SET borzo_window_started_at = now() - INTERVAL '5 minutes', "
+            + "next_provider_retry_at = now() WHERE chef_sub_order_id = ?", hotBox);
+        assertThat(worker.process(order).providerId()).isEqualTo("NO_CAPABLE_COURIER");
+
+        assertThat(database.db.queryForObject("SELECT last_error FROM delivery_schema.delivery_command WHERE chef_sub_order_id = ?",
+            String.class, hotBox)).isEqualTo("NO_CAPABLE_COURIER");
+        assertThat(pidge.quoteCalls).isZero();
+        assertThat(journal.forOrder(hotBox)).isEmpty();
+        borzo.verify();
+    }
+
     /** The handoff's two statements for courier capabilities, on a Borzo job the worker booked. */
     @Test
     void aKeptBorzoSearchIsListedOncePastTheWaitCapAndThePidgePhaseCanRestOnAnUnknownAnswer() {
@@ -561,6 +591,11 @@ class CourierBookingJournalDatabaseTest {
         database.db.update("UPDATE delivery_schema.delivery_command SET promised_ready_at = now() - INTERVAL '19 minutes'");
         assertThat(handoffs.retainedSearchesPastCap(20)).as("inside the cap").isEmpty();
         database.db.update("UPDATE delivery_schema.delivery_command SET promised_ready_at = now() - INTERVAL '21 minutes'");
+        // A case ops already holds for the job: nothing to open, so the job is not listed.
+        database.db.update("INSERT INTO delivery_schema.delivery_exception_case (id, delivery_job_id, order_id, reason, status, opened_by) "
+            + "VALUES (?, ?, ?, 'OTHER', 'OPEN', ?)", UUID.randomUUID(), job, orderId, UUID.randomUUID());
+        assertThat(handoffs.retainedSearchesPastCap(20)).as("ops already holds a case").isEmpty();
+        database.db.update("UPDATE delivery_schema.delivery_exception_case SET status = 'RESOLVED', closed_at = now()");
         assertThat(handoffs.retainedSearchesPastCap(20)).singleElement().satisfies(search -> {
             assertThat(search.deliveryJobId()).isEqualTo(job);
             assertThat(search.chefSubOrderId()).isEqualTo(chefSubOrderId);
@@ -569,8 +604,13 @@ class CourierBookingJournalDatabaseTest {
         assertThat(handoffs.retainedSearchesPastCap(20)).as("its case is open").isEmpty();
         database.db.update("UPDATE delivery_schema.delivery_exception_case SET status = 'RESOLVED', closed_at = now()");
         assertThat(handoffs.retainedSearchesPastCap(20)).as("once per job, also after the case is closed").isEmpty();
-        assertThat(database.db.queryForObject("SELECT reason FROM delivery_schema.delivery_exception_case WHERE delivery_job_id = ?",
-            String.class, job)).isEqualTo("RIDER_NOT_ASSIGNED");
+        assertThat(database.db.queryForObject("SELECT reason FROM delivery_schema.delivery_exception_case WHERE delivery_job_id = ? "
+            + "AND opened_by = '00000000-0000-0000-0000-000000000000'", String.class, job)).isEqualTo("RIDER_NOT_ASSIGNED");
+
+        // The Pidge phase's tries are counted from its first failed claim, whatever the Borzo phase used.
+        assertThat(handoffs.pidgePhaseTry(job, 4)).isEqualTo(1);
+        assertThat(handoffs.pidgePhaseTry(job, 5)).isEqualTo(2);
+        assertThat(handoffs.pidgePhaseTry(job, 13)).isEqualTo(10);
 
         database.db.update("UPDATE delivery_schema.delivery_borzo_pidge_handoff SET state = 'PROCESSING_PIDGE', lease_until = now() + INTERVAL '5 minutes'");
         handoffs.awaitPidgeOutcome(job, Instant.now().minusSeconds(1), "Pidge booking outcome still requires reconciliation");

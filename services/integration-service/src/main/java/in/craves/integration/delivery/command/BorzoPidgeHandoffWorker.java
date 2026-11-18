@@ -38,8 +38,8 @@ public class BorzoPidgeHandoffWorker {
     private static final int MAX_ATTEMPTS = 20;
     // Attempts count the Borzo phase too: the Pidge fallback starts at about attempt 2, so attempt 7 is ~10 minutes in.
     private static final int STALLED_ALERT_ATTEMPT = 7;
-    // Courier capabilities only. Attempts count the Borzo phase too (about 2): this is the Pidge phase's 10th try.
-    static final int PIDGE_PHASE_LAST_ATTEMPT = 12;
+    // Courier capabilities only: the Pidge phase's last try when nothing was sent to Pidge.
+    static final int PIDGE_PHASE_TRIES = 10;
 
     private final BorzoPidgeHandoffRepository handoffs;
     private final DeliveryJobRepository jobs;
@@ -85,13 +85,36 @@ public class BorzoPidgeHandoffWorker {
     }
 
     /** The Pidge phase is over without a courier: a person takes it from here. */
-    private void endPidgePhase(Handoff handoff, String reason) {
+    private void endPidgePhase(Handoff handoff, int tries, boolean pidgeBookingMayExist, String reason) {
         handoffs.manualReview(handoff.deliveryJobId(), reason);
         UUID orderId = jobs.findHandoffJob(handoff.deliveryJobId()).map(DeliveryJobRepository.HandoffJob::orderId).orElse(null);
         log.error("CRAVES_ALERT alert=DELIVERY_HANDOFF_NO_COURIER orderId={} jobId={} reason={}", orderId, handoff.deliveryJobId(), reason);
         if (orderId != null) {
-            cases.openSystemCase(handoff.deliveryJobId(), orderId, "RIDER_NOT_ASSIGNED",
-                "Borzo was cancelled and Pidge was not booked after " + handoff.attemptCount() + " tries: " + reason);
+            cases.openSystemCase(handoff.deliveryJobId(), orderId, "RIDER_NOT_ASSIGNED", "Borzo was cancelled and the handoff to Pidge "
+                + "did not finish after " + tries + " tries. " + (pidgeBookingMayExist ? "A Pidge booking may exist: check Pidge first. "
+                : "Nothing was booked with Pidge. ") + reason);
+        }
+    }
+
+    /**
+     * Whether Pidge may hold a booking for this handoff. PidgeApiClient records pidge_booking before it calls Pidge, under
+     * the order's id or, with the journal on, the attempt's reference; a row that is not REJECTED or CANCELLED may be live.
+     * When that cannot be read the answer is yes.
+     */
+    private boolean pidgeBookingMayExist(Handoff handoff) {
+        try {
+            DeliveryJobRepository.HandoffJob job = jobs.findHandoffJob(handoff.deliveryJobId()).orElse(null);
+            if (job == null) {
+                return true;
+            }
+            List<String> references = new java.util.ArrayList<>(List.of(job.chefSubOrderId().toString()));
+            if (journalOn()) {
+                pidgeAttempts(job.chefSubOrderId()).forEach(attempt -> references.add(attempt.clientRef()));
+            }
+            return references.stream().anyMatch(reference -> pidgeBookings.find(reference)
+                .filter(booking -> !"REJECTED".equals(booking.state()) && !"CANCELLED".equals(booking.state())).isPresent());
+        } catch (RuntimeException unreadable) {
+            return true;
         }
     }
 
@@ -176,13 +199,16 @@ public class BorzoPidgeHandoffWorker {
             } catch (RuntimeException error) {
                 String reason = safeMessage(error);
                 if (capabilitiesOn() && "PROCESSING_PIDGE".equals(handoff.state())) {
-                    // The Pidge phase has an end. A booking whose answer is not known is only looked up from here on.
+                    // The Pidge phase has an end. While Pidge may hold a booking (its answer was lost, or it was booked and a
+                    // later step failed) the booking is only looked up from here on, and the phase is never ended as "not booked".
                     boolean outcomeUnknown = error instanceof PidgeOutcomeUnknownException
-                        || error instanceof in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
+                        || error instanceof in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException
+                        || pidgeBookingMayExist(handoff);
+                    int tries = handoffs.pidgePhaseTry(handoff.deliveryJobId(), handoff.attemptCount());
                     long delaySeconds = Math.min(300L, 5L << Math.min(handoff.attemptCount(), 6));
-                    if (handoff.attemptCount() >= MAX_ATTEMPTS || (handoff.attemptCount() >= PIDGE_PHASE_LAST_ATTEMPT && !outcomeUnknown)) {
-                        endPidgePhase(handoff, outcomeUnknown ? "Pidge booking outcome is still unknown; check Pidge before booking anyone: " + reason
-                            : reason);
+                    if (tries >= MAX_ATTEMPTS || (tries >= PIDGE_PHASE_TRIES && !outcomeUnknown)) {
+                        endPidgePhase(handoff, tries, outcomeUnknown, outcomeUnknown
+                            ? "Pidge booking outcome is still unknown; check Pidge before booking anyone: " + reason : reason);
                         continue;
                     }
                     if (handoff.attemptCount() == STALLED_ALERT_ATTEMPT) {

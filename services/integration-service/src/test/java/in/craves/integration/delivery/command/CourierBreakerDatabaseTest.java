@@ -203,6 +203,22 @@ class CourierBreakerDatabaseTest {
         replica.release(new CourierBreaker.Pass("pidge", false, false, false));
     }
 
+    @Test
+    void aSlowPassDoesNotGiveBackAProbeAnotherReplicaHasTakenSince() {
+        open("borzo");
+        age("opened_at");
+        CourierBreaker.Pass slow = replica().admit("borzo");
+        age("probe_at");
+        CourierBreaker.Pass later = replica().admit("borzo");
+        assertThat(later.probe()).isTrue();
+
+        replica().release(slow);
+        assertThat(replica().admit("borzo").refused()).as("the later replica still holds the probe").isTrue();
+
+        replica().release(later);
+        assertThat(replica().admit("borzo").probe()).isTrue();
+    }
+
     private CourierBreaker replica() {
         return new CourierBreaker(database.db, 3, 5, 30);
     }

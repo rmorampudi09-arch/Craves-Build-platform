@@ -739,7 +739,8 @@ a courier's first failure; a courier that has not failed has no row and costs on
 - **A failed probe** keeps the breaker open; the next probe is `HALF_OPEN_SECONDS` after that one was claimed. So is the
   next probe after a booking that gave no verdict.
 - **A probe that was not used is given back.** A pass that took the probe, was quoted by the courier and then booked
-  another courier or nobody clears `probe_at`, so the next pass that can book takes the probe at once.
+  another courier or nobody clears `probe_at`, so the next pass that can book takes the probe at once. It clears only
+  its own claim, never one another replica has taken since.
 - **While Borzo's breaker is open** in the timed policy, Borzo's window is closed for the order being routed and Pidge is
   quoted at once. While Pidge's is open, or every courier's, the command waits as it does when nobody quotes, up to the
   courier wait cap.
@@ -791,19 +792,33 @@ On:
   `last_error = NO_CAPABLE_COURIER`, and one alert. Without the timed policy the same happens when no active courier can
   carry it. A later message for that command is acknowledged as done. While only Borzo's shared breaker keeps the order
   from Borzo, the order waits out Borzo's window first.
+- **Borzo down for its whole window.** A hot-box order waits inside Borzo's 120 seconds (no quote, breaker open) and is
+  ended as `NO_CAPABLE_COURIER` on the first pass after them: Borzo's window is its only chance, and waiting longer
+  would only retry Pidge, which can never take it.
+- **Never while a booking of the order may exist.** An attempt whose answer is unknown sends the command to the
+  reconciliation lookup first, as for any order. While an attempt is an orphan suspect still being looked up (2 hours),
+  or a refused booking was later found at its courier (the stray-booking path adopts or cancels it), the command waits
+  instead of ending (the courier wait cap then ends a wait that goes on too long, and it too spares an orphan suspect
+  still being looked up). It is ended as `NO_CAPABLE_COURIER` only when its
+  attempts are none, refused outright or cancelled.
 - **No ops case row for it.** `delivery_exception_case` belongs to a delivery job and this order has none, so, like the
   courier wait cap, the dead letter and the paged alert are what ops act on.
 - **Borzo kept (handoff).** When Borzo's 120 seconds pass without a courier and Pidge cannot carry the order, Borzo is
   not cancelled: the handoff ends as `RETAINED_BORZO` and Borzo goes on searching. If it still has no courier when the
   promised ready time is `CRAVES_DELIVERY_COURIER_WAIT_CAP_MINUTES` (20) old, one `delivery_exception_case`
   (`RIDER_NOT_ASSIGNED`, opened by the system) is opened for the job and `DELIVERY_COURIER_WAIT_CAP ... was=RETAINED_BORZO`
-  is logged, once per job. Checked on the handoff worker's tick; no new job.
+  is logged, once per job; a job ops already holds an active case for is left alone. Checked on the handoff worker's
+  tick; no new job.
 - **The handoff's Pidge phase ends.** Off, it retries for ever. On:
-  - a Pidge booking whose answer was lost rests in `PIDGE_RECONCILIATION_PENDING`; each later try only looks the booking
-    up (Pidge is not asked to book again), up to 20 tries in all;
-  - when nothing was sent to Pidge (no quote, order check failing) the phase ends at try 12, its tenth for Pidge;
+  - while Pidge may hold a booking the handoff rests in `PIDGE_RECONCILIATION_PENDING` and each later try only looks the
+    booking up (Pidge is not asked to book again), up to 20 tries. That covers a lost answer and a booking that exists
+    while a later step fails: Pidge shows it as not ready yet, the job could not be switched, or its cancel is not
+    confirmed. `pidge_booking` (written before Pidge is called) decides; the phase is never ended as "not booked" then;
+  - when nothing was sent to Pidge (no quote, order check failing) the phase ends at its tenth try;
+  - tries are the Pidge phase's own: `pidge_phase_first_attempt` (V196) keeps the claim number of its first failed try;
   - the end is `MANUAL_REVIEW`, `DELIVERY_HANDOFF_NO_COURIER`, and one `delivery_exception_case` (`RIDER_NOT_ASSIGNED`)
-    whose note says whether the Pidge booking's outcome is still unknown. `DELIVERY_HANDOFF_STALLED` still fires at try 7.
+    whose note says either that nothing was booked with Pidge or to check Pidge first because a booking may exist.
+    `DELIVERY_HANDOFF_STALLED` still fires at claim 7.
 
 | Alert | Raised | Do |
 |---|---|---|
@@ -819,7 +834,7 @@ Switch on: set the flag. Rollback: set it to `false`; ended commands stay ended,
 `PIDGE_RECONCILIATION_PENDING` is picked up by the old loop (it claims that state already), and kept Borzo bookings stay.
 
 Not in this yet: an unanswered Borzo booking for a hot-box order is still given up as an orphan suspect after its
-lookups, as for any order (the order then ends as `NO_CAPABLE_COURIER` while the booking is still looked up for 2 hours).
+lookups, as for any order; the command then waits while the suspect is looked up for 2 more hours.
 
 ## Safe rollout
 

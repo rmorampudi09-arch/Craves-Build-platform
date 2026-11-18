@@ -275,6 +275,52 @@ class DeliveryProviderRouterTest {
         verify(breaker, org.mockito.Mockito.never()).booked(eq(new CourierBreaker.Pass("backup", false, false, false)), any());
     }
 
+    @Test
+    void aHotBoxOrderIsEndedOnlyWhenNoBookingOfItCanExist() {
+        var catalog = mock(DeliveryProviderCatalogRepository.class);
+        var intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "pidge"));
+        var borzo = new FakeAdapter("borzo", 7, "100.00", CreateBehavior.SUCCESS);
+        borzo.capabilities = java.util.Set.of(DeliveryProviderAdapter.Capability.THERMOBOX);
+        var pidge = new FakeAdapter("pidge", 5, "90.00", CreateBehavior.SUCCESS);
+        var properties = new DeliveryCommandProperties();
+        properties.setBorzoPidgeHandoffEnabled(true);
+        properties.setCourierCapabilitiesEnabled(true);
+        var router = new DeliveryProviderRouter(List.of(borzo, pidge), catalog, intelligence,
+            mock(DeliveryAssignmentRepository.class), properties, quoteExecutor, clock);
+        ProviderCreateAttemptRepository journal = journal();
+        router.setJournal(journal);
+        Instant windowOver = clock.instant().minusSeconds(300);
+
+        // Its answer is not known: reconciliation first, as for any order.
+        when(journal.forOrder(any())).thenReturn(List.of(borzoAttempt("UNKNOWN", null, 60)));
+        assertThatThrownBy(() -> router.route(command(), windowOver)).isInstanceOf(DeliveryCreateReconciliationPendingException.class);
+
+        // Given up as an orphan suspect a minute ago: it is still looked up, so the order waits.
+        when(journal.forOrder(any())).thenReturn(List.of(borzoAttempt("ORPHAN_SUSPECT", null, 60)));
+        assertThatThrownBy(() -> router.route(command(), windowOver))
+            .isExactlyInstanceOf(DeliveryProviderTemporarilyUnavailableException.class).hasMessageContaining("may still exist");
+        assertThatThrownBy(() -> router.route(command(), clock.instant())).as("also inside Borzo's window")
+            .isExactlyInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+
+        // A refused booking that was later found at Borzo: the stray-booking path decides.
+        when(journal.forOrder(any())).thenReturn(List.of(borzoAttempt("REJECTED", "1250032", 60)));
+        assertThatThrownBy(() -> router.route(command(), windowOver))
+            .isExactlyInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+
+        // Nothing can exist: refused outright, or an orphan suspect whose 2 hours of lookups are over.
+        when(journal.forOrder(any())).thenReturn(List.of(borzoAttempt("REJECTED", null, 60)));
+        assertThatThrownBy(() -> router.route(command(), windowOver)).isInstanceOf(DeliveryProviderRouter.NoCapableCourierException.class);
+        when(journal.forOrder(any())).thenReturn(List.of(borzoAttempt("ORPHAN_SUSPECT", null, 3 * 3600)));
+        assertThatThrownBy(() -> router.route(command(), windowOver)).isInstanceOf(DeliveryProviderRouter.NoCapableCourierException.class);
+        assertThat(pidge.quoteCalls() + borzo.quoteCalls()).isZero();
+    }
+
+    private ProviderCreateAttemptRepository.Attempt borzoAttempt(String state, String providerRef, int secondsSinceUpdate) {
+        return new ProviderCreateAttemptRepository.Attempt(UUID.randomUUID(), "borzo", 1, "ref", state, providerRef,
+            clock.instant().minusSeconds(4 * 3600), clock.instant().minusSeconds(secondsSinceUpdate));
+    }
+
     private ProviderCreateAttemptRepository journal() {
         ProviderCreateAttemptRepository journal = mock(ProviderCreateAttemptRepository.class);
         when(journal.enabled()).thenReturn(true);

@@ -154,6 +154,20 @@ public class BorzoPidgeHandoffRepository {
     }
 
     /**
+     * Courier capabilities only: which try of the Pidge phase this claim is. attempt_count also counts the Borzo phase's
+     * claims, so the claim number of the phase's first failed try is kept (a try that does not fail ends the phase).
+     */
+    public int pidgePhaseTry(UUID deliveryJobId, int attemptCount) {
+        Integer tries = jdbc.queryForObject("""
+            UPDATE delivery_schema.delivery_borzo_pidge_handoff
+            SET pidge_phase_first_attempt = COALESCE(pidge_phase_first_attempt, ?)
+            WHERE delivery_job_id = ?
+            RETURNING ? - pidge_phase_first_attempt + 1
+            """, Integer.class, attemptCount, deliveryJobId, attemptCount);
+        return tries == null ? 1 : tries;
+    }
+
+    /**
      * Courier capabilities only: Borzo bookings kept because Pidge cannot carry the order, still without a courier once the
      * promised ready time is capMinutes old, and with no case opened by the system yet.
      */
@@ -167,7 +181,7 @@ public class BorzoPidgeHandoffRepository {
               AND j.provider_id = 'borzo' AND j.status IN ('PENDING', 'SEARCHING', 'DELAYED')
               AND COALESCE(c.promised_ready_at, c.ready_at, c.dispatch_at) < now() - make_interval(mins => ?)
               AND NOT EXISTS (SELECT 1 FROM delivery_schema.delivery_exception_case e WHERE e.delivery_job_id = j.id
-                              AND e.opened_by = '00000000-0000-0000-0000-000000000000')
+                              AND (e.opened_by = '00000000-0000-0000-0000-000000000000' OR e.status NOT IN ('RESOLVED', 'DISMISSED')))
             ORDER BY h.started_at LIMIT 20
             """, (rs, row) -> new RetainedSearch(rs.getObject("id", UUID.class), rs.getObject("order_id", UUID.class),
                 rs.getObject("chef_sub_order_id", UUID.class)), capMinutes);

@@ -169,6 +169,21 @@ public class DeliveryProviderRouter {
             .filter(need -> !offered.contains(need)).collect(Collectors.toSet());
     }
 
+    /**
+     * Ends the order only when no booking of it can exist. An orphan suspect is still looked up for 2 hours, and a refused
+     * booking later found at its courier is the stray-booking path's to adopt or cancel: until then the command waits.
+     * (An attempt whose answer is unknown never gets this far: it sends the command to reconciliation first.)
+     */
+    private DeliveryRoutingException noCapableCourier(Map<String, List<Attempt>> attempts, String message) {
+        Instant stillLookedUp = clock.instant().minus(Duration.ofHours(2));
+        boolean bookingMayExist = attempts.values().stream().flatMap(List::stream).anyMatch(row ->
+            (ProviderCreateAttemptRepository.ORPHAN_SUSPECT.equals(row.state()) && row.updatedAt().isAfter(stillLookedUp))
+                || (ProviderCreateAttemptRepository.REJECTED.equals(row.state()) && row.providerRef() != null));
+        return bookingMayExist
+            ? new DeliveryProviderTemporarilyUnavailableException(message + "; an earlier booking of it may still exist")
+            : new NoCapableCourierException(message);
+    }
+
     private static QuoteAudit cannotCarry(String providerId, Set<DeliveryProviderAdapter.Capability> lacking) {
         return new QuoteAudit(providerId, false, false, null, null, null, "Courier cannot carry this order: needs " + lacking);
     }
@@ -266,7 +281,7 @@ public class DeliveryProviderRouter {
                 throw new DeliveryProviderTemporarilyUnavailableException(
                     "Borzo's breaker is open and Pidge cannot carry this order", borzoWindowStartedAt.plusSeconds(120));
             }
-            throw new NoCapableCourierException("Pidge cannot carry this order: needs " + pidgeLacks);
+            throw noCapableCourier(attempts, "Pidge cannot carry this order: needs " + pidgeLacks);
         }
         Set<String> bookableOnly = null;
         if (journalOn()) {
@@ -318,7 +333,7 @@ public class DeliveryProviderRouter {
 
         if (!someCourierCanCarry && quoteAudit.stream().anyMatch(audit -> audit.error() != null
             && audit.error().startsWith("Courier cannot carry"))) {
-            throw new NoCapableCourierException("No active courier can carry this order");
+            throw noCapableCourier(attempts, "No active courier can carry this order");
         }
         List<QuoteOutcome> outcomes = invokeQuotes(tasks, quoteAudit);
         passes.keySet().stream().filter(providerId -> outcomes.stream().noneMatch(outcome -> providerId.equals(outcome.providerId())

@@ -23,6 +23,8 @@ import in.craves.integration.delivery.command.DeliveryJobRepository.HandoffJob;
 import in.craves.integration.delivery.pidge.PidgeApiClient;
 import in.craves.integration.delivery.pidge.PidgeBookingRepository;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Capability;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.CreateReconciliationResult;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
@@ -54,6 +56,7 @@ class BorzoPidgeHandoffCapabilitiesTest {
     final PidgeProperties pidgeProperties = mock(PidgeProperties.class);
     final PidgeBookingRepository bookings = mock(PidgeBookingRepository.class);
     final DeliveryStatusRepository cases = mock(DeliveryStatusRepository.class);
+    final BorzoPidgeHandoffCompletionService completion = mock(BorzoPidgeHandoffCompletionService.class);
     final DeliveryCommandProperties properties = new DeliveryCommandProperties();
     final QuoteRequest request = mock(QuoteRequest.class);
     final List<String> alerts = new CopyOnWriteArrayList<>();
@@ -71,8 +74,7 @@ class BorzoPidgeHandoffCapabilitiesTest {
     void setUp() {
         properties.setCourierCapabilitiesEnabled(true);
         worker = new BorzoPidgeHandoffWorker(handoffs, jobs, commands, mock(DeliveryOutboxRepository.class), eligibility, catalog, borzo,
-            borzoProperties, pidge, pidgeProperties, bookings, mock(DeliveryStatusUpdateService.class),
-            mock(BorzoPidgeHandoffCompletionService.class));
+            borzoProperties, pidge, pidgeProperties, bookings, mock(DeliveryStatusUpdateService.class), completion);
         worker.setCapabilities(properties, cases);
         when(pidge.capabilities()).thenReturn(Set.of(Capability.PROVIDER_EVENT_TIME));
         when(pidgeProperties.productionCreateReady()).thenReturn(true);
@@ -127,19 +129,23 @@ class BorzoPidgeHandoffCapabilitiesTest {
 
     @Test
     void thePidgePhaseEndsAtItsTenthTryWhenNothingWasSentToPidge() {
-        Handoff earlier = pidgePhase(BorzoPidgeHandoffWorker.PIDGE_PHASE_LAST_ATTEMPT - 1);
-        Handoff last = pidgePhase(BorzoPidgeHandoffWorker.PIDGE_PHASE_LAST_ATTEMPT);
-        HandoffJob job = job(last);
-        job(earlier);
-        when(handoffs.claimDue(1)).thenReturn(List.of(earlier), List.of(last), List.of());
+        // The Borzo phase took 5 claims of this handoff, so the Pidge phase's tenth try is claim 15.
+        Handoff ninth = pidgePhase(14);
+        Handoff tenth = pidgePhase(15);
+        job(ninth);
+        HandoffJob job = job(tenth);
+        when(handoffs.pidgePhaseTry(ninth.deliveryJobId(), 14)).thenReturn(9);
+        when(handoffs.pidgePhaseTry(tenth.deliveryJobId(), 15)).thenReturn(10);
+        when(handoffs.claimDue(1)).thenReturn(List.of(ninth), List.of(tenth), List.of());
         when(pidge.quote(request)).thenReturn(new ProviderQuote("pidge", false, null, null, "INR", List.of(), null, Instant.now()));
 
         worker.processDue();
 
-        verify(handoffs).retry(eq(earlier.deliveryJobId()), eq("PROCESSING_PIDGE"), any(), any());
-        verify(handoffs).manualReview(eq(last.deliveryJobId()), contains("no currently available"));
-        verify(handoffs, never()).retry(eq(last.deliveryJobId()), any(), any(), any());
-        verify(cases).openSystemCase(eq(job.id()), eq(job.orderId()), eq("RIDER_NOT_ASSIGNED"), contains("12 tries"));
+        verify(handoffs).retry(eq(ninth.deliveryJobId()), eq("PROCESSING_PIDGE"), any(), any());
+        verify(handoffs).manualReview(eq(tenth.deliveryJobId()), contains("no currently available"));
+        verify(handoffs, never()).retry(eq(tenth.deliveryJobId()), any(), any(), any());
+        verify(cases).openSystemCase(eq(job.id()), eq(job.orderId()), eq("RIDER_NOT_ASSIGNED"),
+            org.mockito.ArgumentMatchers.argThat(note -> note.contains("after 10 tries") && note.contains("Nothing was booked with Pidge")));
         assertThat(alerts).singleElement().asString().startsWith("CRAVES_ALERT alert=DELIVERY_HANDOFF_NO_COURIER orderId=" + job.orderId()
             + " jobId=" + job.id());
     }
@@ -147,11 +153,14 @@ class BorzoPidgeHandoffCapabilitiesTest {
     @Test
     void aLostPidgeAnswerIsOnlyLookedUpFromThenOnAndEndsAtTheAttemptLimit() {
         Handoff lost = pidgePhase(3);
-        Handoff tenth = pidgePhase(BorzoPidgeHandoffWorker.PIDGE_PHASE_LAST_ATTEMPT);
-        Handoff limit = pidgePhase(20);
+        Handoff tenth = pidgePhase(11);
+        Handoff limit = pidgePhase(21);
         job(lost);
         job(tenth);
         HandoffJob ended = job(limit);
+        when(handoffs.pidgePhaseTry(lost.deliveryJobId(), 3)).thenReturn(2);
+        when(handoffs.pidgePhaseTry(tenth.deliveryJobId(), 11)).thenReturn(10);
+        when(handoffs.pidgePhaseTry(limit.deliveryJobId(), 21)).thenReturn(20);
         when(handoffs.claimDue(1)).thenReturn(List.of(lost), List.of(tenth), List.of(limit), List.of());
         when(pidge.quote(request)).thenReturn(new ProviderQuote("pidge", true, null, null, "INR", List.of(), null, Instant.now()));
         when(pidge.create(any())).thenThrow(new ProviderCreateUncertainException("pidge", "ref", Instant.now(), new RuntimeException("timeout")));
@@ -162,8 +171,67 @@ class BorzoPidgeHandoffCapabilitiesTest {
         verify(handoffs).awaitPidgeOutcome(eq(tenth.deliveryJobId()), any(), any());
         verify(handoffs, never()).retry(any(), any(), any(), any());
         verify(handoffs).manualReview(eq(limit.deliveryJobId()), contains("outcome is still unknown"));
-        verify(cases).openSystemCase(eq(ended.id()), eq(ended.orderId()), eq("RIDER_NOT_ASSIGNED"), any());
+        verify(cases).openSystemCase(eq(ended.id()), eq(ended.orderId()), eq("RIDER_NOT_ASSIGNED"), contains("check Pidge first"));
         assertThat(alerts).hasSize(1);
+    }
+
+    /** Pidge holds a booking and a later step fails: the phase is never ended as "not booked". */
+    @Test
+    void aPidgeBookingThatExistsButIsNotConfirmedReadyKeepsThePhaseOnTheLookup() {
+        HandoffJob job = bookedAtPidgeOnTry(12);
+        when(pidge.reconcileCreate(eq(job.chefSubOrderId().toString()), any()))
+            .thenReturn(CreateReconciliationResult.found(delivery("pidge", DeliveryStatus.PENDING)));
+
+        worker.processDue();
+
+        verify(handoffs).awaitPidgeOutcome(eq(job.id()), any(), contains("not confirmed ready"));
+        verify(handoffs, never()).manualReview(any(), any());
+        verify(cases, never()).openSystemCase(any(), any(), any(), any());
+    }
+
+    @Test
+    void aPidgeBookingWhoseCompletionFailsKeepsThePhaseOnTheLookup() {
+        HandoffJob job = bookedAtPidgeOnTry(12);
+        when(pidge.reconcileCreate(eq(job.chefSubOrderId().toString()), any()))
+            .thenReturn(CreateReconciliationResult.found(delivery("pidge", DeliveryStatus.SEARCHING)));
+        org.mockito.Mockito.doThrow(new IllegalStateException("job could not be switched")).when(completion).complete(any(), any());
+
+        worker.processDue();
+
+        verify(handoffs).awaitPidgeOutcome(eq(job.id()), any(), contains("could not be switched"));
+        verify(handoffs, never()).manualReview(any(), any());
+    }
+
+    @Test
+    void aPidgeBookingWhoseCancelIsNotConfirmedKeepsThePhaseOnTheLookupAndItsEndSaysToCheckPidge() {
+        HandoffJob job = bookedAtPidgeOnTry(12);
+        when(eligibility.eligible(job.chefSubOrderId(), job.orderId(), job.id(), job.providerDeliveryId())).thenReturn(false);
+        ProviderDelivery live = delivery("pidge", DeliveryStatus.SEARCHING);
+        when(pidge.track("pidge-42")).thenReturn(new TrackingSnapshot(live, null, Instant.now()));
+        when(pidge.cancel("pidge-42")).thenReturn(live);
+
+        worker.processDue();
+
+        verify(handoffs).awaitPidgeOutcome(eq(job.id()), any(), contains("cancellation is not confirmed"));
+        verify(handoffs, never()).manualReview(any(), any());
+
+        // At the attempt limit a person takes over, and is told a booking may exist.
+        Handoff limit = new Handoff(job.id(), "1250032", "PROCESSING_PIDGE", 22, Instant.now().minusSeconds(1), true, true);
+        when(handoffs.pidgePhaseTry(job.id(), 22)).thenReturn(20);
+        when(handoffs.claimDue(1)).thenReturn(List.of(limit), List.of());
+        worker.processDue();
+        verify(handoffs).manualReview(eq(job.id()), contains("check Pidge"));
+        verify(cases).openSystemCase(eq(job.id()), eq(job.orderId()), eq("RIDER_NOT_ASSIGNED"), contains("A Pidge booking may exist"));
+    }
+
+    /** A handoff on the given try of its Pidge phase (past the tenth) whose booking Pidge has: pidge_booking holds it. */
+    private HandoffJob bookedAtPidgeOnTry(int tries) {
+        Handoff handoff = pidgePhase(tries + 2);
+        HandoffJob job = job(handoff);
+        when(handoffs.pidgePhaseTry(handoff.deliveryJobId(), tries + 2)).thenReturn(tries);
+        when(handoffs.claimDue(1)).thenReturn(List.of(handoff), List.of());
+        when(bookings.find(job.chefSubOrderId().toString())).thenReturn(Optional.of(new PidgeBookingRepository.Booking("pidge-42", "CREATED")));
+        return job;
     }
 
     private static Handoff pidgePhase(int attempts) {

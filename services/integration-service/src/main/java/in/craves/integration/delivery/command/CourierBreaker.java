@@ -78,7 +78,11 @@ public class CourierBreaker {
      * One pass's leave to call a courier. refused: the breaker is open, do not call. dirty: the row held failures when it
      * was read, so a success must be written. probe: this pass holds the half-open probe.
      */
-    public record Pass(String providerId, boolean refused, boolean dirty, boolean probe) {}
+    public record Pass(String providerId, boolean refused, boolean dirty, boolean probe, java.sql.Timestamp probeClaimedAt) {
+        public Pass(String providerId, boolean refused, boolean dirty, boolean probe) {
+            this(providerId, refused, dirty, probe, null);
+        }
+    }
 
     private record Row(boolean dirty, boolean open, boolean probeDue) {}
 
@@ -119,10 +123,12 @@ public class CourierBreaker {
                 return new Pass(providerId, false, !rows.isEmpty() && rows.get(0).dirty(), false);
             }
             // Only the replica whose update changes the row probes.
-            boolean probe = mayProbe && rows.get(0).probeDue() && jdbc.update("UPDATE " + TABLE + " SET probe_at = now(), updated_at = now() "
-                + "WHERE provider_id = ? AND opened_at < now() - ? * INTERVAL '1 second' "
-                + "AND (probe_at IS NULL OR probe_at < now() - ? * INTERVAL '1 second')", providerId, halfOpenSeconds, halfOpenSeconds) == 1;
-            return new Pass(providerId, !probe, true, probe);
+            List<java.sql.Timestamp> claim = !mayProbe || !rows.get(0).probeDue() ? List.of()
+                : jdbc.queryForList("UPDATE " + TABLE + " SET probe_at = now(), updated_at = now() "
+                    + "WHERE provider_id = ? AND opened_at < now() - ? * INTERVAL '1 second' "
+                    + "AND (probe_at IS NULL OR probe_at < now() - ? * INTERVAL '1 second') RETURNING probe_at", java.sql.Timestamp.class,
+                    providerId, halfOpenSeconds, halfOpenSeconds);
+            return new Pass(providerId, claim.isEmpty(), true, !claim.isEmpty(), claim.isEmpty() ? null : claim.get(0));
         } catch (RuntimeException unreadable) {
             log.warn("Courier breaker could not be read provider={}; the courier is called", providerId, unreadable);
             return new Pass(providerId, false, false, false);
@@ -134,12 +140,13 @@ public class CourierBreaker {
      * goes back, so the next pass that can book takes it at once instead of half-open-seconds later.
      */
     public void release(Pass pass) {
-        if (!pass.probe()) {
+        if (!pass.probe() || pass.probeClaimedAt() == null) {
             return;
         }
         try {
-            jdbc.update("UPDATE " + TABLE + " SET probe_at = NULL, updated_at = now() WHERE provider_id = ? AND opened_at IS NOT NULL",
-                pass.providerId());
+            // Only this pass's own claim: a slow pass does not clear a probe another replica has taken since.
+            jdbc.update("UPDATE " + TABLE + " SET probe_at = NULL, updated_at = now() WHERE provider_id = ? AND probe_at = ?",
+                pass.providerId(), pass.probeClaimedAt());
         } catch (RuntimeException unwritable) {
             log.warn("Courier breaker probe could not be released provider={}", pass.providerId(), unwritable);
         }

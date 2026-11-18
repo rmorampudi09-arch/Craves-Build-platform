@@ -1,0 +1,13 @@
+<policies>
+  <inbound>
+    <base />
+    <!-- Request body: at most 262144 bytes, the size integration-service accepts on these routes today. -->
+    <validate-content unspecified-content-type-action="ignore" max-size="262144" size-exceeded-action="prevent" />
+    <!-- At most 300 calls per 60 seconds per caller address; counted per gateway, so approximate. -->
+    <rate-limit-by-key calls="300" renewal-period="60" counter-key="@(context.Request.IpAddress)" />
+    <!-- No ip-filter: no courier address list is published. -->
+  </inbound>
+  <backend><base /></backend>
+  <outbound><base /></outbound>
+  <on-error><base /></on-error>
+</policies>

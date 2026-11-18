@@ -719,6 +719,8 @@ that courier's webhook check also accepts the previous value and writes
 `COURIER_WEBHOOK_PREVIOUS_SECRET_USED provider=<borzo|pidge>` (no values) for each callback that matched it. Steps are
 in `docs/SECRETS.md`. Empty: only the current value is accepted.
 
+Gateway body size and call rate for the two courier webhook routes: `infra/apim/courier-webhooks/` (applied by hand; steps in its README).
+
 ## Callback status read-back
 
 `CRAVES_DELIVERY_WEBHOOK_VERIFY_FETCH` = `off` (default) | `shadow` | `enforce`. The value is trimmed and read in any

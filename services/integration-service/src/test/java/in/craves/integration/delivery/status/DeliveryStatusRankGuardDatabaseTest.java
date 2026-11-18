@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
+import in.craves.integration.LoggedEvents;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -43,7 +43,7 @@ class DeliveryStatusRankGuardDatabaseTest {
     final DeliveryStatusUpdateService service = new DeliveryStatusUpdateService(List.of(new BorzoWebhookNormalizer(new BorzoStatusMapper())),
         new DeliveryStatusRepository(database.db, json), new DeliveryOutboxRepository(database.db, json), properties, json);
     final TransactionTemplate transaction = new TransactionTemplate(database.transactions);
-    final ListAppender<ILoggingEvent> logged = new ListAppender<>();
+    final LoggedEvents logged = new LoggedEvents();
     final UUID orderId = UUID.randomUUID();
     final UUID chefSubOrderId = UUID.randomUUID();
     final UUID jobId = UUID.randomUUID();

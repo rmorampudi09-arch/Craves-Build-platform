@@ -173,6 +173,7 @@ BORZO_API_ENABLED=false
 BORZO_API_BASE_URL=<sandbox or production URL>
 BORZO_API_AUTH_TOKEN=<Key Vault-backed secret>
 BORZO_CALLBACK_TOKEN=<Key Vault-backed secret>
+BORZO_CALLBACK_TOKEN_PREVIOUS=
 ```
 
 Never place provider credentials in source, pipeline YAML, command output or chat.

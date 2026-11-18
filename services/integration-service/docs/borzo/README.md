@@ -50,6 +50,7 @@ BORZO_API_ENABLED=false
 BORZO_API_BASE_URL=https://robotapitest-in.borzodelivery.com/api/business/1.8
 BORZO_API_AUTH_TOKEN=<secret>
 BORZO_CALLBACK_TOKEN=<secret>
+BORZO_CALLBACK_TOKEN_PREVIOUS=
 BORZO_CONNECT_TIMEOUT_SECONDS=5
 BORZO_READ_TIMEOUT_SECONDS=20
 ```
@@ -57,6 +58,7 @@ BORZO_READ_TIMEOUT_SECONDS=20
 `BORZO_API_AUTH_TOKEN` is sent only to Borzo in the `X-DV-Auth-Token` header.
 `BORZO_CALLBACK_TOKEN` is used only to validate the `X-DV-Signature` callback header.
 They must be different secrets and must never be committed to Git.
+`BORZO_CALLBACK_TOKEN_PREVIOUS` is empty; it is set only while the callback token is being rotated (`docs/SECRETS.md`).
 
 During the current build stage, use secret-backed Azure Container Apps values. Migrate both
 values to Azure Key Vault references after the adapter stabilizes.

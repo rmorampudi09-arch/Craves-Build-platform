@@ -52,6 +52,10 @@ The command sweeper (integration `DeliveryCommandSweeper`, `CRAVES_DELIVERY_COMM
 The status rank guard (integration `DeliveryStatusUpdateService`, `CRAVES_DELIVERY_STATUS_RANK_GUARD=enforce`) adds
 `COURIER_ENDED_DELIVERY`; see the same README, "Status rank guard".
 
+The callback status read-back (integration `DeliveryWebhookProcessor`, `CRAVES_DELIVERY_WEBHOOK_VERIFY_FETCH=enforce`)
+adds `COURIER_WEBHOOK_VERIFY_DISAGREED` and `COURIER_WEBHOOK_VERIFY_FAILED`; see the same README, "Callback status
+read-back". Neither is paged.
+
 The courier API call count (integration `IntegrationAlertMonitor`, `CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED`) adds
 `COURIER_API_USAGE_HIGH` (once per courier per day) and `COURIER_API_RATE_LIMITED`; see the same README, "Courier API
 usage".

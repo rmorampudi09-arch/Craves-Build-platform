@@ -23,6 +23,8 @@ public class DeliveryCommandProperties {
     private boolean courierCancelEnabled = false;
     /** Courier status rank guard (DeliveryStatusUpdateService): off (as today), shadow (logs what it would refuse) or enforce. */
     private String statusRankGuard = "off";
+    /** off | shadow | enforce: read a Pidge booking back before a final status from its callback is applied (README). */
+    private String webhookVerifyFetch = "off";
     /** Re-send due commands nobody is working on and cap the wait on couriers (DeliveryCommandSweeper); off keeps today's behaviour. */
     private boolean sweeperEnabled = false;
     /** How long a command must be due and untouched before the sweeper re-sends it. */
@@ -133,6 +135,9 @@ public class DeliveryCommandProperties {
         if (!java.util.Set.of("off", "shadow", "enforce").contains(statusRankGuard)) {
             throw new IllegalStateException("Delivery statusRankGuard must be off, shadow or enforce");
         }
+        if (!java.util.Set.of("off", "shadow", "enforce").contains(webhookVerifyFetch)) {
+            throw new IllegalStateException("Delivery webhookVerifyFetch must be off, shadow or enforce");
+        }
         if (sweeperMarginSeconds < 5 || sweeperMarginSeconds > 3600) {
             throw new IllegalStateException("Delivery sweeperMarginSeconds must be between 5 and 3600");
         }
@@ -239,6 +244,11 @@ public class DeliveryCommandProperties {
     /** Trimmed and lower-cased; unset or blank is off. */
     public void setStatusRankGuard(String statusRankGuard) {
         this.statusRankGuard = StringUtils.hasText(statusRankGuard) ? statusRankGuard.trim().toLowerCase(java.util.Locale.ROOT) : "off";
+    }
+    public String getWebhookVerifyFetch() { return webhookVerifyFetch; }
+    /** Trimmed and lower-cased; unset or blank is off. */
+    public void setWebhookVerifyFetch(String webhookVerifyFetch) {
+        this.webhookVerifyFetch = StringUtils.hasText(webhookVerifyFetch) ? webhookVerifyFetch.trim().toLowerCase(java.util.Locale.ROOT) : "off";
     }
     public boolean isWebhookFirstTrackingEnabled() { return webhookFirstTrackingEnabled; }
     public void setWebhookFirstTrackingEnabled(boolean webhookFirstTrackingEnabled) { this.webhookFirstTrackingEnabled = webhookFirstTrackingEnabled; }

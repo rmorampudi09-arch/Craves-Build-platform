@@ -68,10 +68,33 @@ public class DeliveryStatusUpdateService {
         this(normalizers, repository, outbox, properties, objectMapper, null);
     }
 
+    /** What a callback says, read from its payload alone. */
+    public ProviderStatusUpdate heard(WebhookWorkItem workItem) {
+        return normalizer(workItem.providerId()).normalize(workItem.rawPayload());
+    }
+
+    /** Whether a delivery job holds this courier booking. */
+    public boolean hasJob(ProviderStatusUpdate update) {
+        return repository.findJobByProviderOrder(update.providerId(), update.providerOrderId()).isPresent();
+    }
+
     @Transactional
     public ProcessingResult processWebhook(WebhookWorkItem workItem) {
+        return processWebhook(workItem, null);
+    }
+
+    /**
+     * readBack: the booking as the courier's API holds it, or null. When its status differs from the callback's, the
+     * read-back status is the one decided on and the result starts with VERIFY_FETCH_DISAGREED.
+     */
+    @Transactional
+    public ProcessingResult processWebhook(WebhookWorkItem workItem, ProviderDelivery readBack) {
         DeliveryWebhookNormalizer normalizer = normalizer(workItem.providerId());
-        ProviderStatusUpdate update = normalizer.normalize(workItem.rawPayload());
+        ProviderStatusUpdate heard = normalizer.normalize(workItem.rawPayload());
+        ProviderStatusUpdate update = readBack == null || readBack.status() == heard.status() ? heard
+            : new ProviderStatusUpdate(heard.providerId(), heard.providerOrderId(), heard.providerDeliveryId(), readBack.status(),
+                readBack.providerStatus(), heard.trackingUrl(), heard.observedAt(), heard.providerMetadata(), heard.courier());
+        String disagreed = update == heard ? "" : "VERIFY_FETCH_DISAGREED_";
         requireProviderMatch(workItem.providerId(), update.providerId());
 
         if ("borzo".equals(update.providerId()) && handoffs != null) {
@@ -150,13 +173,13 @@ public class DeliveryStatusUpdateService {
             update.providerOrderId(),
             update.providerDeliveryId(),
             update.status().name(),
-            decision.reason()
+            disagreed + decision.reason()
         );
         return new ProcessingResult(
             job.id(),
             decision.applied(),
             false,
-            decision.reason()
+            disagreed + decision.reason()
         );
     }
 

@@ -2,6 +2,9 @@ package in.craves.integration.delivery.status;
 
 import in.craves.integration.delivery.command.CourierStrayBookings;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderStatusUpdate;
 import in.craves.integration.delivery.status.DeliveryStatusUpdateService.UnmatchedDeliveryJobException;
 import in.craves.integration.delivery.status.DeliveryStatusRepository.WebhookWorkItem;
 import java.time.Instant;
@@ -40,6 +43,14 @@ public class DeliveryWebhookProcessor {
         this.strayBookings = strayBookings;
     }
 
+    private PidgeCallbackReadBack readBack;
+
+    /** Present only while CRAVES_DELIVERY_WEBHOOK_VERIFY_FETCH is shadow or enforce. */
+    @Autowired(required = false)
+    public void setReadBack(PidgeCallbackReadBack readBack) {
+        this.readBack = readBack;
+    }
+
     public DeliveryWebhookProcessor(DeliveryStatusRepository repository,
                                     DeliveryLeaseRecoveryRepository leaseRecovery,
                                     DeliveryStatusUpdateService statusService,
@@ -71,14 +82,101 @@ public class DeliveryWebhookProcessor {
             properties.getMaxWebhookAttempts()
         );
         for (WebhookWorkItem workItem : workItems) {
-            processOne(workItem);
+            if (readBack == null || !handedToReadBack(workItem)) {
+                processOne(workItem, null);
+            }
         }
     }
 
-    private void processOne(WebhookWorkItem workItem) {
+    /**
+     * A Pidge callback with a final status for a booking that is a delivery job goes to Pidge's own thread, where the
+     * booking is read from Pidge first. When that thread's queue is full the callback is due again at the next pass.
+     * False: handle it here, as without the read-back.
+     */
+    private boolean handedToReadBack(WebhookWorkItem workItem) {
+        if (!"pidge".equals(workItem.providerId())) {
+            return false;
+        }
+        ProviderStatusUpdate heard;
         try {
-            DeliveryStatusUpdateService.ProcessingResult result =
-                statusService.processWebhook(workItem);
+            heard = statusService.heard(workItem);
+            if (!isFinal(heard.status()) || !statusService.hasJob(heard)) {
+                return false;
+            }
+        } catch (RuntimeException unreadable) {
+            return false;
+        }
+        if (!readBack.submit(() -> {
+            try {
+                readBackThenProcess(workItem, heard);
+            } catch (RuntimeException failure) {
+                // The claim's lease returns the callback to a later pass.
+                log.error("Delivery webhook read-back pass failed inboxId={}", workItem.id(), failure);
+            }
+        })) {
+            repository.releaseWebhook(workItem.id());
+            log.warn("DELIVERY_WEBHOOK_VERIFY_FETCH result=QUEUE_FULL provider=pidge");
+        }
+        return true;
+    }
+
+    /** On Pidge's thread; no transaction is open while Pidge is read. */
+    private void readBackThenProcess(WebhookWorkItem workItem, ProviderStatusUpdate heard) {
+        boolean enforce = "enforce".equals(properties.getWebhookVerifyFetch());
+        ProviderDelivery read;
+        try {
+            read = readBack.read(heard.providerOrderId());
+            if (read == null || read.status() == null || read.status() == DeliveryStatus.UNKNOWN) {
+                throw new IllegalStateException("Pidge read-back gave no known status");
+            }
+        } catch (RuntimeException ex) {
+            if (enforce) {
+                readBackFailed(workItem, ex);
+            } else {
+                log.warn("DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result=FETCH_FAILED provider=pidge");
+                processOne(workItem, null);
+            }
+            return;
+        }
+        if (enforce) {
+            processOne(workItem, read);
+            return;
+        }
+        if (read.status() != heard.status()) {
+            log.warn("DELIVERY_WEBHOOK_VERIFY_FETCH mode=shadow result=DIFFERENT provider=pidge");
+        }
+        processOne(workItem, null);
+    }
+
+    /** Enforce: the callback's status is not applied; it is tried again, and after the last attempt it is dead-lettered. */
+    private void readBackFailed(WebhookWorkItem workItem, RuntimeException ex) {
+        try {
+            failed(workItem, new IllegalStateException("VERIFY_FETCH_FAILED " + safeMessage(ex), ex));
+            if (workItem.attemptCount() >= properties.getMaxWebhookAttempts()) {
+                log.error("CRAVES_ALERT alert=COURIER_WEBHOOK_VERIFY_FAILED provider=pidge inboxId={} attempts={}", workItem.id(),
+                    workItem.attemptCount());
+            }
+        } catch (RuntimeException failure) {
+            // The claim's lease returns the callback to a later pass.
+            log.error("Delivery webhook read-back failure could not be recorded inboxId={}", workItem.id(), failure);
+        }
+    }
+
+    private static boolean isFinal(DeliveryStatus status) {
+        return status == DeliveryStatus.DELIVERED || status == DeliveryStatus.CANCELLED || status == DeliveryStatus.FAILED
+            || status == DeliveryStatus.RETURNED;
+    }
+
+    /** read: the booking as the courier holds it (enforce), or null to apply the callback as it came. */
+    private void processOne(WebhookWorkItem workItem, ProviderDelivery read) {
+        try {
+            DeliveryStatusUpdateService.ProcessingResult result = read == null
+                ? statusService.processWebhook(workItem)
+                : statusService.processWebhook(workItem, read);
+            if (result.result() != null && result.result().startsWith("VERIFY_FETCH_DISAGREED")) {
+                log.error("CRAVES_ALERT alert=COURIER_WEBHOOK_VERIFY_DISAGREED provider={} inboxId={} jobId={} readBack={} result={}",
+                    workItem.providerId(), workItem.id(), result.deliveryJobId(), read.status(), result.result());
+            }
             log.info(
                 "Delivery webhook processed inboxId={} provider={} providerEventId={} deliveryJobId={} applied={} duplicate={} result={}",
                 workItem.id(),

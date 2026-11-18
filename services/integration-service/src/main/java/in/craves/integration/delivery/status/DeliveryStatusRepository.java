@@ -315,6 +315,17 @@ public class DeliveryStatusRepository {
             """, retrySeconds, inboxId, maxAgeMinutes) == 1;
     }
 
+    /** A claimed callback nobody could take now: due again at once, and the claim is not counted as an attempt. */
+    public void releaseWebhook(UUID inboxId) {
+        jdbc.update("""
+            UPDATE delivery_schema.delivery_webhook_inbox
+            SET processing_status = 'FAILED', next_attempt_at = now(),
+                attempt_count = GREATEST(0, attempt_count - 1),
+                processing_started_at = NULL, error_message = NULL
+            WHERE id = ? AND processing_status = 'PROCESSING'
+            """, inboxId);
+    }
+
     public void markWebhookDuplicate(UUID inboxId,
                                      String processingResult) {
         jdbc.update("""

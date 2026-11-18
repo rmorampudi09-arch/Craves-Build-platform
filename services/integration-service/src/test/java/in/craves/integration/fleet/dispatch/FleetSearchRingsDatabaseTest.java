@@ -160,6 +160,62 @@ class FleetSearchRingsDatabaseTest {
     }
 
     /**
+     * A decline never widens the ring. One ring, 1 km for 60 s; a rider 0.5 km away declines, another is free 3 km away.
+     * While the first may not be asked again yet, the look finds nobody: the order waits with its stage open, with the
+     * no-supply fast path off and on (an order that was offered is never "no supply"). The near rider is asked again, as
+     * a lone rider is today. As the stage reaches the ring's time the far rider is asked, and the look before it sets the
+     * next one (and the sweeper's stored time) at that moment, not a check later.
+     */
+    @Test
+    void aDeclineNeverWidensTheRingTheOrderWaitsTheRiderIsAskedAgainAndTheNextRingOpensOnTime() {
+        FleetDispatchFixtures.policyWithRings(fleet.db, 20, 300, 0, 1000, 60, 0, 0);
+        UUID near = rider(1, 0.0045);
+        UUID far = rider(2, 0.027);
+        dispatcher.setStageSweeper("on");
+
+        look();
+        assertThat(asked()).containsExactly(near);
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now()");
+        stageIs(22);
+        look();
+        assertThat(asked()).as("declined a moment ago: nobody to ask, and the rider 3 km away is not asked instead").containsExactly(near);
+        assertThat(stages()).as("fast path off: the order waits").containsExactly("CRAVES_FLEET:OPEN:");
+        dispatcher.setNoSupplyFastPath(true, 3);
+        look();
+        assertThat(asked()).containsExactly(near);
+        assertThat(stages()).as("fast path on: an order that was offered is never no supply").containsExactly("CRAVES_FLEET:OPEN:");
+
+        declinedAndTheStageIs(40);
+        look();
+        assertThat(asked()).as("asked again once their gap is over, as a lone rider is without rings").containsExactly(near, near);
+
+        fleet.db.update("UPDATE fleet_schema.trip_offer SET state = 'DECLINED', decided_at = now() WHERE state = 'ACTIVE'");
+        stageIs(57);
+        assertThatThrownBy(() -> dispatcher.run(command, OptionalLong::empty, true))
+            .isInstanceOfSatisfying(DeliveryProviderTemporarilyUnavailableException.class, waiting -> assertThat(fleet.db.queryForObject(
+                "SELECT abs(EXTRACT(EPOCH FROM CAST(? AS timestamptz) - (opened_at + INTERVAL '60 seconds'))) < 1 FROM fleet_schema.trip_stage",
+                Boolean.class, java.sql.Timestamp.from(waiting.policyDeadline()))).as("the next look is at the ring's time, 3 s away").isTrue());
+        assertThat(fleet.db.queryForObject("SELECT abs(EXTRACT(EPOCH FROM next_match_at - (opened_at + INTERVAL '60 seconds'))) < 1 "
+            + "FROM fleet_schema.trip_stage", Boolean.class)).as("and so is the sweeper's stored next look").isTrue();
+        assertThat(asked()).containsExactly(near, near);
+
+        stageIs(60);
+        look();
+        assertThat(asked()).as("at 60 s the whole radius: the rider 3 km away, not yet asked, hears").containsExactly(near, near, far);
+        assertThat(stages()).containsExactly("CRAVES_FLEET:OPEN:");
+    }
+
+    private void stageIs(int ageSeconds) {
+        fleet.db.update("UPDATE fleet_schema.trip_stage SET opened_at = now() - make_interval(secs => ?) WHERE provider = 'CRAVES_FLEET'",
+            ageSeconds);
+    }
+
+    private List<String> stages() {
+        return fleet.db.queryForList("SELECT provider || ':' || state || ':' || COALESCE(outcome, '') FROM fleet_schema.trip_stage "
+            + "ORDER BY opened_at", String.class);
+    }
+
+    /**
      * The no-supply fast path asks whether any rider is in the policy radius, never the ring: a rider on a break 3 km away
      * keeps the order's stage though the first ring is empty. Only with nobody in the radius does the courier come next.
      */

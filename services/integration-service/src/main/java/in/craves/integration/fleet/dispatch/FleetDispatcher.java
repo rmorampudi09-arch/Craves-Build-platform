@@ -339,13 +339,13 @@ public class FleetDispatcher implements FleetStage {
         }
         if (opened.offers().isEmpty()) {
             if (opened.waiting()) {
-                throw riderDeciding(opened.deadline(), policy, opened.tripId());
+                throw riderDeciding(opened.deadline(), policy, opened.tripId(), Instant.now());
             }
             return Optional.empty();
         }
         refreshEngine(opened.offers());
         opened.offers().forEach(offer -> Thread.ofVirtual().name("fleet-offer-push").start(() -> ring(offer)));
-        throw riderDeciding(opened.deadline(), policy, opened.tripId());
+        throw riderDeciding(opened.deadline(), policy, opened.tripId(), Instant.now()); // the stage opened with this look
     }
 
     @Override
@@ -374,14 +374,17 @@ public class FleetDispatcher implements FleetStage {
         if (!"CRAVES_FLEET".equals(trip.provider())) {
             return Optional.empty();
         }
-        Instant deadline = jdbc.query("SELECT deadline_at FROM fleet_schema.trip_stage WHERE trip_id = ? AND provider = 'CRAVES_FLEET' "
-            + "AND state = 'OPEN'", (row, n) -> row.getTimestamp("deadline_at").toInstant(), trip.id()).stream().findFirst().orElse(null);
+        // opened_at: for the next search-ring boundary (riderDeciding); read here so a ring policy costs no statement more.
+        Instant[] stage = jdbc.query("SELECT deadline_at, opened_at FROM fleet_schema.trip_stage WHERE trip_id = ? AND provider = 'CRAVES_FLEET' "
+            + "AND state = 'OPEN'", (row, n) -> new Instant[] {row.getTimestamp("deadline_at").toInstant(),
+                row.getTimestamp("opened_at").toInstant()}, trip.id()).stream().findFirst().orElse(null);
+        Instant deadline = stage == null ? null : stage[0];
         // An offer that never rang in time (heardOrYoung, while on) holds up no round: it stays open, and the next one goes.
         boolean anyOfferOpen = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE trip_id = ? "
             + "AND state = 'ACTIVE' AND expires_at > now()" + heardOrYoung + ")", Boolean.class, trip.id()));
         DispatchPolicy policy = policies.currentDispatchPolicy().orElse(null);
         if (deadline != null && Instant.now().isBefore(deadline) && anyOfferOpen) {
-            throw riderDeciding(deadline, policy, trip.id());
+            throw riderDeciding(deadline, policy, trip.id(), stage[1]);
         }
         if (deadline != null && Instant.now().isBefore(deadline) && policy != null && "live".equals(policy.mode())
             && (policy.offerRounds() > 1 || policy.wholeStage())) {
@@ -396,7 +399,7 @@ public class FleetDispatcher implements FleetStage {
                     LOGGER.info("FLEET_STAGE_CLOSED trip={} outcome=NO_SUPPLY next={}", trip.id(), borzoNext ? "BORZO" : "PIDGE");
                     return Optional.empty();
                 }
-                throw riderDeciding(deadline, policy, trip.id());
+                throw riderDeciding(deadline, policy, trip.id(), stage[1]);
             }
         }
         String outcome = deadline == null || !Instant.now().isBefore(deadline) ? "NO_ACCEPT" : "ALL_DECLINED_OR_EXPIRED";
@@ -421,7 +424,7 @@ public class FleetDispatcher implements FleetStage {
         // counts here, one that never rang too: it stays open until it expires.
         if (!open.isEmpty() && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM fleet_schema.trip_offer WHERE trip_id = ? "
             + "AND state = 'ACTIVE' AND expires_at > now())", Boolean.class, tripId))) {
-            throw riderDeciding(open.get(0), policy, tripId);
+            throw riderDeciding(open.get(0), policy, tripId, null);
         }
         return closeFleetStage(tripId, outcome, borzoNext, pidgeSeconds());
     }
@@ -1247,11 +1250,23 @@ public class FleetDispatcher implements FleetStage {
     /**
      * Riders are deciding on the trip's offers: look again at the stage deadline or the next check, whichever comes first,
      * and with unheardSeconds on (rounds only), when the trip's next offer turns unheard, so its next rider hears on time;
-     * with expiryWake on (rounds only), also when the trip's next offer runs out.
+     * with expiryWake on (rounds only), also when the trip's next offer runs out. Under a policy with search rings (rounds
+     * only; stageOpenedAt not null), also as the stage reaches its next ring boundary, so the wider ring's riders hear then,
+     * not up to a check later; the stage sweeper's stored next look is this same time (run).
      */
-    private DeliveryProviderTemporarilyUnavailableException riderDeciding(Instant deadline, DispatchPolicy policy, UUID tripId) {
+    private DeliveryProviderTemporarilyUnavailableException riderDeciding(Instant deadline, DispatchPolicy policy, UUID tripId,
+                                                                          Instant stageOpenedAt) {
         boolean rounds = policy != null && (policy.offerRounds() > 1 || policy.wholeStage());
-        Instant check = Instant.now().plus(rounds ? ROUND_CHECK_EVERY : CHECK_EVERY);
+        Instant now = Instant.now();
+        Instant check = now.plus(rounds ? ROUND_CHECK_EVERY : CHECK_EVERY);
+        if (rounds && stageOpenedAt != null) {
+            for (int seconds : policy.rings().boundarySeconds()) {
+                Instant boundary = stageOpenedAt.plusSeconds(seconds);
+                if (boundary.isAfter(now) && boundary.isBefore(check)) {
+                    check = boundary;
+                }
+            }
+        }
         if (unheardSeconds > 0 && rounds) {
             // Only offers not yet past it: one already unheard was just looked at, and waking for it again would spin.
             Timestamp unheard = jdbc.queryForObject("SELECT MIN(offered_at) + make_interval(secs => ?) FROM fleet_schema.trip_offer "

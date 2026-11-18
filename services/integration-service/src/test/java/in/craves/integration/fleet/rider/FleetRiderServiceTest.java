@@ -97,7 +97,6 @@ class FleetRiderServiceTest {
         assertThat(rings.radiusM(0, 1500, 500)).as("ops shrank the radius: no ring exceeds it").isEqualTo(1500);
         assertThat(rings.radiusM(150, 3000, 500)).isEqualTo(3000);
         assertThat(new SearchRings(0, 0, 3500, 200).radiusM(0, 5000, 500)).as("one ring only").isEqualTo(3500);
-        assertThat(new SearchRings(2000, 0, 0, 100).on()).as("a ring needs both its size and its time").isFalse();
 
         assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 0, 0, false, false, false, rings))).isEqualTo("The nearest free "
             + "rider hears first, one rider at a time. If nobody accepts, riders are asked again until the order's time with Craves riders "
@@ -105,6 +104,43 @@ class FleetRiderServiceTest {
             + "only riders within 3.5 km, then every rider in range. If no free rider is that near, riders farther away are asked at once. "
             + "Declining is free.");
         assertThat(FleetRiderService.ringsLine(SearchRings.NONE)).isEmpty();
+    }
+
+    /** Odd values: SearchRings alone decides which rings are in force, so dispatch and the line riders read agree. */
+    @Test
+    void aRingThatIsNotInForceNeitherNarrowsTheSearchNorIsTold() {
+        // A size without a time: the first ring is not in force; the second is, from the start.
+        SearchRings noFirstTime = new SearchRings(2000, 0, 3500, 200);
+        assertThat(noFirstTime.first()).isFalse();
+        assertThat(noFirstTime.second()).isTrue();
+        assertThat(noFirstTime.radiusM(0, 5000, 500)).isEqualTo(3500);
+        assertThat(noFirstTime.boundarySeconds()).containsExactly(200);
+        assertThat(FleetRiderService.ringsLine(noFirstTime)).isEqualTo(" Riders nearer the kitchen are asked first: until 200 seconds only "
+            + "riders within 3.5 km, then every rider in range. If no free rider is that near, riders farther away are asked at once.");
+        assertThat(new SearchRings(0, 100, 3500, 200).first()).as("a time without a size").isFalse();
+
+        // A second ring no later, or no wider, than the first is not in force: after the first comes the whole radius.
+        for (SearchRings oneRing : List.of(new SearchRings(2000, 100, 3500, 100), new SearchRings(2000, 100, 3500, 50),
+            new SearchRings(2000, 100, 2000, 200), new SearchRings(2000, 100, 1500, 200), new SearchRings(2000, 100, 3500, 0))) {
+            assertThat(oneRing.first()).as(oneRing.toString()).isTrue();
+            assertThat(oneRing.second()).as(oneRing.toString()).isFalse();
+            assertThat(oneRing.radiusM(0, 5000, 500)).as(oneRing.toString()).isEqualTo(2000);
+            assertThat(oneRing.radiusM(0, 5000, 2500)).as(oneRing + ": nobody in the first ring").isEqualTo(5000);
+            assertThat(oneRing.radiusM(150, 5000, 500)).as(oneRing + ": after the first ring's time").isEqualTo(5000);
+            assertThat(oneRing.boundarySeconds()).as(oneRing.toString()).containsExactly(100);
+            assertThat(FleetRiderService.ringsLine(oneRing)).as(oneRing.toString()).isEqualTo(" Riders nearer the kitchen are asked "
+                + "first: for the first 100 seconds only riders within 2 km, then every rider in range. If no free rider is that near, "
+                + "riders farther away are asked at once.");
+        }
+
+        // Neither in force: no rings at all.
+        for (SearchRings none : List.of(new SearchRings(2000, 0, 0, 100), new SearchRings(0, 100, 0, 200), new SearchRings(2000, 0, 3500, 0))) {
+            assertThat(none.on()).as(none.toString()).isFalse();
+            assertThat(none.radiusM(0, 5000, 500)).as(none.toString()).isEqualTo(5000);
+            assertThat(none.boundarySeconds()).as(none.toString()).isEmpty();
+            assertThat(FleetRiderService.ringsLine(none)).as(none.toString()).isEmpty();
+        }
+        assertThat(new SearchRings(2000, 100, 3500, 200).boundarySeconds()).containsExactly(100, 200);
     }
 
     /** Phase 4: how orders are offered is part of the terms, and a change to it is an upcoming change with its own line. */

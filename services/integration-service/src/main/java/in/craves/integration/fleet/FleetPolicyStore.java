@@ -556,20 +556,44 @@ public class FleetPolicyStore {
      * exceeds. A ring holding no free rider is passed over at once, so an order never waits for a ring nobody is in. All 0
      * (NONE, every version so far): the policy radius from the start, as before rings. Nothing about a rider decides it but
      * where they are now: no history, no score.
+     *
+     * <p>Which rings are in force is decided here alone (first, second), for dispatch and for the line riders read: a ring
+     * needs a size and a time above 0, and the second must be wider and later than the first when there is one. A ring that
+     * is not in force does nothing and is not told.
      */
     public record SearchRings(int ring1M, int ring1Seconds, int ring2M, int ring2Seconds) {
         public static final SearchRings NONE = new SearchRings(0, 0, 0, 0);
 
+        public boolean first() {
+            return ring1M > 0 && ring1Seconds > 0;
+        }
+
+        public boolean second() {
+            return ring2M > (first() ? ring1M : 0) && ring2Seconds > (first() ? ring1Seconds : 0);
+        }
+
         public boolean on() {
-            return ring1M > 0 && ring1Seconds > 0 || ring2M > 0 && ring2Seconds > 0;
+            return first() || second();
+        }
+
+        /** The stage ages at which the search widens, earliest first: the times of the rings in force. */
+        public List<Integer> boundarySeconds() {
+            List<Integer> seconds = new ArrayList<>();
+            if (first()) {
+                seconds.add(ring1Seconds);
+            }
+            if (second()) {
+                seconds.add(ring2Seconds);
+            }
+            return seconds;
         }
 
         /** The search radius for a stage this old; nearestM: how far the nearest free rider in the policy radius is. */
         public int radiusM(long stageAgeSeconds, int policyRadiusM, double nearestM) {
-            if (ring1M > 0 && stageAgeSeconds < ring1Seconds && nearestM <= ring1M) {
+            if (first() && stageAgeSeconds < ring1Seconds && nearestM <= ring1M) {
                 return Math.min(ring1M, policyRadiusM);
             }
-            if (ring2M > 0 && stageAgeSeconds < ring2Seconds && nearestM <= ring2M) {
+            if (second() && stageAgeSeconds < ring2Seconds && nearestM <= ring2M) {
                 return Math.min(ring2M, policyRadiusM);
             }
             return policyRadiusM;

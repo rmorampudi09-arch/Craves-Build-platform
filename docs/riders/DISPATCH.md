@@ -151,6 +151,9 @@ Built, not in use (research R22 item 3-3). **No policy version has rings, so not
 - Then every rider in the policy radius, as today. No ring reaches beyond the policy radius.
 - **A ring nobody free is in is passed over at once.** If no rider who could hear of the order is inside the ring at that look, the next ring is used straight away, so an order never waits for a ring that is empty.
 
+- **A decline never widens a ring.** A rider just asked still counts as in their ring. While they may not be asked again yet (the offer's time and one look more, as today), the order waits with its stage open; it is not offered farther out and is not sent to a courier. Then they are asked again. Riders farther out hear when the ring's time comes: the look before it sets the next look at that moment.
+- **Which rings are in force** is decided in one place (`SearchRings.first`, `second`), for dispatch and for the line riders read: a ring needs a size and a time above 0, and the second must be wider and later than the first when there is one. A ring that is not in force does nothing and is not told. A ring as wide as the policy radius or wider narrows nothing, though the line would still name it: don't publish one.
+
 The values proposed for the first version with rings: **2 km until 100 s, 3.5 km until 200 s, then 5 km.** The sizes are R22's; the times are a proposal (a third of the 300 s each, five offers a ring) and are the owner's to set.
 
 **An example.** Rings as proposed, one rider at a time. Free riders: Asha 0.5 km from the kitchen, Bala 1.1 km, Chitra 3 km, Dev 4.4 km.

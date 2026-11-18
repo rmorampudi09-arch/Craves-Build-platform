@@ -522,8 +522,8 @@ public class FleetRiderService {
         if (!rings.on()) {
             return "";
         }
-        boolean first = rings.ring1M() > 0 && rings.ring1Seconds() > 0;
-        boolean second = rings.ring2M() > 0 && rings.ring2Seconds() > (first ? rings.ring1Seconds() : 0);
+        boolean first = rings.first();
+        boolean second = rings.second();
         return " Riders nearer the kitchen are asked first:"
             + (first ? " for the first " + rings.ring1Seconds() + " seconds only riders within " + km(rings.ring1M()) + " km," : "")
             + (second ? (first ? " then until " : " until ") + rings.ring2Seconds() + " seconds only riders within " + km(rings.ring2M())

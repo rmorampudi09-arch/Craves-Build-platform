@@ -80,7 +80,7 @@ Press **Stop dispatch now** in the console (Rider pilot setup → Dispatch) if a
 
 ## Where the numbers come from
 
-- `trip_offer.rang_at` and `rang_channel`: the phone's offer receipt on its next `/locations` call (`BACKEND.md`, "Offer receipts").
+- `trip_offer.rang_at` and `rang_channel`: the phone's offer receipt on its next `/locations` call, or at once with `CRAVES_FLEET_RING_RECEIPT_ENABLED` (`BACKEND.md`, "Offer receipts").
 - `trip_offer.pushed_at` and `push_result`: stored by `FleetDispatcher` after each push.
 - `rider_shift.last_seen_at`, `max_silence_seconds` and `silences_over_60s`: every `/locations` call, with or without a fix.
 - `rider_shift.health`: the phone's report about once a minute (battery, charging, power saver, whether an offer can ring, drain and unplugged minutes since the service started, queued steps, the last exit reason).

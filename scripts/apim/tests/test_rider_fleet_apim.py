@@ -40,9 +40,10 @@ class RouteTableTest(unittest.TestCase):
         self.assertEqual(len({r[1] for r in routes}), len(routes), 'operation ids are unique')
         self.assertTrue(all(len(r[1]) <= 80 for r in routes))
 
-    def test_the_shift_credential_route_policies_are_used_only_for_locations_devices_and_trip_steps(self):
+    def test_the_shift_credential_route_policies_are_used_only_for_locations_devices_ring_receipts_and_trip_steps(self):
         kinds = {(r[2], r[3]): r[4] for r in table('route') if r[0] == 'rider'}
-        self.assertEqual({key for key, kind in kinds.items() if kind == 'location'}, {('POST', '/locations'), ('POST', '/devices')})
+        self.assertEqual({key for key, kind in kinds.items() if kind == 'location'}, {('POST', '/locations'), ('POST', '/devices'),
+                                                                                 ('POST', '/offers/{offerId}/rang')})
         self.assertEqual({key for key, kind in kinds.items() if kind == 'trip'}, {('POST', '/trips/{tripId}/{action}')})
         for (method, path), op in contract('rider-v1.yaml').items():
             multipart = 'multipart/form-data' in op.get('requestBody', {}).get('content', {})

@@ -671,6 +671,7 @@ class RiderOnlineService : Service() {
     private const val MAX_SHIFT_MS = 12 * 60 * 60_000L
     private val ENDED_STEPS = setOf("DELIVERED", "FAILED", "CANCELLED")
     private val JSON = "application/json; charset=utf-8".toMediaType()
+    private val OFFER_ID = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 
     private val http =
       OkHttpClient.Builder()
@@ -736,6 +737,39 @@ class RiderOnlineService : Service() {
 
           override fun onResponse(call: Call, response: Response) {
             response.use { if (!it.isSuccessful) Log.w(TAG, "new push token refused: ${it.code}") }
+          }
+        },
+      )
+    }
+
+    /**
+     * Tells the server an offer reached this phone as it rings (POST /offers/{offerId}/rang with the shift credential;
+     * R22 22), on OkHttp's own thread, when a shift is saved. Every failure is silent and never ends the shift: a server
+     * without the route answers 401 or 404, and the receipt then goes with the next /locations call as before.
+     */
+    fun sendRang(context: Context, offerId: String, channel: String) {
+      // The id goes into the path: only a UUID, as the server's offers have.
+      if (!OFFER_ID.matches(offerId)) return
+      val shift = loadShift(context) ?: return
+      // ageMs 0: this runs as the offer arrives.
+      val body = JSONObject().put("channel", channel).put("ageMs", 0).toString()
+      val request =
+        Request.Builder()
+          .url("${shift.apiBaseUrl}/api/v1/rider/offers/$offerId/rang")
+          .header(CREDENTIAL_HEADER, shift.credential)
+          .post(body.toRequestBody(JSON))
+          .build()
+      http.newCall(request).enqueue(
+        object : Callback {
+          override fun onFailure(call: Call, e: IOException) {
+            Log.i(TAG, "ring receipt for $offerId not sent; it goes with the next upload")
+          }
+
+          override fun onResponse(call: Call, response: Response) {
+            response.use {
+              if (it.isSuccessful) RiderOffers.receiptsSent(listOf(offerId))
+              else Log.i(TAG, "ring receipt for $offerId refused: ${it.code}; it goes with the next upload")
+            }
           }
         },
       )

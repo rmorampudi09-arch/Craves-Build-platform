@@ -29,6 +29,7 @@ import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus
 import in.craves.integration.delivery.DeliveryIntelligenceModels.Momentum;
 import in.craves.integration.delivery.DeliveryIntelligenceService;
 import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
+import in.craves.integration.delivery.command.CourierBreaker;
 import in.craves.integration.delivery.command.CourierStrayBookings;
 import in.craves.integration.delivery.command.DeliveryCommandCompletionService;
 import in.craves.integration.delivery.command.DeliveryCommandCompletionService.StaleCommandLeaseException;
@@ -46,6 +47,7 @@ import in.craves.integration.delivery.command.DeliveryJobRepository;
 import in.craves.integration.delivery.command.DeliveryOutboxRepository;
 import in.craves.integration.delivery.command.DeliveryProviderCatalogRepository;
 import in.craves.integration.delivery.command.DeliveryProviderRouter;
+import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryCreateReconciliationPendingException;
 import in.craves.integration.delivery.command.DeliveryProviderRouter.DeliveryRoutingException;
 import in.craves.integration.delivery.command.DeliveryServiceBusPublisher;
 import in.craves.integration.delivery.command.ProviderCreateAttemptRepository;
@@ -100,6 +102,7 @@ class CourierBookingJournalDatabaseTest {
     final UUID orderId = UUID.randomUUID();
     final UUID chefSubOrderId = UUID.randomUUID();
     MockRestServiceServer borzo;
+    BorzoApiClient borzoClient;
     ProviderCreateAttemptRepository journal;
     DeliveryCommandRepository commands;
     DeliveryProviderRouter router;
@@ -119,7 +122,7 @@ class CourierBookingJournalDatabaseTest {
         borzoProperties.setAuthToken("sandbox-token");
         RestClient.Builder http = RestClient.builder();
         borzo = MockRestServiceServer.bindTo(http).ignoreExpectOrder(true).build();
-        BorzoApiClient borzoClient = new BorzoApiClient(borzoProperties, json, new BorzoStatusMapper(), http.build());
+        borzoClient = new BorzoApiClient(borzoProperties, json, new BorzoStatusMapper(), http.build());
         borzoClient.setCommandProperties(properties);
 
         journal = new ProviderCreateAttemptRepository(database.db, properties);
@@ -488,6 +491,48 @@ class CourierBookingJournalDatabaseTest {
         assertThat(router.anotherCourierBookable(other, "pidge")).isFalse();
         assertThat(router.anotherCourierBookable(other, "borzo")).isFalse();
         assertThat(router.anotherCourierBookable(chefSubOrderId, "borzo")).as("Pidge now holds this order's booking").isFalse();
+    }
+
+    /** The shared breaker (CRAVES_COURIER_BREAKER_ENABLED), each router with its own CourierBreaker standing for one replica. */
+    @Test
+    void threeBorzoBookingsAnsweredHttp500OnDifferentReplicasOpenTheBreakerOnEveryReplicaAndTheNextOrdersGoToPidge() {
+        borzo.expect(ExpectedCount.times(3), requestTo(BORZO + "/calculate-order")).andRespond(withSuccess(QUOTE, MediaType.APPLICATION_JSON));
+        borzo.expect(ExpectedCount.times(3), requestTo(BORZO + "/create-order")).andRespond(withServerError());
+        DeliveryProviderRouter a = replica();
+        DeliveryProviderRouter b = replica();
+
+        for (DeliveryProviderRouter replica : List.of(a, b, a)) {
+            assertThatThrownBy(() -> replica.route(order(), Instant.now())).isInstanceOf(DeliveryCreateReconciliationPendingException.class);
+        }
+
+        // Borzo's window is open for each of these orders, and Borzo is asked for nothing more.
+        for (DeliveryProviderRouter replica : List.of(a, b, replica())) {
+            RoutingResult booked = replica.route(order(), Instant.now());
+            assertThat(booked.providerId()).isEqualTo("pidge");
+            assertThat(booked.quoteAudit()).anySatisfy(audit -> {
+                assertThat(audit.providerId()).isEqualTo("borzo");
+                assertThat(audit.error()).isEqualTo("Courier breaker is open");
+            });
+        }
+        borzo.verify();
+        assertThat(database.db.queryForObject("SELECT booking_failures FROM delivery_schema.provider_breaker WHERE provider_id = 'borzo' "
+            + "AND opened_at IS NOT NULL", Integer.class)).isEqualTo(3);
+        assertThat(database.db.queryForObject("SELECT count(*) FROM delivery_schema.provider_breaker WHERE provider_id = 'pidge'", Integer.class))
+            .as("a courier that has not failed has no row").isZero();
+    }
+
+    private DeliveryProviderRouter replica() {
+        DeliveryProviderRouter replica = new DeliveryProviderRouter(List.of(borzoClient, pidge), catalog, intelligence, assignments, properties,
+            quotes, Clock.systemUTC(), null);
+        replica.setJournal(journal);
+        replica.setCourierBreaker(new CourierBreaker(database.db, 3, 5, 30));
+        return replica;
+    }
+
+    private DeliveryCommandMessage order() {
+        UUID other = UUID.randomUUID();
+        return new DeliveryCommandMessage(UUID.randomUUID(), UUID.randomUUID(), orderId, orderId, other, message.readyAt(),
+            message.dispatchAt(), other.toString(), 4.6, "Madhapur", 8, 4, message.deliveryRequest());
     }
 
     /** R23's kill test: the courier answered and the pass died before it recorded the booking. */

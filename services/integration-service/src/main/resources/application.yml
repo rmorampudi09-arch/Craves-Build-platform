@@ -199,6 +199,13 @@ craves:
     failure-threshold: ${CRAVES_PROVIDER_RESILIENCE_FAILURE_THRESHOLD:5}
     open-duration: ${CRAVES_PROVIDER_RESILIENCE_OPEN_DURATION:30s}
     max-concurrent-calls: ${CRAVES_PROVIDER_RESILIENCE_MAX_CONCURRENT_CALLS:8}
+  # Courier breaker shared by every replica (docs/delivery-orchestration/README.md, "Shared courier breaker"): off keeps
+  # today's behaviour. Acts only with CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED on.
+  courier-breaker:
+    enabled: ${CRAVES_COURIER_BREAKER_ENABLED:false}
+    booking-failures: ${CRAVES_COURIER_BREAKER_BOOKING_FAILURES:3}
+    quote-failures: ${CRAVES_COURIER_BREAKER_QUOTE_FAILURES:5}
+    half-open-seconds: ${CRAVES_COURIER_BREAKER_HALF_OPEN_SECONDS:30}
   delivery-command:
     enabled: ${CRAVES_DELIVERY_COMMAND_ENABLED:false}
     reconciliation-enabled: ${CRAVES_DELIVERY_RECONCILIATION_ENABLED:false}

@@ -21,10 +21,16 @@ public final class FleetDatabase {
     public final DataSourceTransactionManager transactions;
 
     public FleetDatabase() {
+        this("chef_ledger_test");
+    }
+
+    /** database: chef_ledger_test, or one a test created on the same disposable server (and drops after). */
+    public FleetDatabase(String database) {
         String url = System.getenv("LEDGER_TEST_JDBC_URL");
         assertNotNull(url);
         assertTrue(url.matches("jdbc:postgresql://localhost:[0-9]+/chef_ledger_test"));
         assertEquals("true", System.getenv("CRAVES_DISPOSABLE_TEST_DATABASE"));
+        url = url.substring(0, url.lastIndexOf('/') + 1) + database;
         dataSource = new DriverManagerDataSource(url, System.getenv("LEDGER_TEST_DB_USER"), System.getenv("LEDGER_TEST_DB_PASSWORD"));
         db = new JdbcTemplate(dataSource);
         transactions = new DataSourceTransactionManager(dataSource);

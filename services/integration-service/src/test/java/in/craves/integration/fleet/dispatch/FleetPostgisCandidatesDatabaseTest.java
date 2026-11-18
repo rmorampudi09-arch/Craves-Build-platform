@@ -34,6 +34,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -59,7 +60,10 @@ class FleetPostgisCandidatesDatabaseTest {
     /** Great-circle metres a degree of latitude, as RoadDistanceClient.straightLineMetres counts them. */
     static final double METRES_A_DEGREE = Math.toRadians(1) * 6_371_000;
     static final String SHADOW_LINE = "FLEET_POSTGIS_CANDIDATES mode=shadow today=\\d+ postgis=\\d+ missing=0 extra=0 sameOrder=true "
-        + "todayMicros=\\d+ postgisMicros=\\d+";
+        + "todayFirst=(true|false) todayMicros=\\d+ postgisMicros=\\d+";
+    static final String ON_READY = "FLEET_POSTGIS_CANDIDATES mode=on index=rider_position_latest_geog ready";
+    static final String ON_LOST = "FLEET_POSTGIS_CANDIDATES mode=on unavailable, running as off: no valid index "
+        + "rider_position_latest_geog; another start-up is building it";
 
     final FleetDatabase fleet = new FleetDatabase();
     final ObjectMapper json = JsonMapper.builder().findAndAddModules().build();
@@ -190,6 +194,8 @@ class FleetPostgisCandidatesDatabaseTest {
         assertThat(lines.remove(0)).isEqualTo("FLEET_POSTGIS_CANDIDATES mode=shadow index=rider_position_latest_geog ready");
         // Counts and times only: no rider, no order.
         assertThat(List.copyOf(lines)).isNotEmpty().allSatisfy(line -> assertThat(line).matches(SHADOW_LINE));
+        // Which statement runs first alternates, so neither time always has the pages the other already read.
+        assertThat(List.copyOf(lines)).anyMatch(line -> line.contains("todayFirst=true")).anyMatch(line -> line.contains("todayFirst=false"));
     }
 
     /** The three looks FleetDispatchStatementsDatabaseTest counts (12, 4, 17), with twelve riders in the band. */
@@ -230,21 +236,29 @@ class FleetPostgisCandidatesDatabaseTest {
 
     /**
      * No PostGIS and no right to create it, as on a server where it is not allow-listed: start-up carries on, as off. The
-     * service's role owns the tables (a member of the owner) but is not a superuser.
+     * service's role owns the tables (a member of the owner) but is not a superuser. In a database of its own, made from
+     * template0 (no PostGIS) and dropped after, so the shared test database keeps PostGIS whatever happens here.
      */
     @Test
     void withoutPostgisItStartsRunsAsOffAndSaysSoOnce() {
-        variedRiders();
-        List<Candidate> today = dispatcher("off", "off", true, false)
-            .nearbyRiders(KITCHEN_LAT, KITCHEN_LNG, 5000, -1, 130, null, null, Set.of(), null);
-        assertThat(today).hasSizeGreaterThan(10);
+        String database = "craves_postgis_absent_test";
         String owner = fleet.db.queryForObject("SELECT current_user", String.class);
-        fleet.db.execute("DROP EXTENSION postgis CASCADE");
+        fleet.db.execute("DROP DATABASE IF EXISTS " + database + " WITH (FORCE)");
+        fleet.db.execute("CREATE DATABASE " + database + " TEMPLATE template0");
         fleet.db.execute("DROP ROLE IF EXISTS craves_test_no_ddl");
         fleet.db.execute("CREATE ROLE craves_test_no_ddl");
         fleet.db.execute("GRANT \"" + owner + "\" TO craves_test_no_ddl");
         try {
-            JdbcTemplate service = new JdbcTemplate(new DelegatingDataSource(counted) {
+            FleetDatabase bare = new FleetDatabase(database);
+            Random random = new Random(32);
+            for (int i = 0; i < 20; i++) {
+                FleetDispatchFixtures.riderOnShift(bare, phone(), KITCHEN_LAT + (random.nextDouble() - 0.5) * 0.08,
+                    KITCHEN_LNG + (random.nextDouble() - 0.5) * 0.08, 5, false);
+            }
+            List<Candidate> today = dispatcher(bare.db, "off", "off", true, false)
+                .nearbyRiders(KITCHEN_LAT, KITCHEN_LNG, 5000, -1, 130, null, null, Set.of(), null);
+            assertThat(today).hasSizeGreaterThan(5);
+            JdbcTemplate service = new JdbcTemplate(new DelegatingDataSource(bare.dataSource) {
                 @Override
                 public Connection getConnection() throws SQLException {
                     Connection connection = super.getConnection();
@@ -258,15 +272,17 @@ class FleetPostgisCandidatesDatabaseTest {
             assertThat(List.copyOf(lines)).hasSize(1).first().asString()
                 .startsWith("FLEET_POSTGIS_CANDIDATES mode=on unavailable, running as off: no valid index rider_position_latest_geog; "
                     + "ERROR: permission denied to create extension \"postgis\"");
-            assertThat(fleet.db.queryForObject("SELECT count(*) FROM pg_extension WHERE extname = 'postgis'", Integer.class)).isZero();
-            assertThat(indexValid()).isNull();
+            assertThat(bare.db.queryForObject("SELECT count(*) FROM pg_extension WHERE extname = 'postgis'", Integer.class)).isZero();
+            assertThat(bare.db.queryForObject("SELECT to_regclass('fleet_schema." + FleetDispatcher.POSITION_GEOG_INDEX + "') IS NULL",
+                Boolean.class)).isTrue();
             // The statement PostGIS is not in: with the other, this would fail here.
             assertThat(on.nearbyRiders(KITCHEN_LAT, KITCHEN_LNG, 5000, -1, 130, null, null, Set.of(), null)).containsExactlyElementsOf(today);
             assertThat(List.copyOf(lines)).hasSize(1);
         } finally {
+            fleet.db.execute("DROP DATABASE IF EXISTS " + database + " WITH (FORCE)");
             fleet.db.execute("DROP ROLE craves_test_no_ddl");
-            fleet.db.execute("CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public");
         }
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM pg_extension WHERE extname = 'postgis'", Integer.class)).isOne();
     }
 
     /**
@@ -296,8 +312,9 @@ class FleetPostgisCandidatesDatabaseTest {
                     + other + "'")).isOne();
             }
             assertThat(fleet.db.queryForObject(waiting, Integer.class)).as("written while the build waited").isOne();
-            started = starting.get(30, TimeUnit.SECONDS);
-            assertThat(Duration.ofNanos(System.nanoTime() - begun)).isBetween(Duration.ofMillis(4900), Duration.ofSeconds(15));
+            started = starting.get(90, TimeUnit.SECONDS);
+            // At least the 5 s lock timeout, and well under the 60 s statement timeout (the line says which one ended it).
+            assertThat(Duration.ofNanos(System.nanoTime() - begun)).isBetween(Duration.ofMillis(4900), Duration.ofSeconds(55));
             writer.rollback();
         }
         assertThat(List.copyOf(lines)).hasSize(1).first().asString().isEqualTo("FLEET_POSTGIS_CANDIDATES mode=on unavailable, running "
@@ -305,6 +322,17 @@ class FleetPostgisCandidatesDatabaseTest {
         assertThat(indexValid()).as("left by the failed build").isFalse();
         assertThat(started.nearbyRiders(KITCHEN_LAT, KITCHEN_LNG, 5000, -1, 130, null, null, Set.of(), null)).hasSize(2);
         assertThat(List.copyOf(lines)).as("off: no shadow line").hasSize(1);
+        // A start-up while another holds the build lock does no DDL: it neither drops nor builds, and runs as off.
+        long invalid = indexOid();
+        try (Connection replica = fleet.dataSource.getConnection(); var building = replica.createStatement();
+             var locked = building.executeQuery("SELECT pg_try_advisory_lock(" + FleetDispatcher.POSITION_GEOG_LOCK + ")")) {
+            assertThat(locked.next() && locked.getBoolean(1)).isTrue();
+            lines.clear();
+            dispatcher("on", "off", false, false);
+            assertThat(List.copyOf(lines)).containsExactly(ON_LOST);
+            assertThat(indexOid()).isEqualTo(invalid);
+            assertThat(indexValid()).isFalse();
+        }
         lines.clear();
         dispatcher("shadow", "off", false, false);
         assertThat(List.copyOf(lines)).containsExactly("FLEET_POSTGIS_CANDIDATES mode=shadow index=rider_position_latest_geog ready");
@@ -312,6 +340,71 @@ class FleetPostgisCandidatesDatabaseTest {
         lines.clear();
         dispatcher("on", "off", false, false);
         assertThat(List.copyOf(lines)).containsExactly("FLEET_POSTGIS_CANDIDATES mode=on index=rider_position_latest_geog ready");
+    }
+
+    /**
+     * A build somebody else is running (the owner by hand: no build lock) is never dropped. It waits on a held position
+     * write; the start-up sees it in pg_stat_progress_create_index, leaves it, cannot build its own and runs as off.
+     */
+    @Test
+    void aBuildInProgressIsNotDroppedAndTheStartRunsAsOff() throws Exception {
+        UUID held = rider(KITCHEN_LAT + 0.005, KITCHEN_LNG, 5);
+        String waiting = "SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'CREATE INDEX CONCURRENTLY%' AND wait_event_type = 'Lock'";
+        try (Connection writer = fleet.dataSource.getConnection(); var write = writer.createStatement();
+             Connection owner = fleet.dataSource.getConnection(); var byHand = owner.createStatement()) {
+            writer.setAutoCommit(false);
+            write.executeUpdate("UPDATE fleet_schema.rider_position_latest SET recorded_at = now() WHERE rider_id = '" + held + "'");
+            CompletableFuture<Boolean> build = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return byHand.execute("CREATE INDEX CONCURRENTLY " + FleetDispatcher.POSITION_GEOG_INDEX + " ON fleet_schema."
+                        + "rider_position_latest USING gist ((public.ST_SetSRID(public.ST_MakePoint(lng, lat), 4326)::public.geography))");
+                } catch (SQLException failed) {
+                    throw new IllegalStateException(failed);
+                }
+            });
+            while (fleet.db.queryForObject(waiting, Integer.class) == 0) {
+                assertThat(build).isNotDone();
+                Thread.sleep(20);
+            }
+            long building = indexOid();
+            dispatcher("on", "off", false, false);
+            assertThat(List.copyOf(lines)).hasSize(1).first().asString()
+                .startsWith("FLEET_POSTGIS_CANDIDATES mode=on unavailable, running as off: no valid index rider_position_latest_geog; ERROR: ");
+            assertThat(indexOid()).as("not dropped").isEqualTo(building);
+            assertThat(build).isNotDone();
+            writer.rollback();
+            build.get(60, TimeUnit.SECONDS);
+        }
+        assertThat(indexValid()).isTrue();
+        lines.clear();
+        dispatcher("on", "off", false, false);
+        assertThat(List.copyOf(lines)).containsExactly(ON_READY);
+    }
+
+    /** Replicas starting together: one builds; each other one finds it built or runs as off; one valid index after. */
+    @Test
+    void startUpsTogetherBuildOneIndexAndDropNothing() {
+        variedRiders();
+        CountDownLatch go = new CountDownLatch(1);
+        List<CompletableFuture<FleetDispatcher>> starts = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            starts.add(CompletableFuture.supplyAsync(() -> {
+                try {
+                    go.await();
+                } catch (InterruptedException interrupted) {
+                    throw new IllegalStateException(interrupted);
+                }
+                return dispatcher("on", "off", false, false);
+            }));
+        }
+        go.countDown();
+        starts.forEach(CompletableFuture::join);
+        assertThat(List.copyOf(lines)).hasSize(4).contains(ON_READY).allMatch(line -> line.equals(ON_READY) || line.equals(ON_LOST));
+        assertThat(indexValid()).isTrue();
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM pg_indexes WHERE schemaname = 'fleet_schema' AND tablename = "
+            + "'rider_position_latest' AND indexname LIKE 'rider_position_latest_geog%'", Integer.class)).isOne();
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'", Integer.class))
+            .as("every start-up let the build lock go").isZero();
     }
 
     /** PostGIS goes away under a running service: each look falls back to today's statement inside the same transaction. */
@@ -455,6 +548,10 @@ class FleetPostgisCandidatesDatabaseTest {
     private Boolean indexValid() {
         return fleet.db.query("SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.oid = "
             + "to_regclass('fleet_schema." + FleetDispatcher.POSITION_GEOG_INDEX + "')", rows -> rows.next() ? rows.getBoolean(1) : null);
+    }
+
+    private long indexOid() {
+        return fleet.db.queryForObject("SELECT to_regclass('fleet_schema." + FleetDispatcher.POSITION_GEOG_INDEX + "')::oid", Long.class);
     }
 
     private <T> T rolledBack(Supplier<T> work) {

@@ -29,6 +29,7 @@ import in.craves.integration.fleet.trip.FleetTripModels;
 import in.craves.integration.fleet.trip.FleetTripModels.Offer;
 import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
@@ -95,6 +96,8 @@ public class FleetDispatcher implements FleetStage {
     private static final String GPS_FRESH = "p.recorded_at > now() - make_interval(secs => " + GPS_RULE_FIX_SECONDS + ")";
     private static final String GPS_ACCURATE = "p.accuracy_m <= " + GPS_RULE_ACCURACY_M;
     static final String POSITION_GEOG_INDEX = "rider_position_latest_geog";
+    /** The session advisory lock a start-up holds while it builds POSITION_GEOG_INDEX. */
+    static final String POSITION_GEOG_LOCK = "hashtextextended('fleet_schema." + POSITION_GEOG_INDEX + "', 0)";
     /** A position as PostGIS geography; %s is the row's alias with its dot, or nothing in the index. The two must match. */
     private static final String GEOG = "public.ST_SetSRID(public.ST_MakePoint(%slng, %<slat), 4326)::public.geography";
     /**
@@ -204,6 +207,8 @@ public class FleetDispatcher implements FleetStage {
     private String postgisCandidates = "off";
     /** A savepoint inside the look's transaction: a PostGIS statement that fails must not end it. */
     private final TransactionTemplate savepoint;
+    /** shadow: the candidate queries so far, to alternate which statement runs first. */
+    private final AtomicLong shadowLooks = new AtomicLong();
     private final AtomicLong noRateCardLoggedAt = new AtomicLong();
     /** Phase 5, the fleet engine (craves.fleet.engine.*): the feed while shadow or live, the client while live; else null. */
     private FleetEngineFeed engineFeed;
@@ -298,36 +303,54 @@ public class FleetDispatcher implements FleetStage {
     private String positionIndexMissing() {
         String why = "no valid index " + POSITION_GEOG_INDEX;
         try {
-            Boolean valid = positionIndexValid();
-            if (Boolean.TRUE.equals(valid)) {
+            if (Boolean.TRUE.equals(positionIndexValid())) {
                 return null;
             }
-            List<String> ddl = new ArrayList<>(List.of("CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public"));
-            if (valid != null) {
-                // A build that failed (here or on another replica) leaves an invalid index that IF NOT EXISTS would keep.
-                ddl.add("DROP INDEX CONCURRENTLY IF EXISTS fleet_schema." + POSITION_GEOG_INDEX);
-            }
-            ddl.add("CREATE INDEX CONCURRENTLY IF NOT EXISTS " + POSITION_GEOG_INDEX
-                + " ON fleet_schema.rider_position_latest USING gist ((" + GEOG.formatted("") + "))");
             // A connection of its own, outside any transaction: CONCURRENTLY cannot run inside one.
             try (Connection connection = jdbc.getDataSource().getConnection(); Statement statement = connection.createStatement()) {
                 connection.setAutoCommit(true);
-                statement.execute("SET lock_timeout = '5s'");
-                try {
-                    for (String sql : ddl) {
-                        try {
-                            statement.execute(sql);
-                        } catch (SQLException failed) {
-                            why += "; " + String.valueOf(failed.getMessage()).lines().findFirst().orElse("");
+                // One start-up at a time builds (replicas starting together); another does no DDL and reads the result.
+                if (!answer(statement, "SELECT pg_try_advisory_lock(" + POSITION_GEOG_LOCK + ")")) {
+                    why += "; another start-up is building it";
+                } else {
+                    try {
+                        statement.execute("SET lock_timeout = '5s'");
+                        statement.execute("SET statement_timeout = '60s'");
+                        why = ddl(statement, why, "CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public");
+                        // A build that failed leaves an invalid index that IF NOT EXISTS would keep; never drop one being built
+                        // (one by another role may not show here: then the drop waits for its lock and gives up after 5 s).
+                        if (Boolean.FALSE.equals(positionIndexValid()) && !answer(statement, "SELECT EXISTS (SELECT 1 FROM "
+                            + "pg_stat_progress_create_index WHERE relid = 'fleet_schema.rider_position_latest'::regclass)")) {
+                            why = ddl(statement, why, "DROP INDEX CONCURRENTLY IF EXISTS fleet_schema." + POSITION_GEOG_INDEX);
                         }
+                        why = ddl(statement, why, "CREATE INDEX CONCURRENTLY IF NOT EXISTS " + POSITION_GEOG_INDEX
+                            + " ON fleet_schema.rider_position_latest USING gist ((" + GEOG.formatted("") + "))");
+                    } finally {
+                        statement.execute("SELECT pg_advisory_unlock(" + POSITION_GEOG_LOCK + ")");
+                        statement.execute("RESET lock_timeout");
+                        statement.execute("RESET statement_timeout");
                     }
-                } finally {
-                    statement.execute("RESET lock_timeout");
                 }
             }
             return Boolean.TRUE.equals(positionIndexValid()) ? null : why;
         } catch (RuntimeException | SQLException failed) {
             return why + "; " + failed.getClass().getSimpleName();
+        }
+    }
+
+    private static boolean answer(Statement statement, String query) throws SQLException {
+        try (ResultSet row = statement.executeQuery(query)) {
+            return row.next() && row.getBoolean(1);
+        }
+    }
+
+    /** Runs sql; a failure adds its first line to why. */
+    private static String ddl(Statement statement, String why, String sql) {
+        try {
+            statement.execute(sql);
+            return why;
+        } catch (SQLException failed) {
+            return why + "; " + String.valueOf(failed.getMessage()).lines().findFirst().orElse("");
         }
     }
 
@@ -1150,9 +1173,19 @@ public class FleetDispatcher implements FleetStage {
         if ("off".equals(postgisCandidates)) {
             return candidates(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, exclude, gpsFailed, false);
         }
+        boolean shadow = "shadow".equals(postgisCandidates);
+        // shadow: which statement runs first alternates, so neither time is always the one with the pages already read.
+        boolean todayFirst = shadow && shadowLooks.getAndIncrement() % 2 == 0;
+        List<Candidate> today = null;
+        long todayMicros = 0;
+        long started = System.nanoTime();
+        if (todayFirst) {
+            today = candidates(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, exclude, gpsFailed, false);
+            todayMicros = (System.nanoTime() - started) / 1000;
+        }
         int[] indexedGpsFailed = gpsFailed == null ? null : new int[3];
         List<Candidate> indexed = null;
-        long started = System.nanoTime();
+        started = System.nanoTime();
         try {
             indexed = savepoint.execute(status -> candidates(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, exclude,
                 indexedGpsFailed, true));
@@ -1161,22 +1194,25 @@ public class FleetDispatcher implements FleetStage {
             LOGGER.warn("FLEET_POSTGIS_CANDIDATES_FAILED mode={} error={}", postgisCandidates, failed.getClass().getSimpleName());
         }
         long indexedMicros = (System.nanoTime() - started) / 1000;
-        if (indexed != null && "on".equals(postgisCandidates)) {
+        if (indexed != null && !shadow) {
             if (gpsFailed != null) {
                 System.arraycopy(indexedGpsFailed, 0, gpsFailed, 0, 3);
             }
             return indexed;
         }
-        started = System.nanoTime();
-        List<Candidate> today = candidates(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, exclude, gpsFailed, false);
+        if (today == null) {
+            started = System.nanoTime();
+            today = candidates(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, exclude, gpsFailed, false);
+            todayMicros = (System.nanoTime() - started) / 1000;
+        }
         if (indexed != null) {
             List<UUID> todayIds = today.stream().map(Candidate::riderId).toList();
             List<UUID> indexedIds = indexed.stream().map(Candidate::riderId).toList();
             // sameOrder is false too when two riders at the same distance come back the other way round: no rule orders those.
-            LOGGER.info("FLEET_POSTGIS_CANDIDATES mode=shadow today={} postgis={} missing={} extra={} sameOrder={} todayMicros={} "
-                + "postgisMicros={}", today.size(), indexed.size(), todayIds.stream().filter(id -> !indexedIds.contains(id)).count(),
-                indexedIds.stream().filter(id -> !todayIds.contains(id)).count(), todayIds.equals(indexedIds),
-                (System.nanoTime() - started) / 1000, indexedMicros);
+            LOGGER.info("FLEET_POSTGIS_CANDIDATES mode=shadow today={} postgis={} missing={} extra={} sameOrder={} todayFirst={} "
+                + "todayMicros={} postgisMicros={}", today.size(), indexed.size(), todayIds.stream().filter(id -> !indexedIds.contains(id))
+                .count(), indexedIds.stream().filter(id -> !todayIds.contains(id)).count(), todayIds.equals(indexedIds), todayFirst,
+                todayMicros, indexedMicros);
         }
         return today;
     }

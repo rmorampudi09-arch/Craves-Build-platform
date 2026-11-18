@@ -129,6 +129,70 @@ class DeliveryProviderRouterTest {
     }
 
     @Test
+    void theSharedBreakerSkipsARefusedCourierAndHearsHowTheOthersAnswered() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("fast", "backup"));
+        FakeAdapter fast = new FakeAdapter("fast", 5, "110.00", CreateBehavior.SUCCESS);
+        FakeAdapter backup = new FakeAdapter("backup", 8, "90.00", CreateBehavior.SUCCESS);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        when(intelligence.assign(any())).thenReturn(assignment(UUID.randomUUID(), UUID.randomUUID()));
+        DeliveryProviderRouter router = new DeliveryProviderRouter(List.of(fast, backup), catalog, intelligence,
+            mock(DeliveryAssignmentRepository.class), properties, quoteExecutor, clock);
+        CourierBreaker breaker = mock(CourierBreaker.class);
+        CourierBreaker.Pass backupPass = new CourierBreaker.Pass("backup", false, true, false);
+        when(breaker.admit("fast")).thenReturn(new CourierBreaker.Pass("fast", true, true, false));
+        when(breaker.admit("backup")).thenReturn(backupPass);
+        router.setCourierBreaker(breaker);
+
+        assertThat(router.route(command()).providerId()).as("without the booking journal the breaker is not used").isEqualTo("fast");
+        org.mockito.Mockito.verifyNoInteractions(breaker);
+
+        router.setJournal(journal());
+        var result = router.route(command());
+
+        assertThat(result.providerId()).isEqualTo("backup");
+        assertThat(fast.quoteCalls()).as("the refused courier is not called again").isEqualTo(1);
+        assertThat(result.quoteAudit()).anySatisfy(audit -> {
+            assertThat(audit.providerId()).isEqualTo("fast");
+            assertThat(audit.error()).isEqualTo("Courier breaker is open");
+        });
+        verify(breaker).admit("backup");
+        verify(breaker).quoted(backupPass, Boolean.TRUE);
+        verify(breaker).booked(backupPass, Boolean.TRUE);
+    }
+
+    @Test
+    void aLostBookingAnswerCountsAgainstTheCourierOnTheSharedBreaker() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("fast", "backup"));
+        FakeAdapter fast = new FakeAdapter("fast", 5, "110.00", CreateBehavior.UNCERTAIN);
+        FakeAdapter backup = new FakeAdapter("backup", 8, "90.00", CreateBehavior.SUCCESS);
+        when(intelligence.assign(any())).thenReturn(assignment(UUID.randomUUID(), UUID.randomUUID()));
+        DeliveryProviderRouter router = new DeliveryProviderRouter(List.of(fast, backup), catalog, intelligence,
+            mock(DeliveryAssignmentRepository.class), new DeliveryCommandProperties(), quoteExecutor, clock);
+        CourierBreaker breaker = mock(CourierBreaker.class);
+        when(breaker.admit(any())).thenAnswer(call -> new CourierBreaker.Pass(call.getArgument(0), false, false, false));
+        router.setCourierBreaker(breaker);
+        router.setJournal(journal());
+
+        assertThatThrownBy(() -> router.route(command())).isInstanceOf(DeliveryCreateReconciliationPendingException.class);
+
+        verify(breaker).booked(new CourierBreaker.Pass("fast", false, false, false), Boolean.FALSE);
+        verify(breaker, org.mockito.Mockito.never()).booked(eq(new CourierBreaker.Pass("backup", false, false, false)), any());
+    }
+
+    private ProviderCreateAttemptRepository journal() {
+        ProviderCreateAttemptRepository journal = mock(ProviderCreateAttemptRepository.class);
+        when(journal.enabled()).thenReturn(true);
+        when(journal.begin(any(), any())).thenAnswer(call -> Optional.of(new ProviderCreateAttemptRepository.Attempt(
+            call.getArgument(0), call.getArgument(1), 1, "ref", "INTENT", null, clock.instant(), clock.instant())));
+        when(journal.move(any(), any(), any(), any(), any())).thenReturn(true);
+        return journal;
+    }
+
+    @Test
     void timedPolicyAttemptsOnlyBorzoBeforeTwoMinutesAndOnlyPidgeAfterward() {
         var catalog = mock(DeliveryProviderCatalogRepository.class);
         var intelligence = mock(DeliveryIntelligenceService.class);

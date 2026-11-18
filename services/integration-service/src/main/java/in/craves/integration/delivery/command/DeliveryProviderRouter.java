@@ -54,6 +54,7 @@ public class DeliveryProviderRouter {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeliveryProviderRouter.class);
     /** A new order may take a moment to show in a courier's list, so a refusal is looked up no sooner than this. */
     static final Duration REFUSAL_LOOKUP_AFTER = Duration.ofSeconds(20);
+    private static final String BREAKER_OPEN = "Courier breaker is open";
     private final Map<String, DeliveryProviderAdapter> adapters;
     private final DeliveryProviderCatalogRepository providerCatalog;
     private final DeliveryIntelligenceService intelligenceService;
@@ -65,6 +66,7 @@ public class DeliveryProviderRouter {
     private final FleetStage fleetStage;
     private ProviderGuard providerGuard;
     private ProviderCreateAttemptRepository journal;
+    private CourierBreaker courierBreaker;
 
     @Autowired
     public DeliveryProviderRouter(List<DeliveryProviderAdapter> adapters,
@@ -133,6 +135,24 @@ public class DeliveryProviderRouter {
         return journal != null && journal.enabled();
     }
 
+    /** Present only when CRAVES_COURIER_BREAKER_ENABLED=true. */
+    @Autowired(required = false)
+    public void setCourierBreaker(CourierBreaker courierBreaker) {
+        this.courierBreaker = courierBreaker;
+    }
+
+    /**
+     * The shared breaker's leave to call a courier in this pass, read once per courier; null when the breaker is off.
+     * It needs the journal: without it a courier's refusal of one order cannot be told from a failing courier.
+     */
+    private CourierBreaker.Pass admit(String providerId, Map<String, CourierBreaker.Pass> passes) {
+        return courierBreaker == null || !journalOn() ? null : passes.computeIfAbsent(providerId, courierBreaker::admit);
+    }
+
+    private static boolean refused(CourierBreaker.Pass pass) {
+        return pass != null && pass.refused();
+    }
+
     public boolean borzoTimedPolicyReady() {
         return properties.isBorzoPidgeHandoffEnabled()
             && providerCatalog.activeProviderIds().stream()
@@ -164,7 +184,11 @@ public class DeliveryProviderRouter {
         for (String configuredProviderId : providerCatalog.activeProviderIds()) {
             DeliveryProviderAdapter adapter = adapters.get(normalize(configuredProviderId));
             if (adapter != null && (only == null || only.equals(normalize(configuredProviderId)))) {
-                tasks.add(() -> quote(adapter, command));
+                // The cost guard's quote books nothing, so it never takes the breaker's probe.
+                CourierBreaker.Pass pass = courierBreaker == null || !journalOn() ? null : courierBreaker.read(normalize(configuredProviderId));
+                if (!refused(pass)) {
+                    tasks.add(() -> quote(adapter, command, pass));
+                }
             }
         }
         return invokeQuotes(tasks, new ArrayList<>()).stream().map(QuoteOutcome::quote)
@@ -193,11 +217,14 @@ public class DeliveryProviderRouter {
         }
         // Look before booking: an unresolved earlier attempt goes to the reconciliation worker before anyone is quoted.
         Map<String, List<Attempt>> attempts = journalOn() ? attemptsByCourier(command.chefSubOrderId()) : Map.of();
+        Map<String, CourierBreaker.Pass> passes = new HashMap<>();
         // A refusal in this window sends the order to Pidge at once. A window ops opens later lets Borzo be tried again.
-        boolean borzoWindowOpen = borzoReady && borzoWindowStartedAt != null
+        boolean borzoWindow = borzoReady && borzoWindowStartedAt != null
             && clock.instant().isBefore(borzoWindowStartedAt.plusSeconds(120))
             && !(journalOn() && attempts.containsKey("borzo") && (!bookable(attempts, "borzo")
                 || attempts.get("borzo").stream().anyMatch(row -> !row.createdAt().isBefore(borzoWindowStartedAt))));
+        // An open breaker closes Borzo's window for this order: Pidge is next.
+        boolean borzoWindowOpen = borzoWindow && !refused(admit("borzo", passes));
         Set<String> bookableOnly = null;
         if (journalOn()) {
             List<String> deployed = timedPolicy ? List.of(borzoWindowOpen ? "borzo" : "pidge")
@@ -210,6 +237,9 @@ public class DeliveryProviderRouter {
 
         List<QuoteAudit> quoteAudit = new ArrayList<>();
         List<Callable<QuoteOutcome>> tasks = new ArrayList<>();
+        if (borzoWindow && !borzoWindowOpen) {
+            quoteAudit.add(new QuoteAudit("borzo", false, false, null, null, null, BREAKER_OPEN));
+        }
 
         for (String configuredProviderId : activeProviderIds) {
             String providerId = normalize(configuredProviderId);
@@ -227,7 +257,12 @@ public class DeliveryProviderRouter {
                 ));
                 continue;
             }
-            tasks.add(() -> quote(adapter, command));
+            CourierBreaker.Pass pass = admit(providerId, passes);
+            if (refused(pass)) {
+                quoteAudit.add(new QuoteAudit(providerId, false, false, null, null, null, BREAKER_OPEN));
+                continue;
+            }
+            tasks.add(() -> quote(adapter, command, pass));
         }
 
         List<QuoteOutcome> outcomes = invokeQuotes(tasks, quoteAudit);
@@ -306,6 +341,7 @@ public class DeliveryProviderRouter {
             // Journalled and committed before the call, outside the try: a database error is never read as a refusal.
             Attempt attempt = journalOn() ? beginAttempt(command.chefSubOrderId(), candidate.providerId()) : null;
             String clientReference = attempt == null ? clientReference(command.chefSubOrderId()) : attempt.clientRef();
+            CourierBreaker.Pass pass = passes.get(candidate.providerId());
             try {
                 ProviderDelivery delivery = candidate.adapter().create(
                     new CreateDeliveryRequest(
@@ -324,6 +360,9 @@ public class DeliveryProviderRouter {
                     throw noId;
                 }
                 createAudit.add(new CreateAudit(candidate.providerId(), true, null));
+                if (pass != null) {
+                    courierBreaker.booked(pass, Boolean.TRUE);
+                }
                 return new RoutingResult(
                     candidate.providerId(),
                     delivery,
@@ -337,6 +376,9 @@ public class DeliveryProviderRouter {
                 createAudit.add(new CreateAudit(
                     candidate.providerId(), false, "Provider create outcome requires reconciliation"
                 ));
+                if (pass != null) {
+                    courierBreaker.booked(pass, CourierBreaker.bookingHealth(ex));
+                }
                 if (attempt != null) {
                     record(attempt, ProviderCreateAttemptRepository.UNKNOWN, safeMessage(ex.getCause() == null ? ex : ex.getCause()), null);
                     throw pending(attempt, "Provider create response was not received; fallback is blocked", ex);
@@ -350,6 +392,9 @@ public class DeliveryProviderRouter {
                 );
             } catch (RuntimeException ex) {
                 createAudit.add(new CreateAudit(candidate.providerId(), false, safeMessage(ex)));
+                if (pass != null) {
+                    courierBreaker.booked(pass, CourierBreaker.bookingHealth(ex));
+                }
                 if (attempt != null) {
                     // Every adapter raises ProviderCreateUncertainException when a booking may exist; anything else booked nothing.
                     boolean recorded = record(attempt, ProviderCreateAttemptRepository.REJECTED, safeMessage(ex),
@@ -565,18 +610,29 @@ public class DeliveryProviderRouter {
             ));
     }
 
-    private QuoteOutcome quote(DeliveryProviderAdapter adapter, DeliveryCommandMessage command) {
+    /** pass: the shared breaker's leave for this courier, null when the breaker is off. */
+    private QuoteOutcome quote(DeliveryProviderAdapter adapter, DeliveryCommandMessage command, CourierBreaker.Pass pass) {
         String providerId = normalize(adapter.providerId());
+        long started = System.nanoTime();
+        Boolean healthy = null;
         try {
             ProviderQuote quote = providerGuard == null
                 ? adapter.quote(command.deliveryRequest())
                 : providerGuard.quote(providerId, () -> adapter.quote(command.deliveryRequest()), properties.quoteTimeout());
+            healthy = Boolean.TRUE;
             if (quote == null) {
                 return new QuoteOutcome(providerId, adapter, null, "Provider returned no quote");
             }
             return new QuoteOutcome(providerId, adapter, quote, null);
         } catch (RuntimeException ex) {
+            // The per-replica guard's own refusal is not an answer from the courier.
+            healthy = ex instanceof ProviderGuard.ProviderRefusedException ? null : ProviderGuard.health(ex);
             return new QuoteOutcome(providerId, adapter, null, safeMessage(ex));
+        } finally {
+            if (pass != null) {
+                // A quote slower than the fan-out deadline cannot be used, so it counts against the courier whatever it says.
+                courierBreaker.quoted(pass, System.nanoTime() - started > properties.quoteTimeout().toNanos() ? Boolean.FALSE : healthy);
+            }
         }
     }
 

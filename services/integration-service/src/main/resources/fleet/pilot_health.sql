@@ -470,6 +470,52 @@ WHERE u.provider_id IN ('borzo', 'pidge') AND u.day > (now() AT TIME ZONE 'Asia/
 GROUP BY GROUPING SETS ((), (u.day, u.provider_id))
 ORDER BY GROUPING(u.day) DESC, u.day DESC, u.provider_id;
 
+-- name: courier_charges
+-- What Borzo and Pidge showed as their price, per day (India) a booking became an order's delivery, over the last 14
+-- days, then all of them ("all"). Empty until CRAVES_DELIVERY_COURIER_CHARGE_ENABLED is on. bookings: bookings recorded;
+-- booked_paise: their booking prices; cancelled: of those, cancelled by Craves with the courier's record read back;
+-- expected_paise: what Craves expects to be billed (a cancelled booking counts at the price the courier showed once
+-- cancelled); price_unknown: bookings whose courier answer had no price. Whole paise. A record only: nothing here pays
+-- or chooses a courier.
+SELECT CASE WHEN GROUPING(b.day_ist) = 1 THEN 'all' ELSE b.day_ist::text END AS day_ist,
+       CASE WHEN GROUPING(b.provider_id) = 1 THEN 'all' ELSE b.provider_id END AS courier,
+       count(*) AS bookings,
+       COALESCE(sum(b.booked_paise), 0)::bigint AS booked_paise,
+       count(*) FILTER (WHERE b.cancelled) AS cancelled,
+       COALESCE(sum(b.expected_paise), 0)::bigint AS expected_paise,
+       count(*) FILTER (WHERE b.expected_paise IS NULL) AS price_unknown
+FROM (
+    SELECT c.provider_id, (c.charged_at AT TIME ZONE 'Asia/Kolkata')::date AS day_ist, c.amount_paise AS booked_paise,
+           v.cancelled, v.expected_paise
+    FROM delivery_schema.courier_charge c
+    JOIN LATERAL (SELECT e.cancelled, e.expected_paise FROM delivery_schema.courier_booking_charge e
+                  WHERE e.provider_id = c.provider_id AND e.provider_delivery_id = c.provider_delivery_id) v ON true
+    WHERE c.kind = 'BOOKING' AND c.provider_id IN ('borzo', 'pidge') AND c.charged_at > now() - INTERVAL '14 days'
+) b
+GROUP BY GROUPING SETS ((), (b.day_ist, b.provider_id))
+ORDER BY GROUPING(b.day_ist) DESC, b.day_ist DESC, b.provider_id;
+
+-- name: courier_invoice_accuracy
+-- The newest 20 courier invoices ops imported, each against what Craves recorded (view courier_invoice_check). lines:
+-- invoice lines; matched: equal to the paisa; matched_pct: matched of lines (R23's target is 97%, red under 93%);
+-- differs: both sides known and not equal, net_difference_paise their sum (invoice minus Craves); not_in_craves: billed
+-- bookings Craves has no record of; craves_unknown: Craves' record has no price; not_on_invoice: bookings Craves recorded
+-- in the invoice's period that the invoice lacks. Nothing is disputed, paid or adjusted from here.
+SELECT i.id AS import_id, i.provider_id AS courier, i.invoice_ref, i.period_start, i.period_end, i.imported_at,
+       count(*) FILTER (WHERE k.outcome <> 'NOT_ON_INVOICE') AS lines,
+       count(*) FILTER (WHERE k.outcome = 'MATCHED') AS matched,
+       round(100.0 * count(*) FILTER (WHERE k.outcome = 'MATCHED')
+             / NULLIF(count(*) FILTER (WHERE k.outcome <> 'NOT_ON_INVOICE'), 0), 1) AS matched_pct,
+       count(*) FILTER (WHERE k.outcome = 'AMOUNT_DIFFERS') AS differs,
+       COALESCE(sum(k.difference_paise), 0)::bigint AS net_difference_paise,
+       count(*) FILTER (WHERE k.outcome = 'NOT_IN_CRAVES') AS not_in_craves,
+       count(*) FILTER (WHERE k.outcome = 'CRAVES_AMOUNT_UNKNOWN') AS craves_unknown,
+       count(*) FILTER (WHERE k.outcome = 'NOT_ON_INVOICE') AS not_on_invoice
+FROM (SELECT * FROM delivery_schema.courier_invoice_import ORDER BY id DESC LIMIT 20) i
+JOIN delivery_schema.courier_invoice_check k ON k.import_id = i.id
+GROUP BY i.id, i.provider_id, i.invoice_ref, i.period_start, i.period_end, i.imported_at
+ORDER BY i.id DESC;
+
 -- name: track_size
 -- trip_track on disk: its day partitions and the default one. Thinning old tracks (P2-11) is worth doing past about 5 GB.
 SELECT count(*) AS partitions,

@@ -6,11 +6,14 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 @Component
 public class BorzoSignatureVerifier {
+    private static final Logger log = LoggerFactory.getLogger(BorzoSignatureVerifier.class);
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private final BorzoProperties properties;
 
@@ -26,12 +29,22 @@ public class BorzoSignatureVerifier {
         if (!isConfigured() || !StringUtils.hasText(rawBody) || !StringUtils.hasText(suppliedSignature)) {
             return false;
         }
-        String expected = hmacSha256Hex(rawBody, properties.getCallbackSecret());
-        String supplied = suppliedSignature.trim().toLowerCase(java.util.Locale.ROOT);
-        return MessageDigest.isEqual(
-            expected.getBytes(StandardCharsets.US_ASCII),
-            supplied.getBytes(StandardCharsets.US_ASCII)
-        );
+        byte[] supplied = suppliedSignature.trim().toLowerCase(java.util.Locale.ROOT)
+            .getBytes(StandardCharsets.US_ASCII);
+        if (matches(rawBody, properties.getCallbackSecret(), supplied)) {
+            return true;
+        }
+        String previous = properties.getCallbackSecretPrevious();
+        if (StringUtils.hasText(previous) && matches(rawBody, previous, supplied)) {
+            // One line per callback, no values: when these stop, the previous secret can be removed.
+            log.warn("COURIER_WEBHOOK_PREVIOUS_SECRET_USED provider=borzo");
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean matches(String rawBody, String secret, byte[] supplied) {
+        return MessageDigest.isEqual(hmacSha256Hex(rawBody, secret).getBytes(StandardCharsets.US_ASCII), supplied);
     }
 
     public String signatureFingerprint(String suppliedSignature) {

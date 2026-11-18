@@ -19,6 +19,7 @@ public class PidgeProperties {
     private String authToken = "";
     private String channel = "Craves Hyperlocal";
     private String webhookToken = "";
+    private String webhookTokenPrevious = "";
     private String callbackUrl = "https://api.craves.in/api/v1/webhooks/delivery/pidge";
     private int connectTimeoutSeconds = 5;
     private int readTimeoutSeconds = 20;
@@ -72,6 +73,8 @@ public class PidgeProperties {
     public void setChannel(String value) { channel = value; }
     public String getWebhookToken() { return webhookToken; }
     public void setWebhookToken(String value) { webhookToken = value; }
+    public String getWebhookTokenPrevious() { return webhookTokenPrevious; }
+    public void setWebhookTokenPrevious(String value) { webhookTokenPrevious = value; }
     public String getCallbackUrl() { return callbackUrl; }
     public void setCallbackUrl(String value) { callbackUrl = value; }
     public int getConnectTimeoutSeconds() { return connectTimeoutSeconds; }

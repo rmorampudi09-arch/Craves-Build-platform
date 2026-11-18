@@ -57,6 +57,7 @@ Java paths above are relative to `services/integration-service/src/main/java/in/
 | `PIDGE_API_AUTH_TOKEN` | Existing Azure secret reference `pidge-api-auth-token` |
 | `PIDGE_CHANNEL` | `Craves Hyperlocal` |
 | `PIDGE_WEBHOOK_TOKEN` | Dedicated Azure secret reference `pidge-webhook-token` |
+| `PIDGE_WEBHOOK_TOKEN_PREVIOUS` | Empty; set only while rotating the webhook token (`docs/SECRETS.md`) |
 | `PIDGE_CALLBACK_URL` | `https://api.craves.in/api/v1/webhooks/delivery/pidge` |
 | `PIDGE_PRODUCTION_ACTIVATION_APPROVED` | `false` |
 | `PIDGE_MANUAL_ALLOCATION_VERIFIED` | `false` until Pidge channel configuration is verified |

@@ -28,8 +28,10 @@ import in.craves.integration.fleet.rider.FleetShiftService;
 import in.craves.integration.fleet.trip.FleetTripModels;
 import in.craves.integration.fleet.trip.FleetTripModels.Offer;
 import in.craves.integration.fleet.trip.FleetTripModels.OfferReason;
+import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -60,6 +62,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -94,6 +97,20 @@ public class FleetDispatcher implements FleetStage {
     static final int GPS_RULE_ACCURACY_M = 250;
     private static final String GPS_FRESH = "p.recorded_at > now() - make_interval(secs => " + GPS_RULE_FIX_SECONDS + ")";
     private static final String GPS_ACCURATE = "p.accuracy_m <= " + GPS_RULE_ACCURACY_M;
+    static final String POSITION_GEOG_INDEX = "rider_position_latest_geog";
+    /** The session advisory lock a start-up holds while it builds POSITION_GEOG_INDEX. */
+    static final String POSITION_GEOG_LOCK = "hashtextextended('fleet_schema." + POSITION_GEOG_INDEX + "', 0)";
+    /** A position as PostGIS geography; %s is the row's alias with its dot, or nothing in the index. The two must match. */
+    private static final String GEOG = "public.ST_SetSRID(public.ST_MakePoint(%slng, %<slat), 4326)::public.geography";
+    /**
+     * Positions p within so many metres of a point (parameters: lng, lat, metres), on the spheroid. Asked with
+     * POSTGIS_MARGIN more than the radius, so it never leaves out a rider the exact rule (great-circle metres, in Java)
+     * lets in.
+     */
+    static final String WITHIN_GEOG = "public.ST_DWithin(" + GEOG.formatted("p.")
+        + ", public.ST_SetSRID(public.ST_MakePoint(?, ?), 4326)::public.geography, ?)";
+    /** The spheroid and the sphere differ by under 0.6 % anywhere; 1 % and a metre more covers it. */
+    private static final double POSTGIS_MARGIN = 1.01;
     /** Heading home (Phase 5): the drop must leave the rider at least this much nearer home (straight lines, metres). */
     static final int HOME_PROGRESS_M = 500;
     /** Heading home: the trip may add to the ride home at most this, or a quarter of the way home if that is more. */
@@ -182,6 +199,19 @@ public class FleetDispatcher implements FleetStage {
      */
     private boolean storesNextLook;
     /**
+     * CRAVES_FLEET_POSTGIS_CANDIDATES, off | shadow | on (off by default; R22 #4): the candidate statement also asks
+     * PostGIS for positions within the radius (WITHIN_GEOG), which the index POSITION_GEOG_INDEX answers, so it no longer
+     * reads every position in the latitude/longitude box. Everything else in the statement, the exact distance rule and
+     * the order stay as they are: the same riders, in the same order. shadow asks with today's statement and runs the
+     * other too, logging counts only (FLEET_POSTGIS_CANDIDATES). Without PostGIS or the index (setPostgisCandidates) it
+     * is off.
+     */
+    private String postgisCandidates = "off";
+    /** A savepoint inside the look's transaction: a PostGIS statement that fails must not end it. */
+    private final TransactionTemplate savepoint;
+    /** shadow: the candidate queries so far, to alternate which statement runs first. */
+    private final AtomicLong shadowLooks = new AtomicLong();
+    /**
      * CRAVES_FLEET_TIMERS shadow or on (FleetTimers; null while off): sends the fleet-timers message for a look's next
      * check, true once sent. stageLeavesCommand (CRAVES_FLEET_STAGE_LEAVES_COMMAND_ENABLED, with timers and the sweeper
      * both on): once that message is sent, the order's command is told to come back at the stage's deadline, not at the
@@ -227,6 +257,8 @@ public class FleetDispatcher implements FleetStage {
                            @Value("${craves.fleet.unheard-next-rider-seconds:0}") int unheardSeconds) {
         this.jdbc = jdbc;
         this.transaction = new TransactionTemplate(transactions);
+        this.savepoint = new TransactionTemplate(transactions);
+        this.savepoint.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
         this.policies = policies;
         this.testMode = testMode;
         this.roads = roads;
@@ -252,6 +284,93 @@ public class FleetDispatcher implements FleetStage {
             throw new IllegalStateException("craves.fleet.gps-rule must be off, shadow or enforce");
         }
         this.gpsRule = rule;
+    }
+
+    /**
+     * Trimmed and lower-cased; unset or blank is off; any other value stops start-up. shadow or on: if the index on rider
+     * positions is not there and valid, creates the PostGIS extension and builds the index CONCURRENTLY, so no position
+     * write waits for it; a start that finds it valid runs no DDL and takes no lock. If it cannot be had (PostGIS not
+     * allow-listed on the server, no permission, a lock not granted in 5 s), start-up carries on and this stays off, with
+     * one line.
+     */
+    @Value("${craves.fleet.postgis-candidates:off}")
+    public void setPostgisCandidates(String postgisCandidates) {
+        String mode = postgisCandidates == null || postgisCandidates.isBlank() ? "off" : postgisCandidates.trim().toLowerCase(Locale.ROOT);
+        if (!Set.of("off", "shadow", "on").contains(mode)) {
+            throw new IllegalStateException("craves.fleet.postgis-candidates must be off, shadow or on");
+        }
+        if (!"off".equals(mode)) {
+            String missing = positionIndexMissing();
+            if (missing != null) {
+                LOGGER.warn("FLEET_POSTGIS_CANDIDATES mode={} unavailable, running as off: {}", mode, missing);
+                mode = "off";
+            } else {
+                LOGGER.info("FLEET_POSTGIS_CANDIDATES mode={} index={} ready", mode, POSITION_GEOG_INDEX);
+            }
+        }
+        this.postgisCandidates = mode;
+    }
+
+    /** Null once the index is there and valid; else why not (the database's own words: no rider, no order). */
+    private String positionIndexMissing() {
+        String why = "no valid index " + POSITION_GEOG_INDEX;
+        try {
+            if (Boolean.TRUE.equals(positionIndexValid())) {
+                return null;
+            }
+            // A connection of its own, outside any transaction: CONCURRENTLY cannot run inside one.
+            try (Connection connection = jdbc.getDataSource().getConnection(); Statement statement = connection.createStatement()) {
+                connection.setAutoCommit(true);
+                // One start-up at a time builds (replicas starting together); another does no DDL and reads the result.
+                if (!answer(statement, "SELECT pg_try_advisory_lock(" + POSITION_GEOG_LOCK + ")")) {
+                    why += "; another start-up is building it";
+                } else {
+                    try {
+                        statement.execute("SET lock_timeout = '5s'");
+                        statement.execute("SET statement_timeout = '60s'");
+                        why = ddl(statement, why, "CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public");
+                        // A build that failed leaves an invalid index that IF NOT EXISTS would keep; never drop one being built
+                        // (one by another role may not show here: then the drop waits for its lock and gives up after 5 s).
+                        if (Boolean.FALSE.equals(positionIndexValid()) && !answer(statement, "SELECT EXISTS (SELECT 1 FROM "
+                            + "pg_stat_progress_create_index WHERE relid = 'fleet_schema.rider_position_latest'::regclass)")) {
+                            why = ddl(statement, why, "DROP INDEX CONCURRENTLY IF EXISTS fleet_schema." + POSITION_GEOG_INDEX);
+                        }
+                        why = ddl(statement, why, "CREATE INDEX CONCURRENTLY IF NOT EXISTS " + POSITION_GEOG_INDEX
+                            + " ON fleet_schema.rider_position_latest USING gist ((" + GEOG.formatted("") + "))");
+                    } finally {
+                        statement.execute("SELECT pg_advisory_unlock(" + POSITION_GEOG_LOCK + ")");
+                        statement.execute("RESET lock_timeout");
+                        statement.execute("RESET statement_timeout");
+                    }
+                }
+            }
+            return Boolean.TRUE.equals(positionIndexValid()) ? null : why;
+        } catch (RuntimeException | SQLException failed) {
+            return why + "; " + failed.getClass().getSimpleName();
+        }
+    }
+
+    private static boolean answer(Statement statement, String query) throws SQLException {
+        try (ResultSet row = statement.executeQuery(query)) {
+            return row.next() && row.getBoolean(1);
+        }
+    }
+
+    /** Runs sql; a failure adds its first line to why. */
+    private static String ddl(Statement statement, String why, String sql) {
+        try {
+            statement.execute(sql);
+            return why;
+        } catch (SQLException failed) {
+            return why + "; " + String.valueOf(failed.getMessage()).lines().findFirst().orElse("");
+        }
+    }
+
+    /** True: the index is there and valid; false: there, not valid (being built, or a build failed); null: not there. */
+    private Boolean positionIndexValid() {
+        return jdbc.query("SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+            + "JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'fleet_schema' AND c.relname = ?",
+            rows -> rows.next() ? rows.getBoolean(1) : null, POSITION_GEOG_INDEX);
     }
 
     @Autowired
@@ -1137,8 +1256,58 @@ public class FleetDispatcher implements FleetStage {
      * the riders in range, not in exclude, who meet everything above but not the rule: [0] fix too old, [1] too
      * inaccurate, [2] both. shadow keeps them; enforce leaves them out, as if out of range. The same statement either way.
      */
-    private List<Candidate> nearbyRiders(double lat, double lng, int radiusM, int dropM, int detourPercent, Double dropLat, Double dropLng,
-                                         Set<UUID> exclude, int[] gpsFailed) {
+    List<Candidate> nearbyRiders(double lat, double lng, int radiusM, int dropM, int detourPercent, Double dropLat, Double dropLng,
+                                 Set<UUID> exclude, int[] gpsFailed) {
+        if ("off".equals(postgisCandidates)) {
+            return candidates(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, exclude, gpsFailed, false);
+        }
+        boolean shadow = "shadow".equals(postgisCandidates);
+        // shadow: which statement runs first alternates, so neither time is always the one with the pages already read.
+        boolean todayFirst = shadow && shadowLooks.getAndIncrement() % 2 == 0;
+        List<Candidate> today = null;
+        long todayMicros = 0;
+        long started = System.nanoTime();
+        if (todayFirst) {
+            today = candidates(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, exclude, gpsFailed, false);
+            todayMicros = (System.nanoTime() - started) / 1000;
+        }
+        int[] indexedGpsFailed = gpsFailed == null ? null : new int[3];
+        List<Candidate> indexed = null;
+        started = System.nanoTime();
+        try {
+            indexed = savepoint.execute(status -> candidates(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, exclude,
+                indexedGpsFailed, true));
+        } catch (RuntimeException failed) {
+            // Today's statement answers instead, in on too. shortcut: a line a look while it fails; limit it if it ever does.
+            LOGGER.warn("FLEET_POSTGIS_CANDIDATES_FAILED mode={} error={}", postgisCandidates, failed.getClass().getSimpleName());
+        }
+        long indexedMicros = (System.nanoTime() - started) / 1000;
+        if (indexed != null && !shadow) {
+            if (gpsFailed != null) {
+                System.arraycopy(indexedGpsFailed, 0, gpsFailed, 0, 3);
+            }
+            return indexed;
+        }
+        if (today == null) {
+            started = System.nanoTime();
+            today = candidates(lat, lng, radiusM, dropM, detourPercent, dropLat, dropLng, exclude, gpsFailed, false);
+            todayMicros = (System.nanoTime() - started) / 1000;
+        }
+        if (indexed != null) {
+            List<UUID> todayIds = today.stream().map(Candidate::riderId).toList();
+            List<UUID> indexedIds = indexed.stream().map(Candidate::riderId).toList();
+            // sameOrder is false too when two riders at the same distance come back the other way round: no rule orders those.
+            LOGGER.info("FLEET_POSTGIS_CANDIDATES mode=shadow today={} postgis={} missing={} extra={} sameOrder={} todayFirst={} "
+                + "todayMicros={} postgisMicros={}", today.size(), indexed.size(), todayIds.stream().filter(id -> !indexedIds.contains(id))
+                .count(), indexedIds.stream().filter(id -> !todayIds.contains(id)).count(), todayIds.equals(indexedIds), todayFirst,
+                todayMicros, indexedMicros);
+        }
+        return today;
+    }
+
+    /** nearbyRiders' statement; postgis: with WITHIN_GEOG as well. Off, the text and its parameters are the ones they were. */
+    private List<Candidate> candidates(double lat, double lng, int radiusM, int dropM, int detourPercent, Double dropLat, Double dropLng,
+                                       Set<UUID> exclude, int[] gpsFailed, boolean postgis) {
         boolean gps = gpsFailed != null && !"off".equals(gpsRule);
         boolean enforce = "enforce".equals(gpsRule);
         double dLat = radiusM / 111_320.0;
@@ -1159,7 +1328,8 @@ public class FleetDispatcher implements FleetStage {
                   AND (NOT ? OR r.max_drop_m IS NULL OR r.max_drop_m >= ?)
                   AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip t WHERE t.rider_id = r.id
                                   AND t.state IN ('ASSIGNED', 'AT_PICKUP', 'PICKED_UP', 'AT_DROP'))
-                  AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip_offer o WHERE o.rider_id = r.id AND o.state = 'ACTIVE' AND o.expires_at > now())""",
+                  AND NOT EXISTS (SELECT 1 FROM fleet_schema.trip_offer o WHERE o.rider_id = r.id AND o.state = 'ACTIVE' AND o.expires_at > now())"""
+                + (postgis ? "\n  AND " + WITHIN_GEOG : ""),
                 (row, n) -> {
                     double metres = RoadDistanceClient.straightLineMetres(lat, lng, row.getDouble("lat"), row.getDouble("lng"));
                     Integer maxPickupM = choices ? (Integer) row.getObject("max_pickup_m") : null;
@@ -1186,7 +1356,9 @@ public class FleetDispatcher implements FleetStage {
                     return new Candidate(row.getObject("id", UUID.class), metres, row.getDouble("lat"), row.getDouble("lng"), metres, null,
                         homeNearerM);
                 },
-                lat - dLat, lat + dLat, lng - dLng, lng + dLng, choices, Math.max(dropM, 0))
+                postgis ? new Object[] {lat - dLat, lat + dLat, lng - dLng, lng + dLng, choices, Math.max(dropM, 0), lng, lat,
+                    radiusM * POSTGIS_MARGIN + 1}
+                    : new Object[] {lat - dLat, lat + dLat, lng - dLng, lng + dLng, choices, Math.max(dropM, 0)})
             .stream().filter(rider -> rider != null && rider.straightLineM() <= radiusM).sorted(Comparator.comparingDouble(Candidate::straightLineM))
             .toList();
     }

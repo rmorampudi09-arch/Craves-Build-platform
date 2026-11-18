@@ -614,8 +614,7 @@ public class DeliveryProviderRouter {
     private QuoteOutcome quote(DeliveryProviderAdapter adapter, DeliveryCommandMessage command, CourierBreaker.Pass pass) {
         String providerId = normalize(adapter.providerId());
         long started = System.nanoTime();
-        // A quote slower than the fan-out deadline cannot be used, so it counts against the courier whatever it says.
-        Boolean healthy = Boolean.FALSE;
+        Boolean healthy = null;
         try {
             ProviderQuote quote = providerGuard == null
                 ? adapter.quote(command.deliveryRequest())
@@ -631,6 +630,7 @@ public class DeliveryProviderRouter {
             return new QuoteOutcome(providerId, adapter, null, safeMessage(ex));
         } finally {
             if (pass != null) {
+                // A quote slower than the fan-out deadline cannot be used, so it counts against the courier whatever it says.
                 courierBreaker.quoted(pass, System.nanoTime() - started > properties.quoteTimeout().toNanos() ? Boolean.FALSE : healthy);
             }
         }

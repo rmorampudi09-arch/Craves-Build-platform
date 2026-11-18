@@ -57,6 +57,20 @@ public final class FleetDispatchFixtures {
     }
 
     /**
+     * The owner's rule, live (one rider at a time, no limit on rounds, radius 5 km), with these search rings (V199):
+     * ring1M until ring1Seconds of the stage, then ring2M until ring2Seconds, then the radius.
+     */
+    public static void policyWithRings(JdbcTemplate db, int offerSeconds, int stageSeconds, int fairBandM, int ring1M, int ring1Seconds,
+                                       int ring2M, int ring2Seconds) {
+        db.update("INSERT INTO fleet_schema.dispatch_policy (version, status, effective_from, published_at, mode, offer_seconds, "
+            + "fleet_stage_seconds, radius_m, ranges, offers_at_once, offer_rounds, fair_band_m, ring_1_m, ring_1_seconds, ring_2_m, "
+            + "ring_2_seconds) VALUES ('2026-09-v9', 'PUBLISHED', now() - INTERVAL '1 day', now(), 'live', ?, ?, 5000, '{}', 1, 0, ?, ?, ?, ?, ?)",
+            offerSeconds, stageSeconds, fairBandM, ring1M, ring1Seconds, ring2M, ring2Seconds);
+        db.update("UPDATE fleet_schema.rate_card SET status = 'PUBLISHED', published_at = now(), effective_from = now() - INTERVAL '1 day' "
+            + "WHERE version = '2026-10-v1' AND status = 'DRAFT'");
+    }
+
+    /**
      * An ACTIVE rider with a bound phone, on an open shift, whose last /locations call and last fix were both secondsAgo.
      * Returns the rider id.
      */

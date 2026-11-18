@@ -99,6 +99,15 @@ class FleetDispatchStatementsDatabaseTest {
         assertThat(looks(0, "enforce")).containsExactly(OPENING_NOW, WAITING_BEFORE, NEXT_ROUND_BEFORE - 32);
     }
 
+    /**
+     * Search rings (V199) read the whole radius in the candidate statement and the stage's age in the trip statement the
+     * next round already runs: a policy with rings costs what one without costs.
+     */
+    @Test
+    void searchRingsAddNoStatementToALook() {
+        assertThat(looks(0, "off", true)).containsExactly(OPENING_NOW, WAITING_BEFORE, NEXT_ROUND_BEFORE - 32);
+    }
+
     private int[] looks(int policyCacheSeconds) {
         int[] now = looks(policyCacheSeconds, "off");
         if (policyCacheSeconds == 0) {
@@ -109,6 +118,11 @@ class FleetDispatchStatementsDatabaseTest {
 
     /** The looks at one order: the one that opens it, one while its rider decides, and the one after a decline. */
     private int[] looks(int policyCacheSeconds, String gpsRule) {
+        return looks(policyCacheSeconds, gpsRule, false);
+    }
+
+    /** rings: 2 km until 100 s, 3.5 km until 200 s; every rider here is inside the first. */
+    private int[] looks(int policyCacheSeconds, String gpsRule, boolean rings) {
         JdbcTemplate db = new JdbcTemplate(counted);
         RoadDistanceClient roads = mock(RoadDistanceClient.class);
         when(roads.meters(anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(3500);
@@ -117,7 +131,11 @@ class FleetDispatchStatementsDatabaseTest {
         FleetDispatcher dispatcher = new FleetDispatcher(db, new DataSourceTransactionManager(counted), policies,
             new FleetTestMode(db, FleetDatabase.properties(false)), roads, mock(RiderPushClient.class), json);
         dispatcher.setGpsRule(gpsRule);
-        FleetDispatchFixtures.policy(fleet.db, "live", 20, 300, 1, 0, 1500);
+        if (rings) {
+            FleetDispatchFixtures.policyWithRings(fleet.db, 20, 300, 1500, 2000, 100, 3500, 200);
+        } else {
+            FleetDispatchFixtures.policy(fleet.db, "live", 20, 300, 1, 0, 1500);
+        }
         FleetDispatchFixtures.kitchen(fleet.db, chefSubOrderId, false);
         for (int i = 1; i <= RIDERS_IN_BAND; i++) {
             FleetDispatchFixtures.riderOnShift(fleet, "+9198000000%02d".formatted(i), KITCHEN_LAT + 0.0005 * i, KITCHEN_LNG, 5, false);

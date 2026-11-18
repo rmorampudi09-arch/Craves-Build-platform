@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import in.craves.integration.fleet.FleetPolicyStore.DispatchRules;
 import in.craves.integration.fleet.FleetPolicyStore.RateCard;
+import in.craves.integration.fleet.FleetPolicyStore.SearchRings;
 import in.craves.integration.fleet.FleetPolicyStore.TermsChange;
 import in.craves.integration.fleet.rider.FleetRiderModels.LabelValue;
 import in.craves.integration.fleet.rider.FleetRiderModels.OfferRules;
@@ -76,6 +77,34 @@ class FleetRiderServiceTest {
         assertThat(both.upcoming().summaryOfChanges()).containsExactly(
             "First version of the Craves rider terms. Draft pricing, not final.", "Pickup distance changes from straight line × 1.3 to × 1.25.");
         assertThat(FleetRiderService.factor(100)).isEqualTo("1");
+    }
+
+    /** Search rings (V199): the radius by the stage's age, never beyond the policy radius, and an empty ring passed over. */
+    @Test
+    void searchRingsNarrowTheRadiusByTheStagesAgeAndNeverWaitOnAnEmptyRing() {
+        SearchRings rings = new SearchRings(2000, 100, 3500, 200);
+        assertThat(SearchRings.NONE.on()).isFalse();
+        assertThat(SearchRings.NONE.radiusM(0, 5000, 10)).as("no rings: the policy radius from the start").isEqualTo(5000);
+        assertThat(rings.on()).isTrue();
+        assertThat(rings.radiusM(0, 5000, 500)).isEqualTo(2000);
+        assertThat(rings.radiusM(99, 5000, 2000)).isEqualTo(2000);
+        assertThat(rings.radiusM(100, 5000, 500)).as("the first ring's time is up").isEqualTo(3500);
+        assertThat(rings.radiusM(199, 5000, 500)).isEqualTo(3500);
+        assertThat(rings.radiusM(200, 5000, 500)).as("then the policy radius").isEqualTo(5000);
+        assertThat(rings.radiusM(0, 5000, 2001)).as("nobody free in the first ring: the second at once").isEqualTo(3500);
+        assertThat(rings.radiusM(0, 5000, 4000)).as("nobody free in either").isEqualTo(5000);
+        assertThat(rings.radiusM(0, 5000, Double.MAX_VALUE)).as("nobody free at all").isEqualTo(5000);
+        assertThat(rings.radiusM(0, 1500, 500)).as("ops shrank the radius: no ring exceeds it").isEqualTo(1500);
+        assertThat(rings.radiusM(150, 3000, 500)).isEqualTo(3000);
+        assertThat(new SearchRings(0, 0, 3500, 200).radiusM(0, 5000, 500)).as("one ring only").isEqualTo(3500);
+        assertThat(new SearchRings(2000, 0, 0, 100).on()).as("a ring needs both its size and its time").isFalse();
+
+        assertThat(FleetRiderService.offerRulesLine(new DispatchRules(1, 0, 0, false, false, false, rings))).isEqualTo("The nearest free "
+            + "rider hears first, one rider at a time. If nobody accepts, riders are asked again until the order's time with Craves riders "
+            + "is up. Riders nearer the kitchen are asked first: for the first 100 seconds only riders within 2 km, then until 200 seconds "
+            + "only riders within 3.5 km, then every rider in range. If no free rider is that near, riders farther away are asked at once. "
+            + "Declining is free.");
+        assertThat(FleetRiderService.ringsLine(SearchRings.NONE)).isEmpty();
     }
 
     /** Phase 4: how orders are offered is part of the terms, and a change to it is an upcoming change with its own line. */

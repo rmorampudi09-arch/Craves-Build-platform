@@ -4,6 +4,7 @@ import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetPolicyStore;
 import in.craves.integration.fleet.FleetPolicyStore.DispatchRules;
 import in.craves.integration.fleet.FleetPolicyStore.RateCard;
+import in.craves.integration.fleet.FleetPolicyStore.SearchRings;
 import in.craves.integration.fleet.FleetPolicyStore.TermsChange;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetRules;
@@ -512,7 +513,22 @@ public class FleetRiderService {
             + (rules.byTravelTime() ? " Soonest is by Craves's travel-time estimate; without one, the nearest hear first." : "")
             + (rules.jointMatching() ? " Orders near each other are shared out among the free riders nearby together, not one by one." : "")
             + (rules.nextOrderOffers() ? " You may hear of your next order before this one ends; it waits for you." : "")
+            + ringsLine(rules.rings())
             + " Declining is free.";
+    }
+
+    /** Search rings in English, for the notice of a change; empty without rings. The wording is the owner's to settle (DISPATCH.md §2). */
+    static String ringsLine(SearchRings rings) {
+        if (!rings.on()) {
+            return "";
+        }
+        boolean first = rings.ring1M() > 0 && rings.ring1Seconds() > 0;
+        boolean second = rings.ring2M() > 0 && rings.ring2Seconds() > (first ? rings.ring1Seconds() : 0);
+        return " Riders nearer the kitchen are asked first:"
+            + (first ? " for the first " + rings.ring1Seconds() + " seconds only riders within " + km(rings.ring1M()) + " km," : "")
+            + (second ? (first ? " then until " : " until ") + rings.ring2Seconds() + " seconds only riders within " + km(rings.ring2M())
+                + " km," : "")
+            + " then every rider in range. If no free rider is that near, riders farther away are asked at once.";
     }
 
     /** Minutes as riders read them: "1 minute", "3 minutes", "4.5 minutes". */

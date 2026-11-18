@@ -534,7 +534,8 @@ public class FleetDispatcher implements FleetStage {
         double dropLat = request.dropoff().latitude().doubleValue();
         double dropLng = request.dropoff().longitude().doubleValue();
         int dropM = roads.meters(kitchenLat, kitchenLng, dropLat, dropLng);
-        List<Candidate> riders = riders(command.chefSubOrderId(), kitchenLat, kitchenLng, dropLat, dropLng, dropM, policy, Set.of(), 1);
+        // The stage opens with this look: its age is 0.
+        List<Candidate> riders = riders(command.chefSubOrderId(), kitchenLat, kitchenLng, dropLat, dropLng, dropM, policy, Set.of(), 1, 0);
         // The whole stage has no cost guard, so no courier is asked for a quote.
         OptionalLong courier = riders.isEmpty() || policy.wholeStage() ? OptionalLong.empty() : courierQuotePaise.get();
         Choice choice = choose(riders, policy, card, dropM, courier, 1, kitchenLat, kitchenLng, dropLat, dropLng);
@@ -547,12 +548,19 @@ public class FleetDispatcher implements FleetStage {
      * rules and holds them for this order for a few seconds; test mode is still checked here. When it doesn't answer in
      * time, or finds nobody, dispatch ranks riders itself, as it does with the engine off, and in shadow the engine is told
      * how, to compare.
+     *
+     * <p>Search rings (R22 3-3; a policy rule, none in any version so far; docs/riders/DISPATCH.md §2): while the stage is
+     * younger than a ring's time, only riders inside that ring may hear, in the same order as always; a ring with no free
+     * rider in it is passed over at once (SearchRings.radiusM). Riders already asked stay in. The same statement reads the
+     * whole policy radius either way. The engine knows no rings, so with rings it neither ranks nor is compared.
      */
     private List<Candidate> riders(UUID chefSubOrderId, double kitchenLat, double kitchenLng, double dropLat, double dropLng, int dropM,
-                                   DispatchPolicy policy, Set<UUID> exclude, int round) {
+                                   DispatchPolicy policy, Set<UUID> exclude, int round, long stageAgeSeconds) {
         EtaModel rankBy = rankingModel(policy);
+        boolean rings = policy.rings().on();
         // The engine ranks by the model only once it has it; until then this order is ranked here.
-        boolean engineLive = engineClient != null && !roadRanking && "live".equals(policy.mode()) && (rankBy == null || eta.published());
+        boolean engineLive = engineClient != null && !rings && !roadRanking && "live".equals(policy.mode())
+            && (rankBy == null || eta.published());
         Optional<List<FleetEngineWire.Candidate>> answer = engineLive ? engineClient.rank(chefSubOrderId, kitchenLat, kitchenLng, dropLat,
             dropLng, dropM, enginePolicy(policy, rankBy), exclude, round) : Optional.empty();
         if (answer.isPresent() && !answer.get().isEmpty()) {
@@ -571,19 +579,32 @@ public class FleetDispatcher implements FleetStage {
             }
         }
         int[] gpsFailed = new int[3];
-        List<Candidate> nearby = nearbyRiders(kitchenLat, kitchenLng, policy.radiusM(), dropM, policy.pickupDetourPercent(), dropLat,
-            dropLng, exclude, gpsFailed).stream().filter(rider -> !exclude.contains(rider.riderId())).toList();
+        List<Candidate> inRadius = nearbyRiders(kitchenLat, kitchenLng, policy.radiusM(), dropM, policy.pickupDetourPercent(), dropLat,
+            dropLng, exclude, gpsFailed);
+        List<Candidate> nearby = inRadius.stream().filter(rider -> !exclude.contains(rider.riderId())).toList();
         if (gpsFailed[0] + gpsFailed[1] + gpsFailed[2] > 0) {
             // passing: riders who meet the rule too. Counted before test mode's list, which would cost a statement a rider.
             LOGGER.info("FLEET_GPS_RULE mode={} chefSubOrderId={} round={} passing={} stale={} inaccurate={} both={}", gpsRule, chefSubOrderId,
                 round, nearby.size() - ("shadow".equals(gpsRule) ? gpsFailed[0] + gpsFailed[1] + gpsFailed[2] : 0), gpsFailed[0],
                 gpsFailed[1], gpsFailed[2]);
         }
+        if (rings) {
+            // shortcut: a free rider test mode leaves out still counts as in a ring (asking test mode costs a statement a
+            // rider); upgrade if a pilot ever runs rings beside riders outside its list.
+            int ringM = policy.rings().radiusM(stageAgeSeconds, policy.radiusM(),
+                inRadius.isEmpty() ? Double.MAX_VALUE : inRadius.get(0).straightLineM());
+            if (ringM < policy.radiusM()) {
+                List<Candidate> all = nearby;
+                nearby = all.stream().filter(rider -> rider.straightLineM() <= ringM).toList();
+                LOGGER.info("FLEET_SEARCH_RING chefSubOrderId={} round={} stageAgeSeconds={} ringM={} radiusM={} inRing={} beyond={}",
+                    chefSubOrderId, round, stageAgeSeconds, ringM, policy.radiusM(), nearby.size(), all.size() - nearby.size());
+            }
+        }
         List<Candidate> riders = ranked(nearby, policy, kitchenLat, kitchenLng, chefSubOrderId, rankBy);
         if (answer.isPresent() && !riders.isEmpty()) {
             LOGGER.warn("FLEET_ENGINE_FOUND_NOBODY chefSubOrderId={} round={} javaRiders={}", chefSubOrderId, round, riders.size());
         }
-        if (engineFeed != null && !engineLive && !roadRanking && (rankBy == null || eta.published())) {
+        if (engineFeed != null && !engineLive && !rings && !roadRanking && (rankBy == null || eta.published())) {
             engineFeed.shadow(chefSubOrderId, kitchenLat, kitchenLng, dropLat, dropLng, dropM, enginePolicy(policy, rankBy), exclude,
                 riders.stream().map(FleetDispatcher::engineCandidate).toList(), round);
         }
@@ -835,8 +856,15 @@ public class FleetDispatcher implements FleetStage {
         Map<String, Object> trip = jdbc.queryForMap("""
             SELECT t.chef_sub_order_id, t.kitchen_lat, t.kitchen_lng, t.drop_lat, t.drop_lng, t.drop_distance_m, t.rate_card_version,
                    t.courier_quote_paise,
-                   (SELECT COALESCE(MAX(o.round), 0) FROM fleet_schema.trip_offer o WHERE o.trip_id = t.id) AS rounds
+                   (SELECT COALESCE(MAX(o.round), 0) FROM fleet_schema.trip_offer o WHERE o.trip_id = t.id) AS rounds"""
+            // Search rings read the stage's age here, in this statement; without rings it is the statement it was.
+            + (policy.rings().on() ? """
+                ,
+                       (SELECT EXTRACT(EPOCH FROM now() - MIN(s.opened_at)) FROM fleet_schema.trip_stage s
+                        WHERE s.trip_id = t.id AND s.provider = 'CRAVES_FLEET' AND s.state = 'OPEN') AS stage_age""" : "") + """
+
             FROM fleet_schema.trip t WHERE t.id = ?""", tripId);
+        long stageAgeSeconds = trip.get("stage_age") == null ? 0 : ((Number) trip.get("stage_age")).longValue();
         int rounds = ((Number) trip.get("rounds")).intValue();
         if (!policy.wholeStage() && rounds >= policy.offerRounds()) {
             return List.of();
@@ -848,7 +876,7 @@ public class FleetDispatcher implements FleetStage {
         double lng = ((Number) trip.get("kitchen_lng")).doubleValue();
         int dropM = trip.get("drop_distance_m") == null ? 0 : ((Number) trip.get("drop_distance_m")).intValue();
         List<Candidate> riders = riders((UUID) trip.get("chef_sub_order_id"), lat, lng, ((Number) trip.get("drop_lat")).doubleValue(),
-            ((Number) trip.get("drop_lng")).doubleValue(), dropM, policy, offered, rounds + 1);
+            ((Number) trip.get("drop_lng")).doubleValue(), dropM, policy, offered, rounds + 1, stageAgeSeconds);
         if (policy.wholeStage()) {
             riders = fewestAsksFirst(tripId, riders);
         }

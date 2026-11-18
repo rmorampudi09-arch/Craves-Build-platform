@@ -138,6 +138,45 @@ Built, switched off (`CRAVES_FLEET_NO_SUPPLY_FAST_PATH_ENABLED`, default false; 
 
 **Switching it off:** set it to false. Orders already sent on stay with the courier; every other order waits its whole 300 s again.
 
+### Search rings
+
+Built, not in use (research R22 item 3-3). **No policy version has rings, so nothing here happens:** every order searches the whole policy radius from its first look, as the rule above says. This section describes what a later policy version could switch on. It does not change the owner's rule of 11 Nov 2026.
+
+**Why.** Today the first rider asked can be anywhere in the 5 km. A rider 4 km away rides 15 minutes to the kitchen while one 1 km away was about to come free. Asking nearer riders first shortens the ride to the kitchen (R20's food rings run 2.1 → 5.5 km).
+
+**What it does.** A policy version may carry two rings (`dispatch_policy.ring_1_m`, `ring_1_seconds`, `ring_2_m`, `ring_2_seconds`; V199; all 0 = no rings). With rings:
+
+- For the first `ring_1_seconds` of the order's time with Craves riders, only riders within `ring_1_m` of the kitchen can hear of it.
+- Then, until `ring_2_seconds`, riders within `ring_2_m`.
+- Then every rider in the policy radius, as today. No ring reaches beyond the policy radius.
+- **A ring nobody free is in is passed over at once.** If no rider who could hear of the order is inside the ring at that look, the next ring is used straight away, so an order never waits for a ring that is empty.
+
+The values proposed for the first version with rings: **2 km until 100 s, 3.5 km until 200 s, then 5 km.** The sizes are R22's; the times are a proposal (a third of the 300 s each, five offers a ring) and are the owner's to set.
+
+**An example.** Rings as proposed, one rider at a time. Free riders: Asha 0.5 km from the kitchen, Bala 1.1 km, Chitra 3 km, Dev 4.4 km.
+
+- 0 to 100 s: Asha and Bala. Asha, then Bala, then Asha again.
+- 100 to 200 s: Chitra joins. She has not been asked yet, so she hears first; then Bala and Asha in turn.
+- 200 to 300 s: Dev joins and hears first; then the others again.
+- Had only Dev been on shift, he would have been asked in the first look.
+
+**What stays the same.** One rider at a time, 20 s each, the 300 s with Craves riders, then Borzo. Inside the ring, the order is the one above: nearest first or fair turns, and riders asked the fewest times first, so the same riders are asked again. Riders already asked stay in when the ring widens. A rider's own distance limits, the GPS rule and every other condition of "Who can hear of an order" apply as they do today; a rider they leave out is not counted as being in a ring. Declining is free and changes nothing. The time decides when a ring widens, and where free riders are now decides whether a ring is empty. No acceptance rate, score, decline count or other history of a rider is read, and nothing is recorded for a rider who is outside the ring.
+
+**What does not use rings.** Whether any rider is in range ("No rider in range" above), the fleet's quote to routing, ops' count of riders near a kitchen and food timing all keep the whole policy radius. So an empty first ring never sends an order to a courier while a rider is anywhere in the radius. The fleet engine (Phase 5) knows no rings: under a policy with rings it neither ranks riders nor is compared.
+
+**What changes for riders.** A rider farther from the kitchen can wait up to `ring_2_seconds` for an order they would hear of at once today, while nearer riders are asked. Riders nearer the kitchen hear of more orders, with shorter rides.
+
+**It is a rule, under the notice gate.** The four columns are rules columns: the table's trigger (§7, V192) and `FleetPolicyStore` refuse a version that changes them with less than 14 days' notice once a rate card is published. The console does not set them: every version it saves, the emergency stop included, keeps the rings riders are shown. Switching on is a new policy version with ring values (as V184 added its rule lines), and:
+
+- **While no real riders are live** (the owner's decision), it may start without the 14 days. The trigger allows that only before a rate card is published.
+- **Once riders are live:** first the owner's wording in the rider app under Terms → "How you get orders", in every language the app has, then 14 days' notice through the policy version. The server's English line for the notice of the change is a placeholder until the owner settles the wording (`FleetRiderService.ringsLine`); the rider API and the app do not carry rings yet.
+
+**Before switching on,** run the replay on recorded orders with and without rings (`REPLAY.md`): the mean pickup distance should fall and the food's wait should not rise. The replay does not model rings yet.
+
+**How to see it.** `FLEET_SEARCH_RING chefSubOrderId=… round=… stageAgeSeconds=… ringM=… radiusM=… inRing=… beyond=…`, one line for each look a ring narrowed (counts only, no rider ids).
+
+**Switching it off:** a policy version with all four values 0 (a rule change again: 14 days' notice once riders are live), or the emergency stop, which stops dispatch as a whole.
+
 ### Rain mode
 
 Built switched off (research R16, item 19; due before the June 2027 monsoon). In heavy rain, rides take longer, riders need longer to see and answer an offer, and couriers slow down too. Zomato and Swiggy charge customers a rain fee that funds rider pay.

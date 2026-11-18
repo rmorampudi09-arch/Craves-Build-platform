@@ -331,6 +331,33 @@ class FleetSetupDatabaseTest {
         assertThat(ruleLines(stop.version())).containsExactly(false, false);
     }
 
+    /** Search rings (V199) are not set from the console: a save and the emergency stop start at once and keep the ones riders are shown. */
+    @Test
+    void aSaveAndTheEmergencyStopKeepTheSearchRingsRidersAreShown() {
+        // The seeded draft (its declared ranges), published with the built-in rule and rings; then riders get terms.
+        fleet.db.execute("""
+            DO $$
+            DECLARE p fleet_schema.dispatch_policy%ROWTYPE;
+            BEGIN
+                SELECT * INTO p FROM fleet_schema.dispatch_policy WHERE version = '2026-10-v1';
+                p.version := '2026-10-v5'; p.status := 'PUBLISHED'; p.mode := 'shadow';
+                p.published_at := now() - INTERVAL '1 day'; p.effective_from := p.published_at; p.created_at := p.published_at;
+                p.offers_at_once := 1; p.offer_rounds := 0; p.fair_band_m := 1500;
+                p.ring_1_m := 2000; p.ring_1_seconds := 100; p.ring_2_m := 3500; p.ring_2_seconds := 200;
+                INSERT INTO fleet_schema.dispatch_policy VALUES (p.*);
+            END $$""");
+        RateCardVersion card = (RateCardVersion) tx(() -> setup.createRateCardDraft(ops, UUID.randomUUID(), card(Instant.now(), ranges())));
+        tx(() -> setup.publishRateCard(ops, UUID.randomUUID(), card.version()));
+        for (String mode : List.of("shadow", "off")) {
+            DispatchPolicyVersion saved = (DispatchPolicyVersion) tx(() -> setup.setDispatchPolicy(ops, UUID.randomUUID(),
+                new DispatchPolicyInput(mode, null, null, null, null, null, null, null, null)));
+            assertThat(saved.effectiveFrom()).as(mode + ": at once, no rule changed").isEqualTo(saved.publishedAt());
+            assertThat(fleet.db.queryForObject("SELECT ring_1_m || ' ' || ring_1_seconds || ' ' || ring_2_m || ' ' || ring_2_seconds "
+                + "FROM fleet_schema.dispatch_policy WHERE version = ?", String.class, saved.version())).isEqualTo("2000 100 3500 200");
+        }
+        assertThat(new FleetPolicyStore(fleet.db, json).nextTermsChange()).as("nothing changed for riders").isEmpty();
+    }
+
     /** A policy with no limit on rounds (0) in force: the emergency stop saves, and keeps the rule, as it keeps any riders are shown. */
     @Test
     void theEmergencyStopSavesWhileAPolicyWithNoLimitOnRoundsIsInForce() {

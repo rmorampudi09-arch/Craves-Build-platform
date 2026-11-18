@@ -72,6 +72,7 @@ class FleetDispatchStatementsDatabaseTest {
                 });
         }
     };
+    String stageSweeper = "off";
     final UUID chefSubOrderId = UUID.fromString("0bde0101-1111-4111-8111-111111111111");
     final DeliveryCommandMessage command = FleetDispatchFixtures.command(chefSubOrderId);
 
@@ -99,6 +100,16 @@ class FleetDispatchStatementsDatabaseTest {
         assertThat(looks(0, "enforce")).containsExactly(OPENING_NOW, WAITING_BEFORE, NEXT_ROUND_BEFORE - 32);
     }
 
+    /**
+     * CRAVES_FLEET_STAGE_SWEEPER shadow or on: each look that leaves riders deciding stores its next check on the stage, one
+     * statement. Off (every test above) stores nothing.
+     */
+    @Test
+    void theStageSweeperAddsOneStatementToALookThatLeavesRidersDeciding() {
+        stageSweeper = "on";
+        assertThat(looks(0, "off")).containsExactly(OPENING_NOW + 1, WAITING_BEFORE + 1, NEXT_ROUND_BEFORE - 32 + 1);
+    }
+
     private int[] looks(int policyCacheSeconds) {
         int[] now = looks(policyCacheSeconds, "off");
         if (policyCacheSeconds == 0) {
@@ -117,6 +128,7 @@ class FleetDispatchStatementsDatabaseTest {
         FleetDispatcher dispatcher = new FleetDispatcher(db, new DataSourceTransactionManager(counted), policies,
             new FleetTestMode(db, FleetDatabase.properties(false)), roads, mock(RiderPushClient.class), json);
         dispatcher.setGpsRule(gpsRule);
+        dispatcher.setStageSweeper(stageSweeper);
         FleetDispatchFixtures.policy(fleet.db, "live", 20, 300, 1, 0, 1500);
         FleetDispatchFixtures.kitchen(fleet.db, chefSubOrderId, false);
         for (int i = 1; i <= RIDERS_IN_BAND; i++) {

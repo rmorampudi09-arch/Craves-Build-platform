@@ -172,6 +172,11 @@ public class FleetDispatcher implements FleetStage {
      */
     private boolean noSupplyFastPath;
     private int noSupplySettleSeconds;
+    /**
+     * CRAVES_FLEET_STAGE_SWEEPER shadow or on (off by default): a look that leaves riders deciding stores when the next
+     * one is due on the stage (trip_stage.next_match_at), for FleetStageSweeper. Nothing in dispatch reads it.
+     */
+    private boolean storesNextLook;
     private final AtomicLong noRateCardLoggedAt = new AtomicLong();
     /** Phase 5, the fleet engine (craves.fleet.engine.*): the feed while shadow or live, the client while live; else null. */
     private FleetEngineFeed engineFeed;
@@ -242,6 +247,11 @@ public class FleetDispatcher implements FleetStage {
         this.noSupplySettleSeconds = Math.max(0, settleSeconds);
     }
 
+    @Value("${craves.fleet.stage-sweeper:off}")
+    public void setStageSweeper(String mode) {
+        this.storesNextLook = !"off".equals(FleetStageSweeper.mode(mode));
+    }
+
     @Autowired(required = false)
     public void setEngine(FleetEngineFeed feed, FleetEngineClient client) {
         this.engineFeed = feed.on() ? feed : null;
@@ -272,6 +282,32 @@ public class FleetDispatcher implements FleetStage {
 
     @Override
     public Optional<UUID> run(DeliveryCommandMessage command, Supplier<OptionalLong> courierQuotePaise, boolean borzoNext) {
+        try {
+            return look(command, courierQuotePaise, borzoNext);
+        } catch (DeliveryProviderTemporarilyUnavailableException deciding) {
+            storeNextLook(command.chefSubOrderId(), deciding.policyDeadline());
+            throw deciding;
+        }
+    }
+
+    /**
+     * The time the look just gave for the next one, on the order's open fleet stage. After the look's transactions (riders
+     * deciding is also thrown inside one, which rolls back), in a statement of its own; a failure changes nothing of the look.
+     */
+    private void storeNextLook(UUID chefSubOrderId, Instant at) {
+        if (!storesNextLook || at == null) {
+            return;
+        }
+        try {
+            jdbc.update("UPDATE fleet_schema.trip_stage s SET next_match_at = now() + make_interval(secs => ?) FROM fleet_schema.trip t "
+                + "WHERE t.id = s.trip_id AND t.chef_sub_order_id = ? AND t.replaced_at IS NULL AND s.provider = 'CRAVES_FLEET' "
+                + "AND s.state = 'OPEN'", Math.max(0, Duration.between(Instant.now(), at).toMillis()) / 1000.0, chefSubOrderId);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("FLEET_NEXT_LOOK_NOT_STORED chefSubOrderId={} error={}", chefSubOrderId, exception.getClass().getSimpleName());
+        }
+    }
+
+    private Optional<UUID> look(DeliveryCommandMessage command, Supplier<OptionalLong> courierQuotePaise, boolean borzoNext) {
         Optional<TripState> existing = trip(command.chefSubOrderId());
         if (existing.isPresent()) {
             // Whatever the policy says now: an open fleet stage is always closed before anyone else is booked.

@@ -280,6 +280,10 @@ CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED=false
 CRAVES_DELIVERY_PROVIDER_API_USAGE_ALERT_PERCENT=70
 CRAVES_DELIVERY_BORZO_DAILY_API_CAP=5000
 CRAVES_DELIVERY_PIDGE_DAILY_API_CAP=0
+CRAVES_COURIER_BREAKER_ENABLED=false
+CRAVES_COURIER_BREAKER_BOOKING_FAILURES=3
+CRAVES_COURIER_BREAKER_QUOTE_FAILURES=5
+CRAVES_COURIER_BREAKER_HALF_OPEN_SECONDS=30
 ```
 
 Do not store `SERVICE_BUS_CONNECTION_STRING` in Azure for the managed-identity deployment.
@@ -754,6 +758,55 @@ before Pidge's API shows the same status counts as different. Then set `enforce`
 on the thread finish, and nothing new is handed to it after the restart.
 
 Not in this yet: the gateway body-size and rate policy for the courier webhook routes (`infra/apim`).
+
+## Shared courier breaker
+
+`CRAVES_COURIER_BREAKER_ENABLED` = `false` (default) | `true`. Off, the `CourierBreaker` bean does not exist and no
+statement runs. On, it is used only while `CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED` is on too: without the journal a
+courier's refusal of one order cannot be told from a failing courier.
+
+One row per courier in `delivery_schema.provider_breaker` (V195) is the breaker for every replica. The row is written on
+a courier's first failure; a courier that has not failed has no row and costs one primary-key read per routing pass.
+
+| State | Row | A routing pass |
+|---|---|---|
+| Closed | none, or `opened_at IS NULL` | quotes and books the courier |
+| Open | `opened_at` set | does not call the courier; the quote audit says `Courier breaker is open` |
+| Half-open | open for `CRAVES_COURIER_BREAKER_HALF_OPEN_SECONDS` (30), and no probe claimed in that time | the one replica whose update sets `probe_at` calls the courier for its order; the others still skip it |
+
+- **Opens** after `CRAVES_COURIER_BREAKER_BOOKING_FAILURES` (3) failed bookings in a row, or
+  `CRAVES_COURIER_BREAKER_QUOTE_FAILURES` (5) failed quotes in a row, counted over all replicas with no time window.
+- **A failure** is no answer, a timeout, HTTP 5xx or 429, a booking whose answer was lost or unusable, or a quote slower
+  than `CRAVES_DELIVERY_QUOTE_TIMEOUT_SECONDS`. A courier's refusal of one order (any other 4xx, `is_successful: false`,
+  a failed validation) is not counted and changes nothing.
+- **A success** sets the count to zero. An answered quote, available or not, is a success for quotes only: it does not
+  close a breaker that failed bookings opened. A booking closes it.
+- **A failed probe** keeps the breaker open; the next probe is `HALF_OPEN_SECONDS` after that one was claimed. So is the
+  next probe after one that gave no verdict.
+- **While Borzo's breaker is open** in the timed policy, Borzo's window is closed for the order being routed and Pidge is
+  quoted at once. While Pidge's is open, or every courier's, the command waits as it does when nobody quotes, up to the
+  courier wait cap.
+- The fleet cost guard's courier quote is skipped while the breaker is open and never takes the probe: only a pass that
+  can book does.
+- A lost booking answer is counted and still goes to the reconciliation lookup; the breaker never books again.
+- Not covered: reconciliation lookups, tracking polls, cancels and the Borzo-to-Pidge handoff's own Pidge booking.
+
+If the row cannot be read (database error, or a statement over 2 seconds) the courier is called as if there were no
+breaker; a result that cannot be written is dropped with a warning. The breaker never fails a routing pass.
+
+| Alert | Raised | Do |
+|---|---|---|
+| `COURIER_BREAKER_OPEN provider= failed=bookings\|quotes halfOpenSeconds=` | Once, by the replica whose write opened the breaker | Check the courier's status and `COURIER_API_RATE_LIMITED` / `COURIER_ACCOUNT_REFUSED`. Orders go to the next courier meanwhile; the breaker closes itself on the first good probe (`Courier breaker closed provider=` at WARN) |
+
+```sql
+SELECT * FROM delivery_schema.provider_breaker;
+-- Close one by hand:
+UPDATE delivery_schema.provider_breaker SET booking_failures = 0, quote_failures = 0, opened_at = NULL, probe_at = NULL WHERE provider_id = 'borzo';
+```
+
+Switch on: the booking journal first, then set the flag. Rollback: set it to `false`; the table keeps its rows and
+nothing reads them. `CRAVES_PROVIDER_RESILIENCE_ENABLED` (`ProviderGuard`, per replica, quotes only) is separate and
+unchanged; both may be on.
 
 ## Safe rollout
 

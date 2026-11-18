@@ -60,6 +60,10 @@ The courier API call count (integration `IntegrationAlertMonitor`, `CRAVES_DELIV
 `COURIER_API_USAGE_HIGH` (once per courier per day) and `COURIER_API_RATE_LIMITED`; see the same README, "Courier API
 usage".
 
+The shared courier breaker (integration `CourierBreaker`, `CRAVES_COURIER_BREAKER_ENABLED`) adds `COURIER_BREAKER_OPEN`,
+logged once when a courier's breaker opens for every replica; see the same README, "Shared courier breaker". It emails
+and does not page.
+
 The double-hold check (integration `IntegrationAlertMonitor`, `CRAVES_FLEET_DOUBLE_HOLD_ALERT_ENABLED`) adds
 `FLEET_DOUBLE_HOLD`: an order a Craves rider holds that a courier booking or a second rider holds too; see
 `docs/riders/BACKEND.md`, the flags table.

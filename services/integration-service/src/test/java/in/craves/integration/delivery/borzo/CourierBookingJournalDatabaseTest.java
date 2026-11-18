@@ -29,6 +29,7 @@ import in.craves.integration.delivery.DeliveryIntelligenceModels.CandidateStatus
 import in.craves.integration.delivery.DeliveryIntelligenceModels.Momentum;
 import in.craves.integration.delivery.DeliveryIntelligenceService;
 import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository;
+import in.craves.integration.delivery.status.DeliveryStatusRepository;
 import in.craves.integration.delivery.command.CourierBreaker;
 import in.craves.integration.delivery.command.CourierStrayBookings;
 import in.craves.integration.delivery.command.DeliveryCommandCompletionService;
@@ -493,6 +494,93 @@ class CourierBookingJournalDatabaseTest {
         assertThat(router.anotherCourierBookable(chefSubOrderId, "borzo")).as("Pidge now holds this order's booking").isFalse();
     }
 
+    /**
+     * Item 2-1's exit test, with CRAVES_DELIVERY_COURIER_CAPABILITIES_ENABLED on: a hot-box order whose Borzo window passed
+     * unbooked ends once and pages, instead of waiting on Pidge. It has no delivery job, so the dead letter and the page
+     * are its ops case: delivery_exception_case needs a job.
+     */
+    @Test
+    void aHotBoxOrderAfterBorzosWindowEndsOnceWithOneAlertInsteadOfWaitingOnPidge() {
+        properties.setCourierCapabilitiesEnabled(true);
+        UUID hotBox = UUID.randomUUID();
+        DeliveryCommandMessage order = new DeliveryCommandMessage(UUID.randomUUID(), UUID.randomUUID(), orderId, orderId, hotBox,
+            message.readyAt(), message.dispatchAt(), hotBox.toString(), 4.6, "Madhapur", 8, 4,
+            new QuoteRequest("Packaged food", 2000, true, message.deliveryRequest().pickup(), message.deliveryRequest().dropoff()));
+        commands.createOrFind(order);
+        database.db.update("UPDATE delivery_schema.delivery_command SET borzo_window_started_at = now() - INTERVAL '5 minutes' "
+            + "WHERE chef_sub_order_id = ?", hotBox);
+        List<String> alerts = new java.util.concurrent.CopyOnWriteArrayList<>();
+        ch.qos.logback.core.AppenderBase<ch.qos.logback.classic.spi.ILoggingEvent> logged = new ch.qos.logback.core.AppenderBase<>() {
+            @Override
+            protected void append(ch.qos.logback.classic.spi.ILoggingEvent event) {
+                if (event.getFormattedMessage().startsWith("CRAVES_ALERT")) {
+                    alerts.add(event.getFormattedMessage());
+                }
+            }
+        };
+        logged.start();
+        ch.qos.logback.classic.Logger workerLog = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(DeliveryCommandWorker.class);
+        workerLog.addAppender(logged);
+        try {
+            var first = worker.process(order);
+            var again = worker.process(order);
+
+            assertThat(first.providerId()).isEqualTo("NO_CAPABLE_COURIER");
+            assertThat(first.duplicate()).isFalse();
+            assertThat(again.providerId()).isEqualTo("NO_CAPABLE_COURIER");
+            assertThat(again.duplicate()).as("a later message is done, not retried").isTrue();
+        } finally {
+            workerLog.detachAppender(logged);
+        }
+        assertThat(database.db.queryForMap("SELECT status, last_error, attempt_count FROM delivery_schema.delivery_command "
+            + "WHERE chef_sub_order_id = ?", hotBox)).containsEntry("status", "DEAD_LETTER").containsEntry("last_error", "NO_CAPABLE_COURIER")
+            .containsEntry("attempt_count", 1);
+        assertThat(alerts).singleElement().asString().startsWith("CRAVES_ALERT alert=NO_CAPABLE_COURIER commandId=")
+            .contains("chefSubOrderId=" + hotBox).contains("THERMOBOX");
+        assertThat(pidge.quoteCalls).as("Pidge is not asked for an order it cannot carry").isZero();
+        assertThat(journal.forOrder(hotBox)).isEmpty();
+        borzo.verify();
+    }
+
+    /** The handoff's two statements for courier capabilities, on a Borzo job the worker booked. */
+    @Test
+    void aKeptBorzoSearchIsListedOncePastTheWaitCapAndThePidgePhaseCanRestOnAnUnknownAnswer() {
+        borzoQuotes();
+        borzo.expect(ExpectedCount.once(), requestTo(BORZO + "/create-order"))
+            .andRespond(withSuccess("{\"is_successful\":true,\"order\":{\"order_id\":1250099,\"status\":\"available\"}}",
+                MediaType.APPLICATION_JSON));
+        assertThat(worker.process(message).providerId()).isEqualTo("borzo");
+        UUID job = database.db.queryForObject("SELECT id FROM delivery_schema.delivery_job WHERE chef_sub_order_id = ?", UUID.class, chefSubOrderId);
+        database.db.update("UPDATE delivery_schema.delivery_job SET status = 'SEARCHING' WHERE id = ?", job);
+        database.db.update("INSERT INTO delivery_schema.delivery_borzo_pidge_handoff (delivery_job_id, borzo_provider_delivery_id, started_at, "
+            + "due_at, state, next_attempt_at) VALUES (?, '1250099', now() - INTERVAL '30 minutes', now() - INTERVAL '28 minutes', "
+            + "'RETAINED_BORZO', now())", job);
+        BorzoPidgeHandoffRepository handoffs = new BorzoPidgeHandoffRepository(database.db);
+        DeliveryStatusRepository cases = new DeliveryStatusRepository(database.db, json);
+
+        database.db.update("UPDATE delivery_schema.delivery_command SET promised_ready_at = now() - INTERVAL '19 minutes'");
+        assertThat(handoffs.retainedSearchesPastCap(20)).as("inside the cap").isEmpty();
+        database.db.update("UPDATE delivery_schema.delivery_command SET promised_ready_at = now() - INTERVAL '21 minutes'");
+        assertThat(handoffs.retainedSearchesPastCap(20)).singleElement().satisfies(search -> {
+            assertThat(search.deliveryJobId()).isEqualTo(job);
+            assertThat(search.chefSubOrderId()).isEqualTo(chefSubOrderId);
+        });
+        assertThat(cases.openSystemCase(job, orderId, "RIDER_NOT_ASSIGNED", "Borzo has not assigned a courier")).isTrue();
+        assertThat(handoffs.retainedSearchesPastCap(20)).as("its case is open").isEmpty();
+        database.db.update("UPDATE delivery_schema.delivery_exception_case SET status = 'RESOLVED', closed_at = now()");
+        assertThat(handoffs.retainedSearchesPastCap(20)).as("once per job, also after the case is closed").isEmpty();
+        assertThat(database.db.queryForObject("SELECT reason FROM delivery_schema.delivery_exception_case WHERE delivery_job_id = ?",
+            String.class, job)).isEqualTo("RIDER_NOT_ASSIGNED");
+
+        database.db.update("UPDATE delivery_schema.delivery_borzo_pidge_handoff SET state = 'PROCESSING_PIDGE', lease_until = now() + INTERVAL '5 minutes'");
+        handoffs.awaitPidgeOutcome(job, Instant.now().minusSeconds(1), "Pidge booking outcome still requires reconciliation");
+        assertThat(database.db.queryForObject("SELECT state FROM delivery_schema.delivery_borzo_pidge_handoff WHERE delivery_job_id = ?",
+            String.class, job)).isEqualTo("PIDGE_RECONCILIATION_PENDING");
+        assertThat(handoffs.claimDue(1)).as("it is claimed again for the lookup").singleElement()
+            .satisfies(claimed -> assertThat(claimed.state()).isEqualTo("PROCESSING_PIDGE"));
+        borzo.verify();
+    }
+
     /** The shared breaker (CRAVES_COURIER_BREAKER_ENABLED), each router with its own CourierBreaker standing for one replica. */
     @Test
     void threeBorzoBookingsAnsweredHttp500OnDifferentReplicasOpenTheBreakerOnEveryReplicaAndTheNextOrdersGoToPidge() {
@@ -747,6 +835,12 @@ class CourierBookingJournalDatabaseTest {
         @Override
         public String providerId() {
             return "pidge";
+        }
+
+        /** As the real Pidge client declares: no hot-food box. */
+        @Override
+        public java.util.Set<Capability> capabilities() {
+            return java.util.Set.of(Capability.PROVIDER_EVENT_TIME);
         }
 
         @Override

@@ -8,6 +8,7 @@ import ch.qos.logback.core.AppenderBase;
 import in.craves.integration.fleet.FleetDatabase;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CyclicBarrier;
@@ -80,7 +81,7 @@ class CourierBreakerDatabaseTest {
     void aSuccessStartsTheCountAgainAndAHealthyCourierHasNoRow() {
         CourierBreaker replica = replica();
         CourierBreaker.Pass healthy = replica.admit("borzo");
-        replica.quoted(healthy, Boolean.TRUE);
+        replica.quoted(healthy, Boolean.TRUE, UUID.randomUUID());
         replica.booked(healthy, Boolean.TRUE);
         replica.booked(healthy, null);
         assertThat(rows()).as("nothing is written for a courier that has not failed").isZero();
@@ -146,21 +147,60 @@ class CourierBreakerDatabaseTest {
         CourierBreaker replica = replica();
         for (int failure = 1; failure <= 5; failure++) {
             assertThat(replica.admit("pidge").refused()).isFalse();
-            replica.quoted(replica.admit("pidge"), Boolean.FALSE);
+            replica.quoted(replica.admit("pidge"), Boolean.FALSE, UUID.randomUUID());
         }
         assertThat(replica.admit("pidge").refused()).isTrue();
         assertThat(alerts).singleElement().asString().contains("provider=pidge failed=quotes");
         age("opened_at");
-        replica.quoted(replica.admit("pidge"), Boolean.TRUE);
+        replica.quoted(replica.admit("pidge"), Boolean.TRUE, UUID.randomUUID());
         assertThat(replica.admit("pidge").refused()).as("the probe's quote was answered").isFalse();
 
         open("borzo");
         age("opened_at");
         CourierBreaker.Pass probe = replica.admit("borzo");
-        replica.quoted(probe, Boolean.TRUE);
+        replica.quoted(probe, Boolean.TRUE, UUID.randomUUID());
         assertThat(replica().admit("borzo").refused()).as("bookings failed; a quote proves nothing about them").isTrue();
         replica.booked(probe, Boolean.TRUE);
         assertThat(replica().admit("borzo").refused()).isFalse();
+    }
+
+    @Test
+    void oneOrdersFailedQuotesCountOnceSoItTakesDifferentOrdersToOpenTheBreaker() {
+        CourierBreaker replica = replica();
+        UUID waiting = UUID.randomUUID();
+        for (int pass = 1; pass <= 8; pass++) {
+            replica().quoted(replica.admit("borzo"), Boolean.FALSE, waiting);
+        }
+        assertThat(count("quote_failures")).as("a waiting order is quoted again on every pass").isEqualTo(1);
+        assertThat(replica.admit("borzo").refused()).isFalse();
+
+        for (int order = 2; order <= 5; order++) {
+            assertThat(replica.admit("borzo").refused()).isFalse();
+            replica.quoted(replica.admit("borzo"), Boolean.FALSE, UUID.randomUUID());
+        }
+        assertThat(replica.admit("borzo").refused()).as("five different orders").isTrue();
+        assertThat(alerts).singleElement().asString().contains("failed=quotes");
+
+        // An answered quote starts again, for that order too.
+        age("opened_at");
+        replica.quoted(replica.admit("borzo"), Boolean.TRUE, waiting);
+        replica.quoted(replica.admit("borzo"), Boolean.FALSE, waiting);
+        assertThat(count("quote_failures")).isEqualTo(1);
+    }
+
+    @Test
+    void aProbeGivenBackIsTakenByTheNextPassAtOnce() {
+        open("borzo");
+        age("opened_at");
+        CourierBreaker replica = replica();
+        CourierBreaker.Pass probe = replica.admit("borzo");
+        assertThat(probe.probe()).isTrue();
+        assertThat(replica().admit("borzo").refused()).isTrue();
+
+        replica.release(probe);
+
+        assertThat(replica().admit("borzo").probe()).as("no half-open wait after a pass that never booked the courier").isTrue();
+        replica.release(new CourierBreaker.Pass("pidge", false, false, false));
     }
 
     private CourierBreaker replica() {

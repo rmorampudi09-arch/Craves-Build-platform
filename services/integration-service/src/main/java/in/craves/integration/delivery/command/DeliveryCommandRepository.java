@@ -119,8 +119,12 @@ public class DeliveryCommandRepository {
 
     /** Whether the sweeper ended this command at the courier wait cap (DeliveryCommandSweeper). */
     public boolean endedAtWaitCap(UUID commandId) {
+        return endedWith(commandId, DeliveryCommandSweeper.WAIT_CAP);
+    }
+
+    public boolean endedWith(UUID commandId, String lastError) {
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM delivery_schema.delivery_command WHERE id = ? "
-            + "AND status = 'DEAD_LETTER' AND last_error = ?)", Boolean.class, commandId, DeliveryCommandSweeper.WAIT_CAP));
+            + "AND status = 'DEAD_LETTER' AND last_error = ?)", Boolean.class, commandId, lastError));
     }
 
     /**

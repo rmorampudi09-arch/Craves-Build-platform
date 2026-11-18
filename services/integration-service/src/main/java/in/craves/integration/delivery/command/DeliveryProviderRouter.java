@@ -55,6 +55,8 @@ public class DeliveryProviderRouter {
     /** A new order may take a moment to show in a courier's list, so a refusal is looked up no sooner than this. */
     static final Duration REFUSAL_LOOKUP_AFTER = Duration.ofSeconds(20);
     private static final String BREAKER_OPEN = "Courier breaker is open";
+    /** last_error of a command ended because no courier can carry the order, and the worker's receipt for it. */
+    public static final String NO_CAPABLE_COURIER = "NO_CAPABLE_COURIER";
     private final Map<String, DeliveryProviderAdapter> adapters;
     private final DeliveryProviderCatalogRepository providerCatalog;
     private final DeliveryIntelligenceService intelligenceService;
@@ -153,6 +155,24 @@ public class DeliveryProviderRouter {
         return pass != null && pass.refused();
     }
 
+    /**
+     * CRAVES_DELIVERY_COURIER_CAPABILITIES_ENABLED: what the order needs that this courier does not offer; empty with the
+     * flag off, and for a courier with no adapter here (that one is handled as before).
+     */
+    private Set<DeliveryProviderAdapter.Capability> lacks(String providerId, DeliveryCommandMessage command) {
+        DeliveryProviderAdapter adapter = adapters.get(providerId);
+        if (!properties.isCourierCapabilitiesEnabled() || adapter == null) {
+            return Set.of();
+        }
+        Set<DeliveryProviderAdapter.Capability> offered = adapter.capabilities();
+        return DeliveryProviderAdapter.needs(command.deliveryRequest()).stream()
+            .filter(need -> !offered.contains(need)).collect(Collectors.toSet());
+    }
+
+    private static QuoteAudit cannotCarry(String providerId, Set<DeliveryProviderAdapter.Capability> lacking) {
+        return new QuoteAudit(providerId, false, false, null, null, null, "Courier cannot carry this order: needs " + lacking);
+    }
+
     public boolean borzoTimedPolicyReady() {
         return properties.isBorzoPidgeHandoffEnabled()
             && providerCatalog.activeProviderIds().stream()
@@ -183,7 +203,8 @@ public class DeliveryProviderRouter {
         List<Callable<QuoteOutcome>> tasks = new ArrayList<>();
         for (String configuredProviderId : providerCatalog.activeProviderIds()) {
             DeliveryProviderAdapter adapter = adapters.get(normalize(configuredProviderId));
-            if (adapter != null && (only == null || only.equals(normalize(configuredProviderId)))) {
+            if (adapter != null && (only == null || only.equals(normalize(configuredProviderId)))
+                && lacks(normalize(configuredProviderId), command).isEmpty()) {
                 // The cost guard's quote books nothing, so it never takes the breaker's probe.
                 CourierBreaker.Pass pass = courierBreaker == null || !journalOn() ? null : courierBreaker.read(normalize(configuredProviderId));
                 if (!refused(pass)) {
@@ -199,6 +220,19 @@ public class DeliveryProviderRouter {
 
     public RoutingResult route(DeliveryCommandMessage command, Instant borzoWindowStartedAt) {
         Objects.requireNonNull(command, "delivery command is required");
+        Map<String, CourierBreaker.Pass> passes = new HashMap<>();
+        Set<String> settled = new java.util.HashSet<>();
+        try {
+            return route(command, borzoWindowStartedAt, passes, settled);
+        } finally {
+            // A probe this pass took for a courier it then got no verdict on goes back for the next pass.
+            passes.values().stream().filter(pass -> pass.probe() && !settled.contains(pass.providerId())).forEach(pass -> courierBreaker.release(pass));
+        }
+    }
+
+    /** passes: the shared breaker's leave per courier. settled: couriers whose quote failed or whose booking was answered. */
+    private RoutingResult route(DeliveryCommandMessage command, Instant borzoWindowStartedAt, Map<String, CourierBreaker.Pass> passes,
+                                Set<String> settled) {
         List<String> activeProviderIds = providerCatalog.activeProviderIds();
         if (activeProviderIds.isEmpty()) {
             throw new DeliveryProviderTemporarilyUnavailableException(
@@ -217,14 +251,23 @@ public class DeliveryProviderRouter {
         }
         // Look before booking: an unresolved earlier attempt goes to the reconciliation worker before anyone is quoted.
         Map<String, List<Attempt>> attempts = journalOn() ? attemptsByCourier(command.chefSubOrderId()) : Map.of();
-        Map<String, CourierBreaker.Pass> passes = new HashMap<>();
         // A refusal in this window sends the order to Pidge at once. A window ops opens later lets Borzo be tried again.
         boolean borzoWindow = borzoReady && borzoWindowStartedAt != null
             && clock.instant().isBefore(borzoWindowStartedAt.plusSeconds(120))
             && !(journalOn() && attempts.containsKey("borzo") && (!bookable(attempts, "borzo")
                 || attempts.get("borzo").stream().anyMatch(row -> !row.createdAt().isBefore(borzoWindowStartedAt))));
-        // An open breaker closes Borzo's window for this order: Pidge is next.
-        boolean borzoWindowOpen = borzoWindow && !refused(admit("borzo", passes));
+        Set<DeliveryProviderAdapter.Capability> borzoLacks = borzoWindow ? lacks("borzo", command) : Set.of();
+        Set<DeliveryProviderAdapter.Capability> pidgeLacks = timedPolicy ? lacks("pidge", command) : Set.of();
+        // An open breaker closes Borzo's window for this order: Pidge is next. So does a Borzo that cannot carry it.
+        boolean borzoWindowOpen = borzoWindow && borzoLacks.isEmpty() && !refused(admit("borzo", passes));
+        if (timedPolicy && !borzoWindowOpen && !pidgeLacks.isEmpty()) {
+            if (borzoWindow && borzoLacks.isEmpty()) {
+                // Only the breaker stands between the order and Borzo: its window is waited out.
+                throw new DeliveryProviderTemporarilyUnavailableException(
+                    "Borzo's breaker is open and Pidge cannot carry this order", borzoWindowStartedAt.plusSeconds(120));
+            }
+            throw new NoCapableCourierException("Pidge cannot carry this order: needs " + pidgeLacks);
+        }
         Set<String> bookableOnly = null;
         if (journalOn()) {
             List<String> deployed = timedPolicy ? List.of(borzoWindowOpen ? "borzo" : "pidge")
@@ -238,8 +281,10 @@ public class DeliveryProviderRouter {
         List<QuoteAudit> quoteAudit = new ArrayList<>();
         List<Callable<QuoteOutcome>> tasks = new ArrayList<>();
         if (borzoWindow && !borzoWindowOpen) {
-            quoteAudit.add(new QuoteAudit("borzo", false, false, null, null, null, BREAKER_OPEN));
+            quoteAudit.add(borzoLacks.isEmpty() ? new QuoteAudit("borzo", false, false, null, null, null, BREAKER_OPEN)
+                : cannotCarry("borzo", borzoLacks));
         }
+        boolean someCourierCanCarry = false;
 
         for (String configuredProviderId : activeProviderIds) {
             String providerId = normalize(configuredProviderId);
@@ -257,6 +302,12 @@ public class DeliveryProviderRouter {
                 ));
                 continue;
             }
+            Set<DeliveryProviderAdapter.Capability> lacking = lacks(providerId, command);
+            if (!lacking.isEmpty()) {
+                quoteAudit.add(cannotCarry(providerId, lacking));
+                continue;
+            }
+            someCourierCanCarry = true;
             CourierBreaker.Pass pass = admit(providerId, passes);
             if (refused(pass)) {
                 quoteAudit.add(new QuoteAudit(providerId, false, false, null, null, null, BREAKER_OPEN));
@@ -265,7 +316,13 @@ public class DeliveryProviderRouter {
             tasks.add(() -> quote(adapter, command, pass));
         }
 
+        if (!someCourierCanCarry && quoteAudit.stream().anyMatch(audit -> audit.error() != null
+            && audit.error().startsWith("Courier cannot carry"))) {
+            throw new NoCapableCourierException("No active courier can carry this order");
+        }
         List<QuoteOutcome> outcomes = invokeQuotes(tasks, quoteAudit);
+        passes.keySet().stream().filter(providerId -> outcomes.stream().noneMatch(outcome -> providerId.equals(outcome.providerId())
+            && outcome.quote() != null)).forEach(settled::add);
         if (timedPolicy) {
             String required = borzoWindowOpen ? "borzo" : "pidge";
             if (outcomes.stream().noneMatch(outcome -> required.equals(outcome.providerId())
@@ -342,6 +399,7 @@ public class DeliveryProviderRouter {
             Attempt attempt = journalOn() ? beginAttempt(command.chefSubOrderId(), candidate.providerId()) : null;
             String clientReference = attempt == null ? clientReference(command.chefSubOrderId()) : attempt.clientRef();
             CourierBreaker.Pass pass = passes.get(candidate.providerId());
+            settled.add(candidate.providerId());
             try {
                 ProviderDelivery delivery = candidate.adapter().create(
                     new CreateDeliveryRequest(
@@ -631,7 +689,8 @@ public class DeliveryProviderRouter {
         } finally {
             if (pass != null) {
                 // A quote slower than the fan-out deadline cannot be used, so it counts against the courier whatever it says.
-                courierBreaker.quoted(pass, System.nanoTime() - started > properties.quoteTimeout().toNanos() ? Boolean.FALSE : healthy);
+                courierBreaker.quoted(pass, System.nanoTime() - started > properties.quoteTimeout().toNanos() ? Boolean.FALSE : healthy,
+                    command.chefSubOrderId());
             }
         }
     }
@@ -852,6 +911,13 @@ public class DeliveryProviderRouter {
 
         public DeliveryRoutingException(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    /** With courier capabilities on: no courier left in the chain can carry the order, so waiting would change nothing. */
+    public static class NoCapableCourierException extends DeliveryRoutingException {
+        public NoCapableCourierException(String message) {
+            super(message);
         }
     }
 

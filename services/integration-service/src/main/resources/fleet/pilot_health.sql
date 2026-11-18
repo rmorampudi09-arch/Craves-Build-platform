@@ -447,7 +447,8 @@ FROM (
                min(v.occurred_at) FILTER (WHERE v.normalized_status = 'DELIVERED') AS delivered_at,
                max(v.occurred_at) FILTER (WHERE v.applied AND v.normalized_status IN ('CANCELLED', 'FAILED', 'RETURNING', 'RETURNED'))
                    AS failed_at,
-               bool_or(h.borzo_cancel_intent_at IS NOT NULL) AS switch_started
+               -- Craves started cancelling Borzo for the switch, and did not keep Borzo after all.
+               bool_or(h.borzo_cancel_intent_at IS NOT NULL AND h.state <> 'RETAINED_BORZO') AS switch_started
         FROM delivery_schema.delivery_job j
         LEFT JOIN delivery_schema.delivery_borzo_pidge_handoff h ON h.delivery_job_id = j.id
         LEFT JOIN delivery_schema.delivery_event v ON v.delivery_job_id = j.id AND v.provider_id = a.provider_id

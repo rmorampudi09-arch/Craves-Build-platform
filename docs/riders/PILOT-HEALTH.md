@@ -66,7 +66,7 @@ How Borzo and Pidge do as companies. It is about the courier companies only: not
 | `not_used` | Attempts that were neither refused nor became the order's delivery: still unanswered, a stray booking, or one Craves cancelled (`INTENT`, `UNKNOWN`, `ORPHAN_SUSPECT`, `CANCELLED`). |
 | `bookings` | Attempts that became the order's delivery (`CONFIRMED`, `ADOPTED`). Every column below counts these only. |
 | `assigned`, `never_assigned` | Bookings with, and without, a `COURIER_ASSIGNED` event from that courier. |
-| `switched` | Borzo bookings Craves cancelled to switch the order to Pidge. They are in `never_assigned` unless Borzo assigned at the last moment. |
+| `switched` | Borzo bookings Craves cancelled to switch the order to Pidge (not those where Borzo was kept after all). They are in `never_assigned` unless Borzo assigned at the last moment. |
 | `in_window`, `in_window_pct` | Bookings assigned within the courier's window, counted from when it was asked: 120 s for Borzo, 600 s for Pidge. The percentage is of `bookings`. |
 | `p50_assign_min`, `p80_assign_min`, `p90_assign_min` | Minutes from asking to assigned, over assigned bookings only. Bookings never assigned are left out, so these read low: never shorten a window from them. |
 | `p80_to_pickup_min` | Minutes from assigned to the courier's first `AT_PICKUP` or `PICKED_UP`. |

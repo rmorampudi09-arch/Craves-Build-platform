@@ -49,6 +49,13 @@ public class CourierCancel {
     private final DeliveryStatusUpdateService statusUpdates;
     /** The fleet's push to ops, when the fleet is on (FleetCourierCancel sets it). */
     private volatile BiConsumer<Booking, String> opsPush = (booking, why) -> { };
+    private in.craves.integration.delivery.billing.CourierCharges charges;
+
+    /** Courier charge records (V199); written only while CRAVES_DELIVERY_COURIER_CHARGE_ENABLED is on. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCharges(in.craves.integration.delivery.billing.CourierCharges charges) {
+        this.charges = charges;
+    }
 
     public CourierCancel(JdbcTemplate jdbc, DeliveryCommandProperties properties, List<DeliveryProviderAdapter> adapters,
                          DeliveryStatusUpdateService statusUpdates) {
@@ -158,6 +165,9 @@ public class CourierCancel {
             booking.providerDeliveryId());
         log.info("COURIER_CANCELLED provider={} delivery={} chefSubOrderId={} reason={}", booking.provider(), booking.providerDeliveryId(),
             booking.chefSubOrderId(), reason);
+        if (charges != null) {
+            charges.cancelled(booking.orderId(), booking.chefSubOrderId(), booking.jobId(), seen.delivery());
+        }
         try {
             // The delivery job and order-service hear it now; the courier's callback or the tracking poll would bring it later.
             statusUpdates.processTracking(new TrackingWorkItem(booking.jobId(), booking.orderId(), booking.chefSubOrderId(),

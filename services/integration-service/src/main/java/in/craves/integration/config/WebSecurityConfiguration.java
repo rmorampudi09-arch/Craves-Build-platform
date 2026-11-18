@@ -30,9 +30,13 @@ public class WebSecurityConfiguration {
         // FleetRingReceiptController requires that credential itself.
         RequestMatcher ringReceipt = environment.getProperty("craves.fleet.ring-receipt-enabled", Boolean.class, false)
             ? AntPathRequestMatcher.antMatcher(HttpMethod.POST, "/api/v1/rider/offers/*/rang") : request -> false;
+        // Courier billing (CourierBillingController), off by default: while off the path is closed to everyone.
+        RequestMatcher courierBillingOff = environment.getProperty("craves.delivery-command.courier-charge-enabled", Boolean.class, false)
+            ? request -> false : AntPathRequestMatcher.antMatcher("/api/v1/admin/fleet/courier-billing/**");
         http.csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(courierBillingOff).denyAll()
                 .requestMatchers("/api/v1/admin/operations/delivery-intelligence/**").hasAnyRole(
                     "ADMIN", "PLATFORM_ADMIN", "SUPPORT_ADMIN", "PAYMENTS_ADMIN", "OPERATIONS_ADMIN", "AUDIT_ADMIN"
                 )

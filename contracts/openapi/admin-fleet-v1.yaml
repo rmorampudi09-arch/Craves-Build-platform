@@ -1279,6 +1279,102 @@ paths:
       responses:
         '204': { description: The kitchen is not a pilot kitchen. }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/courier-billing/settings:
+    get:
+      operationId: listCourierBillingSettings
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN, OPERATIONS_ADMIN, AUDIT_ADMIN]
+      description: >-
+        Courier billing settings, one per courier (borzo, pidge). Off until CRAVES_DELIVERY_COURIER_CHARGE_ENABLED (403).
+        A courier nobody has saved shows the neutral defaults (UNKNOWN, UNDECIDED, nothing else). The settings are a
+        record: only the two alert thresholds are read by the server, and only to write an alert line.
+      responses:
+        '200':
+          description: The settings in force.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [settings]
+                properties:
+                  settings: { type: array, maxItems: 2, items: { $ref: '#/components/schemas/CourierBillingSetting' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/courier-billing/settings/{courier}:
+    put:
+      operationId: saveCourierBillingSetting
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: >-
+        Saves a new version of one courier's settings; earlier versions are kept, with who saved each. It changes no
+        booking, price or payment. A threshold, once set, makes the server write one alert line when a booking costs more
+        (per order) or when the day's bookings with that courier pass it (per day, once a day); bookings go on as before.
+      parameters:
+        - { name: courier, in: path, required: true, schema: { type: string, enum: [borzo, pidge] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CourierBillingSettingInput' }
+      responses:
+        '200':
+          description: The courier's settings after the save.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierBillingSetting' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/admin/fleet/courier-billing/invoices:
+    get:
+      operationId: listCourierInvoices
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN, OPERATIONS_ADMIN, AUDIT_ADMIN]
+      description: The newest 50 imported courier invoices.
+      responses:
+        '200':
+          description: Imports, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoices]
+                properties:
+                  invoices: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/CourierInvoice' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: importCourierInvoice
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN]
+      description: >-
+        Imports one courier invoice as CSV (docs/runbooks/courier-invoice-check.md) and answers with its comparison
+        against the charges Craves recorded. The file is stored whole or not at all. The same courier, reference and
+        content again answers with the stored import (duplicate true) and stores nothing; the same reference with other
+        content is 409. Nothing is disputed, paid or adjusted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CourierInvoiceInput' }
+      responses:
+        '200':
+          description: The import and its comparison.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierInvoiceCheck' }
+        '400': { $ref: '#/components/responses/Invalid' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: "CONFLICT: the reference is already imported with other content.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '413': { description: "PAYLOAD_TOO_LARGE: over 512,000 characters or 5,000 lines.", content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/fleet/courier-billing/invoices/{importId}:
+    get:
+      operationId: getCourierInvoiceCheck
+      x-roles: [PLATFORM_ADMIN, PAYMENTS_ADMIN, OPERATIONS_ADMIN, AUDIT_ADMIN]
+      description: One import compared with the charges Craves has recorded by now.
+      parameters:
+        - { name: importId, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+      responses:
+        '200':
+          description: The import and its comparison.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CourierInvoiceCheck' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -1996,3 +2092,82 @@ components:
         chefId: { type: string, format: uuid, description: The chef's identity id. }
         note: { type: string, maxLength: 200 }
         addedAt: { type: string, format: date-time }
+    CourierBillingSettingInput:
+      type: object
+      description: Every field is stored as given; an empty optional field means "not known" or "none".
+      required: [billingMode, disputedFeeBorneBy]
+      properties:
+        billingMode: { type: string, enum: [UNKNOWN, PREPAID_WALLET, POSTPAID_INVOICE] }
+        taxNote: { type: string, nullable: true, maxLength: 500, description: Free text, for example whether the courier's prices include GST. }
+        taxRateBps: { type: integer, nullable: true, minimum: 0, maximum: 10000, description: Hundredths of a percent; empty when not known. Used by nothing. }
+        disputedFeeBorneBy: { type: string, enum: [UNDECIDED, CRAVES, CHEF, CUSTOMER], description: Stored only. Used by nothing. }
+        perOrderAlertPaise: { type: integer, format: int64, nullable: true, minimum: 1 }
+        perDayAlertPaise: { type: integer, format: int64, nullable: true, minimum: 1 }
+    CourierBillingSetting:
+      type: object
+      required: [courier, billingMode, taxNote, taxRateBps, disputedFeeBorneBy, perOrderAlertPaise, perDayAlertPaise, changedByName, changedAt]
+      properties:
+        courier: { type: string, enum: [borzo, pidge] }
+        billingMode: { type: string, enum: [UNKNOWN, PREPAID_WALLET, POSTPAID_INVOICE] }
+        taxNote: { type: string, nullable: true, maxLength: 500 }
+        taxRateBps: { type: integer, nullable: true, minimum: 0, maximum: 10000 }
+        disputedFeeBorneBy: { type: string, enum: [UNDECIDED, CRAVES, CHEF, CUSTOMER] }
+        perOrderAlertPaise: { type: integer, format: int64, nullable: true, minimum: 1 }
+        perDayAlertPaise: { type: integer, format: int64, nullable: true, minimum: 1 }
+        changedByName: { type: string, nullable: true, maxLength: 80, description: The admin, phone masked. Empty when never saved. }
+        changedAt: { type: string, format: date-time, nullable: true }
+    CourierInvoiceInput:
+      type: object
+      required: [courier, invoiceRef, periodStart, periodEnd, csv]
+      properties:
+        courier: { type: string, enum: [borzo, pidge] }
+        invoiceRef: { type: string, pattern: '^[A-Za-z0-9._/-]{1,64}$' }
+        periodStart: { type: string, format: date, description: First India day the invoice covers. }
+        periodEnd: { type: string, format: date, description: Last India day the invoice covers; at most 92 days. }
+        csv:
+          type: string
+          maxLength: 512000
+          description: >-
+            First line exactly booking_reference,amount,tax,date; then at most 5,000 lines. amount and tax are rupees with
+            at most two decimals (tax may be empty), date is YYYY-MM-DD or empty. No quotes; a booking once per file.
+    CourierInvoice:
+      type: object
+      required: [importId, courier, invoiceRef, periodStart, periodEnd, lineCount, totalPaise, currency, importedByName, importedAt]
+      properties:
+        importId: { type: integer, format: int64 }
+        courier: { type: string, enum: [borzo, pidge] }
+        invoiceRef: { type: string, maxLength: 64 }
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        lineCount: { type: integer, minimum: 1, maximum: 5000 }
+        totalPaise: { type: integer, format: int64, minimum: 0 }
+        currency: { type: string, enum: [INR] }
+        importedByName: { type: string, maxLength: 80 }
+        importedAt: { type: string, format: date-time }
+    CourierInvoiceCheck:
+      type: object
+      required: [invoice, duplicate, counts, netDifferencePaise, rows, truncated]
+      properties:
+        invoice: { $ref: '#/components/schemas/CourierInvoice' }
+        duplicate: { type: boolean, description: This content was already imported; nothing was stored now. }
+        counts:
+          type: object
+          description: Lines per outcome. NOT_ON_INVOICE counts bookings Craves recorded in the period that the invoice lacks.
+          required: [MATCHED, AMOUNT_DIFFERS, NOT_IN_CRAVES, CRAVES_AMOUNT_UNKNOWN, NOT_ON_INVOICE]
+          additionalProperties: { type: integer, minimum: 0 }
+        netDifferencePaise: { type: integer, format: int64, description: Invoice minus Craves, over the lines whose amounts differ. }
+        rows: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/CourierInvoiceCheckRow' } }
+        truncated: { type: boolean }
+    CourierInvoiceCheckRow:
+      type: object
+      description: A line that is not MATCHED. Amounts are whole paise, compared exactly.
+      required: [bookingReference, lineNo, invoicePaise, cravesPaise, outcome, differencePaise, cancelled, deliveryStatus]
+      properties:
+        bookingReference: { type: string, maxLength: 200 }
+        lineNo: { type: integer, nullable: true }
+        invoicePaise: { type: integer, format: int64, nullable: true }
+        cravesPaise: { type: integer, format: int64, nullable: true }
+        outcome: { type: string, enum: [AMOUNT_DIFFERS, NOT_IN_CRAVES, CRAVES_AMOUNT_UNKNOWN, NOT_ON_INVOICE] }
+        differencePaise: { type: integer, format: int64, nullable: true }
+        cancelled: { type: boolean }
+        deliveryStatus: { type: string, nullable: true, maxLength: 40 }

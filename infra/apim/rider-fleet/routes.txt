@@ -106,3 +106,8 @@ route|admin|fleet-put-pilot-riders-riderId|PUT|/pilot/riders/{riderId}|admin
 route|admin|fleet-delete-pilot-riders-riderId|DELETE|/pilot/riders/{riderId}|admin
 route|admin|fleet-put-pilot-kitchens-chefId|PUT|/pilot/kitchens/{chefId}|admin
 route|admin|fleet-delete-pilot-kitchens-chefId|DELETE|/pilot/kitchens/{chefId}|admin
+route|admin|fleet-get-courier-billing-settings|GET|/courier-billing/settings|admin
+route|admin|fleet-put-courier-billing-settings-courier|PUT|/courier-billing/settings/{courier}|admin
+route|admin|fleet-get-courier-billing-invoices|GET|/courier-billing/invoices|admin
+route|admin|fleet-post-courier-billing-invoices|POST|/courier-billing/invoices|admin
+route|admin|fleet-get-courier-billing-invoices-importId|GET|/courier-billing/invoices/{importId}|admin

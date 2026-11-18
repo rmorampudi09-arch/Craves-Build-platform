@@ -226,6 +226,8 @@ craves:
     borzo-refusals: ${CRAVES_DELIVERY_BORZO_REFUSALS:verify}
     # Courier cancel for cancelled orders without the fleet flag, confirmed by fetch (CourierCancel): off keeps today's behaviour.
     courier-cancel-enabled: ${CRAVES_DELIVERY_COURIER_CANCEL_ENABLED:false}
+    # Courier charge records, invoice import and billing settings (README, "Courier charges"): off keeps today's behaviour.
+    courier-charge-enabled: ${CRAVES_DELIVERY_COURIER_CHARGE_ENABLED:false}
     # Courier status rank guard (README, "Status rank guard"): off keeps today's behaviour, shadow only logs, enforce refuses.
     status-rank-guard: ${CRAVES_DELIVERY_STATUS_RANK_GUARD:off}
     # Command sweeper and courier wait cap (README, "Command sweeper"): off keeps today's behaviour.

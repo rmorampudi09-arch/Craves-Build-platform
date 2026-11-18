@@ -843,6 +843,94 @@ Switch on: set the flag. Rollback: set it to `false`; ended commands stay ended,
 Not in this yet: an unanswered Borzo booking for a hot-box order is still given up as an orphan suspect after its
 lookups, as for any order; the command then waits while the suspect is looked up for 2 more hours.
 
+## Courier charges, invoice import and billing settings
+
+`CRAVES_DELIVERY_COURIER_CHARGE_ENABLED` (default `false`). Off, nothing below exists: no row is written, the admin
+routes are not registered and their path is denied. On, the service keeps a record of what each courier company
+(Borzo, Pidge) shows as its price for a booking, lets an admin import the courier's invoice to compare, and stores an
+admin's billing settings. **It is a record.** Nothing here pays a courier, refunds or charges anyone, posts to the
+ledger, changes what a customer pays, changes a booking or chooses a courier, and no courier is called for it.
+
+**What is recorded** (`delivery_schema.courier_charge`, V199, append-only: a correction is a new row):
+
+| Row | When | Amount |
+|---|---|---|
+| `BOOKING` | The booking becomes the order's delivery (a first booking, a looked-up or adopted one, and Pidge's booking in a Borzo-to-Pidge switch). | The price in the courier's answer: Borzo's `payment_amount` (the order total), Pidge's `fulfillment.delivery_charge`. Pidge's `bill_amount` is what the customer is billed and is not used. |
+| `CANCEL` | Craves cancelled the booking and the courier shows it cancelled (`CourierCancel`, the fleet's courier cancel, and Borzo's booking in a switch). | The price the courier's record shows once cancelled. It replaces the booking price: the booking is expected to cost this and nothing more. Neither courier has a field named as a cancellation fee, so this is the nearest fact there is. |
+| `ADJUSTMENT` | Nothing writes it yet. | A later signed change. |
+
+Amounts are whole paise in `BIGINT`, currency `INR` on every row. A courier's rupees become paise by rounding half a
+paisa up (`CourierCharges.paise`); an answer with no price is kept with an empty amount. Each booking has one `BOOKING`
+and at most one `CANCEL` row; writing either again changes nothing. What Craves expects to be billed for a booking is
+view `courier_booking_charge`: the `CANCEL` amount when there is one, otherwise the `BOOKING` amount, plus adjustments.
+
+**A charge can never stop a booking or a cancel.** The row is written from the answer the caller already holds, in a
+savepoint of the booking's transaction (`DeliveryStatusRepository.inSavepoint`). When it fails, the savepoint is
+rolled back, the booking commits as it would have, and one line says so:
+`CRAVES_ALERT alert=COURIER_CHARGE_NOT_RECORDED provider=... chefSubOrderId=... delivery=... kind=... error=...`.
+
+**Not recorded yet:** the courier's final price at delivery (waiting or return fees), bookings a courier cancelled
+itself, and stray bookings that never became an order's delivery. An invoice line for any of these shows up in the
+comparison as a difference or as "not in Craves", which is the point of comparing.
+
+### Invoice import
+
+`POST /api/v1/admin/fleet/courier-billing/invoices` (payments or platform admin) with
+`{courier, invoiceRef, periodStart, periodEnd, csv}`. The CSV is the one generic format:
+
+```
+booking_reference,amount,tax,date
+3451201,61.50,11.07,2026-11-02
+3451377,49,,
+```
+
+- `booking_reference`: the courier's own id of the booking (Borzo's order id, Pidge's order id).
+- `amount`: rupees with at most two decimals, on the same basis as the courier's API price. `tax`: the same, or empty.
+  They are read as decimal text and never rounded; a third decimal, a minus sign, a thousands separator or a quote
+  refuses the file.
+- `date`: `YYYY-MM-DD` or empty.
+- At most 5,000 lines and 512,000 characters; a booking once per file; the period at most 92 days.
+
+A refused file stores nothing and the answer names the line. The same courier, reference and content again returns the
+stored import (`duplicate: true`) and stores nothing; the same reference with other content is `409` (import a
+corrected invoice under a new reference). Imports and lines are append-only, with the admin who imported them.
+
+The answer, and `GET .../invoices/{importId}` later, is the comparison (view `courier_invoice_check`), by courier and
+booking reference, to the paisa:
+
+| Outcome | Meaning |
+|---|---|
+| `MATCHED` | The invoice line equals what Craves expects. |
+| `AMOUNT_DIFFERS` | Both are known and differ; `differencePaise` is invoice minus Craves. |
+| `NOT_IN_CRAVES` | The invoice bills a booking Craves has no record of. |
+| `CRAVES_AMOUNT_UNKNOWN` | Craves recorded the booking without a price. |
+| `NOT_ON_INVOICE` | Craves recorded a booking in the invoice's period (India days) that the invoice lacks, unless Craves expects 0 for it. |
+
+No tolerance is applied, and nothing is disputed, paid or adjusted: a person reads the rows
+(`docs/runbooks/courier-invoice-check.md`). Pilot health has `courier_charges` and `courier_invoice_accuracy`.
+
+### Billing settings
+
+`GET .../courier-billing/settings`, `PUT .../courier-billing/settings/{courier}`. Every save is a new row of
+`courier_billing_setting` with the admin who made it; the newest is in force.
+
+| Setting | Values | Default | Read by |
+|---|---|---|---|
+| `billingMode` | `UNKNOWN`, `PREPAID_WALLET`, `POSTPAID_INVOICE` | `UNKNOWN` | Nothing. |
+| `taxNote` | Free text | empty | Nothing. |
+| `taxRateBps` | 0 to 10000, or empty | empty (not known) | Nothing. |
+| `disputedFeeBorneBy` | `UNDECIDED`, `CRAVES`, `CHEF`, `CUSTOMER` | `UNDECIDED` | Nothing. |
+| `perOrderAlertPaise` | A positive number of paise, or empty | empty (none) | `CourierCharges`: one `CRAVES_ALERT alert=COURIER_CHARGE_OVER_ORDER_THRESHOLD` line when a booking's price is over it. |
+| `perDayAlertPaise` | A positive number of paise, or empty | empty (none) | `CourierCharges`: one `CRAVES_ALERT alert=COURIER_SPEND_OVER_DAY_THRESHOLD` line per courier and India day, when the day's booking prices pass it. |
+
+**Nothing acts on these settings beyond those two alert lines.** The first four are kept so the answers to the open
+commercial questions have a place to live; no code reads them (`CourierChargeMoneyTest` checks that no other source
+names them). A threshold never blocks, delays or reroutes a booking: the line is written after the booking is made.
+The three alert codes are log lines; they reach a phone only once added to `infra/monitoring/silent-failure-alerts.bicep`.
+
+The routes are in `contracts/openapi/admin-fleet-v1.yaml` and `infra/apim/rider-fleet/routes.txt`; the gateway serves
+them once its rider-fleet operations are published again.
+
 ## Safe rollout
 
 1. Deploy and test with `CRAVES_DELIVERY_COMMAND_ENABLED=false`.

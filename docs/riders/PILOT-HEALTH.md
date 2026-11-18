@@ -56,6 +56,8 @@ How Borzo and Pidge do as companies. It is about the courier companies only: not
 |---|---|---|
 | `courier_scorecard` | Per booking over 14 days: both couriers (`all`), then each courier, then each courier per day (India) and hour band (`lunch` 11:00–14:59, `dinner` 18:00–22:59, `other`) by when the courier was asked. Columns below. | **`in_window_pct` 90% or more, red under 80%. `failed_pct` 3% or less, red over 6%.** |
 | `courier_api_calls` | Calls to each courier's API per day (India) over 14 days, then all of them. Empty until `CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED` is on. | Borzo's cap is `CRAVES_DELIVERY_BORZO_DAILY_API_CAP` (5,000 a day); `COURIER_API_USAGE_HIGH` is raised at 70% of it. |
+| `courier_charges` | What each courier showed as its price, per day (India) over 14 days, then all of them: bookings, their booking prices, how many Craves cancelled, what Craves expects to be billed, and bookings with no price. Whole paise. Empty until `CRAVES_DELIVERY_COURIER_CHARGE_ENABLED` is on. | A record only. `price_unknown` above 0: the courier's answer carried no price. |
+| `courier_invoice_accuracy` | The newest 20 imported courier invoices against what Craves recorded: lines, matched to the paisa, `matched_pct`, differing lines and their net difference (invoice minus Craves), billed bookings Craves has no record of, and recorded bookings the invoice lacks. | **`matched_pct` ≥ 97%**, red under 93% (R23 §3.7). Read the rows with `docs/runbooks/courier-invoice-check.md`; nothing is disputed or paid from here. |
 
 **It reads the booking journal** (`delivery_schema.provider_create_attempt`, one row each time a courier is asked), so it counts only bookings made while `CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED` is on; with the journal off it shows one row of zeros. `courier_assign_minutes` above counts every booking either way, and for bookings the journal holds the two agree per courier (`FleetPilotHealthDatabaseTest`). A booking's milestones are its own courier's events (`delivery_event`) on the order's delivery job, so a Borzo booking that was switched to Pidge stays Borzo's.
 
@@ -76,7 +78,7 @@ How Borzo and Pidge do as companies. It is about the courier companies only: not
 
 **Reading it.** Borzo's `in_window_pct` under 80% over the two weeks means its 120 s is too short for the couriers it has: the plan (R23 §3.7) is to lengthen it in 30 s steps, to at most 300 s, and never to shorten it from these numbers. That is a code change the owner decides; nothing does it automatically. A courier red on `failed_pct` or `refused` for two weeks: raise it with the courier before changing anything.
 
-**Not on it yet:** pickup and drop on time (the pickup time a courier quoted is not kept per booking, and the time promised to the customer is not in this database), invoice accuracy (needs courier charges), a split by city (orders carry no city), and anything older than 14 days (nothing is stored).
+**Not on it yet:** pickup and drop on time (the pickup time a courier quoted is not kept per booking, and the time promised to the customer is not in this database), a split by city (orders carry no city), and anything older than 14 days (nothing is stored).
 
 ## Fairness and rider choices (Phase 4)
 

@@ -118,12 +118,29 @@ class FleetPilotHealthDatabaseTest {
                 + "VALUES (?, ?, now() - make_interval(mins => ?), ?, ?, 8, false)", first, rider, 58 - 4 * i, path[i][0], path[i][1]);
         }
 
+        // One courier booking at ₹49.50 and an invoice that bills it ₹50 and lists one booking Craves never recorded.
+        fleet.db.update("INSERT INTO delivery_schema.courier_charge (provider_id, provider_delivery_id, chef_sub_order_id, kind, "
+            + "amount_paise, source) VALUES ('borzo', 'BZ-1', ?, 'BOOKING', 4950, 'API')", UUID.randomUUID());
+        fleet.db.update("INSERT INTO delivery_schema.courier_invoice_import (provider_id, invoice_ref, period_start, period_end, "
+            + "content_sha256, line_count, total_paise, imported_by, imported_by_name) VALUES ('borzo', 'INV-1', "
+            + "(now() AT TIME ZONE 'Asia/Kolkata')::date, (now() AT TIME ZONE 'Asia/Kolkata')::date, repeat('0', 64), 2, 9900, ?, 'Admin')",
+            UUID.randomUUID());
+        fleet.db.update("INSERT INTO delivery_schema.courier_invoice_line (import_id, line_no, provider_delivery_id, amount_paise) "
+            + "SELECT id, 2, 'BZ-1', 5000 FROM delivery_schema.courier_invoice_import UNION ALL "
+            + "SELECT id, 3, 'BZ-9', 4900 FROM delivery_schema.courier_invoice_import");
+
         Map<String, String> queries = queries();
         assertThat(queries.keySet()).containsExactly("offer_to_ring", "offer_to_ring_by_day", "first_channel", "push_results",
             "shift_survival", "sync_delay", "battery_per_hour", "fleet_stage_outcomes", "batching_candidates", "rider_busy_share",
             "pickup_detour", "fcm_on_time", "offer_outcomes", "earnings_per_online_hour", "offer_rules", "rider_choices", "kitchen_wait",
-            "ready_vs_promise", "courier_assign_minutes", "courier_scorecard", "courier_api_calls", "track_size");
+            "ready_vs_promise", "courier_assign_minutes", "courier_scorecard", "courier_api_calls", "courier_charges",
+            "courier_invoice_accuracy", "track_size");
         queries.forEach((name, sql) -> assertThat(fleet.db.queryForList(sql)).as(name).isNotEmpty());
+        assertThat(fleet.db.queryForList(queries.get("courier_charges")).get(0)).containsEntry("courier", "all")
+            .containsEntry("bookings", 1L).containsEntry("booked_paise", 4950L).containsEntry("expected_paise", 4950L);
+        assertThat(fleet.db.queryForList(queries.get("courier_invoice_accuracy")).get(0)).containsEntry("lines", 2L)
+            .containsEntry("matched", 0L).containsEntry("differs", 1L).containsEntry("net_difference_paise", 50L)
+            .containsEntry("not_in_craves", 1L).containsEntry("not_on_invoice", 0L);
 
         assertThat(number(fleet.db.queryForList(queries.get("offer_to_ring_by_day")).get(0), "p95_s")).isCloseTo(19.05, within(0.051));
         List<Map<String, Object>> ring = fleet.db.queryForList(queries.get("offer_to_ring"));

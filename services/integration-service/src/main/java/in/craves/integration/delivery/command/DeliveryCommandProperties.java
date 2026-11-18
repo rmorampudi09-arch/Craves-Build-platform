@@ -21,6 +21,8 @@ public class DeliveryCommandProperties {
     private String borzoRefusals = "verify";
     /** Cancel a cancelled order's courier whatever the fleet flag, confirmed by fetching it (CourierCancel); off keeps today's behaviour. */
     private boolean courierCancelEnabled = false;
+    /** Record what each courier charges for a booking, and open the courier-billing admin routes (CourierCharges); off keeps today's behaviour. */
+    private boolean courierChargeEnabled = false;
     /** Courier status rank guard (DeliveryStatusUpdateService): off (as today), shadow (logs what it would refuse) or enforce. */
     private String statusRankGuard = "off";
     /** Re-send due commands nobody is working on and cap the wait on couriers (DeliveryCommandSweeper); off keeps today's behaviour. */
@@ -231,6 +233,8 @@ public class DeliveryCommandProperties {
     public void setBookingJournalEnabled(boolean bookingJournalEnabled) { this.bookingJournalEnabled = bookingJournalEnabled; }
     public boolean isCourierCancelEnabled() { return courierCancelEnabled; }
     public void setCourierCancelEnabled(boolean courierCancelEnabled) { this.courierCancelEnabled = courierCancelEnabled; }
+    public boolean isCourierChargeEnabled() { return courierChargeEnabled; }
+    public void setCourierChargeEnabled(boolean courierChargeEnabled) { this.courierChargeEnabled = courierChargeEnabled; }
     public boolean isSweeperEnabled() { return sweeperEnabled; }
     public boolean isCourierCapabilitiesEnabled() { return courierCapabilitiesEnabled; }
     public void setCourierCapabilitiesEnabled(boolean courierCapabilitiesEnabled) { this.courierCapabilitiesEnabled = courierCapabilitiesEnabled; }

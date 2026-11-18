@@ -718,6 +718,8 @@ that courier's webhook check also accepts the previous value and writes
 `COURIER_WEBHOOK_PREVIOUS_SECRET_USED provider=<borzo|pidge>` (no values) for each callback that matched it. Steps are
 in `docs/SECRETS.md`. Empty: only the current value is accepted.
 
+Gateway body size and call rate for the two courier webhook routes: `infra/apim/courier-webhooks/` (applied by hand; steps in its README).
+
 ## Shared courier breaker
 
 `CRAVES_COURIER_BREAKER_ENABLED` = `false` (default) | `true`. Off, the `CourierBreaker` bean does not exist and no

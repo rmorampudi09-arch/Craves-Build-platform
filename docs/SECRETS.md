@@ -32,3 +32,4 @@ Steps:
 4. Remove the previous variable; restart the service.
 
 With the previous variable empty, only the current value is accepted. The log line carries no values.
+If the old value must stop working immediately, leave the previous variable empty.

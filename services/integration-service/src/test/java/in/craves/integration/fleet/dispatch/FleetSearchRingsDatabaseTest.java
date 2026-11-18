@@ -33,7 +33,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.slf4j.LoggerFactory;
 
 /**
- * Search rings (R22 3-3, V199; docs/riders/DISPATCH.md §2): a policy without them asks as before; with them, riders nearer
+ * Search rings (R22 3-3, V198; docs/riders/DISPATCH.md §2): a policy without them asks as before; with them, riders nearer
  * the kitchen are asked first and farther ones as the stage ages, in the same fair order, the same riders asked again.
  * Rings 2 km until 100 s, then 3.5 km until 200 s, then the 5 km radius. No sleeps: the stage and its offers are moved back.
  */

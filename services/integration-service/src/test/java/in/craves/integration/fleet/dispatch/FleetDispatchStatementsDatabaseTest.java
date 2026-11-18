@@ -72,6 +72,7 @@ class FleetDispatchStatementsDatabaseTest {
                 });
         }
     };
+    String stageSweeper = "off";
     final UUID chefSubOrderId = UUID.fromString("0bde0101-1111-4111-8111-111111111111");
     final DeliveryCommandMessage command = FleetDispatchFixtures.command(chefSubOrderId);
 
@@ -100,12 +101,22 @@ class FleetDispatchStatementsDatabaseTest {
     }
 
     /**
-     * Search rings (V199) read the whole radius in the candidate statement and the stage's age in the trip statement the
-     * next round already runs: a policy with rings costs what one without costs.
+     * Search rings (V198) read the whole radius in the candidate statement and the stage's age in the trip statement the
+     * next round already runs: a policy with rings costs what one without costs (the stage sweeper off, as above).
      */
     @Test
     void searchRingsAddNoStatementToALook() {
         assertThat(looks(0, "off", true)).containsExactly(OPENING_NOW, WAITING_BEFORE, NEXT_ROUND_BEFORE - 32);
+    }
+
+    /**
+     * CRAVES_FLEET_STAGE_SWEEPER shadow or on: each look that leaves riders deciding stores its next check on the stage, one
+     * statement. Off (every test above) stores nothing.
+     */
+    @Test
+    void theStageSweeperAddsOneStatementToALookThatLeavesRidersDeciding() {
+        stageSweeper = "on";
+        assertThat(looks(0, "off")).containsExactly(OPENING_NOW + 1, WAITING_BEFORE + 1, NEXT_ROUND_BEFORE - 32 + 1);
     }
 
     private int[] looks(int policyCacheSeconds) {
@@ -131,6 +142,7 @@ class FleetDispatchStatementsDatabaseTest {
         FleetDispatcher dispatcher = new FleetDispatcher(db, new DataSourceTransactionManager(counted), policies,
             new FleetTestMode(db, FleetDatabase.properties(false)), roads, mock(RiderPushClient.class), json);
         dispatcher.setGpsRule(gpsRule);
+        dispatcher.setStageSweeper(stageSweeper);
         if (rings) {
             FleetDispatchFixtures.policyWithRings(fleet.db, 20, 300, 1500, 2000, 100, 3500, 200);
         } else {

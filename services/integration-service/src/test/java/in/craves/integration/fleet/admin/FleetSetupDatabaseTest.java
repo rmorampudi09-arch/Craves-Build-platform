@@ -331,7 +331,7 @@ class FleetSetupDatabaseTest {
         assertThat(ruleLines(stop.version())).containsExactly(false, false);
     }
 
-    /** Search rings (V199) are not set from the console: a save and the emergency stop start at once and keep the ones riders are shown. */
+    /** Search rings (V198) are not set from the console: a save and the emergency stop start at once and keep the ones riders are shown. */
     @Test
     void aSaveAndTheEmergencyStopKeepTheSearchRingsRidersAreShown() {
         // The seeded draft (its declared ranges), published with the built-in rule and rings; then riders get terms.

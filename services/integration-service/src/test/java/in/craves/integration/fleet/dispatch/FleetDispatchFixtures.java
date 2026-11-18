@@ -57,7 +57,7 @@ public final class FleetDispatchFixtures {
     }
 
     /**
-     * The owner's rule, live (one rider at a time, no limit on rounds, radius 5 km), with these search rings (V199):
+     * The owner's rule, live (one rider at a time, no limit on rounds, radius 5 km), with these search rings (V198):
      * ring1M until ring1Seconds of the stage, then ring2M until ring2Seconds, then the radius.
      */
     public static void policyWithRings(JdbcTemplate db, int offerSeconds, int stageSeconds, int fairBandM, int ring1M, int ring1Seconds,

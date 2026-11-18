@@ -52,7 +52,7 @@ public class FleetPolicyStore {
     public static final Map<String, List<Long>> DISPATCH_RULE_BOUNDS = Map.of("offers_at_once", List.of(1L, 3L),
         "offer_rounds", List.of(0L, 5L), "fair_band_m", List.of(0L, 5000L));
     /**
-     * Search rings (R22 3-3, V199; docs/riders/DISPATCH.md §2, "Search rings"): rule columns too, all 0 (no rings) in every
+     * Search rings (R22 3-3, V198; docs/riders/DISPATCH.md §2, "Search rings"): rule columns too, all 0 (no rings) in every
      * version so far. Not set from the console: a new version keeps the ones riders are shown (FleetSetupService).
      */
     public static final List<String> SEARCH_RING_FIELDS = List.of("ring_1_m", "ring_1_seconds", "ring_2_m", "ring_2_seconds");
@@ -461,7 +461,7 @@ public class FleetPolicyStore {
                                  int radiusM, int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise,
                                  int pidgeStageSeconds, int offersAtOnce, int offerRounds, int fairBandM, boolean rankByTravelTime,
                                  SearchRings rings) {
-        /** Before search rings (V199): one search radius for the whole stage. */
+        /** Before search rings (V198): one search radius for the whole stage. */
         public DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds, int radiusM,
                               int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise, int pidgeStageSeconds,
                               int offersAtOnce, int offerRounds, int fairBandM, boolean rankByTravelTime) {
@@ -515,7 +515,7 @@ public class FleetPolicyStore {
      */
     public record DispatchRules(int offersAtOnce, int offerRounds, int fairBandM, boolean byTravelTime, boolean jointMatching,
                                 boolean nextOrderOffers, SearchRings rings) {
-        /** Before search rings (V199). */
+        /** Before search rings (V198). */
         public DispatchRules(int offersAtOnce, int offerRounds, int fairBandM, boolean byTravelTime, boolean jointMatching,
                              boolean nextOrderOffers) {
             this(offersAtOnce, offerRounds, fairBandM, byTravelTime, jointMatching, nextOrderOffers, SearchRings.NONE);
@@ -550,7 +550,7 @@ public class FleetPolicyStore {
     }
 
     /**
-     * Search rings (R22 3-3, V199; docs/riders/DISPATCH.md §2, "Search rings"): a rule riders are told, so the columns are
+     * Search rings (R22 3-3, V198; docs/riders/DISPATCH.md §2, "Search rings"): a rule riders are told, so the columns are
      * under the 14-day notice like every rule. For the first ring1Seconds of an order's fleet stage only riders within ring1M
      * of the kitchen may hear of it, then within ring2M until ring2Seconds, then within the policy radius, which no ring
      * exceeds. A ring holding no free rider is passed over at once, so an order never waits for a ring nobody is in. All 0

@@ -223,7 +223,7 @@ public class FleetSetupService {
             DispatchRules shown = policies.dispatchRules(null);
             args.add(shown.jointMatching());
             args.add(shown.nextOrderOffers());
-            // Search rings (V199) likewise: kept as riders are shown them, never set here.
+            // Search rings (V198) likewise: kept as riders are shown them, never set here.
             args.addAll(List.of(shown.rings().ring1M(), shown.rings().ring1Seconds(), shown.rings().ring2M(), shown.rings().ring2Seconds()));
             args.add(admin.write(ranges));
             jdbc.update("INSERT INTO fleet_schema.dispatch_policy (version, effective_from, mode, " + String.join(", ", DISPATCH_POLICY_FIELDS)

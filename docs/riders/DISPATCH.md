@@ -144,7 +144,7 @@ Built, not in use (research R22 item 3-3). **No policy version has rings, so not
 
 **Why.** Today the first rider asked can be anywhere in the 5 km. A rider 4 km away rides 15 minutes to the kitchen while one 1 km away was about to come free. Asking nearer riders first shortens the ride to the kitchen (R20's food rings run 2.1 → 5.5 km).
 
-**What it does.** A policy version may carry two rings (`dispatch_policy.ring_1_m`, `ring_1_seconds`, `ring_2_m`, `ring_2_seconds`; V199; all 0 = no rings). With rings:
+**What it does.** A policy version may carry two rings (`dispatch_policy.ring_1_m`, `ring_1_seconds`, `ring_2_m`, `ring_2_seconds`; V198; all 0 = no rings). With rings:
 
 - For the first `ring_1_seconds` of the order's time with Craves riders, only riders within `ring_1_m` of the kitchen can hear of it.
 - Then, until `ring_2_seconds`, riders within `ring_2_m`.

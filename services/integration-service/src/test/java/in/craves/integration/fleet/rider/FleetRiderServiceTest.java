@@ -79,7 +79,7 @@ class FleetRiderServiceTest {
         assertThat(FleetRiderService.factor(100)).isEqualTo("1");
     }
 
-    /** Search rings (V199): the radius by the stage's age, never beyond the policy radius, and an empty ring passed over. */
+    /** Search rings (V198): the radius by the stage's age, never beyond the policy radius, and an empty ring passed over. */
     @Test
     void searchRingsNarrowTheRadiusByTheStagesAgeAndNeverWaitOnAnEmptyRing() {
         SearchRings rings = new SearchRings(2000, 100, 3500, 200);

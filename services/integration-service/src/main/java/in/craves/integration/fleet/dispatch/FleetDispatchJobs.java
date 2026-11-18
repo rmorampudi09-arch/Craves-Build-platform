@@ -133,9 +133,20 @@ public class FleetDispatchJobs {
         this.intelligence = intelligence;
     }
 
+    /** Open fleet stages whose next look is overdue (CRAVES_FLEET_STAGE_SWEEPER; off: its sweep returns at once). */
+    private FleetStageSweeper stageSweeper;
+
+    @Autowired(required = false)
+    public void setStageSweeper(FleetStageSweeper stageSweeper) {
+        this.stageSweeper = stageSweeper;
+    }
+
     @Scheduled(scheduler = FleetConfiguration.FLEET_SCHEDULER, fixedDelayString = "${craves.fleet.dispatch-tick-ms:5000}")
     public void tick() {
         expireOffers();
+        if (stageSweeper != null) {
+            stageSweeper.sweep();
+        }
         cancelledOrders();
         watchdog();
         courierStages();

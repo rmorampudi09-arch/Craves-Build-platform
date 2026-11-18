@@ -83,4 +83,12 @@ class PidgeTransportTest {
         assertEquals("UNCLASSIFIED", PidgeTransport.failureCategory(null));
         assertEquals("UNCLASSIFIED", PidgeTransport.failureCategory("x".repeat(8193)));
     }
+    @SuppressWarnings("unchecked")
+    @Test void aReadWithALimitIsGivenUpAtTheLimitAndCountsAsNotReceived() throws Exception {
+        when(http.sendAsync(any(), any(HttpResponse.BodyHandler.class))).thenReturn(new java.util.concurrent.CompletableFuture<>());
+        var failure = assertThrows(PidgeTransport.ApiException.class,
+            () -> transport.get("/v1.0/store/channel/vendor/order/PG-1", java.time.Duration.ofMillis(20)));
+        assertEquals("Pidge response was not received", failure.getMessage());
+        verify(http, never()).send(any(), any(HttpResponse.BodyHandler.class));
+    }
 }

@@ -37,11 +37,13 @@ public class PidgeTransport {
         this.client = client;
     }
 
-    public JsonNode get(String path) { return request("GET", path, null, false); }
-    public JsonNode quote(JsonNode body) { return request("POST", "/v1.0/store/channel/vendor/quote", body, false); }
-    public JsonNode mutate(String path, JsonNode body) { return request("POST", path, body, true); }
+    public JsonNode get(String path) { return request("GET", path, null, false, null); }
+    /** A read that is given up after the limit, whatever the configured read timeout. */
+    public JsonNode get(String path, Duration limit) { return request("GET", path, null, false, limit); }
+    public JsonNode quote(JsonNode body) { return request("POST", "/v1.0/store/channel/vendor/quote", body, false, null); }
+    public JsonNode mutate(String path, JsonNode body) { return request("POST", path, body, true, null); }
 
-    private JsonNode request(String method, String path, JsonNode body, boolean mutation) {
+    private JsonNode request(String method, String path, JsonNode body, boolean mutation, Duration limit) {
         if (!properties.isEnabled() || !properties.credentialReady())
             throw new ApiException("Pidge API is disabled or credentials are missing", false);
         properties.validate();
@@ -57,7 +59,9 @@ public class PidgeTransport {
         else request.GET();
         try {
             CourierApiUsage.call("pidge");
-            HttpResponse<String> response = client.send(request.build(), HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = limit == null
+                ? client.send(request.build(), HttpResponse.BodyHandlers.ofString())
+                : within(limit, request.build());
             int status = response.statusCode();
             if (status == 429) CourierApiUsage.rateLimited("pidge");
             if (status < 200 || status >= 300) {
@@ -85,6 +89,17 @@ public class PidgeTransport {
         } catch (IOException ex) {
             log.warn("Pidge transport failure operation={} type={}", operation(path, mutation), ex.getClass().getSimpleName());
             throw new ApiException("Pidge response was not received", mutation);
+        }
+    }
+
+    /** The whole exchange, body included, inside the limit. */
+    private HttpResponse<String> within(Duration limit, HttpRequest request) throws IOException, InterruptedException {
+        var pending = client.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+        try {
+            return pending.get(limit.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException | java.util.concurrent.ExecutionException ex) {
+            pending.cancel(true);
+            throw new IOException("Pidge read did not finish", ex);
         }
     }
 

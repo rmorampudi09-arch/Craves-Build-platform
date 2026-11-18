@@ -56,6 +56,11 @@ The courier API call count (integration `IntegrationAlertMonitor`, `CRAVES_DELIV
 `COURIER_API_USAGE_HIGH` (once per courier per day) and `COURIER_API_RATE_LIMITED`; see the same README, "Courier API
 usage".
 
+Courier capabilities (integration `DeliveryCommandWorker`, `CRAVES_DELIVERY_COURIER_CAPABILITIES_ENABLED`) add
+`NO_CAPABLE_COURIER`, logged once when a command is ended because no courier can carry the order; it pages. The same
+flag logs `DELIVERY_COURIER_WAIT_CAP ... was=RETAINED_BORZO` for a Borzo search kept past the wait cap. See the same
+README, "Courier capabilities".
+
 The shared courier breaker (integration `CourierBreaker`, `CRAVES_COURIER_BREAKER_ENABLED`) adds `COURIER_BREAKER_OPEN`,
 logged once when a courier's breaker opens for every replica; see the same README, "Shared courier breaker". It emails
 and does not page.
@@ -90,6 +95,7 @@ to this folder deploys nothing: no pipeline or workflow reads it, and the rules 
 | TERMINAL_CONFLICT | None yet: no delivery code logs it (the status rank guard records `STALE_RANK` only) | — |
 | Courier-side cancels | `COURIER_ENDED_DELIVERY` | `DeliveryStatusUpdateService` |
 | A courier's REJECTED rate over 20% in 15 min | `COURIER_REJECTED_RATE` | `IntegrationAlertMonitor` |
+| No courier can carry an order (fix program 2-1) | `NO_CAPABLE_COURIER` | `DeliveryCommandWorker` (with `CRAVES_DELIVERY_COURIER_CAPABILITIES_ENABLED`) |
 
 To page on another code, add it to `pagedCodes` in the template. Severities are unchanged.
 

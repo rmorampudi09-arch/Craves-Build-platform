@@ -158,8 +158,100 @@ class DeliveryProviderRouterTest {
             assertThat(audit.error()).isEqualTo("Courier breaker is open");
         });
         verify(breaker).admit("backup");
-        verify(breaker).quoted(backupPass, Boolean.TRUE);
+        verify(breaker).quoted(eq(backupPass), eq(Boolean.TRUE), any());
         verify(breaker).booked(backupPass, Boolean.TRUE);
+        verify(breaker, org.mockito.Mockito.never()).release(any());
+    }
+
+    @Test
+    void aProbeTakenForACourierThatWasQuotedButNotBookedIsGivenBack() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("fast", "backup"));
+        FakeAdapter fast = new FakeAdapter("fast", 5, "110.00", CreateBehavior.SUCCESS);
+        FakeAdapter backup = new FakeAdapter("backup", 8, "90.00", CreateBehavior.SUCCESS);
+        when(intelligence.assign(any())).thenReturn(assignment(UUID.randomUUID(), UUID.randomUUID()));
+        DeliveryProviderRouter router = new DeliveryProviderRouter(List.of(fast, backup), catalog, intelligence,
+            mock(DeliveryAssignmentRepository.class), new DeliveryCommandProperties(), quoteExecutor, clock);
+        CourierBreaker breaker = mock(CourierBreaker.class);
+        CourierBreaker.Pass fastProbe = new CourierBreaker.Pass("fast", false, true, true);
+        CourierBreaker.Pass backupProbe = new CourierBreaker.Pass("backup", false, true, true);
+        when(breaker.admit("fast")).thenReturn(fastProbe);
+        when(breaker.admit("backup")).thenReturn(backupProbe);
+        router.setCourierBreaker(breaker);
+        router.setJournal(journal());
+
+        assertThat(router.route(command()).providerId()).isEqualTo("fast");
+
+        verify(breaker).booked(fastProbe, Boolean.TRUE);
+        verify(breaker).release(backupProbe);
+        verify(breaker, org.mockito.Mockito.never()).release(fastProbe);
+    }
+
+    @Test
+    void withCapabilitiesOnACourierThatCannotCarryTheOrderIsNotQuotedAndNoCapableCourierEndsTheRouting() {
+        DeliveryProviderCatalogRepository catalog = mock(DeliveryProviderCatalogRepository.class);
+        DeliveryIntelligenceService intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("fast", "backup"));
+        FakeAdapter fast = new FakeAdapter("fast", 5, "110.00", CreateBehavior.SUCCESS);
+        FakeAdapter backup = new FakeAdapter("backup", 8, "90.00", CreateBehavior.SUCCESS);
+        DeliveryCommandProperties properties = new DeliveryCommandProperties();
+        when(intelligence.assign(any())).thenReturn(assignment(UUID.randomUUID(), UUID.randomUUID()));
+        DeliveryProviderRouter router = new DeliveryProviderRouter(List.of(fast, backup), catalog, intelligence,
+            mock(DeliveryAssignmentRepository.class), properties, quoteExecutor, clock);
+
+        // command() needs a hot-food box, which neither courier declares: with the flag off both are quoted as before.
+        assertThat(router.route(command()).providerId()).isEqualTo("fast");
+        assertThat(backup.quoteCalls()).isEqualTo(1);
+
+        properties.setCourierCapabilitiesEnabled(true);
+        backup.capabilities = java.util.Set.of(DeliveryProviderAdapter.Capability.THERMOBOX);
+        var result = router.route(command());
+        assertThat(result.providerId()).isEqualTo("backup");
+        assertThat(fast.quoteCalls()).as("not asked for an order it cannot carry").isEqualTo(1);
+        assertThat(result.quoteAudit()).anySatisfy(audit -> {
+            assertThat(audit.providerId()).isEqualTo("fast");
+            assertThat(audit.error()).isEqualTo("Courier cannot carry this order: needs [THERMOBOX]");
+        });
+
+        backup.capabilities = java.util.Set.of();
+        assertThatThrownBy(() -> router.route(command())).isInstanceOf(DeliveryProviderRouter.NoCapableCourierException.class);
+        assertThat(fast.quoteCalls() + backup.quoteCalls()).isEqualTo(3);
+    }
+
+    @Test
+    void withCapabilitiesOnAHotBoxOrderGoesToBorzoInItsWindowAndEndsAfterItInsteadOfWaitingOnPidge() {
+        var catalog = mock(DeliveryProviderCatalogRepository.class);
+        var intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "pidge"));
+        var borzo = new FakeAdapter("borzo", 7, "100.00", CreateBehavior.SUCCESS);
+        borzo.capabilities = java.util.Set.of(DeliveryProviderAdapter.Capability.THERMOBOX);
+        var pidge = new FakeAdapter("pidge", 5, "90.00", CreateBehavior.SUCCESS);
+        var properties = new DeliveryCommandProperties();
+        properties.setBorzoPidgeHandoffEnabled(true);
+        properties.setCourierCapabilitiesEnabled(true);
+        when(intelligence.assign(any())).thenReturn(timedAssignment());
+        var router = new DeliveryProviderRouter(List.of(borzo, pidge), catalog, intelligence,
+            mock(DeliveryAssignmentRepository.class), properties, quoteExecutor, clock);
+
+        assertThat(router.route(command(), clock.instant()).providerId()).isEqualTo("borzo");
+
+        assertThatThrownBy(() -> router.route(command(), clock.instant().minusSeconds(120)))
+            .isInstanceOf(DeliveryProviderRouter.NoCapableCourierException.class).hasMessageContaining("THERMOBOX");
+        assertThat(pidge.quoteCalls()).isZero();
+
+        // Borzo's breaker is open inside its window: the window is waited out, the order is not ended.
+        CourierBreaker breaker = mock(CourierBreaker.class);
+        when(breaker.admit("borzo")).thenReturn(new CourierBreaker.Pass("borzo", true, true, false));
+        router.setCourierBreaker(breaker);
+        router.setJournal(journal());
+        assertThatThrownBy(() -> router.route(command(), clock.instant()))
+            .isExactlyInstanceOf(DeliveryProviderTemporarilyUnavailableException.class).hasMessageContaining("breaker is open");
+
+        properties.setCourierCapabilitiesEnabled(false);
+        router.setCourierBreaker(null);
+        assertThat(router.route(command(), clock.instant().minusSeconds(120)).providerId()).as("flag off: Pidge is asked as before")
+            .isEqualTo("pidge");
     }
 
     @Test
@@ -181,6 +273,52 @@ class DeliveryProviderRouterTest {
 
         verify(breaker).booked(new CourierBreaker.Pass("fast", false, false, false), Boolean.FALSE);
         verify(breaker, org.mockito.Mockito.never()).booked(eq(new CourierBreaker.Pass("backup", false, false, false)), any());
+    }
+
+    @Test
+    void aHotBoxOrderIsEndedOnlyWhenNoBookingOfItCanExist() {
+        var catalog = mock(DeliveryProviderCatalogRepository.class);
+        var intelligence = mock(DeliveryIntelligenceService.class);
+        when(catalog.activeProviderIds()).thenReturn(List.of("borzo", "pidge"));
+        var borzo = new FakeAdapter("borzo", 7, "100.00", CreateBehavior.SUCCESS);
+        borzo.capabilities = java.util.Set.of(DeliveryProviderAdapter.Capability.THERMOBOX);
+        var pidge = new FakeAdapter("pidge", 5, "90.00", CreateBehavior.SUCCESS);
+        var properties = new DeliveryCommandProperties();
+        properties.setBorzoPidgeHandoffEnabled(true);
+        properties.setCourierCapabilitiesEnabled(true);
+        var router = new DeliveryProviderRouter(List.of(borzo, pidge), catalog, intelligence,
+            mock(DeliveryAssignmentRepository.class), properties, quoteExecutor, clock);
+        ProviderCreateAttemptRepository journal = journal();
+        router.setJournal(journal);
+        Instant windowOver = clock.instant().minusSeconds(300);
+
+        // Its answer is not known: reconciliation first, as for any order.
+        when(journal.forOrder(any())).thenReturn(List.of(borzoAttempt("UNKNOWN", null, 60)));
+        assertThatThrownBy(() -> router.route(command(), windowOver)).isInstanceOf(DeliveryCreateReconciliationPendingException.class);
+
+        // Given up as an orphan suspect a minute ago: it is still looked up, so the order waits.
+        when(journal.forOrder(any())).thenReturn(List.of(borzoAttempt("ORPHAN_SUSPECT", null, 60)));
+        assertThatThrownBy(() -> router.route(command(), windowOver))
+            .isExactlyInstanceOf(DeliveryProviderTemporarilyUnavailableException.class).hasMessageContaining("may still exist");
+        assertThatThrownBy(() -> router.route(command(), clock.instant())).as("also inside Borzo's window")
+            .isExactlyInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+
+        // A refused booking that was later found at Borzo: the stray-booking path decides.
+        when(journal.forOrder(any())).thenReturn(List.of(borzoAttempt("REJECTED", "1250032", 60)));
+        assertThatThrownBy(() -> router.route(command(), windowOver))
+            .isExactlyInstanceOf(DeliveryProviderTemporarilyUnavailableException.class);
+
+        // Nothing can exist: refused outright, or an orphan suspect whose 2 hours of lookups are over.
+        when(journal.forOrder(any())).thenReturn(List.of(borzoAttempt("REJECTED", null, 60)));
+        assertThatThrownBy(() -> router.route(command(), windowOver)).isInstanceOf(DeliveryProviderRouter.NoCapableCourierException.class);
+        when(journal.forOrder(any())).thenReturn(List.of(borzoAttempt("ORPHAN_SUSPECT", null, 3 * 3600)));
+        assertThatThrownBy(() -> router.route(command(), windowOver)).isInstanceOf(DeliveryProviderRouter.NoCapableCourierException.class);
+        assertThat(pidge.quoteCalls() + borzo.quoteCalls()).isZero();
+    }
+
+    private ProviderCreateAttemptRepository.Attempt borzoAttempt(String state, String providerRef, int secondsSinceUpdate) {
+        return new ProviderCreateAttemptRepository.Attempt(UUID.randomUUID(), "borzo", 1, "ref", state, providerRef,
+            clock.instant().minusSeconds(4 * 3600), clock.instant().minusSeconds(secondsSinceUpdate));
     }
 
     private ProviderCreateAttemptRepository journal() {
@@ -570,6 +708,7 @@ class DeliveryProviderRouterTest {
         private final int pickupEtaMinutes;
         private final BigDecimal fee;
         private final CreateBehavior createBehavior;
+        private java.util.Set<Capability> capabilities = java.util.Set.of();
         private final AtomicInteger quoteCalls = new AtomicInteger();
         private final AtomicInteger createCalls = new AtomicInteger();
         private final AtomicInteger reconcileCalls = new AtomicInteger();
@@ -590,6 +729,11 @@ class DeliveryProviderRouterTest {
         @Override
         public String providerId() {
             return providerId;
+        }
+
+        @Override
+        public java.util.Set<Capability> capabilities() {
+            return capabilities;
         }
 
         @Override

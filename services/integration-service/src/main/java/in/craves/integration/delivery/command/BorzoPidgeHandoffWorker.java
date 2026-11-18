@@ -38,6 +38,8 @@ public class BorzoPidgeHandoffWorker {
     private static final int MAX_ATTEMPTS = 20;
     // Attempts count the Borzo phase too: the Pidge fallback starts at about attempt 2, so attempt 7 is ~10 minutes in.
     private static final int STALLED_ALERT_ATTEMPT = 7;
+    // Courier capabilities only: the Pidge phase's last try when nothing was sent to Pidge.
+    static final int PIDGE_PHASE_TRIES = 10;
 
     private final BorzoPidgeHandoffRepository handoffs;
     private final DeliveryJobRepository jobs;
@@ -53,6 +55,68 @@ public class BorzoPidgeHandoffWorker {
     private final DeliveryStatusUpdateService statusUpdates;
     private final BorzoPidgeHandoffCompletionService completion;
     private ProviderCreateAttemptRepository journal;
+    private DeliveryCommandProperties properties;
+    private in.craves.integration.delivery.status.DeliveryStatusRepository cases;
+
+    /** Courier capabilities (CRAVES_DELIVERY_COURIER_CAPABILITIES_ENABLED); off, or unset, nothing below changes. */
+    @Autowired(required = false)
+    public void setCapabilities(DeliveryCommandProperties properties, in.craves.integration.delivery.status.DeliveryStatusRepository cases) {
+        this.properties = properties;
+        this.cases = cases;
+    }
+
+    private boolean capabilitiesOn() {
+        return properties != null && cases != null && properties.isCourierCapabilitiesEnabled();
+    }
+
+    /** A Borzo search kept because Pidge cannot carry the order gets a person once the courier wait cap is over. */
+    private void capRetainedSearches() {
+        try {
+            for (BorzoPidgeHandoffRepository.RetainedSearch search : handoffs.retainedSearchesPastCap(properties.getCourierWaitCapMinutes())) {
+                if (cases.openSystemCase(search.deliveryJobId(), search.orderId(), "RIDER_NOT_ASSIGNED",
+                    "Borzo has not assigned a courier and Pidge cannot carry this order")) {
+                    log.error("CRAVES_ALERT alert=DELIVERY_COURIER_WAIT_CAP jobId={} chefSubOrderId={} orderId={} was=RETAINED_BORZO capMinutes={}",
+                        search.deliveryJobId(), search.chefSubOrderId(), search.orderId(), properties.getCourierWaitCapMinutes());
+                }
+            }
+        } catch (RuntimeException error) {
+            log.error("Retained Borzo searches could not be checked against the wait cap", error);
+        }
+    }
+
+    /** The Pidge phase is over without a courier: a person takes it from here. */
+    private void endPidgePhase(Handoff handoff, int tries, boolean pidgeBookingMayExist, String reason) {
+        handoffs.manualReview(handoff.deliveryJobId(), reason);
+        UUID orderId = jobs.findHandoffJob(handoff.deliveryJobId()).map(DeliveryJobRepository.HandoffJob::orderId).orElse(null);
+        log.error("CRAVES_ALERT alert=DELIVERY_HANDOFF_NO_COURIER orderId={} jobId={} reason={}", orderId, handoff.deliveryJobId(), reason);
+        if (orderId != null) {
+            cases.openSystemCase(handoff.deliveryJobId(), orderId, "RIDER_NOT_ASSIGNED", "Borzo was cancelled and the handoff to Pidge "
+                + "did not finish after " + tries + " tries. " + (pidgeBookingMayExist ? "A Pidge booking may exist: check Pidge first. "
+                : "Nothing was booked with Pidge. ") + reason);
+        }
+    }
+
+    /**
+     * Whether Pidge may hold a booking for this handoff. PidgeApiClient records pidge_booking before it calls Pidge, under
+     * the order's id or, with the journal on, the attempt's reference; a row that is not REJECTED or CANCELLED may be live.
+     * When that cannot be read the answer is yes.
+     */
+    private boolean pidgeBookingMayExist(Handoff handoff) {
+        try {
+            DeliveryJobRepository.HandoffJob job = jobs.findHandoffJob(handoff.deliveryJobId()).orElse(null);
+            if (job == null) {
+                return true;
+            }
+            List<String> references = new java.util.ArrayList<>(List.of(job.chefSubOrderId().toString()));
+            if (journalOn()) {
+                pidgeAttempts(job.chefSubOrderId()).forEach(attempt -> references.add(attempt.clientRef()));
+            }
+            return references.stream().anyMatch(reference -> pidgeBookings.find(reference)
+                .filter(booking -> !"REJECTED".equals(booking.state()) && !"CANCELLED".equals(booking.state())).isPresent());
+        } catch (RuntimeException unreadable) {
+            return true;
+        }
+    }
 
     /** The booking journal (V191); used only while CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED is on. */
     @Autowired(required = false)
@@ -109,6 +173,9 @@ public class BorzoPidgeHandoffWorker {
 
     @Scheduled(scheduler = in.craves.integration.config.WorkerSchedulingConfiguration.DELIVERY_SCHEDULER, fixedDelayString = "${craves.delivery-command.borzo-pidge-handoff-interval-ms:5000}")
     public void processDue() {
+        if (capabilitiesOn()) {
+            capRetainedSearches();
+        }
         for (int index = 0; index < BATCH_SIZE; index++) {
             List<Handoff> due = handoffs.claimDue(1);
             if (due.isEmpty()) return;
@@ -131,6 +198,32 @@ public class BorzoPidgeHandoffWorker {
                     error.orderId, handoff.deliveryJobId(), safeMessage(error));
             } catch (RuntimeException error) {
                 String reason = safeMessage(error);
+                if (capabilitiesOn() && "PROCESSING_PIDGE".equals(handoff.state())) {
+                    // The Pidge phase has an end. While Pidge may hold a booking (its answer was lost, or it was booked and a
+                    // later step failed) the booking is only looked up from here on, and the phase is never ended as "not booked".
+                    boolean outcomeUnknown = error instanceof PidgeOutcomeUnknownException
+                        || error instanceof in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderCreateUncertainException
+                        || pidgeBookingMayExist(handoff);
+                    int tries = handoffs.pidgePhaseTry(handoff.deliveryJobId(), handoff.attemptCount());
+                    long delaySeconds = Math.min(300L, 5L << Math.min(handoff.attemptCount(), 6));
+                    if (tries >= MAX_ATTEMPTS || (tries >= PIDGE_PHASE_TRIES && !outcomeUnknown)) {
+                        endPidgePhase(handoff, tries, outcomeUnknown, outcomeUnknown
+                            ? "Pidge booking outcome is still unknown; check Pidge before booking anyone: " + reason : reason);
+                        continue;
+                    }
+                    if (handoff.attemptCount() == STALLED_ALERT_ATTEMPT) {
+                        log.error("CRAVES_ALERT alert=DELIVERY_HANDOFF_STALLED jobId={} attempts={} reason={}",
+                            handoff.deliveryJobId(), handoff.attemptCount(), reason);
+                    }
+                    if (outcomeUnknown) {
+                        handoffs.awaitPidgeOutcome(handoff.deliveryJobId(), Instant.now().plusSeconds(delaySeconds), reason);
+                    } else {
+                        handoffs.retry(handoff.deliveryJobId(), handoff.state(), Instant.now().plusSeconds(delaySeconds), reason);
+                    }
+                    log.warn("Delivery handoff Pidge phase jobId={} attempts={} outcomeUnknown={} reason={}",
+                        handoff.deliveryJobId(), handoff.attemptCount(), outcomeUnknown, reason);
+                    continue;
+                }
                 if (handoff.attemptCount() >= MAX_ATTEMPTS
                     && !"PROCESSING_PIDGE".equals(handoff.state())) {
                     handoffs.manualReview(handoff.deliveryJobId(), reason);
@@ -199,6 +292,15 @@ public class BorzoPidgeHandoffWorker {
         if (latest.status() != DeliveryStatus.PENDING && latest.status() != DeliveryStatus.SEARCHING
             && latest.status() != DeliveryStatus.DELAYED) {
             throw new IllegalStateException("Borzo state is not safe for automatic cancellation");
+        }
+        if (capabilitiesOn()) {
+            var needs = in.craves.integration.delivery.provider.DeliveryProviderAdapter.needs(request(job.chefSubOrderId()));
+            if (!pidge.capabilities().containsAll(needs)) {
+                // Pidge cannot carry it, so Borzo is not cancelled: its search goes on, up to the courier wait cap.
+                handoffs.markRetainedByWorker(job.id());
+                log.info("Borzo kept: Pidge cannot carry this order jobId={} needs={}", job.id(), needs);
+                return;
+            }
         }
         if (!pidgeReady()) {
             throw new IllegalStateException("Pidge is not ready to accept the fallback");
@@ -301,7 +403,7 @@ public class BorzoPidgeHandoffWorker {
             }
             CreateReconciliationResult result = pidge.reconcileCreate(reference, handoff.dueAt());
             if (result.status() != CreateReconciliationStatus.FOUND) {
-                throw new IllegalStateException("Pidge booking outcome still requires reconciliation");
+                throw new PidgeOutcomeUnknownException();
             }
             delivery = result.delivery();
         } else {
@@ -437,6 +539,13 @@ public class BorzoPidgeHandoffWorker {
         PidgeBookingEndedException(UUID orderId, String message) {
             super(message);
             this.orderId = orderId;
+        }
+    }
+
+    /** A Pidge booking was sent and Pidge does not show it yet. */
+    private static final class PidgeOutcomeUnknownException extends IllegalStateException {
+        PidgeOutcomeUnknownException() {
+            super("Pidge booking outcome still requires reconciliation");
         }
     }
 

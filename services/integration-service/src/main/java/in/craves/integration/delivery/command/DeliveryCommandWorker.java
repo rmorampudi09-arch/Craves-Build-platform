@@ -164,6 +164,13 @@ public class DeliveryCommandWorker {
                 waitKey,
                 ex
             );
+        } catch (DeliveryProviderRouter.NoCapableCourierException ex) {
+            // Only with courier capabilities on. An order with no delivery job cannot have a delivery_exception_case, so
+            // it ends as the wait cap ends one: a dead letter with its own reason, and a page.
+            commands.markDeadLetter(command.id(), DeliveryProviderRouter.NO_CAPABLE_COURIER, lease);
+            log.error("CRAVES_ALERT alert=NO_CAPABLE_COURIER commandId={} chefSubOrderId={} orderId={} reason={}",
+                command.id(), command.chefSubOrderId(), command.orderId(), safeMessage(ex));
+            return new WorkerReceipt(null, false, DeliveryProviderRouter.NO_CAPABLE_COURIER);
         } catch (DeliveryRoutingException ex) {
             handleFailure(command, ex, lease);
             throw transientRetry(command, ex.getMessage(), ex);
@@ -237,6 +244,11 @@ public class DeliveryCommandWorker {
         // A message still on its way for a command the sweeper ended at the wait cap: done, and the reason stays on the row.
         if ("DEAD_LETTER".equals(command.status()) && properties.isSweeperEnabled() && commands.endedAtWaitCap(commandId)) {
             return new WorkerReceipt(null, true, DeliveryCommandSweeper.WAIT_CAP);
+        }
+        // Another message for a command ended because no courier can carry the order: done, and the reason stays on the row.
+        if ("DEAD_LETTER".equals(command.status()) && properties.isCourierCapabilitiesEnabled()
+            && commands.endedWith(commandId, DeliveryProviderRouter.NO_CAPABLE_COURIER)) {
+            return new WorkerReceipt(null, true, DeliveryProviderRouter.NO_CAPABLE_COURIER);
         }
         if ("WAITING_FOR_PROVIDER".equals(command.status())) {
             Instant retryAt = command.nextProviderRetryAt();

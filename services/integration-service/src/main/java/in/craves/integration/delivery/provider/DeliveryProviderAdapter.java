@@ -15,6 +15,22 @@ import java.util.UUID;
 public interface DeliveryProviderAdapter {
     String providerId();
 
+    /**
+     * What a courier is known to offer. THERMOBOX: it can be asked for a hot-food box. PROVIDER_EVENT_TIME: its status
+     * events carry the courier's own time. Claimed only once the courier's documents or a sandbox test show it.
+     */
+    enum Capability { THERMOBOX, PROVIDER_EVENT_TIME }
+
+    /** Unknown counts as not offered. Read only with CRAVES_DELIVERY_COURIER_CAPABILITIES_ENABLED on. */
+    default java.util.Set<Capability> capabilities() {
+        return java.util.Set.of();
+    }
+
+    /** What an order needs of its courier. */
+    static java.util.Set<Capability> needs(QuoteRequest request) {
+        return request != null && request.thermoboxRequired() ? java.util.Set.of(Capability.THERMOBOX) : java.util.Set.of();
+    }
+
     ProviderQuote quote(QuoteRequest request);
 
     /**

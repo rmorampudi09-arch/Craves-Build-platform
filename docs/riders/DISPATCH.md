@@ -147,7 +147,7 @@ Built, switched off (`CRAVES_FLEET_NO_SUPPLY_FAST_PATH_ENABLED`, default false; 
 - **Two looks at once ask one rider.** Tested 1,000 times in a row on PostgreSQL.
 - **If a timer is lost,** the stage sweeper (`CRAVES_FLEET_STAGE_SWEEPER`) looks within its margin, and the delivery command still comes back by itself.
 - **Order of switching on:** create the queue (an owner step: `infra/fleet-timers/README.md`); `CRAVES_FLEET_STAGE_SWEEPER=on`; a week of `CRAVES_FLEET_TIMERS=shadow`, reading `FLEET_TIMER mode=shadow ... lateMs= due=` beside the command's own looks; then `on`; and only after that `CRAVES_FLEET_STAGE_LEAVES_COMMAND_ENABLED`, which makes the command come back every 30 s and at the deadline, not every 5 s.
-- **Not done yet:** a rider who has just come online is found at the order's next check, as today (their first position arrives after the shift starts). At 300 orders due in the same instant the 99th-percentile time to the first ring was measured above R22's 2 s target on a 4-core test machine; the bounding-box candidate query takes most of it (PostGIS candidates are planned to replace it).
+- **Not done yet:** a rider who has just come online is found at the order's next check, as today (their first position arrives after the shift starts). At 300 orders due in the same instant (16 looks at once, as four replicas), the 99th-percentile time from due to the first ring measured 1.6 to 1.9 s on a 4-core test machine once warm, and 2.0 to 2.7 s on the first, cold run, against R22's 2 s target; the test asserts only that it is under the 5 s check. The bounding-box candidate query takes most of it (PostGIS candidates are planned to replace it).
 
 ### Search rings
 

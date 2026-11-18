@@ -711,6 +711,13 @@ SELECT * FROM delivery_schema.provider_api_usage ORDER BY day DESC, provider_id;
 
 Switch on: set the flag. Rollback: set it to `false`; the table keeps its rows and nothing reads them.
 
+## Courier webhook secret rotation
+
+`BORZO_CALLBACK_TOKEN_PREVIOUS` and `PIDGE_WEBHOOK_TOKEN_PREVIOUS` are optional and empty by default. When one is set,
+that courier's webhook check also accepts the previous value and writes
+`COURIER_WEBHOOK_PREVIOUS_SECRET_USED provider=<borzo|pidge>` (no values) for each callback that matched it. Steps are
+in `docs/SECRETS.md`. Empty: only the current value is accepted.
+
 ## Shared courier breaker
 
 `CRAVES_COURIER_BREAKER_ENABLED` = `false` (default) | `true`. Off, the `CourierBreaker` bean does not exist and no

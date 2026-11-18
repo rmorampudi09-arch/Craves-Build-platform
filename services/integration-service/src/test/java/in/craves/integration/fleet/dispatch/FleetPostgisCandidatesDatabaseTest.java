@@ -40,6 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -124,6 +125,7 @@ class FleetPostgisCandidatesDatabaseTest {
      */
     @Test
     void onFindsTheSameRidersInTheSameOrderWithTheSameGpsCountsAsOff() {
+        assumePostgis();
         List<UUID> all = variedRiders();
         List<UUID> north = new ArrayList<>();
         for (double metres : new double[] {4990, 4993, 4996, 4999.9, 5000.1}) {
@@ -179,6 +181,7 @@ class FleetPostgisCandidatesDatabaseTest {
     /** Rings 2 km until 100 s, 3.5 km until 200 s, then 5 km; test mode on, one rider not on its list. */
     @Test
     void withRingsAndTestModeEveryModeAsksTheSameRidersInTheSameOrder() {
+        assumePostgis();
         List<UUID> four = List.of(rider(KITCHEN_LAT + 0.005, KITCHEN_LNG, 5), rider(KITCHEN_LAT, KITCHEN_LNG + 0.010, 5),
             rider(KITCHEN_LAT - 0.027, KITCHEN_LNG, 5), rider(KITCHEN_LAT + 0.040, KITCHEN_LNG, 5));
         UUID notListed = rider(KITCHEN_LAT + 0.001, KITCHEN_LNG, 5);
@@ -201,6 +204,7 @@ class FleetPostgisCandidatesDatabaseTest {
     /** The three looks FleetDispatchStatementsDatabaseTest counts (12, 4, 17), with twelve riders in the band. */
     @Test
     void onCostsWhatOffCostsAndShadowOneStatementMoreALookThatRanks() {
+        assumePostgis();
         for (int i = 1; i <= 12; i++) {
             rider(KITCHEN_LAT + 0.0005 * i, KITCHEN_LNG, 5);
         }
@@ -224,6 +228,7 @@ class FleetPostgisCandidatesDatabaseTest {
 
     @Test
     void theIndexAnswersTheStatement() {
+        assumePostgis();
         rider(KITCHEN_LAT + 0.005, KITCHEN_LNG, 5);
         dispatcher("on", "off", false, false);
         rolledBack(() -> {
@@ -243,6 +248,7 @@ class FleetPostgisCandidatesDatabaseTest {
     void withoutPostgisItStartsRunsAsOffAndSaysSoOnce() {
         String database = "craves_postgis_absent_test";
         String owner = fleet.db.queryForObject("SELECT current_user", String.class);
+        int sharedPostgis = fleet.db.queryForObject("SELECT count(*) FROM pg_extension WHERE extname = 'postgis'", Integer.class);
         fleet.db.execute("DROP DATABASE IF EXISTS " + database + " WITH (FORCE)");
         fleet.db.execute("CREATE DATABASE " + database + " TEMPLATE template0");
         fleet.db.execute("DROP ROLE IF EXISTS craves_test_no_ddl");
@@ -271,7 +277,8 @@ class FleetPostgisCandidatesDatabaseTest {
             FleetDispatcher on = dispatcher(service, "on", "off", true, false);
             assertThat(List.copyOf(lines)).hasSize(1).first().asString()
                 .startsWith("FLEET_POSTGIS_CANDIDATES mode=on unavailable, running as off: no valid index rider_position_latest_geog; "
-                    + "ERROR: permission denied to create extension \"postgis\"");
+                    // A server with PostGIS that may not create it (not allow-listed), or one without PostGIS at all.
+                    + (postgisAvailable() ? "ERROR: permission denied to create extension \"postgis\"" : "ERROR: extension \"postgis\" is not available"));
             assertThat(bare.db.queryForObject("SELECT count(*) FROM pg_extension WHERE extname = 'postgis'", Integer.class)).isZero();
             assertThat(bare.db.queryForObject("SELECT to_regclass('fleet_schema." + FleetDispatcher.POSITION_GEOG_INDEX + "') IS NULL",
                 Boolean.class)).isTrue();
@@ -282,7 +289,8 @@ class FleetPostgisCandidatesDatabaseTest {
             fleet.db.execute("DROP DATABASE IF EXISTS " + database + " WITH (FORCE)");
             fleet.db.execute("DROP ROLE craves_test_no_ddl");
         }
-        assertThat(fleet.db.queryForObject("SELECT count(*) FROM pg_extension WHERE extname = 'postgis'", Integer.class)).isOne();
+        assertThat(fleet.db.queryForObject("SELECT count(*) FROM pg_extension WHERE extname = 'postgis'", Integer.class))
+            .as("the shared database untouched").isEqualTo(sharedPostgis);
     }
 
     /**
@@ -292,6 +300,7 @@ class FleetPostgisCandidatesDatabaseTest {
      */
     @Test
     void aBuildThatCannotHaveItsLockGivesUpAsOffWithoutHoldingWritesAndTheNextStartBuildsIt() throws Exception {
+        assumePostgis();
         UUID held = rider(KITCHEN_LAT + 0.005, KITCHEN_LNG, 5);
         UUID other = rider(KITCHEN_LAT + 0.006, KITCHEN_LNG, 5);
         String waiting = "SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'CREATE INDEX CONCURRENTLY%' AND wait_event_type = 'Lock'";
@@ -348,6 +357,7 @@ class FleetPostgisCandidatesDatabaseTest {
      */
     @Test
     void aBuildInProgressIsNotDroppedAndTheStartRunsAsOff() throws Exception {
+        assumePostgis();
         UUID held = rider(KITCHEN_LAT + 0.005, KITCHEN_LNG, 5);
         String waiting = "SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'CREATE INDEX CONCURRENTLY%' AND wait_event_type = 'Lock'";
         try (Connection writer = fleet.dataSource.getConnection(); var write = writer.createStatement();
@@ -384,6 +394,7 @@ class FleetPostgisCandidatesDatabaseTest {
     /** Replicas starting together: one builds; each other one finds it built or runs as off; one valid index after. */
     @Test
     void startUpsTogetherBuildOneIndexAndDropNothing() {
+        assumePostgis();
         variedRiders();
         CountDownLatch go = new CountDownLatch(1);
         List<CompletableFuture<FleetDispatcher>> starts = new ArrayList<>();
@@ -410,6 +421,7 @@ class FleetPostgisCandidatesDatabaseTest {
     /** PostGIS goes away under a running service: each look falls back to today's statement inside the same transaction. */
     @Test
     void ifThePostgisStatementFailsTodaysStatementAnswersInTheSameTransaction() {
+        assumePostgis();
         variedRiders();
         FleetDispatcher on = dispatcher("on", "off", true, false);
         FleetDispatcher shadow = dispatcher("shadow", "off", true, false);
@@ -548,6 +560,17 @@ class FleetPostgisCandidatesDatabaseTest {
     private Boolean indexValid() {
         return fleet.db.query("SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.oid = "
             + "to_regclass('fleet_schema." + FleetDispatcher.POSITION_GEOG_INDEX + "')", rows -> rows.next() ? rows.getBoolean(1) : null);
+    }
+
+    private boolean postgisAvailable() {
+        return Boolean.TRUE.equals(fleet.db.queryForObject("SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'postgis')",
+            Boolean.class));
+    }
+
+    /** CI's regression job runs postgis/postgis; a job on plain postgres (chef-bank-onboarding-ci) skips what needs PostGIS. */
+    private void assumePostgis() {
+        Assumptions.assumeTrue(postgisAvailable(), "PostGIS is not installed on this test server (plain postgres image): "
+            + "the PostGIS candidate tests run in launch regression CI on postgis/postgis");
     }
 
     private long indexOid() {

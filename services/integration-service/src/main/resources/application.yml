@@ -227,6 +227,8 @@ craves:
     sweeper-enabled: ${CRAVES_DELIVERY_COMMAND_SWEEPER_ENABLED:false}
     sweeper-margin-seconds: ${CRAVES_DELIVERY_COMMAND_SWEEPER_MARGIN_SECONDS:15}
     courier-wait-cap-minutes: ${CRAVES_DELIVERY_COURIER_WAIT_CAP_MINUTES:20}
+    # Courier capabilities (README, "Courier capabilities"): off keeps today's routing and Borzo-to-Pidge handoff.
+    courier-capabilities-enabled: ${CRAVES_DELIVERY_COURIER_CAPABILITIES_ENABLED:false}
     # Webhook-first courier tracking (README, "Webhook-first tracking"): off keeps the poll every tracking-poll-seconds.
     webhook-first-tracking-enabled: ${CRAVES_DELIVERY_WEBHOOK_FIRST_TRACKING_ENABLED:false}
     # Only read with webhook-first tracking on: seconds without a callback or a poll before a job is polled, by stage, and

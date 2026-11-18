@@ -248,12 +248,17 @@ public class DeliveryStatusRepository {
      * job already has an active case.
      */
     public boolean openCourierEndedCase(UUID deliveryJobId, UUID orderId, String note) {
+        return openSystemCase(deliveryJobId, orderId, "PROVIDER_CANCELLED", note);
+    }
+
+    /** An ops case opened by the system for a delivery job, with one of the table's reasons. False when the job has an active case. */
+    public boolean openSystemCase(UUID deliveryJobId, UUID orderId, String reason, String note) {
         UUID caseId = UUID.randomUUID();
         if (jdbc.update("""
             INSERT INTO delivery_schema.delivery_exception_case (id, delivery_job_id, order_id, reason, status, opened_by)
-            VALUES (?, ?, ?, 'PROVIDER_CANCELLED', 'OPEN', ?)
+            VALUES (?, ?, ?, ?, 'OPEN', ?)
             ON CONFLICT (delivery_job_id) WHERE status NOT IN ('RESOLVED', 'DISMISSED') DO NOTHING
-            """, caseId, deliveryJobId, orderId, SYSTEM_ACTOR) != 1) {
+            """, caseId, deliveryJobId, orderId, reason, SYSTEM_ACTOR) != 1) {
             return false;
         }
         jdbc.update("INSERT INTO delivery_schema.delivery_exception_event (case_id, action, status, actor_id, note) "

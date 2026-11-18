@@ -280,6 +280,7 @@ CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED=false
 CRAVES_DELIVERY_PROVIDER_API_USAGE_ALERT_PERCENT=70
 CRAVES_DELIVERY_BORZO_DAILY_API_CAP=5000
 CRAVES_DELIVERY_PIDGE_DAILY_API_CAP=0
+CRAVES_DELIVERY_COURIER_CAPABILITIES_ENABLED=false
 CRAVES_COURIER_BREAKER_ENABLED=false
 CRAVES_COURIER_BREAKER_BOOKING_FAILURES=3
 CRAVES_COURIER_BREAKER_QUOTE_FAILURES=5
@@ -767,7 +768,7 @@ on the thread finish, and nothing new is handed to it after the restart.
 statement runs. On, it is used only while `CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED` is on too: without the journal a
 courier's refusal of one order cannot be told from a failing courier.
 
-One row per courier in `delivery_schema.provider_breaker` (V195) is the breaker for every replica. The row is written on
+One row per courier in `delivery_schema.provider_breaker` (V195, V196) is the breaker for every replica. The row is written on
 a courier's first failure; a courier that has not failed has no row and costs one primary-key read per routing pass.
 
 | State | Row | A routing pass |
@@ -778,13 +779,19 @@ a courier's first failure; a courier that has not failed has no row and costs on
 
 - **Opens** after `CRAVES_COURIER_BREAKER_BOOKING_FAILURES` (3) failed bookings in a row, or
   `CRAVES_COURIER_BREAKER_QUOTE_FAILURES` (5) failed quotes in a row, counted over all replicas with no time window.
+- **One order's failed quotes count once.** A waiting order is quoted again on every pass; the row remembers the order
+  counted last (`quote_failed_order`) and the same order failing again adds nothing, so it takes different orders to
+  open the breaker on quotes. Bookings are already limited per order by the journal.
 - **A failure** is no answer, a timeout, HTTP 5xx or 429, a booking whose answer was lost or unusable, or a quote slower
   than `CRAVES_DELIVERY_QUOTE_TIMEOUT_SECONDS`. A courier's refusal of one order (any other 4xx, `is_successful: false`,
   a failed validation) is not counted and changes nothing.
 - **A success** sets the count to zero. An answered quote, available or not, is a success for quotes only: it does not
   close a breaker that failed bookings opened. A booking closes it.
 - **A failed probe** keeps the breaker open; the next probe is `HALF_OPEN_SECONDS` after that one was claimed. So is the
-  next probe after one that gave no verdict.
+  next probe after a booking that gave no verdict.
+- **A probe that was not used is given back.** A pass that took the probe, was quoted by the courier and then booked
+  another courier or nobody clears `probe_at`, so the next pass that can book takes the probe at once. It clears only
+  its own claim, never one another replica has taken since.
 - **While Borzo's breaker is open** in the timed policy, Borzo's window is closed for the order being routed and Pidge is
   quoted at once. While Pidge's is open, or every courier's, the command waits as it does when nobody quotes, up to the
   courier wait cap.
@@ -793,8 +800,10 @@ a courier's first failure; a courier that has not failed has no row and costs on
 - A lost booking answer is counted and still goes to the reconciliation lookup; the breaker never books again.
 - Not covered: reconciliation lookups, tracking polls, cancels and the Borzo-to-Pidge handoff's own Pidge booking.
 
-If the row cannot be read (database error, or a statement over 2 seconds) the courier is called as if there were no
-breaker; a result that cannot be written is dropped with a warning. The breaker never fails a routing pass.
+If the row cannot be read the courier is called as if there were no breaker; a result that cannot be written is
+dropped with a warning. The breaker never fails a routing pass. A pass waits at most 1 second for the read, the wait
+for a database connection included: the read runs on up to 8 threads of its own (no second connection pool), and a
+pass that finds all 8 busy does not wait at all. Each statement is also limited to 2 seconds.
 
 | Alert | Raised | Do |
 |---|---|---|
@@ -809,6 +818,74 @@ UPDATE delivery_schema.provider_breaker SET booking_failures = 0, quote_failures
 Switch on: the booking journal first, then set the flag. Rollback: set it to `false`; the table keeps its rows and
 nothing reads them. `CRAVES_PROVIDER_RESILIENCE_ENABLED` (`ProviderGuard`, per replica, quotes only) is separate and
 unchanged; both may be on.
+
+## Courier capabilities
+
+`CRAVES_DELIVERY_COURIER_CAPABILITIES_ENABLED` = `false` (default) | `true`. Off, nothing below happens: every courier is
+asked for every order and the Borzo-to-Pidge handoff runs as before. No migration; it needs no other flag.
+
+Each courier adapter declares what it offers (`DeliveryProviderAdapter.capabilities()`). Unknown counts as not offered.
+
+| Courier | `THERMOBOX` (hot-food box) | `PROVIDER_EVENT_TIME` (its own time on status events) |
+|---|---|---|
+| Borzo | yes: `is_thermobox_required` on the order, sent today | yes: `event_datetime` |
+| Pidge | no: its API has no such field and `PidgeApiClient` refuses such an order | yes: `updated_at` |
+
+An order needs `THERMOBOX` when its delivery request says `thermoboxRequired`. Nothing reads `PROVIDER_EVENT_TIME` yet.
+Thermobox needs no other code: Borzo is already sent the field, and Pidge is never asked.
+
+On:
+
+- **Routing.** A courier that lacks what the order needs is not quoted; the quote audit says
+  `Courier cannot carry this order: needs [THERMOBOX]`. The fleet cost guard's quote skips it too.
+- **No capable courier.** In the timed policy, once Borzo's window is over (or Borzo refused, or is switched off) and
+  Pidge cannot carry the order, the command ends at once instead of waiting on Pidge: `DEAD_LETTER` with
+  `last_error = NO_CAPABLE_COURIER`, and one alert. Without the timed policy the same happens when no active courier can
+  carry it. A later message for that command is acknowledged as done. While only Borzo's shared breaker keeps the order
+  from Borzo, the order waits out Borzo's window first.
+- **Borzo down for its whole window.** A hot-box order waits inside Borzo's 120 seconds (no quote, breaker open) and is
+  ended as `NO_CAPABLE_COURIER` on the first pass after them: Borzo's window is its only chance, and waiting longer
+  would only retry Pidge, which can never take it.
+- **Never while a booking of the order may exist.** An attempt whose answer is unknown sends the command to the
+  reconciliation lookup first, as for any order. While an attempt is an orphan suspect still being looked up (2 hours),
+  or a refused booking was later found at its courier (the stray-booking path adopts or cancels it), the command waits
+  instead of ending (the courier wait cap then ends a wait that goes on too long, and it too spares an orphan suspect
+  still being looked up). It is ended as `NO_CAPABLE_COURIER` only when its
+  attempts are none, refused outright or cancelled.
+- **No ops case row for it.** `delivery_exception_case` belongs to a delivery job and this order has none, so, like the
+  courier wait cap, the dead letter and the paged alert are what ops act on.
+- **Borzo kept (handoff).** When Borzo's 120 seconds pass without a courier and Pidge cannot carry the order, Borzo is
+  not cancelled: the handoff ends as `RETAINED_BORZO` and Borzo goes on searching. If it still has no courier when the
+  promised ready time is `CRAVES_DELIVERY_COURIER_WAIT_CAP_MINUTES` (20) old, one `delivery_exception_case`
+  (`RIDER_NOT_ASSIGNED`, opened by the system) is opened for the job and `DELIVERY_COURIER_WAIT_CAP ... was=RETAINED_BORZO`
+  is logged, once per job; a job ops already holds an active case for is left alone. Checked on the handoff worker's
+  tick; no new job.
+- **The handoff's Pidge phase ends.** Off, it retries for ever. On:
+  - while Pidge may hold a booking the handoff rests in `PIDGE_RECONCILIATION_PENDING` and each later try only looks the
+    booking up (Pidge is not asked to book again), up to 20 tries. That covers a lost answer and a booking that exists
+    while a later step fails: Pidge shows it as not ready yet, the job could not be switched, or its cancel is not
+    confirmed. `pidge_booking` (written before Pidge is called) decides; the phase is never ended as "not booked" then;
+  - when nothing was sent to Pidge (no quote, order check failing) the phase ends at its tenth try;
+  - tries are the Pidge phase's own: `pidge_phase_first_attempt` (V196) keeps the claim number of its first failed try;
+  - the end is `MANUAL_REVIEW`, `DELIVERY_HANDOFF_NO_COURIER`, and one `delivery_exception_case` (`RIDER_NOT_ASSIGNED`)
+    whose note says either that nothing was booked with Pidge or to check Pidge first because a booking may exist.
+    `DELIVERY_HANDOFF_STALLED` still fires at claim 7.
+
+| Alert | Raised | Do |
+|---|---|---|
+| `NO_CAPABLE_COURIER commandId= chefSubOrderId= orderId= reason=` | Once, when the command is ended. Pages | Book a courier by hand or cancel the order; the command will not run again |
+| `DELIVERY_COURIER_WAIT_CAP jobId= ... was=RETAINED_BORZO` | Once per job | Open the job's case: Borzo is still searching |
+
+```sql
+SELECT id, chef_sub_order_id, updated_at FROM delivery_schema.delivery_command
+WHERE status = 'DEAD_LETTER' AND last_error = 'NO_CAPABLE_COURIER' ORDER BY updated_at DESC;
+```
+
+Switch on: set the flag. Rollback: set it to `false`; ended commands stay ended, a handoff resting in
+`PIDGE_RECONCILIATION_PENDING` is picked up by the old loop (it claims that state already), and kept Borzo bookings stay.
+
+Not in this yet: an unanswered Borzo booking for a hot-box order is still given up as an orphan suspect after its
+lookups, as for any order; the command then waits while the suspect is looked up for 2 more hours.
 
 ## Safe rollout
 

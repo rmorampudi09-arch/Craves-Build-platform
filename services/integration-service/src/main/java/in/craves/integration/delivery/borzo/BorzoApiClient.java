@@ -105,6 +105,12 @@ public class BorzoApiClient implements DeliveryProviderAdapter {
         this.commandProperties = commandProperties;
     }
 
+    /** is_thermobox_required on the order; event_datetime on callbacks. */
+    @Override
+    public java.util.Set<Capability> capabilities() {
+        return java.util.Set.of(Capability.THERMOBOX, Capability.PROVIDER_EVENT_TIME);
+    }
+
     @Override
     public String providerId() {
         return PROVIDER_ID;

@@ -81,6 +81,11 @@ craves:
     # and logs FLEET_GPS_RULE with how many each look would leave out; enforce leaves them out. enforce changes who can be
     # asked: 14 days' notice to riders first once a rate card is published (GO-LIVE.md §8). Any other value stops start-up.
     gps-rule: ${CRAVES_FLEET_GPS_RULE:off}
+    # PostGIS candidates (R22 #4; BACKEND.md): off | shadow | on. The candidate statement also asks PostGIS for positions
+    # within the radius, answered by an index; the same riders in the same order. shadow asks with today's statement and
+    # logs FLEET_POSTGIS_CANDIDATES (counts only). shadow or on creates the extension and the index at start-up if they
+    # are missing; if PostGIS is not allow-listed on the server it runs as off with one line. Any other value stops start-up.
+    postgis-candidates: ${CRAVES_FLEET_POSTGIS_CANDIDATES:off}
     # No rider in range (DISPATCH.md §2): with no limit on rounds, an order nobody was asked about and with no rider on
     # shift in range at all goes on to Borzo once its stage is settle-seconds old, not after the whole 300 s. An order
     # any rider could still hear of keeps its 300 s. Off: every order waits the whole stage, as before. Riders are told

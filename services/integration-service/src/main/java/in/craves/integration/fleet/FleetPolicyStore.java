@@ -52,6 +52,11 @@ public class FleetPolicyStore {
     public static final Map<String, List<Long>> DISPATCH_RULE_BOUNDS = Map.of("offers_at_once", List.of(1L, 3L),
         "offer_rounds", List.of(0L, 5L), "fair_band_m", List.of(0L, 5000L));
     /**
+     * Search rings (R22 3-3, V198; docs/riders/DISPATCH.md §2, "Search rings"): rule columns too, all 0 (no rings) in every
+     * version so far. Not set from the console: a new version keeps the ones riders are shown (FleetSetupService).
+     */
+    public static final List<String> SEARCH_RING_FIELDS = List.of("ring_1_m", "ring_1_seconds", "ring_2_m", "ring_2_seconds");
+    /**
      * The dispatch values Craves runs with, the owner's rule of 11 Nov 2026 (docs/riders/DISPATCH.md §2): 20 s to accept, a
      * 300 s fleet stage, within 5 km, then Borzo, then Pidge for 600 s; the pickup detour as seeded (the cost guard's values
      * are kept, but no limit on rounds runs without one). The console doesn't ask for them: a version saved without a value
@@ -123,7 +128,7 @@ public class FleetPolicyStore {
         return jdbc.query("""
             SELECT version, effective_from, mode, offer_seconds, fleet_stage_seconds, radius_m, pickup_detour_percent,
                    per_order_overhead_paise, cost_guard_premium_paise, pidge_stage_seconds, offers_at_once, offer_rounds, fair_band_m,
-                   rank_by_travel_time
+                   rank_by_travel_time, ring_1_m, ring_1_seconds, ring_2_m, ring_2_seconds
             FROM fleet_schema.dispatch_policy
             WHERE status = 'PUBLISHED' AND withdrawn_at IS NULL AND effective_from <= now()
             ORDER BY effective_from DESC, created_at DESC LIMIT 1""",
@@ -131,7 +136,8 @@ public class FleetPolicyStore {
                 row.getString("mode"), row.getInt("offer_seconds"), row.getInt("fleet_stage_seconds"), row.getInt("radius_m"),
                 row.getInt("pickup_detour_percent"), row.getLong("per_order_overhead_paise"), row.getLong("cost_guard_premium_paise"),
                 row.getInt("pidge_stage_seconds"), row.getInt("offers_at_once"), row.getInt("offer_rounds"), row.getInt("fair_band_m"),
-                row.getBoolean("rank_by_travel_time")))
+                row.getBoolean("rank_by_travel_time"), new SearchRings(row.getInt("ring_1_m"), row.getInt("ring_1_seconds"),
+                    row.getInt("ring_2_m"), row.getInt("ring_2_seconds"))))
             .stream().findFirst();
     }
 
@@ -175,7 +181,9 @@ public class FleetPolicyStore {
     static DispatchRules rules(Map<String, Object> policy) {
         return new DispatchRules(((Number) policy.get("offers_at_once")).intValue(), ((Number) policy.get("offer_rounds")).intValue(),
             ((Number) policy.get("fair_band_m")).intValue(), Boolean.TRUE.equals(policy.get("rank_by_travel_time")),
-            Boolean.TRUE.equals(policy.get("joint_matching")), Boolean.TRUE.equals(policy.get("next_order_offers")));
+            Boolean.TRUE.equals(policy.get("joint_matching")), Boolean.TRUE.equals(policy.get("next_order_offers")),
+            new SearchRings(((Number) policy.get("ring_1_m")).intValue(), ((Number) policy.get("ring_1_seconds")).intValue(),
+                ((Number) policy.get("ring_2_m")).intValue(), ((Number) policy.get("ring_2_seconds")).intValue()));
     }
 
     /**
@@ -200,9 +208,11 @@ public class FleetPolicyStore {
         DispatchRules rules = dispatchRules(now);
         starts.addAll(jdbc.queryForList("SELECT effective_from FROM fleet_schema.dispatch_policy WHERE status = 'PUBLISHED' "
             + "AND withdrawn_at IS NULL AND effective_from > ? AND (offers_at_once <> ? OR offer_rounds <> ? OR fair_band_m <> ? "
-            + "OR rank_by_travel_time <> ? OR joint_matching <> ? OR next_order_offers <> ?) ORDER BY effective_from LIMIT 1",
+            + "OR rank_by_travel_time <> ? OR joint_matching <> ? OR next_order_offers <> ? OR ring_1_m <> ? OR ring_1_seconds <> ? "
+            + "OR ring_2_m <> ? OR ring_2_seconds <> ?) ORDER BY effective_from LIMIT 1",
             Timestamp.class, Timestamp.from(now), rules.offersAtOnce(), rules.offerRounds(), rules.fairBandM(), rules.byTravelTime(),
-            rules.jointMatching(), rules.nextOrderOffers()));
+            rules.jointMatching(), rules.nextOrderOffers(), rules.rings().ring1M(), rules.rings().ring1Seconds(), rules.rings().ring2M(),
+            rules.rings().ring2Seconds()));
         return starts.stream().map(Timestamp::toInstant).min(Comparator.naturalOrder()).map(at -> {
             RateCard card = rateCardInForce(at).orElseThrow();
             return new TermsChange(at, card, card.effectiveFrom().equals(at), detour, pickupDetour(at), rules, dispatchRules(at));
@@ -449,7 +459,16 @@ public class FleetPolicyStore {
      */
     public record DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds,
                                  int radiusM, int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise,
-                                 int pidgeStageSeconds, int offersAtOnce, int offerRounds, int fairBandM, boolean rankByTravelTime) {
+                                 int pidgeStageSeconds, int offersAtOnce, int offerRounds, int fairBandM, boolean rankByTravelTime,
+                                 SearchRings rings) {
+        /** Before search rings (V198): one search radius for the whole stage. */
+        public DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds, int radiusM,
+                              int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise, int pidgeStageSeconds,
+                              int offersAtOnce, int offerRounds, int fairBandM, boolean rankByTravelTime) {
+            this(version, effectiveFrom, mode, offerSeconds, fleetStageSeconds, radiusM, pickupDetourPercent, perOrderOverheadPaise,
+                costGuardPremiumPaise, pidgeStageSeconds, offersAtOnce, offerRounds, fairBandM, rankByTravelTime, SearchRings.NONE);
+        }
+
         /** Phase 4's shape: ranked by distance. */
         public DispatchPolicy(String version, Instant effectiveFrom, String mode, int offerSeconds, int fleetStageSeconds, int radiusM,
                               int pickupDetourPercent, long perOrderOverheadPaise, long costGuardPremiumPaise, int pidgeStageSeconds,
@@ -472,7 +491,7 @@ public class FleetPolicyStore {
         }
 
         public DispatchRules rules() {
-            return new DispatchRules(offersAtOnce, offerRounds, fairBandM, rankByTravelTime);
+            return new DispatchRules(offersAtOnce, offerRounds, fairBandM, rankByTravelTime, false, false, rings);
         }
 
         /**
@@ -492,10 +511,16 @@ public class FleetPolicyStore {
      * least per online hour today goes first). byTravelTime (Phase 5): "nearest" is the soonest at the kitchen by the
      * travel-time model, when it is live and was judged to rank riders well (FleetEta.ranking); else the nearest by distance.
      * jointMatching and nextOrderOffers (policy 2026-11-v2, app 1.3.3): two rule lines riders are shown; the dispatcher does
-     * not act on them yet (REDESIGN.md R-09), so they only decide the terms text and the 14-day notice.
+     * not act on them yet (REDESIGN.md R-09), so they only decide the terms text and the 14-day notice. rings: SearchRings.
      */
     public record DispatchRules(int offersAtOnce, int offerRounds, int fairBandM, boolean byTravelTime, boolean jointMatching,
-                                boolean nextOrderOffers) {
+                                boolean nextOrderOffers, SearchRings rings) {
+        /** Before search rings (V198). */
+        public DispatchRules(int offersAtOnce, int offerRounds, int fairBandM, boolean byTravelTime, boolean jointMatching,
+                             boolean nextOrderOffers) {
+            this(offersAtOnce, offerRounds, fairBandM, byTravelTime, jointMatching, nextOrderOffers, SearchRings.NONE);
+        }
+
         /** Up to Phase 5's rules: neither 2026-11-v2 line. */
         public DispatchRules(int offersAtOnce, int offerRounds, int fairBandM, boolean byTravelTime) {
             this(offersAtOnce, offerRounds, fairBandM, byTravelTime, false, false);
@@ -521,6 +546,57 @@ public class FleetPolicyStore {
          */
         public double bandMinutes() {
             return Math.max(0.1, Math.round(fairBandM * 3 / 100.0) / 10.0);
+        }
+    }
+
+    /**
+     * Search rings (R22 3-3, V198; docs/riders/DISPATCH.md §2, "Search rings"): a rule riders are told, so the columns are
+     * under the 14-day notice like every rule. For the first ring1Seconds of an order's fleet stage only riders within ring1M
+     * of the kitchen may hear of it, then within ring2M until ring2Seconds, then within the policy radius, which no ring
+     * exceeds. A ring holding no free rider is passed over at once, so an order never waits for a ring nobody is in. All 0
+     * (NONE, every version so far): the policy radius from the start, as before rings. Nothing about a rider decides it but
+     * where they are now: no history, no score.
+     *
+     * <p>Which rings are in force is decided here alone (first, second), for dispatch and for the line riders read: a ring
+     * needs a size and a time above 0, and the second must be wider and later than the first when there is one. A ring that
+     * is not in force does nothing and is not told.
+     */
+    public record SearchRings(int ring1M, int ring1Seconds, int ring2M, int ring2Seconds) {
+        public static final SearchRings NONE = new SearchRings(0, 0, 0, 0);
+
+        public boolean first() {
+            return ring1M > 0 && ring1Seconds > 0;
+        }
+
+        public boolean second() {
+            return ring2M > (first() ? ring1M : 0) && ring2Seconds > (first() ? ring1Seconds : 0);
+        }
+
+        public boolean on() {
+            return first() || second();
+        }
+
+        /** The stage ages at which the search widens, earliest first: the times of the rings in force. */
+        public List<Integer> boundarySeconds() {
+            List<Integer> seconds = new ArrayList<>();
+            if (first()) {
+                seconds.add(ring1Seconds);
+            }
+            if (second()) {
+                seconds.add(ring2Seconds);
+            }
+            return seconds;
+        }
+
+        /** The search radius for a stage this old; nearestM: how far the nearest free rider in the policy radius is. */
+        public int radiusM(long stageAgeSeconds, int policyRadiusM, double nearestM) {
+            if (first() && stageAgeSeconds < ring1Seconds && nearestM <= ring1M) {
+                return Math.min(ring1M, policyRadiusM);
+            }
+            if (second() && stageAgeSeconds < ring2Seconds && nearestM <= ring2M) {
+                return Math.min(ring2M, policyRadiusM);
+            }
+            return policyRadiusM;
         }
     }
 }

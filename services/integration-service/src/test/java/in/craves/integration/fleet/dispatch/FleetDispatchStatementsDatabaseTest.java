@@ -101,6 +101,15 @@ class FleetDispatchStatementsDatabaseTest {
     }
 
     /**
+     * Search rings (V198) read the whole radius in the candidate statement and the stage's age in the trip statement the
+     * next round already runs: a policy with rings costs what one without costs (the stage sweeper off, as above).
+     */
+    @Test
+    void searchRingsAddNoStatementToALook() {
+        assertThat(looks(0, "off", true)).containsExactly(OPENING_NOW, WAITING_BEFORE, NEXT_ROUND_BEFORE - 32);
+    }
+
+    /**
      * CRAVES_FLEET_STAGE_SWEEPER shadow or on: each look that leaves riders deciding stores its next check on the stage, one
      * statement. Off (every test above) stores nothing.
      */
@@ -120,6 +129,11 @@ class FleetDispatchStatementsDatabaseTest {
 
     /** The looks at one order: the one that opens it, one while its rider decides, and the one after a decline. */
     private int[] looks(int policyCacheSeconds, String gpsRule) {
+        return looks(policyCacheSeconds, gpsRule, false);
+    }
+
+    /** rings: 2 km until 100 s, 3.5 km until 200 s; every rider here is inside the first. */
+    private int[] looks(int policyCacheSeconds, String gpsRule, boolean rings) {
         JdbcTemplate db = new JdbcTemplate(counted);
         RoadDistanceClient roads = mock(RoadDistanceClient.class);
         when(roads.meters(anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(3500);
@@ -129,7 +143,11 @@ class FleetDispatchStatementsDatabaseTest {
             new FleetTestMode(db, FleetDatabase.properties(false)), roads, mock(RiderPushClient.class), json);
         dispatcher.setGpsRule(gpsRule);
         dispatcher.setStageSweeper(stageSweeper);
-        FleetDispatchFixtures.policy(fleet.db, "live", 20, 300, 1, 0, 1500);
+        if (rings) {
+            FleetDispatchFixtures.policyWithRings(fleet.db, 20, 300, 1500, 2000, 100, 3500, 200);
+        } else {
+            FleetDispatchFixtures.policy(fleet.db, "live", 20, 300, 1, 0, 1500);
+        }
         FleetDispatchFixtures.kitchen(fleet.db, chefSubOrderId, false);
         for (int i = 1; i <= RIDERS_IN_BAND; i++) {
             FleetDispatchFixtures.riderOnShift(fleet, "+9198000000%02d".formatted(i), KITCHEN_LAT + 0.0005 * i, KITCHEN_LNG, 5, false);

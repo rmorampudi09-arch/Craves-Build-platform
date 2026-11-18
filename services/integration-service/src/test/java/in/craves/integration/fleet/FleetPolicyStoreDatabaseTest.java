@@ -175,7 +175,7 @@ class FleetPolicyStoreDatabaseTest {
         assertThat(columns).as("the list names only columns there are").containsAll(NOT_RULES);
         List<String> rules = columns.stream().filter(column -> !NOT_RULES.contains(column)).toList();
         assertThat(rules).contains("pickup_detour_percent", "offers_at_once", "offer_rounds", "fair_band_m", "rank_by_travel_time",
-            "joint_matching", "next_order_offers");
+            "joint_matching", "next_order_offers", "ring_1_m", "ring_1_seconds", "ring_2_m", "ring_2_seconds");
         UUID ops = UUID.randomUUID();
         for (String column : rules) {
             String version = "2099-01-v" + (rules.indexOf(column) + 1);

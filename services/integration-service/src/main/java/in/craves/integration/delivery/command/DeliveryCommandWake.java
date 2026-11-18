@@ -50,6 +50,33 @@ public class DeliveryCommandWake {
         }
     }
 
+    /**
+     * CRAVES_FLEET_TIMERS on: a look without the command (FleetDispatcher.matchOrClose) found that the trip's open fleet
+     * stage needs its command, to close it at the deadline or for anything only the command decides. As a decline does: a
+     * command waiting for its riders becomes due now and one message runs it. True when that message went.
+     */
+    public boolean stage(UUID tripId) {
+        try {
+            List<String> due = jdbc.queryForList("""
+                UPDATE delivery_schema.delivery_command c
+                SET next_provider_retry_at = now(), updated_at = now()
+                FROM fleet_schema.trip t
+                JOIN fleet_schema.trip_stage s ON s.trip_id = t.id AND s.provider = 'CRAVES_FLEET' AND s.state = 'OPEN'
+                WHERE t.id = ? AND c.chef_sub_order_id = t.chef_sub_order_id AND c.status = 'WAITING_FOR_PROVIDER'
+                RETURNING c.payload::text
+                """, String.class, tripId);
+            if (due.isEmpty()) {
+                return false;
+            }
+            // A new id each time: the stage may need its command again within the queue's 10 minutes of duplicate detection.
+            publisher.publishNow(json.readValue(due.get(0), DeliveryCommandMessage.class), "fleet-timer:" + tripId + ":" + UUID.randomUUID());
+            return true;
+        } catch (RuntimeException | JsonProcessingException exception) {
+            LOGGER.warn("FLEET_TIMER_COMMAND_WAKE trip={} failed: {}", tripId, exception.getClass().getSimpleName());
+            return false;
+        }
+    }
+
     /** True when the offer's order was waiting for its riders and the message went. */
     boolean wake(UUID offerId) {
         try {

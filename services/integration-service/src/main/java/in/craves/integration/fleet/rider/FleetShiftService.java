@@ -3,6 +3,7 @@ package in.craves.integration.fleet.rider;
 import in.craves.integration.fleet.FleetApiException;
 import in.craves.integration.fleet.FleetProperties;
 import in.craves.integration.fleet.FleetStorage;
+import in.craves.integration.fleet.dispatch.FleetTimers;
 import in.craves.integration.fleet.engine.FleetEngineFeed;
 import in.craves.integration.fleet.rider.FleetRiderModels.DeviceRegistration;
 import in.craves.integration.fleet.rider.FleetRiderModels.HeadingHome;
@@ -81,6 +82,14 @@ public class FleetShiftService {
     @Autowired(required = false)
     public void setEngineFeed(FleetEngineFeed feed) {
         this.engineFeed = feed.on() ? feed : null;
+    }
+
+    /** CRAVES_FLEET_TIMERS: a rider back from a break is free, so the orders waiting near them look now (off: nothing). */
+    private FleetTimers timers;
+
+    @Autowired(required = false)
+    public void setTimers(FleetTimers timers) {
+        this.timers = timers;
     }
 
     /** The fleet engine reads the rider again once this transaction commits (FleetEngineFeed.refresh). */
@@ -192,6 +201,9 @@ public class FleetShiftService {
         jdbc.queryForList("SELECT s.id FROM fleet_schema.rider_shift s JOIN fleet_schema.rider r ON r.id = s.rider_id "
             + "WHERE r.identity_id = ? AND s.ended_at IS NULL", UUID.class, identityId).forEach(this::endBreak);
         engineRefresh(identityId);
+        if (timers != null) {
+            timers.afterBreak(identityId);
+        }
     }
 
     /**

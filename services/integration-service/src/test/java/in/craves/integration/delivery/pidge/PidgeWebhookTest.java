@@ -48,4 +48,30 @@ class PidgeWebhookTest {
         assertEquals("Ravi Kumar", update.courier().name());
         assertEquals("9000000001", update.courier().phone());
     }
+    @Test void previousTokenIsIgnoredUntilSetThenAcceptedAndCounted() {
+        java.util.List<String> lines = new java.util.concurrent.CopyOnWriteArrayList<>();
+        var appender = new ch.qos.logback.core.AppenderBase<ch.qos.logback.classic.spi.ILoggingEvent>() {
+            @Override protected void append(ch.qos.logback.classic.spi.ILoggingEvent event) { lines.add(event.getFormattedMessage()); }
+        };
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(PidgeWebhookService.class);
+        appender.start(); logger.addAppender(appender);
+        try {
+            properties.setWebhookToken("test-secret-b");
+            assertEquals(401, assertThrows(ResponseStatusException.class, () -> service.accept(payload, "test-secret-a")).getStatusCode().value());
+            properties.setWebhookTokenPrevious(" ");
+            assertEquals(401, assertThrows(ResponseStatusException.class, () -> service.accept(payload, "")).getStatusCode().value());
+            assertEquals(401, assertThrows(ResponseStatusException.class, () -> service.accept(payload, null)).getStatusCode().value());
+            verifyNoInteractions(jdbc);
+
+            properties.setWebhookTokenPrevious("test-secret-a");
+            assertTrue(service.accept(payload, "Bearer test-secret-b").accepted());
+            assertTrue(lines.isEmpty());
+            assertTrue(service.accept(payload, "Bearer test-secret-a").accepted());
+            assertEquals(401, assertThrows(ResponseStatusException.class, () -> service.accept(payload, "test-secret-c")).getStatusCode().value());
+            assertEquals(java.util.List.of("COURIER_WEBHOOK_PREVIOUS_SECRET_USED provider=pidge"), lines);
+
+            properties.setWebhookToken("");
+            assertEquals(503, assertThrows(ResponseStatusException.class, () -> service.accept(payload, "test-secret-a")).getStatusCode().value());
+        } finally { logger.detachAppender(appender); }
+    }
 }

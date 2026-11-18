@@ -20,6 +20,7 @@ public class BorzoProperties {
     private String baseUrl = "https://robotapitest-in.borzodelivery.com/api/business/1.8";
     private String authToken = "";
     private String callbackSecret = "";
+    private String callbackSecretPrevious = "";
     private String callbackUrl = "";
     private int connectTimeoutSeconds = 5;
     private int readTimeoutSeconds = 20;
@@ -128,6 +129,8 @@ public class BorzoProperties {
     public void setAuthToken(String authToken) { this.authToken = authToken; }
     public String getCallbackSecret() { return callbackSecret; }
     public void setCallbackSecret(String callbackSecret) { this.callbackSecret = callbackSecret; }
+    public String getCallbackSecretPrevious() { return callbackSecretPrevious; }
+    public void setCallbackSecretPrevious(String value) { this.callbackSecretPrevious = value; }
     public String getCallbackUrl() { return callbackUrl; }
     public void setCallbackUrl(String callbackUrl) { this.callbackUrl = callbackUrl; }
     public int getConnectTimeoutSeconds() { return connectTimeoutSeconds; }

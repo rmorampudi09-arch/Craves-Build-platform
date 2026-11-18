@@ -7,6 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class PidgeWebhookService {
+    private static final Logger log = LoggerFactory.getLogger(PidgeWebhookService.class);
     private final PidgeProperties properties;
     private final ObjectMapper mapper;
     private final JdbcTemplate jdbc;
@@ -28,8 +31,14 @@ public class PidgeWebhookService {
         if (!StringUtils.hasText(expected)) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Pidge callback is not configured");
         String supplied = authorization == null ? "" : authorization.trim();
         if (supplied.regionMatches(true, 0, "Bearer ", 0, 7)) supplied = supplied.substring(7);
-        if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), supplied.getBytes(StandardCharsets.UTF_8)))
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Pidge callback credential");
+        byte[] suppliedBytes = supplied.getBytes(StandardCharsets.UTF_8);
+        if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), suppliedBytes)) {
+            String previous = properties.getWebhookTokenPrevious();
+            if (!StringUtils.hasText(previous) || !MessageDigest.isEqual(previous.getBytes(StandardCharsets.UTF_8), suppliedBytes))
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid Pidge callback credential");
+            // One line per callback, no values: when these stop, the previous token can be removed.
+            log.warn("COURIER_WEBHOOK_PREVIOUS_SECRET_USED provider=pidge");
+        }
         if (raw == null || raw.length() > 262144) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid callback body size");
         JsonNode payload;
         try {

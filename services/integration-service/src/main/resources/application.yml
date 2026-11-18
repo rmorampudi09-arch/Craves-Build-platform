@@ -343,6 +343,7 @@ craves:
       auth-token: ${PIDGE_API_AUTH_TOKEN:}
       channel: ${PIDGE_CHANNEL:Craves Hyperlocal}
       webhook-token: ${PIDGE_WEBHOOK_TOKEN:}
+      webhook-token-previous: ${PIDGE_WEBHOOK_TOKEN_PREVIOUS:}
       callback-url: ${PIDGE_CALLBACK_URL:https://api.craves.in/api/v1/webhooks/delivery/pidge}
       connect-timeout-seconds: ${PIDGE_CONNECT_TIMEOUT_SECONDS:5}
       read-timeout-seconds: ${PIDGE_READ_TIMEOUT_SECONDS:20}
@@ -355,6 +356,7 @@ craves:
       base-url: ${BORZO_API_BASE_URL:https://robotapitest-in.borzodelivery.com/api/business/1.8}
       auth-token: ${BORZO_API_AUTH_TOKEN:}
       callback-secret: ${BORZO_CALLBACK_TOKEN:}
+      callback-secret-previous: ${BORZO_CALLBACK_TOKEN_PREVIOUS:}
       callback-url: ${BORZO_CALLBACK_URL:}
       connect-timeout-seconds: ${BORZO_CONNECT_TIMEOUT_SECONDS:5}
       read-timeout-seconds: ${BORZO_READ_TIMEOUT_SECONDS:20}

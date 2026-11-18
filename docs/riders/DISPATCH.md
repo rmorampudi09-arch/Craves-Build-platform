@@ -42,6 +42,8 @@ A rider hears of an order only if all of these hold:
 - **`enforce` is not a penalty.** A rider left out gets no offer row: it is not a decline or an ask, nothing is recorded against them, their earnings per hour and time free (fair turns) are untouched, and they hear of orders again with their next fresh, accurate fix. No count is kept per rider.
 - **Notice.** `enforce` changes who can hear of an order. Until riders are live it may start at once (the owner's decision). From go-live it needs 14 days' notice, with the rule worded in the app under Terms → "How you get orders": a location under 1 minute old, accurate to 250 m (Telangana s.13(2) [1]). The app doesn't show this rule or tell a rider left out why (not built).
 
+**Finding riders by index (built, switched off: `CRAVES_FLEET_POSTGIS_CANDIDATES`).** A change to how the database finds the riders above, not to who they are: with the switch `on`, the look also asks PostGIS for positions near the kitchen, so an index answers it. The same riders hear, in the same order; `shadow` runs both and logs counts to prove it. It is not a rule under the notice gate, because no rider's offers change. It needs PostGIS allow-listed on the production database server first (an owner step; `BACKEND.md`, flags table); without it the switch runs as off.
+
 ### In what order
 
 - **Nearest first** (fair band 0): by straight-line distance to the kitchen. With `CRAVES_FLEET_ROAD_RANKING_ENABLED`, the 5 nearest are re-ranked by road distance.

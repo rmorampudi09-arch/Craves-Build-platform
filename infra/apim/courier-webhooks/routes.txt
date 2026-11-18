@@ -1,0 +1,5 @@
+# The courier webhook operations that carry policy.xml. The API that owns them is read from the gateway (README.md).
+# route|key|operation id|method|gateway path = backend path on integration-service|policy file <kind>.xml
+# Kept equal to the controllers in services/integration-service by scripts/apim/tests/test_courier_webhooks_apim.py.
+route|courier|courier-webhook-post-borzo|POST|/api/v1/webhooks/delivery/borzo|policy
+route|courier|courier-webhook-post-pidge|POST|/api/v1/webhooks/delivery/pidge|policy

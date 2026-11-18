@@ -1,5 +1,6 @@
--- Craves Rider pilot health (docs/riders/PILOT-HEALTH.md). Read-only: every query reads fleet_schema, and the two
--- dispatch-timing queries (ready_vs_promise, courier_assign_minutes) also delivery_schema and payment_schema.
+-- Craves Rider pilot health (docs/riders/PILOT-HEALTH.md). Read-only: every query reads fleet_schema, and the dispatch
+-- timing and courier queries (ready_vs_promise, courier_assign_minutes, courier_scorecard, courier_api_calls) also
+-- delivery_schema and payment_schema.
 -- The ops console's Pilot health page runs these (FleetPilotHealth, GET /api/v1/admin/fleet/pilot-health). By hand, on
 -- a read-only connection to the integration database, the whole file or one query at a time:
 --   psql "$FLEET_READONLY_URL" -v ON_ERROR_STOP=1 -f services/integration-service/src/main/resources/fleet/pilot_health.sql
@@ -383,6 +384,90 @@ FROM (
 ) b
 GROUP BY ROLLUP (b.provider_id)
 ORDER BY GROUPING(b.provider_id) DESC, courier;
+
+-- name: courier_scorecard
+-- Borzo and Pidge as companies, per booking, over the last 14 days: first both couriers, then each courier, then each day
+-- (India) and hour band (lunch 11:00-14:59, dinner 18:00-22:59, other) a booking was asked for. It reads the booking
+-- journal, so it counts only bookings made with CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED on. attempts: times a courier was
+-- asked; refused: it said no; not_used: neither refused nor the order's delivery (unanswered, stray or cancelled by
+-- Craves); bookings: became the order's delivery. A Borzo booking switched to Pidge stays Borzo's, never assigned
+-- (switched). in_window: a courier assigned within 120 s (Borzo) or 600 s (Pidge) of asking; target 90%, red under 80%.
+-- failed_after_assign: cancelled, failed or returned by the courier after one was assigned, leaving out bookings Craves
+-- cancelled (craves_cancelled: the order was cancelled, or ops cancelled the delivery) or switched; target 3% of
+-- assigned, red over 6%. Times are minutes. Nothing here chooses a courier or changes a booking.
+SELECT CASE WHEN GROUPING(b.day_ist) = 1 THEN 'all' ELSE b.day_ist::text END AS day_ist,
+       CASE WHEN GROUPING(b.hour_band) = 1 THEN 'all' ELSE b.hour_band END AS hour_band,
+       CASE WHEN GROUPING(b.courier) = 1 THEN 'all' ELSE b.courier END AS courier,
+       count(*) AS attempts,
+       count(*) FILTER (WHERE b.state = 'REJECTED') AS refused,
+       count(*) FILTER (WHERE b.state <> 'REJECTED' AND NOT b.booked) AS not_used,
+       count(*) FILTER (WHERE b.booked) AS bookings,
+       count(b.assigned_at) AS assigned,
+       count(*) FILTER (WHERE b.booked) - count(b.assigned_at) AS never_assigned,
+       count(*) FILTER (WHERE b.switched) AS switched,
+       count(*) FILTER (WHERE b.assigned_at <= b.booked_at + b.assign_window) AS in_window,
+       round(100.0 * count(*) FILTER (WHERE b.assigned_at <= b.booked_at + b.assign_window)
+             / NULLIF(count(*) FILTER (WHERE b.booked), 0), 1) AS in_window_pct,
+       round((percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM b.assigned_at - b.booked_at) / 60))::numeric, 1)
+           AS p50_assign_min,
+       round((percentile_cont(0.8) WITHIN GROUP (ORDER BY extract(epoch FROM b.assigned_at - b.booked_at) / 60))::numeric, 1)
+           AS p80_assign_min,
+       round((percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM b.assigned_at - b.booked_at) / 60))::numeric, 1)
+           AS p90_assign_min,
+       round((percentile_cont(0.8) WITHIN GROUP (ORDER BY extract(epoch FROM b.at_pickup_at - b.assigned_at) / 60))::numeric, 1)
+           AS p80_to_pickup_min,
+       count(b.delivered_at) AS delivered,
+       count(*) FILTER (WHERE b.failed_at >= b.assigned_at AND NOT b.craves_cancelled AND NOT b.switched) AS failed_after_assign,
+       round(100.0 * count(*) FILTER (WHERE b.failed_at >= b.assigned_at AND NOT b.craves_cancelled AND NOT b.switched)
+             / NULLIF(count(b.assigned_at), 0), 1) AS failed_pct,
+       count(*) FILTER (WHERE b.craves_cancelled) AS craves_cancelled
+FROM (
+    SELECT a.provider_id AS courier, a.state, a.created_at AS booked_at, a.state IN ('CONFIRMED', 'ADOPTED') AS booked,
+           (a.created_at AT TIME ZONE 'Asia/Kolkata')::date AS day_ist,
+           CASE WHEN extract(hour FROM a.created_at AT TIME ZONE 'Asia/Kolkata') BETWEEN 11 AND 14 THEN 'lunch'
+                WHEN extract(hour FROM a.created_at AT TIME ZONE 'Asia/Kolkata') BETWEEN 18 AND 22 THEN 'dinner'
+                ELSE 'other' END AS hour_band,
+           -- DeliveryProviderRouter's Borzo window and Pidge's stage.
+           CASE a.provider_id WHEN 'borzo' THEN INTERVAL '120 seconds' ELSE INTERVAL '600 seconds' END AS assign_window,
+           e.assigned_at, e.at_pickup_at, e.delivered_at, e.failed_at,
+           a.provider_id = 'borzo' AND COALESCE(e.switch_started, false) AS switched,
+           -- Each looked up by its primary key, one booking at a time.
+           a.state IN ('CONFIRMED', 'ADOPTED') AND COALESCE(
+               (SELECT true FROM delivery_schema.order_cancelled o WHERE o.chef_sub_order_id = a.chef_sub_order_id),
+               (SELECT true FROM delivery_schema.courier_cancel c
+                WHERE c.provider_id = a.provider_id AND c.provider_delivery_id = a.provider_ref), false) AS craves_cancelled
+    -- One row per booking attempt, found by the journal's created_at index.
+    FROM delivery_schema.provider_create_attempt a
+    -- A booking's milestones are its own courier's events on the order's job (a switch rewrites the job and keeps the
+    -- earlier courier's events). An aggregate, so it runs once per booking by the job's and the events' keys and never
+    -- reads either table whole.
+    LEFT JOIN LATERAL (
+        SELECT min(v.occurred_at) FILTER (WHERE v.normalized_status = 'COURIER_ASSIGNED') AS assigned_at,
+               min(v.occurred_at) FILTER (WHERE v.normalized_status IN ('AT_PICKUP', 'PICKED_UP')) AS at_pickup_at,
+               min(v.occurred_at) FILTER (WHERE v.normalized_status = 'DELIVERED') AS delivered_at,
+               max(v.occurred_at) FILTER (WHERE v.applied AND v.normalized_status IN ('CANCELLED', 'FAILED', 'RETURNING', 'RETURNED'))
+                   AS failed_at,
+               bool_or(h.borzo_cancel_intent_at IS NOT NULL) AS switch_started
+        FROM delivery_schema.delivery_job j
+        LEFT JOIN delivery_schema.delivery_borzo_pidge_handoff h ON h.delivery_job_id = j.id
+        LEFT JOIN delivery_schema.delivery_event v ON v.delivery_job_id = j.id AND v.provider_id = a.provider_id
+        WHERE j.chef_sub_order_id = a.chef_sub_order_id AND a.state IN ('CONFIRMED', 'ADOPTED')
+    ) e ON true
+    WHERE a.provider_id IN ('borzo', 'pidge') AND a.created_at > now() - INTERVAL '14 days'
+) b
+GROUP BY GROUPING SETS ((), (b.courier), (b.day_ist, b.courier, b.hour_band))
+ORDER BY GROUPING(b.day_ist) DESC, GROUPING(b.courier) DESC, b.day_ist DESC, b.courier, b.hour_band;
+
+-- name: courier_api_calls
+-- Calls to each courier's API per day (India) over the last 14 days, then all of them ("all"). Counted only with
+-- CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED on. Borzo's daily cap is CRAVES_DELIVERY_BORZO_DAILY_API_CAP (5000).
+SELECT CASE WHEN GROUPING(u.day) = 1 THEN 'all' ELSE u.day::text END AS day_ist,
+       CASE WHEN GROUPING(u.provider_id) = 1 THEN 'all' ELSE u.provider_id END AS courier,
+       COALESCE(sum(u.calls), 0) AS calls
+FROM delivery_schema.provider_api_usage u
+WHERE u.provider_id IN ('borzo', 'pidge') AND u.day > (now() AT TIME ZONE 'Asia/Kolkata')::date - 14
+GROUP BY GROUPING SETS ((), (u.day, u.provider_id))
+ORDER BY GROUPING(u.day) DESC, u.day DESC, u.provider_id;
 
 -- name: track_size
 -- trip_track on disk: its day partitions and the default one. Thinning old tracks (P2-11) is worth doing past about 5 GB.

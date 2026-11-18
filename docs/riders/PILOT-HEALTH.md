@@ -48,6 +48,36 @@ Some work waits until pilot data shows it is needed (blueprint C1, C5 and C7; WO
 | `courier_assign_minutes` | Borzo and Pidge bookings over 14 days: minutes from booking to their courier being assigned (p50, p90) and bookings never assigned, per courier and both (`all`). A Borzo booking switched to Pidge counts as Borzo's, never assigned, and the Pidge booking as Pidge's. | **p50 near or past the 10-minute lead** (`CRAVES_DELIVERY_COMMAND_LEAD_TIME_MINUTES`): food waits for couriers, so book earlier by raising the lead. |
 | `track_size` | `trip_track` on disk, all partitions. | **Past about 5 GB:** thin tracks older than 7 days to one fix per 10 s per trip (P2-11). |
 
+## Courier scorecard (Borzo and Pidge)
+
+How Borzo and Pidge do as companies. It is about the courier companies only: nothing in it is per rider, and nothing reads it to choose a courier, change a booking or act on its own. A person reads it, weekly and before a review with a courier.
+
+| Query | What it shows | Target or what to look for |
+|---|---|---|
+| `courier_scorecard` | Per booking over 14 days: both couriers (`all`), then each courier, then each courier per day (India) and hour band (`lunch` 11:00–14:59, `dinner` 18:00–22:59, `other`) by when the courier was asked. Columns below. | **`in_window_pct` 90% or more, red under 80%. `failed_pct` 3% or less, red over 6%.** |
+| `courier_api_calls` | Calls to each courier's API per day (India) over 14 days, then all of them. Empty until `CRAVES_DELIVERY_PROVIDER_API_USAGE_ENABLED` is on. | Borzo's cap is `CRAVES_DELIVERY_BORZO_DAILY_API_CAP` (5,000 a day); `COURIER_API_USAGE_HIGH` is raised at 70% of it. |
+
+**It reads the booking journal** (`delivery_schema.provider_create_attempt`, one row each time a courier is asked), so it counts only bookings made while `CRAVES_DELIVERY_BOOKING_JOURNAL_ENABLED` is on; with the journal off it shows one row of zeros. `courier_assign_minutes` above counts every booking either way, and for bookings the journal holds the two agree per courier (`FleetPilotHealthDatabaseTest`). A booking's milestones are its own courier's events (`delivery_event`) on the order's delivery job, so a Borzo booking that was switched to Pidge stays Borzo's.
+
+| Column | Definition |
+|---|---|
+| `attempts` | Times the courier was asked to book (journal rows). |
+| `refused` | Attempts the courier refused, or where a lookup found no booking (`REJECTED`). |
+| `not_used` | Attempts that were neither refused nor became the order's delivery: still unanswered, a stray booking, or one Craves cancelled (`INTENT`, `UNKNOWN`, `ORPHAN_SUSPECT`, `CANCELLED`). |
+| `bookings` | Attempts that became the order's delivery (`CONFIRMED`, `ADOPTED`). Every column below counts these only. |
+| `assigned`, `never_assigned` | Bookings with, and without, a `COURIER_ASSIGNED` event from that courier. |
+| `switched` | Borzo bookings Craves cancelled to switch the order to Pidge. They are in `never_assigned` unless Borzo assigned at the last moment. |
+| `in_window`, `in_window_pct` | Bookings assigned within the courier's window, counted from when it was asked: 120 s for Borzo, 600 s for Pidge. The percentage is of `bookings`. |
+| `p50_assign_min`, `p80_assign_min`, `p90_assign_min` | Minutes from asking to assigned, over assigned bookings only. Bookings never assigned are left out, so these read low: never shorten a window from them. |
+| `p80_to_pickup_min` | Minutes from assigned to the courier's first `AT_PICKUP` or `PICKED_UP`. |
+| `delivered` | Bookings with a `DELIVERED` event from that courier. |
+| `failed_after_assign`, `failed_pct` | Assigned bookings the courier then cancelled, failed or returned (an applied `CANCELLED`, `FAILED`, `RETURNING` or `RETURNED`), leaving out those Craves cancelled or switched. The percentage is of `assigned`. |
+| `craves_cancelled` | Bookings Craves cancelled: the order was cancelled, or operations cancelled the delivery. Not the courier's failure. |
+
+**Reading it.** Borzo's `in_window_pct` under 80% over the two weeks means its 120 s is too short for the couriers it has: the plan (R23 §3.7) is to lengthen it in 30 s steps, to at most 300 s, and never to shorten it from these numbers. That is a code change the owner decides; nothing does it automatically. A courier red on `failed_pct` or `refused` for two weeks: raise it with the courier before changing anything.
+
+**Not on it yet:** pickup and drop on time (the pickup time a courier quoted is not kept per booking, and the time promised to the customer is not in this database), invoice accuracy (needs courier charges), a split by city (orders carry no city), and anything older than 14 days (nothing is stored).
+
 ## Fairness and rider choices (Phase 4)
 
 How evenly riders earn for their time, what the offer rules cost, what riders choose, and where they wait. Read them weekly with the triggers. `DISPATCH.md` §7 says what to change when one fires, and every change to the offer rules needs 14 days' notice.

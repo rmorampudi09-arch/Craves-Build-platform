@@ -172,6 +172,8 @@ object RiderOffers {
       while (receipts.size > MAX_RECEIPTS) receipts.remove(receipts.keys.first())
     }
     Log.i(TAG, "offer ${offer.offerId} first via $channel")
+    // The server hears of it now (R22 22); the receipt kept above still rides on the next /locations call if this fails.
+    RiderOnlineService.sendRang(context, offer.offerId, channel)
     val (ownTitle, ownBody) = words(context, offer.json)
     ring(context, offer, RiderText.fromServer(context, title) ?: ownTitle, RiderText.fromServer(context, body) ?: ownBody)
     if (!RiderEvents.emit("riderOffer") { offer.toMap() }) {

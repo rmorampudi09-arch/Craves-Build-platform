@@ -26,6 +26,10 @@ public class WebSecurityConfiguration {
         // JWT. FleetTripController then requires that credential (its rider's own trip) or a RIDER JWT itself.
         RequestMatcher credentialTripSteps = environment.getProperty("craves.fleet.trip-shift-credential-enabled", Boolean.class, false)
             ? AntPathRequestMatcher.antMatcher(HttpMethod.POST, "/api/v1/rider/trips/*/*") : request -> false;
+        // R22 22, off by default: the native service reports an offer ringing with the shift credential.
+        // FleetRingReceiptController requires that credential itself.
+        RequestMatcher ringReceipt = environment.getProperty("craves.fleet.ring-receipt-enabled", Boolean.class, false)
+            ? AntPathRequestMatcher.antMatcher(HttpMethod.POST, "/api/v1/rider/offers/*/rang") : request -> false;
         http.csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
@@ -45,6 +49,7 @@ public class WebSecurityConfiguration {
                 // applicant's (a PENDING rider's) JWT, checked by its service. The credential authenticates nothing else.
                 .requestMatchers(HttpMethod.POST, "/api/v1/rider/locations", "/api/v1/rider/devices").permitAll()
                 .requestMatchers(credentialTripSteps).permitAll()
+                .requestMatchers(ringReceipt).permitAll()
                 // Any signed-in user may ask whether they are a rider, and sign up (apply). A PENDING rider (no RIDER role
                 // until ops activates them) may read their profile, accept the privacy notice, and send documents and a
                 // payout account: the services require their rider row. Every other rider route needs RIDER.

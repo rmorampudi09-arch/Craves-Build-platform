@@ -84,6 +84,20 @@ class FleetShiftCredentialSecurityTest {
         verifyNoInteractions(riders, admin, joinsExits, trips, slots, earnings, payouts, support, ops);
     }
 
+    /** R22 22: until CRAVES_FLEET_RING_RECEIPT_ENABLED the ring receipt route is closed to the credential, as before it was built. */
+    @Test
+    void theRingReceiptNeedsItsSwitch() throws Exception {
+        assertThat(rang()).isIn(401, 403);
+        verifyNoInteractions(locations);
+    }
+
+    /** POST /offers/{offerId}/rang with only the shift credential: its status. */
+    int rang() throws Exception {
+        return mvc.perform(request(HttpMethod.POST, "/api/v1/rider/offers/" + UUID.randomUUID() + "/rang")
+            .header(FleetShiftService.SHIFT_CREDENTIAL, CREDENTIAL).contentType(MediaType.APPLICATION_JSON)
+            .content("{\"channel\":\"fcm\",\"ageMs\":0}")).andReturn().getResponse().getStatus();
+    }
+
     /** Every rider and admin fleet route called with only the shift credential; the ones that answered (not 401 or 403). */
     Set<String> walk() throws Exception {
         Set<String> walked = new TreeSet<>();

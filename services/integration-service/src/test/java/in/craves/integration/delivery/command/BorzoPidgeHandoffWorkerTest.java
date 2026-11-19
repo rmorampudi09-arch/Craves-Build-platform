@@ -134,11 +134,15 @@ class BorzoPidgeHandoffWorkerTest {
         when(borzo.readOrder(handoff.borzoProviderDeliveryId()))
             .thenReturn(delivery("borzo", handoff.borzoProviderDeliveryId(), DeliveryStatus.CANCELLED));
 
-        worker().processDue();
+        BorzoPidgeHandoffWorker worker = worker();
+        worker.setCharges(charges);
+        worker.processDue();
 
         verify(handoffs).manualReview(eq(job.id()), any());
         verify(borzo, never()).cancel(any());
         verify(pidge, never()).create(any());
+        verify(charges, never()).cancelled(any(), any(), any(), any(), eq(false));
+        verify(charges, never()).cancelled(any(), any(), any(), any(), eq(true));
     }
 
     @Test
@@ -186,10 +190,15 @@ class BorzoPidgeHandoffWorkerTest {
             .thenThrow(new ResourceAccessException("uncertain cancellation response"));
         when(handoffs.markBorzoCancelled(job.id())).thenReturn(true);
 
-        worker().processDue();
+        BorzoPidgeHandoffWorker worker = worker();
+        worker.setCharges(charges);
+        worker.processDue();
 
         verify(borzo).cancel(first.borzoProviderDeliveryId());
         verify(handoffs).markBorzoCancelled(job.id());
+        // Craves's own cancel found on the retry: recorded once, amount unknown, so the booking price is no longer expected.
+        verify(charges).cancelled(eq(job.orderId()), eq(job.chefSubOrderId()), eq(job.id()), any(), eq(false));
+        verify(charges, never()).cancelled(any(), any(), any(), any(), eq(true));
         verify(pidge, never()).create(any());
     }
 
@@ -223,8 +232,8 @@ class BorzoPidgeHandoffWorkerTest {
         verify(borzo, times(2)).readCourier(handoff.borzoProviderDeliveryId());
         verify(borzo).cancel(handoff.borzoProviderDeliveryId());
         verify(handoffs).markBorzoCancelled(job.id());
-        // DELAYED with no courier id read just before: no rider, so the cancel is recorded as free.
-        verify(charges).cancelled(eq(job.orderId()), eq(job.chefSubOrderId()), eq(job.id()), any(), eq(true));
+        // DELAYED read just before: whether a rider was assigned is not known, so the cancel's amount is unknown.
+        verify(charges).cancelled(eq(job.orderId()), eq(job.chefSubOrderId()), eq(job.id()), any(), eq(false));
     }
 
     @Test

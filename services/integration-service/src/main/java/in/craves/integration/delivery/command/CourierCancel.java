@@ -1,6 +1,7 @@
 package in.craves.integration.delivery.command;
 
 import in.craves.integration.config.WorkerSchedulingConfiguration;
+import in.craves.integration.delivery.billing.CourierCharges;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
@@ -142,7 +143,7 @@ public class CourierCancel {
                 throw new IllegalStateException("no " + courier + " client in this service");
             }
             seen = adapter.track(booking.providerDeliveryId());
-            beforeRider = in.craves.integration.delivery.billing.CourierCharges.beforeRider(seen);
+            beforeRider = CourierCharges.beforeRider(seen);
             past = CourierStrayBookings.PAST_CANCELLING.contains(seen.delivery().status());
             if (!past && seen.delivery().status() != DeliveryStatus.CANCELLED) {
                 try {

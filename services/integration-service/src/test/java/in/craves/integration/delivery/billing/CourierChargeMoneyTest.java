@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.billing.CourierBilling.Line;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Courier;
@@ -69,6 +70,33 @@ class CourierChargeMoneyTest {
             assertThat(CourierCharges.beforeRider(seen(status, null))).as(status.name()).isFalse();
         }
         assertThat(CourierCharges.beforeRider(null)).as("nothing read").isFalse();
+        assertThat(CourierCharges.beforeRider(seen(DeliveryStatus.SEARCHING, new Courier(null, null, "9999999999", null, null, null))))
+            .as("a phone alone is a rider").isFalse();
+    }
+
+    @Test
+    void aPidgeOrBorzoAnswerWithAnyRiderOrAFulfillmentPastSearchingIsNotKnownFree() throws Exception {
+        ObjectMapper json = new ObjectMapper();
+        // Pidge maps a top-level PENDING to PENDING whatever the fulfillment says, and a cancelled fulfillment to PENDING.
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"CREATED\"}"))).isTrue();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{}"))).isTrue();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"CREATED\",\"rider\":{}}"))).as("an empty rider is none").isTrue();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"CREATED\",\"rider\":{\"mobile\":\"9999999999\"}}"))).isFalse();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"CREATED\",\"rider\":{\"id\":7}}"))).isFalse();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"CANCELLED\"}"))).as("the rider dropped out").isFalse();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"OUT_FOR_PICKUP\"}"))).isFalse();
+        // Borzo's raw order names its courier once one is assigned.
+        assertThat(CourierCharges.beforeRider(raw(json, "{\"courier\":null}"))).isTrue();
+        assertThat(CourierCharges.beforeRider(raw(json, "{\"courier\":{\"courier_id\":\"12\"}}"))).isFalse();
+    }
+
+    private static TrackingSnapshot pidge(ObjectMapper json, String fulfillment) throws Exception {
+        return raw(json, "{\"fulfillment\":" + fulfillment + "}");
+    }
+
+    private static TrackingSnapshot raw(ObjectMapper json, String metadata) throws Exception {
+        return new TrackingSnapshot(new ProviderDelivery("pidge", "PG-1", null, DeliveryStatus.PENDING, "PENDING", null, null, null,
+            json.readTree(metadata), Instant.now()), null, Instant.now());
     }
 
     @Test

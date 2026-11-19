@@ -1,0 +1,122 @@
+# Fix program routes for the production Caddy gateway (stock caddy:2.10). Placement and checks: infra/caddy/README.md.
+# Defines two snippets only; nothing here applies until (api_routes) has `import fix_program` as its first line.
+# Matcher names start with fix_ so they never clash with the house @opN names. Captured path segments allow only
+# [A-Za-z0-9_-] (offer UUIDs, courier names borzo/pidge, numeric import ids), so no dot or encoded segment is rewritten.
+
+# Mirrors infra/apim/rider-fleet/admin-policy.xml: Bearer header required (401), shift credential dropped, no-store,
+# nosniff, DENY. Not reproduced: the correlation-id copy (README).
+(fix_admin_fleet) {
+	@fix_no_bearer not header_regexp Authorization (?i)^Bearer\s
+	respond @fix_no_bearer `{"error":"AUTHENTICATION_REQUIRED","message":"A Bearer access token is required."}` 401
+	request_header -X-Craves-Shift-Credential
+	header {
+		defer
+		Cache-Control "no-store, no-cache, must-revalidate"
+		Pragma no-cache
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+	}
+	import to integration:8080
+}
+
+(fix_program) {
+	# Courier webhooks: 262144 bytes, as infra/apim/courier-webhooks/policy.xml. Over the limit is 413; the body is
+	# otherwise forwarded unchanged, path included. Must come before the ^/api/v1/webhooks/.* catch-all (@op456).
+	@fix_courier_webhook_borzo {
+		method POST
+		path_regexp (?i)^/api/v1/webhooks/delivery/borzo/?$
+	}
+	handle @fix_courier_webhook_borzo {
+		request_body {
+			max_size 262144
+		}
+		import to integration:8080
+	}
+
+	@fix_courier_webhook_pidge {
+		method POST
+		path_regexp (?i)^/api/v1/webhooks/delivery/pidge/?$
+	}
+	handle @fix_courier_webhook_pidge {
+		request_body {
+			max_size 262144
+		}
+		import to integration:8080
+	}
+
+	# Ring receipt (PR #697). Mirrors infra/apim/rider-fleet/location-policy.xml: Bearer header or a non-empty shift
+	# credential (401 otherwise), credential passed through, 16 KB cap. Not reproduced: 2 calls in flight per shift.
+	@fix_rider_offer_rang {
+		method POST
+		path_regexp (?i)^/api/v1/rider/offers/(?P<offerId>[A-Za-z0-9_-]+)/rang/?$
+	}
+	handle @fix_rider_offer_rang {
+		@fix_no_rider_credential {
+			not header_regexp Authorization (?i)^Bearer\s
+			not header_regexp X-Craves-Shift-Credential \S
+		}
+		respond @fix_no_rider_credential `{"code":"AUTHENTICATION_REQUIRED","message":"A Bearer access token or the shift credential is required."}` 401
+		request_body {
+			max_size 16384
+		}
+		rewrite * /api/v1/rider/offers/{re.fix_rider_offer_rang.offerId}/rang?{query}
+		header {
+			defer
+			Cache-Control "private, no-store"
+			Pragma no-cache
+			X-Content-Type-Options nosniff
+		}
+		import to integration:8080
+	}
+
+	# Courier billing (PR #708), contracts/openapi/admin-fleet-v1.yaml. APIM has no body cap on admin routes; here only
+	# POST /invoices has one (1 MiB).
+	@fix_admin_fleet_courier_billing_settings_get {
+		method GET
+		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/settings/?$
+	}
+	handle @fix_admin_fleet_courier_billing_settings_get {
+		rewrite * /api/v1/admin/fleet/courier-billing/settings?{query}
+		import fix_admin_fleet
+	}
+
+	@fix_admin_fleet_courier_billing_setting_put {
+		method PUT
+		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/settings/(?P<courier>[A-Za-z0-9_-]+)/?$
+	}
+	handle @fix_admin_fleet_courier_billing_setting_put {
+		rewrite * /api/v1/admin/fleet/courier-billing/settings/{re.fix_admin_fleet_courier_billing_setting_put.courier}?{query}
+		import fix_admin_fleet
+	}
+
+	@fix_admin_fleet_courier_billing_invoices_get {
+		method GET
+		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/invoices/?$
+	}
+	handle @fix_admin_fleet_courier_billing_invoices_get {
+		rewrite * /api/v1/admin/fleet/courier-billing/invoices?{query}
+		import fix_admin_fleet
+	}
+
+	@fix_admin_fleet_courier_billing_invoices_post {
+		method POST
+		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/invoices/?$
+	}
+	handle @fix_admin_fleet_courier_billing_invoices_post {
+		# CourierBilling.MAX_CHARS is a 512,000-character CSV inside JSON; 1 MiB leaves room for its escaping.
+		request_body {
+			max_size 1048576
+		}
+		rewrite * /api/v1/admin/fleet/courier-billing/invoices?{query}
+		import fix_admin_fleet
+	}
+
+	@fix_admin_fleet_courier_billing_invoice_get {
+		method GET
+		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/invoices/(?P<importId>[A-Za-z0-9_-]+)/?$
+	}
+	handle @fix_admin_fleet_courier_billing_invoice_get {
+		rewrite * /api/v1/admin/fleet/courier-billing/invoices/{re.fix_admin_fleet_courier_billing_invoice_get.importId}?{query}
+		import fix_admin_fleet
+	}
+}

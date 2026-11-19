@@ -1,0 +1,10 @@
+# Stands in for integration:8080: reads the whole body (as the service does) and echoes what it received.
+{
+	auto_https off
+}
+
+:8080 {
+	header X-Upstream integration-standin
+	header Cache-Control upstream-value
+	respond "{method} {uri} fdid={header.X-Azure-FDID} cip={header.X-Azure-ClientIP} shift={header.X-Craves-Shift-Credential} body={http.request.body}" 200
+}

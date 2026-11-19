@@ -921,11 +921,17 @@ and the line is `CRAVES_ALERT alert=COURIER_CHARGE_THRESHOLD_NOT_CHECKED`.
 
 | Canceller | `CANCEL` amount | Why |
 |---|---|---|
-| `CourierCancel` (order cancelled, or ops with `CRAVES_DELIVERY_COURIER_CANCEL_ENABLED` on) | `0` or empty | It reads the booking just before cancelling. `0` when that read shows `PENDING` or `SEARCHING` and no rider with an id (`CourierCharges.beforeRider`); empty for anything else, including a booking an earlier attempt already left cancelled. |
+| `CourierCancel` (order cancelled, or ops with `CRAVES_DELIVERY_COURIER_CANCEL_ENABLED` on) | `0` or empty | It reads the booking just before cancelling and applies `CourierCharges.beforeRider` to that read; empty for anything else, including a booking an earlier attempt already left cancelled. |
 | `FleetCourierCancel` (fleet tick, or ops with that flag off) | empty | It cancels without reading the courier first, and the delivery job's own status can lag the courier. |
-| `BorzoPidgeHandoffWorker` (Borzo's booking in a switch to Pidge) | `0` | It cancels Borzo only after reading it `PENDING` or `SEARCHING`, or `DELAYED` with no courier id. |
+| `BorzoPidgeHandoffWorker` (Borzo's booking in a switch to Pidge) | `0` or empty | The same rule on Borzo as read just before the cancel: `DELAYED` is empty. A retry that finds Borzo already cancelled after Craves recorded its cancel intent (the answer was lost) writes an empty `CANCEL`, so the booking price is no longer expected. |
 
-A rider assigned in the seconds between that read and the cancel is not seen. In the comparison a free cancel the
+`CourierCharges.beforeRider` is the one rule: `0` only when the read shows `PENDING` or `SEARCHING`, no rider anywhere in
+the answer (an id, name or phone in the courier read, Borzo's `order.courier` or Pidge's `fulfillment.rider`), and no
+Pidge fulfillment past searching (Pidge reads a top-level pending order, and a fulfillment cancelled when its rider
+dropped out, as `PENDING`). When in doubt it is empty, never `0`.
+
+A rider assigned in the seconds between Craves's read and its cancel is not seen: that cancel is recorded as `0`, and if
+the courier charged for it the wallet statement shows it as `AMOUNT_DIFFERS`. In the comparison a free cancel the
 statement lacks is not listed, one the statement charges is `AMOUNT_DIFFERS`, and an unknown one is
 `CRAVES_AMOUNT_UNKNOWN` (or `NOT_ON_INVOICE` with no Craves amount when the statement lacks it).
 

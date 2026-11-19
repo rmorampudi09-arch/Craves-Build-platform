@@ -67,5 +67,6 @@ then on both), and an unknown amount when a rider was assigned or it cannot tell
 first). So a free cancel the wallet does not deduct is not listed; one the wallet does deduct is `AMOUNT_DIFFERS`; an
 unknown one is `CRAVES_AMOUNT_UNKNOWN`, or `NOT_ON_INVOICE` with no Craves amount when the wallet shows nothing. Read
 the deduction on the wallet line: after a rider is assigned a fee may apply (Borzo mentions about ₹40; Pidge's is not
-known). Before the flag goes on, still find one such order in each wallet's history to confirm a cancel before a rider
-deducts nothing.
+known). A rider assigned in the seconds between Craves's read and its cancel is not seen: Craves records that cancel as
+`0`, and if the courier charged for it the wallet line shows as `AMOUNT_DIFFERS`. Before the flag goes on, still find one
+such order in each wallet's history to confirm a cancel before a rider deducts nothing.

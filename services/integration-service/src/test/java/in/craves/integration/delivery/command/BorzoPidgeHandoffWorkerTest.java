@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.config.PidgeProperties;
+import in.craves.integration.delivery.billing.CourierCharges;
 import in.craves.integration.delivery.borzo.BorzoApiClient;
 import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository.Handoff;
 import in.craves.integration.delivery.command.DeliveryJobRepository.HandoffJob;
@@ -51,6 +52,7 @@ class BorzoPidgeHandoffWorkerTest {
     private final DeliveryStatusUpdateService statusUpdates = mock(DeliveryStatusUpdateService.class);
     private final BorzoPidgeHandoffCompletionService completion =
         mock(BorzoPidgeHandoffCompletionService.class);
+    private final CourierCharges charges = mock(CourierCharges.class);
 
     private BorzoPidgeHandoffWorker worker() {
         return worker(borzoProperties);
@@ -110,11 +112,15 @@ class BorzoPidgeHandoffWorkerTest {
         when(handoffs.markBorzoCancelled(job.id())).thenReturn(true);
         when(handoffs.markCancelIntent(job.id())).thenReturn(true);
 
-        worker(maintenance).processDue();
+        BorzoPidgeHandoffWorker worker = worker(maintenance);
+        worker.setCharges(charges);
+        worker.processDue();
 
         verify(borzo).cancel(handoff.borzoProviderDeliveryId());
         verify(handoffs).markBorzoCancelled(job.id());
         verify(pidge, never()).create(any());
+        // Cancelled while Borzo showed SEARCHING: no rider, so the cancel is recorded as free.
+        verify(charges).cancelled(eq(job.orderId()), eq(job.chefSubOrderId()), eq(job.id()), any(), eq(true));
     }
 
     @Test
@@ -210,11 +216,15 @@ class BorzoPidgeHandoffWorkerTest {
             .thenReturn(delivery("borzo", handoff.borzoProviderDeliveryId(), DeliveryStatus.CANCELLED));
         when(handoffs.markBorzoCancelled(job.id())).thenReturn(true);
 
-        worker().processDue();
+        BorzoPidgeHandoffWorker worker = worker();
+        worker.setCharges(charges);
+        worker.processDue();
 
         verify(borzo, times(2)).readCourier(handoff.borzoProviderDeliveryId());
         verify(borzo).cancel(handoff.borzoProviderDeliveryId());
         verify(handoffs).markBorzoCancelled(job.id());
+        // DELAYED with no courier id read just before: no rider, so the cancel is recorded as free.
+        verify(charges).cancelled(eq(job.orderId()), eq(job.chefSubOrderId()), eq(job.id()), any(), eq(true));
     }
 
     @Test

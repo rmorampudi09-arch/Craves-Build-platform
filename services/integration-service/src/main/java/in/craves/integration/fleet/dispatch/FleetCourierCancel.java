@@ -194,7 +194,8 @@ public class FleetCourierCancel {
         LOGGER.info("FLEET_COURIER_CANCELLED provider={} delivery={} chefSubOrderId={} reason={}", booking.provider(),
             booking.providerDeliveryId(), booking.chefSubOrderId(), reason);
         if (charges != null) {
-            charges.cancelled(booking.orderId(), booking.chefSubOrderId(), booking.jobId(), answer);
+            // Nothing read from the courier before the cancel (the job's own status can lag it): whether a rider was assigned is unknown.
+            charges.cancelled(booking.orderId(), booking.chefSubOrderId(), booking.jobId(), answer, false);
         }
         try {
             // The delivery job and order-service hear it now; the courier's callback or the tracking poll would bring it later.

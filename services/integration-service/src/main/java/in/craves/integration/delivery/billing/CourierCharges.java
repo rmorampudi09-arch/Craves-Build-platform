@@ -1,7 +1,9 @@
 package in.craves.integration.delivery.billing;
 
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
 import in.craves.integration.delivery.status.DeliveryStatusRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -41,12 +43,26 @@ public class CourierCharges {
 
     /** The booking became the order's delivery: the courier's price as its answer shows it. */
     public void booked(UUID orderId, UUID chefSubOrderId, UUID deliveryJobId, ProviderDelivery delivery) {
-        record(BOOKING, orderId, chefSubOrderId, deliveryJobId, delivery);
+        record(BOOKING, orderId, chefSubOrderId, deliveryJobId, delivery, false);
     }
 
-    /** The courier shows the booking cancelled: the price its record shows now, which replaces the booking price. */
-    public void cancelled(UUID orderId, UUID chefSubOrderId, UUID deliveryJobId, ProviderDelivery delivery) {
-        record(CANCEL, orderId, chefSubOrderId, deliveryJobId, delivery);
+    /**
+     * The courier shows the booking Craves cancelled cancelled. Its amount replaces the booking price: 0 when the caller read,
+     * before cancelling, that no rider was assigned (free on Borzo and Pidge); otherwise NULL, unknown, for the wallet statement
+     * to decide. Never the price the courier's record shows after the cancel, which is the booking price repeated.
+     */
+    public void cancelled(UUID orderId, UUID chefSubOrderId, UUID deliveryJobId, ProviderDelivery delivery, boolean beforeRider) {
+        record(CANCEL, orderId, chefSubOrderId, deliveryJobId, delivery, beforeRider);
+    }
+
+    /**
+     * What the courier showed just before Craves cancelled says no rider was assigned: still being placed or searched for, and
+     * no rider with an id (the same test as BorzoPidgeHandoffWorker's). Anything else, or nothing read, is not known.
+     */
+    public static boolean beforeRider(TrackingSnapshot seen) {
+        return seen != null && seen.delivery() != null
+            && (seen.delivery().status() == DeliveryStatus.PENDING || seen.delivery().status() == DeliveryStatus.SEARCHING)
+            && (seen.courier() == null || seen.courier().providerCourierId() == null || seen.courier().providerCourierId().isBlank());
     }
 
     /**
@@ -62,12 +78,12 @@ public class CourierCharges {
         return rupees == null ? null : rupees.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
     }
 
-    private void record(String kind, UUID orderId, UUID chefSubOrderId, UUID deliveryJobId, ProviderDelivery delivery) {
+    private void record(String kind, UUID orderId, UUID chefSubOrderId, UUID deliveryJobId, ProviderDelivery delivery, boolean beforeRider) {
         if (!enabled() || delivery == null) {
             return;
         }
         try {
-            Long paise = paise(price(delivery));
+            Long paise = CANCEL.equals(kind) ? (beforeRider ? Long.valueOf(0L) : null) : paise(price(delivery));
             boolean written = Boolean.TRUE.equals(savepoints.inSavepoint(() -> jdbc.update("""
                 INSERT INTO delivery_schema.courier_charge
                     (provider_id, provider_delivery_id, chef_sub_order_id, order_id, delivery_job_id, kind, amount_paise, source)

@@ -372,7 +372,8 @@ public class BorzoPidgeHandoffWorker {
         }
         requireStateChange(handoffs.markBorzoCancelled(job.id()), "Borzo cancellation state changed");
         if (charges != null) {
-            charges.cancelled(job.orderId(), job.chefSubOrderId(), job.id(), cancellation);
+            // Cancelled only after reading Borzo PENDING or SEARCHING, or DELAYED with no courier id: no rider was assigned.
+            charges.cancelled(job.orderId(), job.chefSubOrderId(), job.id(), cancellation, true);
         }
     }
 

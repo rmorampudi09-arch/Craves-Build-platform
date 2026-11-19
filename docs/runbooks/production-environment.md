@@ -2,7 +2,9 @@
 
 This is the one place that says which Azure subscription, resources and pipelines are production. If anything else in the repo disagrees, this page wins and the other file is wrong. `scripts/release/tests/test_no_retired_azure_names.py` fails CI if a retired name below comes back.
 
-Checked against live Azure on 26 and 27 Oct 2026 (read only).
+**Since 17 Nov 2026:** production no longer runs on Azure Container Apps or Azure Database for PostgreSQL flexible servers. On the night of 16–17 Nov 2026 (IST) every app and the database moved to Docker containers on one VM, `vm-craves-compact` (section "Production VM" below). The old container apps, flexible servers and network were deleted on 17 Nov between 03:52 and 04:37 IST. Anything in this repo that tells you to run `az containerapp …`, move revision traffic or change a `pg-craves-*` server describes the old setup.
+
+Checked against live Azure on 26 and 27 Oct 2026 (read only). The VM layout is from the owner, 19 Nov 2026.
 
 Production moved to a new subscription on 29 Oct 2026 (cut-over about 23:45 UTC). The section "Current" below is the new estate; the section after it describes the old subscription, which is now an idle, read-only fallback.
 
@@ -12,39 +14,68 @@ Production moved to a new subscription on 29 Oct 2026 (cut-over about 23:45 UTC)
 |---|---|
 | Azure subscription | `34eefd95-1a19-416f-b9df-92b326500615` (account ravitejamm6@gmail.com) |
 | Tenant | `182d6285-5895-47f8-9ade-77b10854ed0d` |
-| Resource groups | one per feature: `rg-craves-<feature>-prod` (auth, catalog, order, user-chef, notification, subscription, integration, referral, voice, web, admin, delivery-intel), plus `rg-craves-data-business-prod`, `rg-craves-shared-prod`, `rg-craves-ops-prod`, `rg-craves-dns-prod` |
-| Container apps | `ca-craves-<feature>-prod` (referral also `ca-craves-referral-members-prod`) |
+| Compute (since 17 Nov 2026) | VM `vm-craves-compact` in `rg-craves-compact-prod`. No Azure Container Apps remain |
+| Resource groups | `rg-craves-compact-prod` (the VM). Until 17 Nov the apps ran in one group per feature, `rg-craves-<feature>-prod` (auth, catalog, order, user-chef, notification, subscription, integration, referral, voice, web, admin, delivery-intel), plus `rg-craves-data-business-prod`, `rg-craves-shared-prod`, `rg-craves-ops-prod`, `rg-craves-dns-prod`; which of them still hold anything production uses is to be confirmed by the owner |
 | Container registry | `crcravesprod34eefd` |
-| APIM | `apim-craves-prod-34eefd`, behind Front Door `afd-craves-prod` (api.craves.in). A 401 without a token does not show that a route is published: on `craves-finance-admin-v1` every path answers 401, and a path with no operation of its own falls to the `/*` operations, reaches the service at the wrong path and gives a signed-in admin 403 (14 Nov 2026). Publish each new finance route as its own operation with a rewrite-uri, as `scripts/apim/configure-finance-insights-apim.sh` does, and check it signed in |
+| APIM | `apim-craves-prod-34eefd`, behind Front Door `afd-craves-prod` (api.craves.in). Whether APIM still fronts the API since 17 Nov 2026, or only the VM's Caddy proxy does, is to be confirmed by the owner. A 401 without a token does not show that a route is published: on `craves-finance-admin-v1` every path answers 401, and a path with no operation of its own falls to the `/*` operations, reaches the service at the wrong path and gives a signed-in admin 403 (14 Nov 2026). Publish each new finance route as its own operation with a rewrite-uri, as `scripts/apim/configure-finance-insights-apim.sh` does, and check it signed in |
+| Service Bus | `sb-craves-std-34eefd` (Azure; the apps on the VM connect to it) |
+| Redis | Azure Managed Redis `amr-craves-prod-34eefd` (the apps on the VM connect to it; not re-checked on 19 Nov 2026) |
 | DNS | zone `craves.in` in `rg-craves-dns-prod` (registrar GoDaddy) |
-| Releases | Azure DevOps org `ravitejamm6`, project `Craves-New-Original`. `ops/mirror-github` copies GitHub `main` every 15 minutes; `release-<feature>` pipelines build and roll out automatically (10 % canary, then 100 %, automatic rollback). No manual approval: **a merge to `main` goes live.** |
+| Releases | Until 17 Nov 2026: Azure DevOps org `ravitejamm6`, project `Craves-New-Original`. `ops/mirror-github` copies GitHub `main` every 15 minutes; `release-<feature>` pipelines build and roll out to Container Apps (10 % canary, then 100 %, automatic rollback), with no manual approval. Those pipelines targeted Container Apps, which no longer exist. **How a merge to `main` now reaches the VM is to be confirmed by the owner.** Until then, treat every merge to `main` as one that may go live. |
 
-Each service's resources (from the 30 Oct 2026 migration report):
+## Production VM (since 17 Nov 2026)
 
-| Service | Resource group | Container app | Key Vault | Database | Outbound address |
-|---|---|---|---|---|---|
-| auth | `rg-craves-auth-prod` | `ca-craves-auth-prod` | `kv-crv-auth-34eefd` | `pg-craves-auth-prod` | 20.198.108.229 |
-| catalog | `rg-craves-catalog-prod` | `ca-craves-catalog-prod` | `kv-crv-catalog-34eefd` | business | 20.235.64.75 |
-| order | `rg-craves-order-prod` | `ca-craves-order-prod` | `kv-crv-order-34eefd` | business | 20.198.125.128 |
-| user-chef | `rg-craves-user-chef-prod` | `ca-craves-user-chef-prod` | `kv-crv-userchef-34eefd` | business | 20.219.136.254 |
-| notification | `rg-craves-notification-prod` | `ca-craves-notification-prod` | `kv-crv-notif-34eefd` | business | 20.235.95.84 |
-| subscription | `rg-craves-subscription-prod` | `ca-craves-subscription-prod` | `kv-crv-subs-34eefd` | business | 20.204.118.52 |
-| integration | `rg-craves-integration-prod` | `ca-craves-integration-prod` | `kv-crv-integ-34eefd` | `pg-craves-integration-prod` | 20.204.46.72 |
-| referral | `rg-craves-referral-prod` | `ca-craves-referral-prod`, `ca-craves-referral-members-prod` | `kv-crv-referral-34eefd` | `pg-craves-referral-prod` | 20.192.2.161 |
-| voice | `rg-craves-voice-prod` | `ca-craves-voice-prod` | `kv-crv-voice-34eefd` | none | 104.211.91.72 |
-| web | `rg-craves-web-prod` | `ca-craves-web-prod` | `kv-crv-web-34eefd` | none | 20.198.84.102 |
-| admin | `rg-craves-admin-prod` | `ca-craves-admin-prod` | `kv-crv-admin-34eefd` | none | 20.219.159.80 |
-| delivery-intel | `rg-craves-delivery-intel-prod` | `ca-craves-delivery-intel-prod` | `kv-crv-delintel-34eefd` | none | 20.219.193.93 |
+| What | Value |
+|---|---|
+| VM | `vm-craves-compact`, resource group `rg-craves-compact-prod`, subscription 34eefd95 |
+| Open ports | 80 and 443 (web) and 22 (SSH; the network security group rule for 22 is unconfirmed) |
+| Web proxy | a Caddy container, in front of the app containers |
+| Apps | each service runs as a Docker container on the VM |
+| Database | one container, `craves-postgres-1`: PostgreSQL 16.9, image `postgis/postgis:16-3.5`, reachable only on Docker's private network on the VM |
+| Logs | Whether the containers' logs reach Log Analytics (`law-craves-prod`) is to be confirmed by the owner. Production no longer writes `ContainerAppConsoleLogs_CL`, so the Kusto queries on this page and elsewhere that read it find nothing new |
 
-"business" is `pg-craves-business-prod` in `rg-craves-data-business-prod`; catalog, order, user-chef, notification and subscription share it.
+Each service and its database (all in `craves-postgres-1`):
 
-Two things every change to an app has to respect:
-- **Each app runs as its own user-assigned identity** (`id-craves-<feature>-prod`) and must name it in `AZURE_CLIENT_ID`. The services' Azure SDK (`DefaultAzureCredential`) needs that setting to reach Service Bus; without it, the call fails with "Unable to load the proper Managed Identity" and no event leaves the service. Order, integration and subscription ran without it from the move until 1 Nov 2026, so no order event reached Service Bus in that time.
-- **Guest support chat trusts the web server only once told to.** On `ca-craves-user-chef-prod`, set `CRAVES_SUPPORT_GUEST_FORWARDER_HEADER=X-Azure-SocketIP` and `CRAVES_SUPPORT_GUEST_FORWARDER_IPS=20.198.84.102` (the web app's outbound address above, same value as auth's `CRAVES_CENTRAL_OTP_FORWARDING_IPS`). Until then any caller that reaches the API directly can name its own `X-Craves-Visitor` and take the whole shared guest chat budget. The header without the list stops the service from starting; remove the header first. Like any setting change, it only takes effect once traffic is moved to the new revision (next bullet).
-- **Traffic is pinned to a named revision** (multiple-revision mode). A setting changed with `az containerapp update` makes a new revision that gets no traffic until it is moved to it (`docs/riders/GO-LIVE.md` §8).
-- **Rolling one app back** (handbook 108, added 10 Nov 2026): `bash scripts/release/rollback-revision.sh ca-craves-<feature>-prod [revision]` shows which revision takes all traffic now and which it would go back to (by default the newest older revision that is still active and Healthy); add `CONFIRM_ROLLBACK=true` to move all traffic there. It works only on subscription 34eefd95 and `rg-craves-<feature>-prod`, moves traffic only (no image, setting or revision changes, never activates a revision), refuses while traffic is split by a running canary, reads the result back and prints the command that undoes it. The old org's narrow `azure-pipelines-*-rollback.yml` pipelines still target the old resource group: do not run them.
+| Service | Database | Key Vault until 17 Nov (used by the VM: to be confirmed) |
+|---|---|---|
+| auth | `craves_auth_db` | `kv-crv-auth-34eefd` |
+| user-chef | `craves_business_db` | `kv-crv-userchef-34eefd` |
+| subscription | `craves_business_db` | `kv-crv-subs-34eefd` |
+| catalog | `craves_business_db` | `kv-crv-catalog-34eefd` |
+| notification | `craves_business_db` | `kv-crv-notif-34eefd` |
+| order | `craves_business_db` | `kv-crv-order-34eefd` |
+| integration | `craves_integration_db` | `kv-crv-integ-34eefd` |
+| advanced | `craves_advanced_db` | none listed |
+| referral, referral-members | `craves_referral_db` | `kv-crv-referral-34eefd` |
+| admin | none of its own | `kv-crv-admin-34eefd` |
+| delivery-intel | none of its own | `kv-crv-delintel-34eefd` |
+| web | none of its own | `kv-crv-web-34eefd` |
+| voice | whether it runs on the VM is to be confirmed by the owner | `kv-crv-voice-34eefd` |
+
+Extensions: `craves_business_db` has pgcrypto 1.3 and PostGIS 3.5.2; `craves_integration_db` has PostGIS 3.5.2 (added 19 Nov 2026, fix-program D-2); the others have only plpgsql. The database is not an Azure flexible server, so server parameters such as `azure.extensions` do not apply.
+
+## Backups and recovery
+
+- A cron job on the VM runs at 03:00 IST every day. It runs `pg_dump` of each database, keeps the dumps on the VM for 7 days and uploads each one to blob storage `stcravesdocs34eefd`, path `db-backups/<weekday>/`, also kept for 7 days. It first ran on 17 Nov 2026 at 03:25 IST.
+- Gaps, as of 19 Nov 2026:
+  - Daily only: up to about one day of data can be lost.
+  - No Azure Backup of the VM.
+  - No restore has been tested.
+  - The VM is a single point of failure: if it stops, every app and the database stop.
+  - The network security group rule for port 22 is unconfirmed.
+
+## Before 17 Nov 2026: rules on Container Apps
+
+These held while the apps ran on Container Apps. What still applies on the VM is noted in each.
+
+- **Each app runs as its own user-assigned identity** (`id-craves-<feature>-prod`) and must name it in `AZURE_CLIENT_ID`. The services' Azure SDK (`DefaultAzureCredential`) needs that setting to reach Service Bus; without it, the call fails with "Unable to load the proper Managed Identity" and no event leaves the service. Order, integration and subscription ran without it from the move until 1 Nov 2026, so no order event reached Service Bus in that time. Which identity the containers on the VM use to reach Service Bus is to be confirmed by the owner.
+- **Guest support chat trusts the web server only once told to.** On user-chef, set `CRAVES_SUPPORT_GUEST_FORWARDER_HEADER` and `CRAVES_SUPPORT_GUEST_FORWARDER_IPS` (the web app's address as user-chef sees it, same value as auth's `CRAVES_CENTRAL_OTP_FORWARDING_IPS`). On Container Apps these were `X-Azure-SocketIP` and the web app's outbound address. On the VM the right header and address behind Caddy are to be confirmed by the owner, and the setting goes on user-chef's container (exact mechanism to be confirmed). Until then any caller that reaches the API directly can name its own `X-Craves-Visitor` and take the whole shared guest chat budget. The header without the list stops the service from starting; remove the header first.
+- **Traffic was pinned to a named revision** (multiple-revision mode). A setting changed with `az containerapp update` made a new revision that got no traffic until it was moved to it (`docs/riders/GO-LIVE.md` §8). The VM has no revisions.
+- **Rolling one app back** (handbook 108, added 10 Nov 2026): `bash scripts/release/rollback-revision.sh ca-craves-<feature>-prod [revision]` moved traffic between Container Apps revisions. It has nothing to act on since 17 Nov 2026; how to roll back a container on the VM is to be confirmed by the owner. The old org's narrow `azure-pipelines-*-rollback.yml` pipelines still target the old resource group: do not run them.
 
 ### Web and admin: answer only our Front Door (`X-Azure-FDID`)
+
+> Written for Container Apps, before 17 Nov 2026. On the VM, web and admin run as containers behind Caddy. Whether Front Door still sits in front of the VM, and so whether `X-Azure-FDID` arrives, is to be confirmed by the owner; the revision and probe steps below no longer apply. Do not set `enforce` until that is confirmed.
 
 `ca-craves-web-prod` (craves.in, www) and `ca-craves-admin-prod` (admin.craves.in) run the same app, `apps/customer-web-next`, and accept Azure Front Door's shared address ranges. Any other company's Front Door profile could send traffic to them and skip our WAF. Our profile, `afd-craves-prod`, stamps every request with `X-Azure-FDID: 59117d14-1c4f-402e-a98b-0fa1009de276`, and Front Door overwrites any value a client sends, so the app can trust the header. The id is not a secret.
 
@@ -89,6 +120,8 @@ The code ships switched off. The release template changes only the image and `CR
 To undo, make a revision with `CRAVES_FRONT_DOOR_CHECK=report` (or `off`) and move traffic to it, or move traffic back to the previous revision.
 
 ### Catalog: straight from Front Door
+
+> Written for Container Apps, before 17 Nov 2026. `craves-catalog-direct-origin` pointed at catalog's container app, which was deleted on 17 Nov. What Front Door's catalog route reaches now is to be confirmed by the owner; do not run `scripts/frontdoor/configure-catalog-direct-route.sh` until then.
 
 Public catalog reads skip APIM. On 15 Nov 2026, with Front Door and APIM gateway logs turned on, APIM's two gateway machines each froze for 0.2–1 s at random (one about every 7 s, the other about every 30 s) at about 10 % of one unit's capacity, holding every request on that machine. APIM's own timer showed at most 3 ms for those requests, TCP connections to APIM never waited (1,754 opened, slowest 18 ms), and requests that skip APIM never stalled (Front Door p99: 15 ms for the web app, about 750 ms for anything through APIM). The freezes are inside the managed gateway, so catalog's busiest paths go around it.
 

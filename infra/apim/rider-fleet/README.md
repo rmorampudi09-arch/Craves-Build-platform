@@ -9,6 +9,8 @@ Subscription key: not required
 Gateway path = backend path; operation policies set the backend with base-url
 ```
 
+> **Since 17 Nov 2026** integration-service runs as a container on the production VM behind a Caddy proxy, and `ca-craves-integration-prod` no longer exists (`docs/runbooks/production-environment.md`). The configure script checks that container app, so it cannot pass as written. Whether APIM still fronts production, and where its backend now points, is to be confirmed by the owner.
+
 `routes.txt` lists both APIs and every operation with its policy. `scripts/apim/tests/test_rider_fleet_apim.py` fails when it differs from the two contracts, so a contract change is published by updating `routes.txt` in the same PR.
 
 ## Policies

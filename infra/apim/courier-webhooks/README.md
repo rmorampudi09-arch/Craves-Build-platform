@@ -23,6 +23,8 @@ Everything else is inherited through `<base />`: the backend, headers and error 
 
 Nothing in CI or in a release pipeline applies this folder. Someone with rights on API Management applies it by hand, from a checkout of `main`, **on a non-production instance first**, then on production. Replace every `<PLACEHOLDER>`.
 
+Since 17 Nov 2026 production runs on a VM behind a Caddy proxy (`docs/runbooks/production-environment.md`). Whether API Management still fronts production, and so whether this policy reaches the courier callbacks at all, is to be confirmed by the owner. Confirm it before applying.
+
 1. Find the API and the operation that serve each route (read-only). If a route is served by a wildcard operation, stop: it needs its own `POST` operation in the same API first, so the policy does not reach other routes.
 
 ```bash

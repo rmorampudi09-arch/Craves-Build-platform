@@ -23,6 +23,8 @@ Everything else is inherited through `<base />`: the backend, headers and error 
 
 Nothing in CI or in a release pipeline applies this folder. Someone with rights on API Management applies it by hand, from a checkout of `main`, **on a non-production instance first**, then on production. Replace every `<PLACEHOLDER>`.
 
+**Since 17 Nov 2026 no API Management service exists.** The public API host points at the production VM, where Caddy is the gateway (`docs/runbooks/production-environment.md`). This policy cannot be applied to production: the body size and rate limits above need equivalent Caddy rules on the VM, in Caddy's `api_routes` config, which is not in this repo. The steps below are kept for reference only.
+
 1. Find the API and the operation that serve each route (read-only). If a route is served by a wildcard operation, stop: it needs its own `POST` operation in the same API first, so the policy does not reach other routes.
 
 ```bash

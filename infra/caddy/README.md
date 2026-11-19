@@ -25,13 +25,22 @@ The fix routes are then the first `handle` blocks in `(api_routes)`. They only m
 Costs nothing: it is a config file and a `caddy reload` in the running container, and it is reverted by reloading the previous file.
 
 1. See where `/etc/caddy` comes from: `docker inspect craves-caddy-1 --format '{{json .Mounts}}'`. If the directory is a bind mount, copy `fix-program.caddy` next to the Caddyfile on the host. If only the Caddyfile file is mounted, the new file needs its own mount (a compose change and a Caddy restart): stop and plan that separately.
-2. Back up the Caddyfile (`cp Caddyfile Caddyfile.before-fix-$(date +%Y%m%d%H%M)`), add the two lines above.
-3. `docker exec craves-caddy-1 caddy validate --config /etc/caddy/Caddyfile` must print `Valid configuration`.
-4. Order check: `docker exec craves-caddy-1 caddy adapt --config /etc/caddy/Caddyfile | grep -o 'webhooks/delivery/borzo\|webhooks/\.\*' | head -2` prints `webhooks/delivery/borzo` first.
-5. `docker exec craves-caddy-1 caddy reload --config /etc/caddy/Caddyfile` (graceful; a rejected config leaves the running one in place).
-6. Check: an unauthenticated `GET /api/v1/admin/fleet/courier-billing/settings` is 401 from Caddy; the next real Borzo and Pidge callbacks are stored as before (`delivery_webhook_inbox` keeps growing).
+2. Confirm the production `(to)` snippet sets `X-Azure-SocketIP`, `X-Azure-ClientIP` and `X-Azure-FDID` with `header_up <Name> <value>` inside `reverse_proxy`, as `test/Caddyfile` does. That form replaces any value the client sent (the test checks it). If it adds (`header_up +Name`) or sets them some other way, a client could pass its own values to integration: stop and fix `(to)` first.
+3. Back up the Caddyfile (`cp Caddyfile Caddyfile.before-fix-$(date +%Y%m%d%H%M)`), add the two lines above.
+4. `docker exec craves-caddy-1 caddy validate --config /etc/caddy/Caddyfile` must print `Valid configuration`.
+5. Order check, for **all** new routes. This prints every path matcher in the order Caddy tries them (needs `jq` on the VM):
 
-Roll back: restore the saved Caddyfile and run step 5 again.
+   ```bash
+   docker exec craves-caddy-1 caddy adapt --config /etc/caddy/Caddyfile 2>/dev/null \
+     | jq -r '.. | objects | select(has("match")) | .match[] | (.path_regexp | select(.) | "\(.name) \(.pattern)") // ((.path // empty) | "path " + join(" "))' \
+     | grep -n -i -E 'webhooks|/rider|/admin|^path '
+   ```
+
+   The eight `fix_` lines must come before every line that could match the same requests: `op456` (`^/api/v1/webhooks/.*`), and any broad pattern or `path` line for `/api/v1/webhooks`, `/api/v1/rider` or `/api/v1/admin`. Lines for other, unrelated paths may come first. Watch for `path` lines: a `handle` with an inline path matcher (`handle /api/v1/webhooks/* {`) is sorted ahead of every named matcher, wherever it is in the file, so it would take these requests before the fix routes. If one does, stop: the fix routes cannot win over it without changing that block.
+6. `docker exec craves-caddy-1 caddy reload --config /etc/caddy/Caddyfile` (graceful; a rejected config leaves the running one in place).
+7. Check: an unauthenticated `GET /api/v1/admin/fleet/courier-billing/settings` is 401 from Caddy; the next real Borzo and Pidge callbacks are stored as before (`delivery_webhook_inbox` keeps growing).
+
+Roll back: restore the saved Caddyfile and run step 6 again.
 
 ## What Caddy does not do here
 
@@ -42,4 +51,4 @@ Roll back: restore the saved Caddyfile and run step 5 again.
 
 ## Test
 
-`bash infra/caddy/test/run-test.sh` (Docker and curl) runs `caddy:2.10` with `test/Caddyfile`, a copy of the house structure (`(to)`, `(api_routes)` with a sample `@op21` and the `@op456` catch-all, this file placed as above), and a stand-in `integration:8080` that reads and echoes the body. It runs `caddy validate`, checks the route order in `caddy adapt`, then checks every route: over-size webhook bodies 413, normal ones reach the upstream, other webhook paths still use the catch-all, each new route reaches the upstream with the right path and headers, and missing credentials get 401. It removes its own containers and network on exit.
+`bash infra/caddy/test/run-test.sh` (Docker, curl and jq) runs `caddy:2.10` with `test/Caddyfile`, a copy of the house structure (`(to)`, `(api_routes)` with a sample `@op21` and the `@op456` catch-all, this file placed as above), and a stand-in `integration:8080` that reads and echoes the body. It runs `caddy validate`, checks the route order with the step 5 command, then checks every route: over-size bodies 413, normal ones reach the upstream, other webhook paths still use the catch-all, each new route reaches the upstream with the path it should (from the upstream's echo) and the right headers, client-sent `X-Azure-FDID`/`X-Azure-ClientIP` are replaced, a missing, empty or whitespace-only credential gets 401, and an encoded dot segment (`/api/v1/rider/offers/%252e%252e/rang`) does not reach integration as the ring receipt. It listens on loopback only. It removes its own containers and network on exit.

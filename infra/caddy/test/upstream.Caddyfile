@@ -6,5 +6,5 @@
 :8080 {
 	header X-Upstream integration-standin
 	header Cache-Control upstream-value
-	respond "{method} {uri} fdid={header.X-Azure-FDID} shift={header.X-Craves-Shift-Credential} body={http.request.body}" 200
+	respond "{method} {uri} fdid={header.X-Azure-FDID} cip={header.X-Azure-ClientIP} shift={header.X-Craves-Shift-Credential} body={http.request.body}" 200
 }

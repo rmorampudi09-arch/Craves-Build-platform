@@ -1,6 +1,7 @@
 # Fix program routes for the production Caddy gateway (stock caddy:2.10). Placement and checks: infra/caddy/README.md.
 # Defines two snippets only; nothing here applies until (api_routes) has `import fix_program` as its first line.
-# Matcher names start with fix_ so they never clash with the house @opN names.
+# Matcher names start with fix_ so they never clash with the house @opN names. Captured path segments allow only
+# [A-Za-z0-9_-] (offer UUIDs, courier names borzo/pidge, numeric import ids), so no dot or encoded segment is rewritten.
 
 # Mirrors infra/apim/rider-fleet/admin-policy.xml: Bearer header required (401), shift credential dropped, no-store,
 # nosniff, DENY. Not reproduced: the correlation-id copy (README).
@@ -47,7 +48,7 @@
 	# credential (401 otherwise), credential passed through, 16 KB cap. Not reproduced: 2 calls in flight per shift.
 	@fix_rider_offer_rang {
 		method POST
-		path_regexp (?i)^/api/v1/rider/offers/(?P<offerId>[^/]+)/rang/?$
+		path_regexp (?i)^/api/v1/rider/offers/(?P<offerId>[A-Za-z0-9_-]+)/rang/?$
 	}
 	handle @fix_rider_offer_rang {
 		@fix_no_rider_credential {
@@ -81,7 +82,7 @@
 
 	@fix_admin_fleet_courier_billing_setting_put {
 		method PUT
-		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/settings/(?P<courier>[^/]+)/?$
+		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/settings/(?P<courier>[A-Za-z0-9_-]+)/?$
 	}
 	handle @fix_admin_fleet_courier_billing_setting_put {
 		rewrite * /api/v1/admin/fleet/courier-billing/settings/{re.fix_admin_fleet_courier_billing_setting_put.courier}?{query}
@@ -112,7 +113,7 @@
 
 	@fix_admin_fleet_courier_billing_invoice_get {
 		method GET
-		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/invoices/(?P<importId>[^/]+)/?$
+		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/invoices/(?P<importId>[A-Za-z0-9_-]+)/?$
 	}
 	handle @fix_admin_fleet_courier_billing_invoice_get {
 		rewrite * /api/v1/admin/fleet/courier-billing/invoices/{re.fix_admin_fleet_courier_billing_invoice_get.importId}?{query}

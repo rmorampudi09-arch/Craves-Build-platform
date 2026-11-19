@@ -33,6 +33,8 @@ for _ in $(seq 30); do curl -s -o /dev/null "$BASE/" && break; sleep 0.5; done
 
 head -c 300000 /dev/zero | tr '\0' a > "$OUT/big"   # over 262144
 head -c 20000 /dev/zero | tr '\0' a > "$OUT/mid"    # over 16384, under 262144
+head -c 1100000 /dev/zero | tr '\0' a > "$OUT/huge" # over 1048576
+head -c 600000 /dev/zero | tr '\0' a > "$OUT/csv"   # under 1048576
 fails=0
 # check <name> <expected status> <text expected in the response headers or body, or -> <curl args...>
 check() {
@@ -67,6 +69,8 @@ check "GET settings (shift credential dropped)" 200 "GET /api/v1/admin/fleet/cou
 check "PUT settings/{courier}"                  200 "PUT /api/v1/admin/fleet/courier-billing/settings/PIDGE?x=1" -X PUT "${J[@]}" "${B[@]}" --data '{}' "$C/settings/PIDGE/?x=1"
 check "GET invoices"                            200 "X-Frame-Options: DENY" "${B[@]}" "$C/invoices"
 check "POST invoices"                           200 "POST /api/v1/admin/fleet/courier-billing/invoices " -X POST "${J[@]}" "${B[@]}" --data '{}' "$C/invoices"
+check "POST invoices, 1100000 bytes"            413 - -X POST "${J[@]}" "${B[@]}" --data-binary @"$OUT/huge" "$C/invoices"
+check "POST invoices, 600000 bytes"             200 "POST /api/v1/admin/fleet/courier-billing/invoices " -X POST "${J[@]}" "${B[@]}" --data-binary @"$OUT/csv" "$C/invoices"
 check "GET invoices/{importId}"                 200 "no-store, no-cache, must-revalidate" "${B[@]}" "$C/invoices/42"
 check "admin route without Bearer"              401 "AUTHENTICATION_REQUIRED" "$C/settings"
 

@@ -68,7 +68,8 @@
 		import to integration:8080
 	}
 
-	# Courier billing (PR #708), contracts/openapi/admin-fleet-v1.yaml. Admin routes have no body cap in APIM either.
+	# Courier billing (PR #708), contracts/openapi/admin-fleet-v1.yaml. APIM has no body cap on admin routes; here only
+	# POST /invoices has one (1 MiB).
 	@fix_admin_fleet_courier_billing_settings_get {
 		method GET
 		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/settings/?$
@@ -101,6 +102,10 @@
 		path_regexp (?i)^/api/v1/admin/fleet/courier-billing/invoices/?$
 	}
 	handle @fix_admin_fleet_courier_billing_invoices_post {
+		# CourierBilling.MAX_CHARS is a 512,000-character CSV inside JSON; 1 MiB leaves room for its escaping.
+		request_body {
+			max_size 1048576
+		}
 		rewrite * /api/v1/admin/fleet/courier-billing/invoices?{query}
 		import fix_admin_fleet
 	}

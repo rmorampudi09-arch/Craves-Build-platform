@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import in.craves.integration.config.BorzoProperties;
 import in.craves.integration.config.PidgeProperties;
+import in.craves.integration.delivery.billing.CourierCharges;
 import in.craves.integration.delivery.borzo.BorzoApiClient;
 import in.craves.integration.delivery.command.BorzoPidgeHandoffRepository.Handoff;
 import in.craves.integration.delivery.command.DeliveryJobRepository.HandoffJob;
@@ -51,6 +52,7 @@ class BorzoPidgeHandoffWorkerTest {
     private final DeliveryStatusUpdateService statusUpdates = mock(DeliveryStatusUpdateService.class);
     private final BorzoPidgeHandoffCompletionService completion =
         mock(BorzoPidgeHandoffCompletionService.class);
+    private final CourierCharges charges = mock(CourierCharges.class);
 
     private BorzoPidgeHandoffWorker worker() {
         return worker(borzoProperties);
@@ -110,11 +112,15 @@ class BorzoPidgeHandoffWorkerTest {
         when(handoffs.markBorzoCancelled(job.id())).thenReturn(true);
         when(handoffs.markCancelIntent(job.id())).thenReturn(true);
 
-        worker(maintenance).processDue();
+        BorzoPidgeHandoffWorker worker = worker(maintenance);
+        worker.setCharges(charges);
+        worker.processDue();
 
         verify(borzo).cancel(handoff.borzoProviderDeliveryId());
         verify(handoffs).markBorzoCancelled(job.id());
         verify(pidge, never()).create(any());
+        // Cancelled while Borzo showed SEARCHING: no rider, so the cancel is recorded as free.
+        verify(charges).cancelled(eq(job.orderId()), eq(job.chefSubOrderId()), eq(job.id()), any(), eq(true));
     }
 
     @Test
@@ -128,11 +134,15 @@ class BorzoPidgeHandoffWorkerTest {
         when(borzo.readOrder(handoff.borzoProviderDeliveryId()))
             .thenReturn(delivery("borzo", handoff.borzoProviderDeliveryId(), DeliveryStatus.CANCELLED));
 
-        worker().processDue();
+        BorzoPidgeHandoffWorker worker = worker();
+        worker.setCharges(charges);
+        worker.processDue();
 
         verify(handoffs).manualReview(eq(job.id()), any());
         verify(borzo, never()).cancel(any());
         verify(pidge, never()).create(any());
+        verify(charges, never()).cancelled(any(), any(), any(), any(), eq(false));
+        verify(charges, never()).cancelled(any(), any(), any(), any(), eq(true));
     }
 
     @Test
@@ -180,10 +190,15 @@ class BorzoPidgeHandoffWorkerTest {
             .thenThrow(new ResourceAccessException("uncertain cancellation response"));
         when(handoffs.markBorzoCancelled(job.id())).thenReturn(true);
 
-        worker().processDue();
+        BorzoPidgeHandoffWorker worker = worker();
+        worker.setCharges(charges);
+        worker.processDue();
 
         verify(borzo).cancel(first.borzoProviderDeliveryId());
         verify(handoffs).markBorzoCancelled(job.id());
+        // Craves's own cancel found on the retry: recorded once, amount unknown, so the booking price is no longer expected.
+        verify(charges).cancelled(eq(job.orderId()), eq(job.chefSubOrderId()), eq(job.id()), any(), eq(false));
+        verify(charges, never()).cancelled(any(), any(), any(), any(), eq(true));
         verify(pidge, never()).create(any());
     }
 
@@ -210,11 +225,15 @@ class BorzoPidgeHandoffWorkerTest {
             .thenReturn(delivery("borzo", handoff.borzoProviderDeliveryId(), DeliveryStatus.CANCELLED));
         when(handoffs.markBorzoCancelled(job.id())).thenReturn(true);
 
-        worker().processDue();
+        BorzoPidgeHandoffWorker worker = worker();
+        worker.setCharges(charges);
+        worker.processDue();
 
         verify(borzo, times(2)).readCourier(handoff.borzoProviderDeliveryId());
         verify(borzo).cancel(handoff.borzoProviderDeliveryId());
         verify(handoffs).markBorzoCancelled(job.id());
+        // DELAYED read just before: whether a rider was assigned is not known, so the cancel's amount is unknown.
+        verify(charges).cancelled(eq(job.orderId()), eq(job.chefSubOrderId()), eq(job.id()), any(), eq(false));
     }
 
     @Test

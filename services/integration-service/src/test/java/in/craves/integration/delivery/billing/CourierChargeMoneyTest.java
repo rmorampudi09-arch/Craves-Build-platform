@@ -3,12 +3,21 @@ package in.craves.integration.delivery.billing;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.craves.integration.delivery.billing.CourierBilling.Line;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Courier;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
 import in.craves.integration.delivery.status.DeliveryStatusRepository;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -49,12 +58,69 @@ class CourierChargeMoneyTest {
     }
 
     @Test
+    void aCancelIsKnownFreeOnlyWhenTheCourierShowedNoRiderJustBefore() {
+        Courier rider = new Courier("R-7", "Ravi", null, null, null, null);
+        Courier noId = new Courier(" ", null, null, null, null, null);
+        assertThat(CourierCharges.beforeRider(seen(DeliveryStatus.PENDING, null))).isTrue();
+        assertThat(CourierCharges.beforeRider(seen(DeliveryStatus.SEARCHING, null))).isTrue();
+        assertThat(CourierCharges.beforeRider(seen(DeliveryStatus.SEARCHING, noId))).as("a rider without an id is none").isTrue();
+        assertThat(CourierCharges.beforeRider(seen(DeliveryStatus.SEARCHING, rider))).isFalse();
+        for (DeliveryStatus status : List.of(DeliveryStatus.COURIER_ASSIGNED, DeliveryStatus.COURIER_TO_PICKUP, DeliveryStatus.AT_PICKUP,
+            DeliveryStatus.DELAYED, DeliveryStatus.CANCELLED, DeliveryStatus.UNKNOWN)) {
+            assertThat(CourierCharges.beforeRider(seen(status, null))).as(status.name()).isFalse();
+        }
+        assertThat(CourierCharges.beforeRider(null)).as("nothing read").isFalse();
+        assertThat(CourierCharges.beforeRider(seen(DeliveryStatus.SEARCHING, new Courier(null, null, "9999999999", null, null, null))))
+            .as("a phone alone is a rider").isFalse();
+    }
+
+    @Test
+    void aPidgeOrBorzoAnswerWithAnyRiderOrAFulfillmentPastSearchingIsNotKnownFree() throws Exception {
+        ObjectMapper json = new ObjectMapper();
+        // Pidge maps a top-level PENDING to PENDING whatever the fulfillment says, and a cancelled fulfillment to PENDING.
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"CREATED\"}"))).isTrue();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{}"))).isTrue();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"CREATED\",\"rider\":{}}"))).as("an empty rider is none").isTrue();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"CREATED\",\"rider\":{\"mobile\":\"9999999999\"}}"))).isFalse();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"CREATED\",\"rider\":{\"id\":7}}"))).isFalse();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"CANCELLED\"}"))).as("the rider dropped out").isFalse();
+        assertThat(CourierCharges.beforeRider(pidge(json, "{\"status\":\"OUT_FOR_PICKUP\"}"))).isFalse();
+        // Borzo's raw order names its courier once one is assigned.
+        assertThat(CourierCharges.beforeRider(raw(json, "{\"courier\":null}"))).isTrue();
+        assertThat(CourierCharges.beforeRider(raw(json, "{\"courier\":{\"courier_id\":\"12\"}}"))).isFalse();
+    }
+
+    private static TrackingSnapshot pidge(ObjectMapper json, String fulfillment) throws Exception {
+        return raw(json, "{\"fulfillment\":" + fulfillment + "}");
+    }
+
+    private static TrackingSnapshot raw(ObjectMapper json, String metadata) throws Exception {
+        return new TrackingSnapshot(new ProviderDelivery("pidge", "PG-1", null, DeliveryStatus.PENDING, "PENDING", null, null, null,
+            json.readTree(metadata), Instant.now()), null, Instant.now());
+    }
+
+    @Test
+    void aCancelRecordsZeroBeforeARiderAndNullOtherwiseNeverTheCouriersPrice() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        DeliveryStatusRepository savepoints = mock(DeliveryStatusRepository.class);
+        when(savepoints.inSavepoint(any())).thenAnswer(call -> ((java.util.function.Supplier<?>) call.getArgument(0)).get());
+        DeliveryCommandProperties on = new DeliveryCommandProperties();
+        on.setCourierChargeEnabled(true);
+        CourierCharges charges = new CourierCharges(jdbc, on, savepoints);
+        UUID order = UUID.randomUUID();
+        charges.cancelled(order, order, null, delivery("borzo", "61.00", null), true);
+        charges.cancelled(order, order, null, delivery("pidge", "450.00", "58.00"), false);
+        verify(jdbc).update(anyString(), eq("borzo"), anyString(), eq(order), eq(order), isNull(), eq("CANCEL"), eq(0L));
+        verify(jdbc).update(anyString(), eq("pidge"), anyString(), eq(order), eq(order), isNull(), eq("CANCEL"), isNull());
+    }
+
+    @Test
     void withTheFlagOffNothingIsReadOrWritten() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         DeliveryStatusRepository savepoints = mock(DeliveryStatusRepository.class);
         CourierCharges charges = new CourierCharges(jdbc, new DeliveryCommandProperties(), savepoints);
         charges.booked(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), delivery("borzo", "61.00", "55.00"));
-        charges.cancelled(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), delivery("borzo", "0.00", "0.00"));
+        charges.cancelled(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), delivery("borzo", "0.00", "0.00"), true);
         verifyNoInteractions(jdbc, savepoints);
     }
 
@@ -118,6 +184,11 @@ class CourierChargeMoneyTest {
     private static void refused(String csv, String message) {
         assertThatThrownBy(() -> CourierBilling.parse(csv)).isInstanceOf(ResponseStatusException.class).hasMessageContaining("400")
             .hasMessageContaining(message);
+    }
+
+    static TrackingSnapshot seen(DeliveryStatus status, Courier courier) {
+        return new TrackingSnapshot(new ProviderDelivery("borzo", "BZ-1", null, status, status.name(), new BigDecimal("61.00"), null, null,
+            null, Instant.now()), courier, Instant.now());
     }
 
     static ProviderDelivery delivery(String courier, String payment, String deliveryFee) {

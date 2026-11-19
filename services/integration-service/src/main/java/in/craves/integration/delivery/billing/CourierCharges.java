@@ -1,12 +1,19 @@
 package in.craves.integration.delivery.billing;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import in.craves.integration.delivery.command.DeliveryCommandProperties;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.Courier;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.ProviderDelivery;
+import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
 import in.craves.integration.delivery.status.DeliveryStatusRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,12 +48,50 @@ public class CourierCharges {
 
     /** The booking became the order's delivery: the courier's price as its answer shows it. */
     public void booked(UUID orderId, UUID chefSubOrderId, UUID deliveryJobId, ProviderDelivery delivery) {
-        record(BOOKING, orderId, chefSubOrderId, deliveryJobId, delivery);
+        record(BOOKING, orderId, chefSubOrderId, deliveryJobId, delivery, false);
     }
 
-    /** The courier shows the booking cancelled: the price its record shows now, which replaces the booking price. */
-    public void cancelled(UUID orderId, UUID chefSubOrderId, UUID deliveryJobId, ProviderDelivery delivery) {
-        record(CANCEL, orderId, chefSubOrderId, deliveryJobId, delivery);
+    /**
+     * The courier shows as cancelled a booking Craves cancelled. Its amount replaces the booking price: 0 when the caller read,
+     * before cancelling, that no rider was assigned (free on Borzo and Pidge); otherwise NULL, unknown, for the wallet statement
+     * to decide. Never the price the courier's record shows after the cancel, which is the booking price repeated.
+     */
+    public void cancelled(UUID orderId, UUID chefSubOrderId, UUID deliveryJobId, ProviderDelivery delivery, boolean beforeRider) {
+        record(CANCEL, orderId, chefSubOrderId, deliveryJobId, delivery, beforeRider);
+    }
+
+    /**
+     * What the courier showed just before Craves cancelled says no rider was assigned: PENDING or SEARCHING, and no rider
+     * anywhere in the answer (an id, name or phone in the courier read, Borzo's order.courier or Pidge's fulfillment.rider),
+     * and no Pidge fulfillment past searching (PidgeStatusMapper reads a top-level PENDING, and a fulfillment cancelled when
+     * its rider dropped out, as PENDING). Anything else, or nothing read, is not known: the one rule every canceller uses.
+     */
+    public static boolean beforeRider(TrackingSnapshot seen) {
+        if (seen == null || seen.delivery() == null
+            || (seen.delivery().status() != DeliveryStatus.PENDING && seen.delivery().status() != DeliveryStatus.SEARCHING)) {
+            return false;
+        }
+        Courier courier = seen.courier();
+        if (courier != null && (text(courier.providerCourierId()) || text(courier.name()) || text(courier.phone()))) {
+            return false;
+        }
+        JsonNode raw = seen.delivery().providerMetadata() == null ? MissingNode.getInstance() : seen.delivery().providerMetadata();
+        JsonNode fulfillment = raw.path("fulfillment");
+        String stage = fulfillment.path("status").asText("").trim().toUpperCase(Locale.ROOT);
+        return !person(raw.path("courier")) && !person(fulfillment.path("rider"))
+            && (stage.isEmpty() || PIDGE_SEARCHING.contains(stage));
+    }
+
+    /** Pidge fulfillment statuses PidgeStatusMapper reads as searching when no rider is named. */
+    private static final Set<String> PIDGE_SEARCHING = Set.of("CREATED", "FULFILLED", "3");
+
+    private static boolean person(JsonNode node) {
+        return node.isObject() && List.of("id", "courier_id", "name", "phone", "mobile").stream()
+            .anyMatch(field -> text(node.path(field).asText(null)));
+    }
+
+    private static boolean text(String value) {
+        return value != null && !value.isBlank();
     }
 
     /**
@@ -62,12 +107,12 @@ public class CourierCharges {
         return rupees == null ? null : rupees.setScale(2, RoundingMode.HALF_UP).movePointRight(2).longValueExact();
     }
 
-    private void record(String kind, UUID orderId, UUID chefSubOrderId, UUID deliveryJobId, ProviderDelivery delivery) {
+    private void record(String kind, UUID orderId, UUID chefSubOrderId, UUID deliveryJobId, ProviderDelivery delivery, boolean beforeRider) {
         if (!enabled() || delivery == null) {
             return;
         }
         try {
-            Long paise = paise(price(delivery));
+            Long paise = CANCEL.equals(kind) ? (beforeRider ? Long.valueOf(0L) : null) : paise(price(delivery));
             boolean written = Boolean.TRUE.equals(savepoints.inSavepoint(() -> jdbc.update("""
                 INSERT INTO delivery_schema.courier_charge
                     (provider_id, provider_delivery_id, chef_sub_order_id, order_id, delivery_job_id, kind, amount_paise, source)

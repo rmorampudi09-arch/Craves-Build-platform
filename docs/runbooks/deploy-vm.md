@@ -12,17 +12,22 @@ Rules that still apply (`AGENTS.md`, `docs/runbooks/live-runtime-safety.md`): de
 
 ## 0. Pick the commit
 
-1. Choose a commit `SHA` on `main` and check it:
+The required check runs on pull requests, not on `main`: a commit on `main` (a squash merge) never has a check run of its own. So check the pull request it came from, and that `main` holds exactly the code that was tested. Do this on any machine with `git` and `gh`; the VM needs neither.
+
+1. Choose a commit `SHA` on `main`. Its title ends with the pull request number, `(#NNN)`.
+2. Find that pull request's last head commit (`HEAD_SHA`) and check its required check:
 
 ```bash
 git fetch origin main && git merge-base --is-ancestor "$SHA" origin/main && echo "on main"
-gh api --method GET "repos/rmorampudi09-arch/Craves-Build-platform/commits/$SHA/check-runs" \
-  -f check_name='Exact-SHA complete regression evidence' --jq '.check_runs[] | .conclusion'
+HEAD_SHA=$(gh api "repos/rmorampudi09-arch/Craves-Build-platform/pulls/<NNN>" --jq .head.sha)
+gh api --method GET "repos/rmorampudi09-arch/Craves-Build-platform/commits/$HEAD_SHA/check-runs" \
+  -f check_name='Exact-SHA complete regression evidence' --jq '[.check_runs[]] | max_by(.started_at) | .conclusion'
+git fetch origin "$HEAD_SHA" && [ "$(git rev-parse "$SHA^{tree}")" = "$(git rev-parse "$HEAD_SHA^{tree}")" ] && echo "same code as tested"
 ```
 
-The second command must print `success`. Anything else (empty, `failure`, `cancelled`): stop.
+The check must print `success` and the last line `same code as tested`. Anything else: stop.
 
-2. `TAG=$(git rev-parse --short=12 "$SHA")`. Image tags are the 12-character commit. Set `SHA` and `TAG` in the VM shell too.
+3. `TAG=$(git rev-parse --short=12 "$SHA")`. Image tags are the 12-character commit. Set `SHA` and `TAG` in the VM shell too.
 
 ## 1. Record what runs now (before anything else)
 

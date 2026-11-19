@@ -94,7 +94,7 @@ class CourierChargeDatabaseTest {
     }
 
     @Test
-    void aConfirmedBookingWritesItsPriceOnceAndACancelWritesOnlyWhatTheCourierShowsThen() {
+    void aConfirmedBookingWritesItsPriceOnceAndACancelBeforeARiderWritesZeroNotTheCouriersPrice() {
         ProviderDelivery borzo = delivery("borzo", "BZ-1", "61.50", "55.00");
         UUID order = book(borzo);
         assertThat(database.db.queryForList(CHARGES)).containsExactly(Map.of("kind", "BOOKING", "amount_paise", 6150L, "currency", "INR",
@@ -103,14 +103,14 @@ class CourierChargeDatabaseTest {
         assertThat(count("courier_charge")).as("the same booking again writes nothing").isEqualTo(1);
         assertThat(expected("BZ-1")).isEqualTo(6150L);
 
-        // Borzo's record once cancelled shows ₹20: the booking is expected to cost that, not 61.50 + 20.
+        // Borzo's record once cancelled shows ₹20 (its booking price repeated): a cancel before a rider is free, so 0 is kept.
         ProviderDelivery cancelled = new ProviderDelivery("borzo", "BZ-1", null, DeliveryStatus.CANCELLED, "canceled", new BigDecimal("20.00"),
             null, null, null, Instant.now());
-        charges.cancelled(order, order, null, cancelled);
-        charges.cancelled(order, order, null, cancelled);
+        charges.cancelled(order, order, null, cancelled, true);
+        charges.cancelled(order, order, null, cancelled, true);
         assertThat(database.db.queryForList(CHARGES)).extracting(row -> row.get("kind") + " " + row.get("amount_paise"))
-            .containsExactly("BOOKING 6150", "CANCEL 2000");
-        assertThat(expected("BZ-1")).as("a cancel counts only its own amount").isEqualTo(2000L);
+            .containsExactly("BOOKING 6150", "CANCEL 0");
+        assertThat(expected("BZ-1")).as("a cancel counts only its own amount").isEqualTo(0L);
 
         // Pidge's price is its delivery charge, not the customer's bill; an answer without a price is kept as unknown.
         book(delivery("pidge", "PG-1", "450.00", "58.00"));
@@ -118,7 +118,7 @@ class CourierChargeDatabaseTest {
         assertThat(expected("PG-1")).isEqualTo(5800L);
         assertThat(expected("PG-2")).isNull();
         assertThat(database.db.queryForObject("SELECT sum(expected_paise) FROM delivery_schema.courier_booking_charge", Long.class))
-            .as("the courier total is the sum of its charges").isEqualTo(2000L + 5800L);
+            .as("the courier total is the sum of its charges").isEqualTo(5800L);
         assertThat(alerts).isEmpty();
     }
 
@@ -211,7 +211,7 @@ class CourierChargeDatabaseTest {
         book(delivery("borzo", "BZ-2", "49.00", null));
         book(delivery("borzo", "BZ-3", "70.00", null));
         UUID cancelledOrder = book(delivery("borzo", "BZ-4", "55.00", null));
-        charges.cancelled(cancelledOrder, cancelledOrder, null, delivery("borzo", "BZ-4", "0.00", null));
+        charges.cancelled(cancelledOrder, cancelledOrder, null, delivery("borzo", "BZ-4", "0.00", null), true);
         book(delivery("borzo", "BZ-5", null, null));
         book(delivery("pidge", "PG-1", null, "58.00"));
 

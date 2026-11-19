@@ -87,7 +87,7 @@ docker save "$IMAGE" | gzip | ssh <VM_USER>@<VM_HOST> 'gunzip | docker load'
 
 ## 4. Back up the database (just before)
 
-Find integration's database from its compose entry (the JDBC URL ends in `/<database>`; do not print passwords) and the Postgres user from the `postgres` service:
+For integration the database is `craves_integration_db` and the admin role `postgres` (`docs/runbooks/production-environment.md`); the nightly dump in `/opt/craves/backup/nightly/` is up to a day old, so take this fresh one too. Confirm the database from its compose entry (the JDBC URL ends in `/<database>`; do not print passwords) and the Postgres user from the `postgres` service:
 
 ```bash
 jq -r '.services.integration.environment.SPRING_DATASOURCE_URL // "see env_file"' compose.json

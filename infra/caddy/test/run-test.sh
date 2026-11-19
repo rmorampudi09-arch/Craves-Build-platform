@@ -18,7 +18,8 @@ OUT=$(mktemp -d)
 
 mounts=(-v "$HERE/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$HERE/../fix-program.caddy:/etc/caddy/fix-program.caddy:ro")
 echo "== caddy validate"
-docker run --rm "${mounts[@]}" "$IMAGE" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1 | tail -1
+docker run --rm "${mounts[@]}" "$IMAGE" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1 \
+  | grep -x 'Valid configuration' || { echo "FAIL: caddy validate"; exit 1; }
 echo "== caddy adapt: fix routes come before the webhook catch-all"
 order=$(docker run --rm "${mounts[@]}" "$IMAGE" caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile 2>/dev/null \
   | grep -o 'webhooks/delivery/borzo\|webhooks/delivery/pidge\|webhooks/\.\*' | tr '\n' ' ')

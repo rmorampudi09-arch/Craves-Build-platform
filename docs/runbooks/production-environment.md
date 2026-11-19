@@ -33,6 +33,8 @@ Production moved to a new subscription on 29 Oct 2026 (cut-over about 23:45 UTC)
 | Gateway | a Caddy container, in front of the app containers (see "API gateway" above) |
 | Apps | each service runs as a Docker container on the VM, defined in `/opt/craves/compose.json` |
 | Database | one container, `craves-postgres-1`: PostgreSQL 16.9, image `postgis/postgis:16-3.5`, reachable only on Docker's private network on the VM |
+| Deploy a service | by hand, one service at a time, with no Azure cost: `docs/runbooks/deploy-vm.md` |
+| Gateway rules ready, not applied | courier webhook body limits, ring receipt and courier billing routes for Caddy: `infra/caddy/README.md` |
 | Logs | Logs stay on the VM: Docker keeps 3 files of 20 MB per container. There is no Azure Monitor agent and nothing reaches Log Analytics (`law-craves-prod`). Production no longer writes `ContainerAppConsoleLogs_CL`, so the Kusto queries on this page and elsewhere find nothing new, and no alert rule in this repo can fire |
 
 Each service and its database (all in `craves-postgres-1`):
@@ -110,6 +112,18 @@ Restore into a scratch database, **never into the live one**. It uses the produc
    Optionally, also count the rows of one busy table in each. The live count may be slightly higher, because the live database has moved on since 03:00.
 6. Drop the scratch database: `docker exec craves-postgres-1 psql -U postgres -c "DROP DATABASE restore_test_<name>"`.
 7. Record the date and the result here.
+
+## Later, costs money (owner decision 19 Nov 2026: not now)
+
+Nothing below is turned on. Each closes a gap named in "Pre-launch gaps" or "Backups and recovery" above, and each except the last adds to the Azure bill, so each needs the owner's go-ahead.
+
+| Item | What it fixes | Cost |
+|---|---|---|
+| Azure Backup of the VM | No Azure Backup of the VM: the whole VM can be rebuilt quickly from a recovery point | Costs money: monthly, by disk size |
+| More frequent database backups to storage, or a standby database or VM | Daily-only dumps and the single point of failure: lose less than a day of data, or keep running if the VM fails | Costs money: small (more uploads) to large (a second VM) |
+| Send the VM's container logs to Log Analytics | No alerting: the alert rules in `infra/monitoring` can then work and page when something breaks (after their queries are changed to the new table) | Costs money: billed per GB ingested |
+| Fleet timer messages through Service Bus (`infra/fleet-timers`), once `CRAVES_FLEET_TIMERS` is turned on | Riders hear of an order when its next check is due, not only on the delivery command's 5 s pass (`docs/riders/DISPATCH.md` "Timers") | Costs money: tiny, per message |
+| Custom Caddy build with a rate-limit module | The courier webhook rate limit, which stock `caddy:2.10` cannot do (`infra/caddy/README.md`) | **No Azure cost**, effort only: built on the VM and kept in its local image store |
 
 ## Before 17 Nov 2026: rules on Container Apps
 

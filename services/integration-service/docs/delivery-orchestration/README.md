@@ -902,7 +902,7 @@ ledger, changes what a customer pays, changes a booking or chooses a courier, an
 | Row | When | Amount |
 |---|---|---|
 | `BOOKING` | The booking becomes the order's delivery (a first booking, a looked-up or adopted one, and Pidge's booking in a Borzo-to-Pidge switch). | The price in the courier's answer: Borzo's `payment_amount` (the order total), Pidge's `fulfillment.delivery_charge`. Pidge's `bill_amount` is what the customer is billed and is not used. |
-| `CANCEL` | Craves cancelled the booking and the courier shows it cancelled (`CourierCancel`, the fleet's courier cancel, and Borzo's booking in a switch). | The price the courier's record shows once cancelled. It replaces the booking price: the booking is expected to cost this and nothing more. Neither courier has a field named as a cancellation fee, so this is the nearest fact there is. |
+| `CANCEL` | Craves cancelled the booking and the courier shows it cancelled (`CourierCancel`, the fleet's courier cancel, and Borzo's booking in a switch). | `0` when the canceller read, just before cancelling, that the courier had no rider assigned: cancelling then is free on Borzo and Pidge. Otherwise empty (unknown): after a rider is assigned a fee may apply (Borzo mentions about ₹40; Pidge's is not known) and the wallet statement says what it was. Never the price the courier's record shows after the cancel, which is likely the booking price repeated. It replaces the booking price. |
 | `ADJUSTMENT` | Nothing writes it yet. | A later signed change. |
 
 Amounts are whole paise in `BIGINT`, currency `INR` on every row. A courier's rupees become paise by rounding half a
@@ -917,9 +917,17 @@ rolled back, the booking commits as it would have, and one line says so:
 The alert thresholds are checked in a second savepoint after the row is written: when that check fails the row stays
 and the line is `CRAVES_ALERT alert=COURIER_CHARGE_THRESHOLD_NOT_CHECKED`.
 
-**Before the flag goes on, check one real Borzo cancel answer.** The `CANCEL` amount is whatever price Borzo's order
-shows once cancelled. If Borzo keeps the original quote there instead of the fee (or 0), every free cancel will show as
-`NOT_ON_INVOICE` at the full booking price, and the `CANCEL` rule has to change first. The same check applies to Pidge.
+**Who knows whether a rider was assigned.** No courier is called for it; each canceller uses what it already read:
+
+| Canceller | `CANCEL` amount | Why |
+|---|---|---|
+| `CourierCancel` (order cancelled, or ops with `CRAVES_DELIVERY_COURIER_CANCEL_ENABLED` on) | `0` or empty | It reads the booking just before cancelling. `0` when that read shows `PENDING` or `SEARCHING` and no rider with an id (`CourierCharges.beforeRider`); empty for anything else, including a booking an earlier attempt already left cancelled. |
+| `FleetCourierCancel` (fleet tick, or ops with that flag off) | empty | It cancels without reading the courier first, and the delivery job's own status can lag the courier. |
+| `BorzoPidgeHandoffWorker` (Borzo's booking in a switch to Pidge) | `0` | It cancels Borzo only after reading it `PENDING` or `SEARCHING`, or `DELAYED` with no courier id. |
+
+A rider assigned in the seconds between that read and the cancel is not seen. In the comparison a free cancel the
+statement lacks is not listed, one the statement charges is `AMOUNT_DIFFERS`, and an unknown one is
+`CRAVES_AMOUNT_UNKNOWN` (or `NOT_ON_INVOICE` with no Craves amount when the statement lacks it).
 
 **Not recorded yet:** the courier's final price at delivery (waiting or return fees), bookings a courier cancelled
 itself, and stray bookings that never became an order's delivery. An invoice line for any of these shows up in the
@@ -955,7 +963,7 @@ booking reference, to the paisa:
 | `MATCHED` | The invoice line equals what Craves expects. |
 | `AMOUNT_DIFFERS` | Both are known and differ; `differencePaise` is invoice minus Craves. |
 | `NOT_IN_CRAVES` | The invoice bills a booking Craves has no record of. |
-| `CRAVES_AMOUNT_UNKNOWN` | Craves recorded the booking without a price. |
+| `CRAVES_AMOUNT_UNKNOWN` | Craves recorded the booking without a price, or cancelled it without knowing whether a rider was assigned. |
 | `NOT_ON_INVOICE` | Craves recorded a booking in the invoice's period (India days) that the invoice lacks, unless Craves expects 0 for it. |
 
 No tolerance is applied, and nothing is disputed, paid or adjusted: a person reads the rows

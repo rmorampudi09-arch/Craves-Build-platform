@@ -294,6 +294,10 @@ public class BorzoPidgeHandoffWorker {
             requireCommercialOrder(job);
             requireStateChange(handoffs.markBorzoCancelled(job.id()),
                 "Borzo cancellation state changed");
+            if (charges != null) {
+                // Craves cancelled it on an earlier try whose answer was lost: what Borzo showed before is not known here.
+                charges.cancelled(job.orderId(), job.chefSubOrderId(), job.id(), latest, false);
+            }
             return;
         }
         if (latest.status() != DeliveryStatus.PENDING && latest.status() != DeliveryStatus.SEARCHING
@@ -372,7 +376,10 @@ public class BorzoPidgeHandoffWorker {
         }
         requireStateChange(handoffs.markBorzoCancelled(job.id()), "Borzo cancellation state changed");
         if (charges != null) {
-            charges.cancelled(job.orderId(), job.chefSubOrderId(), job.id(), cancellation);
+            // The one rule (CourierCharges.beforeRider) on Borzo as read just before the cancel: DELAYED is not known.
+            charges.cancelled(job.orderId(), job.chefSubOrderId(), job.id(), cancellation,
+                in.craves.integration.delivery.billing.CourierCharges.beforeRider(
+                    new TrackingSnapshot(immediatelyBeforeCancel, null, Instant.now())));
         }
     }
 

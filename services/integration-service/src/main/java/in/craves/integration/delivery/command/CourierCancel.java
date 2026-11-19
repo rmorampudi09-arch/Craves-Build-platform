@@ -1,6 +1,7 @@
 package in.craves.integration.delivery.command;
 
 import in.craves.integration.config.WorkerSchedulingConfiguration;
+import in.craves.integration.delivery.billing.CourierCharges;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.DeliveryStatus;
 import in.craves.integration.delivery.provider.DeliveryProviderAdapter.TrackingSnapshot;
@@ -134,12 +135,15 @@ public class CourierCancel {
         TrackingSnapshot seen;
         String refusal = null;
         boolean past;
+        // What the courier showed just before this attempt's cancel: no rider then, and the cancel cost nothing.
+        boolean beforeRider;
         try {
             DeliveryProviderAdapter adapter = couriers.get(booking.provider());
             if (adapter == null) {
                 throw new IllegalStateException("no " + courier + " client in this service");
             }
             seen = adapter.track(booking.providerDeliveryId());
+            beforeRider = CourierCharges.beforeRider(seen);
             past = CourierStrayBookings.PAST_CANCELLING.contains(seen.delivery().status());
             if (!past && seen.delivery().status() != DeliveryStatus.CANCELLED) {
                 try {
@@ -166,7 +170,7 @@ public class CourierCancel {
         log.info("COURIER_CANCELLED provider={} delivery={} chefSubOrderId={} reason={}", booking.provider(), booking.providerDeliveryId(),
             booking.chefSubOrderId(), reason);
         if (charges != null) {
-            charges.cancelled(booking.orderId(), booking.chefSubOrderId(), booking.jobId(), seen.delivery());
+            charges.cancelled(booking.orderId(), booking.chefSubOrderId(), booking.jobId(), seen.delivery(), beforeRider);
         }
         try {
             // The delivery job and order-service hear it now; the courier's callback or the tracking poll would bring it later.

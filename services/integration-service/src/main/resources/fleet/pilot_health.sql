@@ -474,9 +474,9 @@ ORDER BY GROUPING(u.day) DESC, u.day DESC, u.provider_id;
 -- What Borzo and Pidge showed as their price, per day (India) a booking became an order's delivery, over the last 14
 -- days, then all of them ("all"). Empty until CRAVES_DELIVERY_COURIER_CHARGE_ENABLED is on. bookings: bookings recorded;
 -- booked_paise: their booking prices; cancelled: of those, cancelled by Craves with the courier's record read back;
--- expected_paise: what Craves expects to be billed (a cancelled booking counts at the price the courier showed once
--- cancelled); price_unknown: bookings whose courier answer had no price. Whole paise. A record only: nothing here pays
--- or chooses a courier.
+-- expected_paise: what Craves expects to be billed (a cancelled booking counts 0 when cancelled before a rider, else
+-- unknown); price_unknown: bookings whose courier answer had no price, or cancelled when a rider may have been assigned.
+-- Whole paise. A record only: nothing here pays or chooses a courier.
 SELECT CASE WHEN GROUPING(b.day_ist) = 1 THEN 'all' ELSE b.day_ist::text END AS day_ist,
        CASE WHEN GROUPING(b.provider_id) = 1 THEN 'all' ELSE b.provider_id END AS courier,
        count(*) AS bookings,

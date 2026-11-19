@@ -517,7 +517,7 @@ public class FleetRiderService {
             + " Declining is free.";
     }
 
-    /** Search rings in English, for the notice of a change; empty without rings. The wording is the owner's to settle (DISPATCH.md §2). */
+    /** Search rings in English, for the notice of a change; empty without rings. Wording approved by the owner on 19 Nov 2026 (DISPATCH.md). */
     static String ringsLine(SearchRings rings) {
         if (!rings.on()) {
             return "";

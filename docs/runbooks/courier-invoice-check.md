@@ -41,3 +41,27 @@ charges, invoice import and billing settings".
 rate, who bears a disputed fee, and two alert thresholds. All of it is a record of what was agreed. The system acts on
 none of it, except that a threshold makes it write one alert line when a booking costs more than the per-order amount,
 or when a day's bookings with that courier pass the per-day amount. Bookings are never blocked.
+
+### Owner decisions, 19 Nov 2026
+
+Both couriers are paid the same way today: Craves tops up a **prepaid wallet** with Borzo and another with Pidge, and
+each courier deducts every order from its own wallet. So, when the flag goes on, save for **both** `borzo` and `pidge`:
+
+| Setting | Value | Why |
+|---|---|---|
+| `billingMode` | `PREPAID_WALLET` | How both are paid today. |
+| `taxNote` | `Wallet deduction as charged; GST per the courier's tax invoice` | The money that leaves Craves is the wallet deduction. |
+| `taxRateBps` | empty until checked | Check one wallet line: if the deduction equals the price shown at booking, GST is inside it. Then record the rate the courier's tax invoice states (18 % is `1800`). |
+| `disputedFeeBorneBy` | `CRAVES` | A courier's fee is between Craves and the courier: the customer paid a fixed delivery fee and the chef did nothing wrong. |
+| `perOrderAlertPaise`, `perDayAlertPaise` | empty for the first week | Set them from the first week's real spend, for example the per-day amount near a day's top-up, so the alert says "top up soon". |
+
+**The "invoice" is the wallet statement.** Export the month's wallet history from each courier's portal and turn every
+order deduction into one CSV line (`booking_reference` = the courier's order id, `amount` = the deduction). Top-ups and
+refunds to the wallet are not bookings: leave them out. Differences are then read as in the table above, to the paisa.
+
+**Cancels.** Customers cannot cancel an order, but Craves itself cancels a courier booking in four cases: Borzo found no
+rider in time and the order moves to Pidge; a Craves rider takes an order a courier also holds; a duplicate booking
+made after a lost answer; and ops cancelling a delivery. Before the flag goes on, find one such order in each wallet's
+history and see what was deducted for the cancelled booking (often nothing). If the wallet shows nothing but Craves would
+record the full price, keep the flag off and change the CANCEL row to record the price as unknown first (a small code
+change in `CourierCharges`).

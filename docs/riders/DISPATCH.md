@@ -167,7 +167,7 @@ Built, not in use (research R22 item 3-3). **No policy version has rings, so not
 - **A decline never widens a ring.** A rider just asked still counts as in their ring. While they may not be asked again yet (the offer's time and one look more, as today), the order waits with its stage open; it is not offered farther out and is not sent to a courier. Then they are asked again. Riders farther out hear when the ring's time comes: the look before it sets the next look at that moment.
 - **Which rings are in force** is decided in one place (`SearchRings.first`, `second`), for dispatch and for the line riders read: a ring needs a size and a time above 0, and the second must be wider and later than the first when there is one. A ring that is not in force does nothing and is not told. A ring as wide as the policy radius or wider narrows nothing, though the line would still name it: don't publish one.
 
-The values proposed for the first version with rings: **2 km until 100 s, 3.5 km until 200 s, then 5 km.** The sizes are R22's; the times are a proposal (a third of the 300 s each, five offers a ring) and are the owner's to set.
+The values for the first version with rings, **approved by the owner on 19 Nov 2026: 2 km until 100 s, 3.5 km until 200 s, then 5 km,** with an empty ring passed over at once (as above). The sizes are R22's; the times are a third of the 300 s each, five offers a ring. No policy version carries them yet.
 
 **An example.** Rings as proposed, one rider at a time. Free riders: Asha 0.5 km from the kitchen, Bala 1.1 km, Chitra 3 km, Dev 4.4 km.
 
@@ -185,7 +185,7 @@ The values proposed for the first version with rings: **2 km until 100 s, 3.5 km
 **It is a rule, under the notice gate.** The four columns are rules columns: the table's trigger (§7, V192) and `FleetPolicyStore` refuse a version that changes them with less than 14 days' notice once a rate card is published. The console does not set them: every version it saves, the emergency stop included, keeps the rings riders are shown. Switching on is a new policy version with ring values (as V184 added its rule lines), and:
 
 - **While no real riders are live** (the owner's decision), it may start without the 14 days. The trigger allows that only before a rate card is published.
-- **Once riders are live:** first the owner's wording in the rider app under Terms → "How you get orders", in every language the app has, then 14 days' notice through the policy version. The server's English line for the notice of the change is a placeholder until the owner settles the wording (`FleetRiderService.ringsLine`); the rider API and the app do not carry rings yet.
+- **Once riders are live:** first the owner's wording in the rider app under Terms → "How you get orders", in every language the app has, then 14 days' notice through the policy version. The owner approved the server's English line on 19 Nov 2026 (`FleetRiderService.ringsLine`; with the values above it reads: "Riders nearer the kitchen are asked first: for the first 100 seconds only riders within 2 km, then until 200 seconds only riders within 3.5 km, then every rider in range. If no free rider is that near, riders farther away are asked at once."). The rider API and the app do not carry rings yet.
 
 **Before switching on,** run the replay on recorded orders with and without rings (`REPLAY.md`): the mean pickup distance should fall and the food's wait should not rise. The replay does not model rings yet.
 

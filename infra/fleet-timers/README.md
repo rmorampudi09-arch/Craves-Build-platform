@@ -13,8 +13,9 @@ Nothing creates it: no pipeline, no workflow and no agent runs this file. A sign
 - Until it exists, leave `CRAVES_FLEET_TIMERS` off. If the flag is switched on without the queue, the service still
   starts and dispatch works as with off: the sends fail, `CRAVES_ALERT alert=FLEET_TIMERS_SEND_FAILED` and
   `FLEET_TIMERS_RECEIVE_FAILED` are logged at most once a minute each, and every order goes on by its delivery command.
-- Since 17 Nov 2026 `CRAVES_FLEET_TIMERS` is set on integration-service's container on the production VM, not on a
-  container app (`docs/runbooks/production-environment.md`; exact mechanism to be confirmed by the owner).
+- Since 17 Nov 2026 `CRAVES_FLEET_TIMERS` is set by hand on integration-service in `/opt/craves/compose.json` on the
+  production VM, not on a container app (`docs/runbooks/production-environment.md`). Deploys there are manual, and the
+  flag works only once the integration container runs a build that has this code (nothing merged from 17 Nov is live yet).
 
 ## Create it
 

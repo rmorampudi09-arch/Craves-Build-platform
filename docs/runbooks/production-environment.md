@@ -2,7 +2,7 @@
 
 This is the one place that says which Azure subscription, resources and pipelines are production. If anything else in the repo disagrees, this page wins and the other file is wrong. `scripts/release/tests/test_no_retired_azure_names.py` fails CI if a retired name below comes back.
 
-**Since 17 Nov 2026:** production no longer runs on Azure Container Apps or Azure Database for PostgreSQL flexible servers. On the night of 16–17 Nov 2026 (IST) every app and the database moved to Docker containers on one VM, `vm-craves-compact` (section "Production VM" below). The old container apps, flexible servers and network were deleted on 17 Nov between 03:52 and 04:37 IST. Anything in this repo that tells you to run `az containerapp …`, move revision traffic or change a `pg-craves-*` server describes the old setup.
+**Since 17 Nov 2026:** production no longer runs on Azure Container Apps, Azure Database for PostgreSQL flexible servers or API Management. On the night of 16–17 Nov 2026 (IST) every app and the database moved to Docker containers on one VM, `vm-craves-compact` (section "Production VM" below). The old container apps, flexible servers and network were deleted on 17 Nov between 03:52 and 04:37 IST. **Deploys are manual: a merge to `main` does not reach production until someone deploys it by hand.** Anything in this repo that tells you to run `az containerapp …`, move revision traffic, change a `pg-craves-*` server or configure APIM describes the old setup.
 
 Checked against live Azure on 26 and 27 Oct 2026 (read only). The VM layout is from the owner, 19 Nov 2026.
 
@@ -17,22 +17,23 @@ Production moved to a new subscription on 29 Oct 2026 (cut-over about 23:45 UTC)
 | Compute (since 17 Nov 2026) | VM `vm-craves-compact` in `rg-craves-compact-prod`. No Azure Container Apps remain |
 | Resource groups | `rg-craves-compact-prod` (the VM). Until 17 Nov the apps ran in one group per feature, `rg-craves-<feature>-prod` (auth, catalog, order, user-chef, notification, subscription, integration, referral, voice, web, admin, delivery-intel), plus `rg-craves-data-business-prod`, `rg-craves-shared-prod`, `rg-craves-ops-prod`, `rg-craves-dns-prod`; which of them still hold anything production uses is to be confirmed by the owner |
 | Container registry | `crcravesprod34eefd` |
-| APIM | `apim-craves-prod-34eefd`, behind Front Door `afd-craves-prod` (api.craves.in). Whether APIM still fronts the API since 17 Nov 2026, or only the VM's Caddy proxy does, is to be confirmed by the owner. A 401 without a token does not show that a route is published: on `craves-finance-admin-v1` every path answers 401, and a path with no operation of its own falls to the `/*` operations, reaches the service at the wrong path and gives a signed-in admin 403 (14 Nov 2026). Publish each new finance route as its own operation with a rewrite-uri, as `scripts/apim/configure-finance-insights-apim.sh` does, and check it signed in |
+| API gateway | Caddy on the VM. `api.craves.in` points at the VM. No API Management service exists since 17 Nov 2026. Caddy's config has an `api_routes` block with one matcher per route (the old APIM routes rewritten for Caddy); it lives on the VM and is not in this repo. A new route, or a gateway limit such as a body size or rate limit, needs a Caddy rule on the VM. The APIM files and scripts in this repo (`infra/apim/*`, `scripts/apim/*`) no longer configure production |
 | Service Bus | `sb-craves-std-34eefd` (Azure; the apps on the VM connect to it) |
 | Redis | Azure Managed Redis `amr-craves-prod-34eefd` (the apps on the VM connect to it; not re-checked on 19 Nov 2026) |
 | DNS | zone `craves.in` in `rg-craves-dns-prod` (registrar GoDaddy) |
-| Releases | Until 17 Nov 2026: Azure DevOps org `ravitejamm6`, project `Craves-New-Original`. `ops/mirror-github` copies GitHub `main` every 15 minutes; `release-<feature>` pipelines build and roll out to Container Apps (10 % canary, then 100 %, automatic rollback), with no manual approval. Those pipelines targeted Container Apps, which no longer exist. **How a merge to `main` now reaches the VM is to be confirmed by the owner.** Until then, treat every merge to `main` as one that may go live. |
+| Releases | **Manual since 17 Nov 2026.** Nothing deploys a merge to the VM: no deploy agent, CI runner, auto-updater or scheduled job runs on it, and nothing in this repo runs commands on it. The services are defined in one file on the VM, `/opt/craves/compose.json`, edited by hand (last on 18 Nov 2026). A flag set on the VM takes effect only once the service runs a build that has the code. Until 17 Nov the Azure DevOps org `ravitejamm6`, project `Craves-New-Original`, mirrored `main` and its `release-<feature>` pipelines rolled out to Container Apps; they no longer deploy anything. |
+| What runs (19 Nov 2026) | Older merges that are on `main`, not current `main`: integration and order `66157cf` (#658, 14 Nov), user-chef `c3421f9` (#663, 14 Nov), web and admin `8c9951a` (16 Nov). The voice and web images carry PR-number tags (`pr699-…`, `…-pr700`) not yet traced to a commit. Nothing merged from 17 Nov 2026 onward (#677 on) is live |
 
 ## Production VM (since 17 Nov 2026)
 
 | What | Value |
 |---|---|
 | VM | `vm-craves-compact`, resource group `rg-craves-compact-prod`, subscription 34eefd95 |
-| Open ports | 80 and 443 (web) and 22 (SSH; the network security group rule for 22 is unconfirmed) |
-| Web proxy | a Caddy container, in front of the app containers |
-| Apps | each service runs as a Docker container on the VM |
+| Open ports | The network security group allows only 80 and 443 from the internet. Port 22 (SSH) is reachable only from inside the virtual network |
+| Gateway | a Caddy container, in front of the app containers (see "API gateway" above) |
+| Apps | each service runs as a Docker container on the VM, defined in `/opt/craves/compose.json` |
 | Database | one container, `craves-postgres-1`: PostgreSQL 16.9, image `postgis/postgis:16-3.5`, reachable only on Docker's private network on the VM |
-| Logs | Whether the containers' logs reach Log Analytics (`law-craves-prod`) is to be confirmed by the owner. Production no longer writes `ContainerAppConsoleLogs_CL`, so the Kusto queries on this page and elsewhere that read it find nothing new |
+| Logs | Logs stay on the VM: Docker keeps 3 files of 20 MB per container. There is no Azure Monitor agent and nothing reaches Log Analytics (`law-craves-prod`). Production no longer writes `ContainerAppConsoleLogs_CL`, so the Kusto queries on this page and elsewhere find nothing new, and no alert rule in this repo can fire |
 
 Each service and its database (all in `craves-postgres-1`):
 
@@ -52,7 +53,16 @@ Each service and its database (all in `craves-postgres-1`):
 | web | none of its own | `kv-crv-web-34eefd` |
 | voice | whether it runs on the VM is to be confirmed by the owner | `kv-crv-voice-34eefd` |
 
-Extensions: `craves_business_db` has pgcrypto 1.3 and PostGIS 3.5.2; `craves_integration_db` has PostGIS 3.5.2 (added 19 Nov 2026, fix-program D-2); the others have only plpgsql. The database is not an Azure flexible server, so server parameters such as `azure.extensions` do not apply.
+Extensions: `craves_business_db` has pgcrypto 1.3 and PostGIS 3.5.2; `craves_integration_db` has PostGIS 3.5.2 in schema `public` (added 19 Nov 2026, fix-program D-2); the others have only plpgsql. The database is not an Azure flexible server, so server parameters such as `azure.extensions` do not apply.
+
+## Pre-launch gaps (19 Nov 2026)
+
+- One VM runs every app and the database: if it stops, everything stops.
+- Deploys are manual, with no pipeline, canary or rollback.
+- Production runs merges from 14–16 Nov; deploy a build from current `main` next.
+- No alerting: logs stay on the VM and nothing reaches Log Analytics.
+- The courier webhook body size and rate limits (`infra/apim/courier-webhooks`) and the new admin and rider routes (ring receipt, courier billing) are not in Caddy's config.
+- No database restore has been tested.
 
 ## Backups and recovery
 
@@ -60,22 +70,59 @@ Extensions: `craves_business_db` has pgcrypto 1.3 and PostGIS 3.5.2; `craves_int
 - Gaps, as of 19 Nov 2026:
   - Daily only: up to about one day of data can be lost.
   - No Azure Backup of the VM.
-  - No restore has been tested.
-  - The VM is a single point of failure: if it stops, every app and the database stop.
-  - The network security group rule for port 22 is unconfirmed.
+  - No restore has been tested (procedure below).
+  - The VM is a single point of failure.
+
+### Restore test
+
+Restore into a scratch database, **never into the live one**. It uses the production VM's CPU and disk, so run it off-peak. Repeat for each database. Below, `<db>` is the live database (for example `craves_integration_db`) and `<name>` is its name without `craves_` and `_db` (for example `integration`). The admin role is `postgres`.
+
+1. Find the dump. The backup job is `/etc/cron.d/craves-backup` (not root's crontab). Its dumps are in `/opt/craves/backup/nightly/`, one per database and day, named like `craves_integration_db-2026-11-18.dump`. The job runs `pg_dump -Fc`, so each dump is in custom format and is restored with `pg_restore`. `head -c 5 <dump>` must print `PGDMP`.
+2. Check free disk. The restored copy needs about as much space as the live database, not the dump's size:
+
+   ```bash
+   docker exec craves-postgres-1 psql -U postgres -Atc "select pg_size_pretty(pg_database_size('<db>'))"
+   df -h /var/lib/docker
+   ```
+
+   The VM had 28 GB free on 19 Nov 2026. Stop if the free space is not well above the database size.
+3. Create the scratch database:
+
+   ```bash
+   docker exec craves-postgres-1 psql -U postgres -c "CREATE DATABASE restore_test_<name>"
+   ```
+
+4. Restore into it:
+
+   ```bash
+   docker exec -i craves-postgres-1 pg_restore -U postgres --no-owner --no-acl -d restore_test_<name> < /opt/craves/backup/nightly/<db>-<date>.dump
+   ```
+
+   Read the last line: `errors ignored on restore: N` lists errors that were skipped. No such line means none.
+5. Compare with the live database. The main check is the number of tables, run in both `restore_test_<name>` and `<db>`; the two must match:
+
+   ```bash
+   for d in restore_test_<name> <db>; do
+     docker exec craves-postgres-1 psql -U postgres -d "$d" -Atc "select count(*) from information_schema.tables where table_schema not in ('pg_catalog', 'information_schema')"
+   done
+   ```
+
+   Optionally, also count the rows of one busy table in each. The live count may be slightly higher, because the live database has moved on since 03:00.
+6. Drop the scratch database: `docker exec craves-postgres-1 psql -U postgres -c "DROP DATABASE restore_test_<name>"`.
+7. Record the date and the result here.
 
 ## Before 17 Nov 2026: rules on Container Apps
 
 These held while the apps ran on Container Apps. What still applies on the VM is noted in each.
 
 - **Each app runs as its own user-assigned identity** (`id-craves-<feature>-prod`) and must name it in `AZURE_CLIENT_ID`. The services' Azure SDK (`DefaultAzureCredential`) needs that setting to reach Service Bus; without it, the call fails with "Unable to load the proper Managed Identity" and no event leaves the service. Order, integration and subscription ran without it from the move until 1 Nov 2026, so no order event reached Service Bus in that time. Which identity the containers on the VM use to reach Service Bus is to be confirmed by the owner.
-- **Guest support chat trusts the web server only once told to.** On user-chef, set `CRAVES_SUPPORT_GUEST_FORWARDER_HEADER` and `CRAVES_SUPPORT_GUEST_FORWARDER_IPS` (the web app's address as user-chef sees it, same value as auth's `CRAVES_CENTRAL_OTP_FORWARDING_IPS`). On Container Apps these were `X-Azure-SocketIP` and the web app's outbound address. On the VM the right header and address behind Caddy are to be confirmed by the owner, and the setting goes on user-chef's container (exact mechanism to be confirmed). Until then any caller that reaches the API directly can name its own `X-Craves-Visitor` and take the whole shared guest chat budget. The header without the list stops the service from starting; remove the header first.
+- **Guest support chat trusts the web server only once told to.** On user-chef, set `CRAVES_SUPPORT_GUEST_FORWARDER_HEADER` and `CRAVES_SUPPORT_GUEST_FORWARDER_IPS` (the web app's address as user-chef sees it, same value as auth's `CRAVES_CENTRAL_OTP_FORWARDING_IPS`). On Container Apps these were `X-Azure-SocketIP` and the web app's outbound address. On the VM the setting goes on user-chef's service in `/opt/craves/compose.json`; the right header and address behind Caddy are to be confirmed by the owner. Until then any caller that reaches the API directly can name its own `X-Craves-Visitor` and take the whole shared guest chat budget. The header without the list stops the service from starting; remove the header first.
 - **Traffic was pinned to a named revision** (multiple-revision mode). A setting changed with `az containerapp update` made a new revision that got no traffic until it was moved to it (`docs/riders/GO-LIVE.md` §8). The VM has no revisions.
-- **Rolling one app back** (handbook 108, added 10 Nov 2026): `bash scripts/release/rollback-revision.sh ca-craves-<feature>-prod [revision]` moved traffic between Container Apps revisions. It has nothing to act on since 17 Nov 2026; how to roll back a container on the VM is to be confirmed by the owner. The old org's narrow `azure-pipelines-*-rollback.yml` pipelines still target the old resource group: do not run them.
+- **Rolling one app back** (handbook 108, added 10 Nov 2026): `bash scripts/release/rollback-revision.sh ca-craves-<feature>-prod [revision]` moved traffic between Container Apps revisions. It has nothing to act on since 17 Nov 2026. On the VM there is no rollback tool: a rollback is a manual change on the VM, like a deploy. The old org's narrow `azure-pipelines-*-rollback.yml` pipelines still target the old resource group: do not run them.
 
 ### Web and admin: answer only our Front Door (`X-Azure-FDID`)
 
-> Written for Container Apps, before 17 Nov 2026. On the VM, web and admin run as containers behind Caddy. Whether Front Door still sits in front of the VM, and so whether `X-Azure-FDID` arrives, is to be confirmed by the owner; the revision and probe steps below no longer apply. Do not set `enforce` until that is confirmed.
+> Written for Container Apps, before 17 Nov 2026. On the VM, web and admin run as containers behind Caddy, and the revision and probe steps below no longer apply. Whether Front Door still sits in front of craves.in, www and admin.craves.in, and so whether `X-Azure-FDID` arrives, is to be confirmed by the owner. Do not set `enforce` until that is confirmed.
 
 `ca-craves-web-prod` (craves.in, www) and `ca-craves-admin-prod` (admin.craves.in) run the same app, `apps/customer-web-next`, and accept Azure Front Door's shared address ranges. Any other company's Front Door profile could send traffic to them and skip our WAF. Our profile, `afd-craves-prod`, stamps every request with `X-Azure-FDID: 59117d14-1c4f-402e-a98b-0fa1009de276`, and Front Door overwrites any value a client sends, so the app can trust the header. The id is not a secret.
 
@@ -121,7 +168,7 @@ To undo, make a revision with `CRAVES_FRONT_DOOR_CHECK=report` (or `off`) and mo
 
 ### Catalog: straight from Front Door
 
-> Written for Container Apps, before 17 Nov 2026. `craves-catalog-direct-origin` pointed at catalog's container app, which was deleted on 17 Nov. What Front Door's catalog route reaches now is to be confirmed by the owner; do not run `scripts/frontdoor/configure-catalog-direct-route.sh` until then.
+> Written for Container Apps, before 17 Nov 2026. `craves-catalog-direct-origin` pointed at catalog's container app, which was deleted on 17 Nov. `api.craves.in` now points at the VM, so Front Door's catalog route is no longer in the path. Do not run `scripts/frontdoor/configure-catalog-direct-route.sh`.
 
 Public catalog reads skip APIM. On 15 Nov 2026, with Front Door and APIM gateway logs turned on, APIM's two gateway machines each froze for 0.2–1 s at random (one about every 7 s, the other about every 30 s) at about 10 % of one unit's capacity, holding every request on that machine. APIM's own timer showed at most 3 ms for those requests, TCP connections to APIM never waited (1,754 opened, slowest 18 ms), and requests that skip APIM never stalled (Front Door p99: 15 ms for the web app, about 750 ms for anything through APIM). The freezes are inside the managed gateway, so catalog's busiest paths go around it.
 

@@ -4,9 +4,10 @@ Services report problems as one log line each: `CRAVES_ALERT alert=<CODE> key=va
 `silent-failure-alerts.bicep` turns those lines into Azure Monitor pages, with one scheduled query rule per code
 over `ContainerAppConsoleLogs_CL`, plus a metric alert on Service Bus dead-letter queues.
 
-> **Since 17 Nov 2026 production runs on a VM, not Container Apps** (`docs/runbooks/production-environment.md`). It no longer
-> writes `ContainerAppConsoleLogs_CL`, so these log rules would never fire until the VM's container logs are sent to Log
-> Analytics and the rules query that table instead (to be confirmed and set up by the owner). Nothing here was deployed anyway.
+> **Since 17 Nov 2026 production runs on a VM, not Container Apps** (`docs/runbooks/production-environment.md`). Its logs
+> stay on the VM (Docker keeps 3 × 20 MB per container); there is no Azure Monitor agent and nothing reaches Log Analytics.
+> It no longer writes `ContainerAppConsoleLogs_CL`, so these log rules could never fire: the VM's container logs would first
+> have to be sent to Log Analytics and the rules changed to query that table. Nothing here was deployed anyway.
 
 The module is off by default. With `deployAlerts=false` it creates nothing and costs nothing.
 

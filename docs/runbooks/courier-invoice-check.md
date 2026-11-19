@@ -61,7 +61,11 @@ refunds to the wallet are not bookings: leave them out. Differences are then rea
 
 **Cancels.** Customers cannot cancel an order, but Craves itself cancels a courier booking in four cases: Borzo found no
 rider in time and the order moves to Pidge; a Craves rider takes an order a courier also holds; a duplicate booking
-made after a lost answer; and ops cancelling a delivery. Before the flag goes on, find one such order in each wallet's
-history and see what was deducted for the cancelled booking (often nothing). If the wallet shows nothing but Craves would
-record the full price, keep the flag off and change the CANCEL row to record the price as unknown first (a small code
-change in `CourierCharges`).
+made after a lost answer; and ops cancelling a delivery. Craves never records the price the courier shows after a
+cancel. It records `0` when it read, just before cancelling, that the courier had no rider assigned (cancelling is free
+then on both), and an unknown amount when a rider was assigned or it cannot tell (the fleet's own cancel reads nothing
+first). So a free cancel the wallet does not deduct is not listed; one the wallet does deduct is `AMOUNT_DIFFERS`; an
+unknown one is `CRAVES_AMOUNT_UNKNOWN`, or `NOT_ON_INVOICE` with no Craves amount when the wallet shows nothing. Read
+the deduction on the wallet line: after a rider is assigned a fee may apply (Borzo mentions about ₹40; Pidge's is not
+known). Before the flag goes on, still find one such order in each wallet's history to confirm a cancel before a rider
+deducts nothing.

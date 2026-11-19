@@ -1,0 +1,39 @@
+# Stand-in for the production Caddyfile's structure: (to), (api_routes) with one sample route and the webhook catch-all,
+# and fix-program.caddy placed as infra/caddy/README.md says. Used by run-test.sh only.
+{
+	auto_https off
+}
+
+(to) {
+	reverse_proxy {args[0]} {
+		header_up X-Azure-SocketIP {remote_host}
+		header_up X-Azure-ClientIP {client_ip}
+		header_up X-Azure-FDID test-fdid
+	}
+}
+
+import fix-program.caddy
+
+(api_routes) {
+	import fix_program
+
+	@op21 {
+		method GET
+		path_regexp (?i)^/api/v1/rider/me/?$
+	}
+	handle @op21 {
+		rewrite * /api/v1/rider/me?{query}
+		import to integration:8080
+	}
+
+	@op456 {
+		path_regexp (?i)^/api/v1/webhooks/.*
+	}
+	handle @op456 {
+		import to integration:8080
+	}
+}
+
+:8000 {
+	import api_routes
+}

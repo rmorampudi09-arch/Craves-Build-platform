@@ -29,7 +29,7 @@ charges, invoice import and billing settings".
    | `MATCHED` | Nothing. |
    | `AMOUNT_DIFFERS` | Look at the delivery: a waiting or return fee is not recorded by Craves yet and shows here. Ask the courier about any difference the delivery's timeline does not explain. |
    | `NOT_IN_CRAVES` | The courier billed a booking Craves has no record of: a booking from before the flag was on, a stray booking, or a billing error. Ask the courier for its details. |
-   | `CRAVES_AMOUNT_UNKNOWN` | Craves has the booking but the courier's answer carried no price. Check the line by hand. |
+   | `CRAVES_AMOUNT_UNKNOWN` | Craves has the booking but the courier's answer carried no price, or Craves cancelled it without knowing whether a rider was assigned (see Cancels below). Check the line by hand. |
    | `NOT_ON_INVOICE` | Craves recorded a booking in the period that the invoice lacks. `cancelled` and `deliveryStatus` say what became of it; a booking the courier cancelled itself is normal here. |
 
 5. **Raise disputes with the courier yourself,** within its window (Pidge: 7 days; Borzo: ask). A corrected invoice is

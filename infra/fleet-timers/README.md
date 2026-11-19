@@ -13,6 +13,9 @@ Nothing creates it: no pipeline, no workflow and no agent runs this file. A sign
 - Until it exists, leave `CRAVES_FLEET_TIMERS` off. If the flag is switched on without the queue, the service still
   starts and dispatch works as with off: the sends fail, `CRAVES_ALERT alert=FLEET_TIMERS_SEND_FAILED` and
   `FLEET_TIMERS_RECEIVE_FAILED` are logged at most once a minute each, and every order goes on by its delivery command.
+- Since 17 Nov 2026 `CRAVES_FLEET_TIMERS` is set by hand on integration-service in `/opt/craves/compose.json` on the
+  production VM, not on a container app (`docs/runbooks/production-environment.md`). Deploys there are manual, and the
+  flag works only once the integration container runs a build that has this code (nothing merged from 17 Nov is live yet).
 
 ## Create it
 
@@ -35,8 +38,9 @@ az servicebus queue show -g <resource group> --namespace-name <namespace> -n fle
 
 ## Access
 
-integration-service signs in to Service Bus as its own identity (`id-craves-integration-prod`,
-`docs/runbooks/production-environment.md`). It must be able to send to and receive from the new queue. If its Service
+integration-service signed in to Service Bus as its own identity (`id-craves-integration-prod`,
+`docs/runbooks/production-environment.md`) while it ran on Container Apps. Since 17 Nov 2026 it runs as a container on the
+production VM; which identity that container uses is to be confirmed by the owner. It must be able to send to and receive from the new queue. If its Service
 Bus role is granted on the namespace, nothing more is needed. If it is granted queue by queue, grant the same role on
 `fleet-timers` (read the existing grants first: `az role assignment list --assignee <the identity's principal id> --all -o table`).
 

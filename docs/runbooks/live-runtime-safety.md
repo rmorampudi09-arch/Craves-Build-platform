@@ -23,6 +23,8 @@ Owner rule (Raviteja, Oct 2026): no change, rebuild from `main`, pipeline or man
 
 To retire code on purpose, delete its line from the lock file in the same PR, with the reason in the PR description.
 
+**Since 17 Nov 2026** production no longer runs on Azure Container Apps: every service runs as a Docker container on one VM (`docs/runbooks/production-environment.md`). The lock still stops a build that lacks live code before Flyway starts, but the Container Apps behaviour described above (a revision that never becomes ready while traffic stays on the running one) no longer applies. Deploys to the VM are manual, with no canary or automatic rollback, so whoever deploys must check that the new container started and, if it did not, put the previous image back by hand.
+
 ## Auth: live overlays restored to `main` (13 Oct 2026)
 
 Live image: `cravesrm09prodlow6bf632.azurecr.io/craves/auth-service@sha256:258e4126151be06968742caf03d14bb443f8df4c08486b7d0fbd3ca7a94a2b0c`, tag `email-test-pairs-87eddd1c4563`.

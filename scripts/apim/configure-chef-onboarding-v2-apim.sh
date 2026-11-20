@@ -28,13 +28,13 @@ curl --fail --silent --show-error --max-time 30 "https://$FQDN/actuator/health" 
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf -- "$TEMP_DIR"' EXIT
 configure_api() {
-  local API_ID="$1" PATH_PART="$2"
+  local API_ID="$1" PATH_PART="$2" DISPLAY_NAME="$3"
   mapfile -t MATCHES < <(az apim api list -g "$RG" --service-name "$APIM" --query "[?path=='$PATH_PART'].name" -o tsv)
   [[ "${#MATCHES[@]}" -le 1 ]] || { echo 'Ambiguous APIM path; no update applied.' >&2; exit 1; }
   if [[ "${#MATCHES[@]}" -eq 1 ]]; then
     [[ "${MATCHES[0]}" == "$API_ID" ]] || { echo 'An existing API owns this path; review it before release.' >&2; exit 1; }
   else
-    az apim api create -g "$RG" --service-name "$APIM" --api-id "$API_ID" --display-name "Craves Chef Onboarding" \
+    az apim api create -g "$RG" --service-name "$APIM" --api-id "$API_ID" --display-name "$DISPLAY_NAME" \
       --path "$PATH_PART" --protocols https --subscription-required false -o none
   fi
 }
@@ -61,8 +61,8 @@ XML
 }
 CHEF=craves-chef-onboarding-v2
 ADMIN=craves-chef-onboarding-backoffice-v2
-configure_api "$CHEF" "api/v1/chef/onboarding"
-configure_api "$ADMIN" "api/v1/backoffice/chef-onboarding"
+configure_api "$CHEF" "api/v1/chef/onboarding" "Craves Chef Onboarding v2"
+configure_api "$ADMIN" "api/v1/backoffice/chef-onboarding" "Craves Chef Onboarding Backoffice v2"
 operation "$CHEF" state GET / /api/v1/chef/onboarding
 operation "$CHEF" save PUT / /api/v1/chef/onboarding
 operation "$CHEF" draft PATCH / /api/v1/chef/onboarding

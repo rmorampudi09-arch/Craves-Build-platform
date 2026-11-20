@@ -6,11 +6,18 @@ import {
   CRAVES_SUPPORT_EMAIL,
   SUPPORT_COMMON_QUESTIONS,
 } from "@/features/support/lib/support-contact";
-import { CRAVES_SUPPORT_PHONE, CRAVES_SUPPORT_PHONE_LABEL } from "@/shared/lib/support-phone";
+import {
+  CRAVES_SUPPORT_LINE,
+  CRAVES_SUPPORT_LINE_LABEL,
+  CRAVES_SUPPORT_PHONE,
+  CRAVES_SUPPORT_PHONE_LABEL,
+} from "@/shared/lib/support-phone";
 import { AutoHideCustomerHeader } from "@/shared/components/navigation/AutoHideCustomerHeader";
 
 const TILE =
   "flex h-28 min-w-0 flex-1 flex-col items-center justify-center gap-2 rounded-2xl text-sm font-black transition-[border-color,box-shadow,background-color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/30";
+
+const NUMBER = "font-semibold whitespace-nowrap text-[#C4200F] underline";
 
 function TileBody({
   icon: Icon,
@@ -77,7 +84,15 @@ export function HelpSupport() {
           </a>
         </div>
         <p className="mt-2.5 px-1 text-xs leading-5 text-[#6B6B6B]">
-          Chat replies in seconds. Call {CRAVES_SUPPORT_PHONE_LABEL}. Email {CRAVES_SUPPORT_EMAIL}.
+          Chat replies in seconds. Call{" "}
+          <a href={`tel:${CRAVES_SUPPORT_PHONE}`} className={NUMBER}>
+            {CRAVES_SUPPORT_PHONE_LABEL}
+          </a>
+          , or{" "}
+          <a href={`tel:${CRAVES_SUPPORT_LINE}`} className={NUMBER}>
+            {CRAVES_SUPPORT_LINE_LABEL}
+          </a>{" "}
+          at any time in English, Telugu, Hindi or Kannada. Email {CRAVES_SUPPORT_EMAIL}.
         </p>
 
         <h2 className="mb-2 mt-8 px-1 font-display text-lg font-black">Common questions</h2>

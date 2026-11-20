@@ -21,6 +21,12 @@ describe("Help & support", () => {
         .getByRole("link", { name: "Call: call Craves support on +91 83673 66787" })
         .getAttribute("href"),
     ).toBe("tel:+918367366787");
+    expect(screen.getByRole("link", { name: "+91 83673 66787" }).getAttribute("href")).toBe(
+      "tel:+918367366787",
+    );
+    expect(screen.getByRole("link", { name: "040 4590 3153" }).getAttribute("href")).toBe(
+      "tel:+914045903153",
+    );
     expect(screen.getByRole("link", { name: /^Email/ }).getAttribute("href")).toBe(
       "mailto:support@craves.in?subject=Craves%20support",
     );

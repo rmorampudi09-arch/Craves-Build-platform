@@ -1,5 +1,6 @@
 import { PolicySection, PublicPolicyPage } from "@/features/legal/components/PublicPolicyPage";
 import { ContextualBackBoundary } from "@/shared/components/navigation/ContextualBackBoundary";
+import { CRAVES_SUPPORT_LINE, CRAVES_SUPPORT_LINE_LABEL } from "@/shared/lib/support-phone";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,15 @@ export default function ContactPage() {
         ) : (
           <p>Email our support team for help with your Craves account or order.</p>
         )}
+        <p>
+          Support line (any time, in English, Telugu, Hindi or Kannada):{" "}
+          <a
+            className="font-semibold text-[#F62E18] underline"
+            href={`tel:${CRAVES_SUPPORT_LINE}`}
+          >
+            {CRAVES_SUPPORT_LINE_LABEL}
+          </a>
+        </p>
         <p>Please include your Craves order reference when one is available. Never send a card number, CVV, UPI PIN, OTP, password, or API secret by email.</p>
       </PolicySection>
 

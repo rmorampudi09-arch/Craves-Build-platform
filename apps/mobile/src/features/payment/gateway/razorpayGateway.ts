@@ -1,11 +1,14 @@
-import RazorpayCheckout from 'react-native-razorpay';
+import {NativeModules} from 'react-native';
 import {AppApiError} from '../../../core/http/apiError';
 import type {
   RazorpayHostedHandoff,
   RazorpayVerificationProof,
 } from '../domain/paymentTypes';
+import type {RazorpayCheckoutOptions} from 'react-native-razorpay';
 
 const MAX_PROVIDER_FIELD_LENGTH = 512;
+
+declare const require: (id: string) => unknown;
 
 export interface RazorpayCustomerPrefill {
   name?: string | null;
@@ -26,15 +29,16 @@ function boundedText(value: unknown, maxLength: number): string | null {
 }
 
 function amountInSubunits(amount: string): number {
-  if (!/^\d+(?:\.\d+)?$/.test(amount)) {
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(amount);
+  if (!match) {
     throw new AppApiError(
       'PAYMENT_AMOUNT_INVALID',
       'The payment amount could not be prepared securely.',
     );
   }
-  const numeric = Number(amount);
-  const subunits = Math.round(numeric * 100);
-  if (!Number.isFinite(numeric) || numeric <= 0 || !Number.isSafeInteger(subunits)) {
+  const [, whole, fractional = ''] = match;
+  const subunits = Number(`${whole}${fractional.padEnd(2, '0')}`);
+  if (!Number.isSafeInteger(subunits) || subunits <= 0) {
     throw new AppApiError(
       'PAYMENT_AMOUNT_INVALID',
       'The payment amount could not be prepared securely.',
@@ -84,6 +88,43 @@ function providerFailureMessage(error: unknown): string {
   return 'Razorpay checkout did not complete. No payment has been marked successful.';
 }
 
+function paymentUnavailableE2EEnabled(): boolean {
+  if (!__DEV__) return false;
+  const nativeControl = NativeModules.CravesCurrentLocation as
+    | {isPaymentUnavailableE2EEnabled?: () => boolean}
+    | undefined;
+  try {
+    return nativeControl?.isPaymentUnavailableE2EEnabled?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+async function nativeRazorpayOpen(): Promise<
+  | ((options: RazorpayCheckoutOptions) => Promise<unknown>)
+  | null
+> {
+  if (paymentUnavailableE2EEnabled()) return null;
+
+  let module: {default?: unknown; open?: unknown} | null;
+  try {
+    module = require('react-native-razorpay') as {
+      default?: unknown;
+      open?: unknown;
+    };
+  } catch {
+    return null;
+  }
+  const checkout = (asRecord(module.default) ?? asRecord(module)) as {
+    open?: unknown;
+  } | null;
+  return typeof checkout?.open === 'function'
+    ? (checkout.open.bind(checkout) as (
+        options: RazorpayCheckoutOptions,
+      ) => Promise<unknown>)
+    : null;
+}
+
 export async function openRazorpayCheckout(
   handoff: RazorpayHostedHandoff,
   prefill: RazorpayCustomerPrefill = {},
@@ -91,11 +132,23 @@ export async function openRazorpayCheckout(
   const prefillName = boundedText(prefill.name, 120) ?? 'Craves Customer';
   const prefillEmail = boundedText(prefill.email, 180);
   const prefillPhone = boundedText(prefill.phone, 32);
+  const amount = amountInSubunits(handoff.amount.amount);
+  const openNativeCheckout = await nativeRazorpayOpen();
+
+  if (!openNativeCheckout) {
+    throw new AppApiError(
+      'PAYMENT_PROVIDER_UNAVAILABLE',
+      'Secure payment checkout is not available in this mobile build.',
+      undefined,
+      undefined,
+      true,
+    );
+  }
 
   try {
-    const response = await RazorpayCheckout.open({
+    const response = await openNativeCheckout({
       key: handoff.checkoutKeyId,
-      amount: amountInSubunits(handoff.amount.amount),
+      amount,
       currency: handoff.amount.currency,
       name: 'Craves',
       description: 'Craves order payment',

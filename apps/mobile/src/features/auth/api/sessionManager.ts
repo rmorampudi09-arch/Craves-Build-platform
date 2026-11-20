@@ -71,7 +71,26 @@ async function rotateRefreshToken(): Promise<AuthTokenResponse | null> {
   const trace = startPerformanceTrace('session_refresh');
   trackSessionEvent('session_refresh_started');
   const hadAccessToken = Boolean(tokenMemory.get());
-  const refreshSession = await refreshTokenStore.load();
+  let refreshSession: StoredRefreshSession | null;
+  try {
+    refreshSession = await refreshTokenStore.load();
+  } catch (error) {
+    captureException(error, 'session_restore_storage_unavailable', {
+      hadAccessToken,
+    });
+    trackSessionEvent('session_restore_storage_unavailable', {
+      hadAccessToken,
+    });
+    trace.end('failure', {reason: 'secure_storage_unavailable'});
+
+    if (!hadAccessToken) {
+      // A cold start with inaccessible secure storage must never authenticate from
+      // partial state. Continue as anonymous so sign-in remains available.
+      tokenMemory.clear();
+      return null;
+    }
+    throw error;
+  }
 
   if (!refreshSession) {
     tokenMemory.clear();

@@ -63,6 +63,16 @@ describe('sessionManager', () => {
     tokenMemory.clear();
   });
 
+  it('fails closed to anonymous when secure storage is unavailable during cold restore', async () => {
+    loadMock.mockRejectedValueOnce(new Error('keychain entitlement unavailable'));
+
+    await expect(sessionManager.restore()).resolves.toBeNull();
+
+    expect(postMock).not.toHaveBeenCalled();
+    expect(clearMock).not.toHaveBeenCalled();
+    expect(tokenMemory.get()).toBeNull();
+  });
+
   it('persists the refresh credential before exposing the access token', async () => {
     const tokens = createTokenPair();
     saveMock.mockImplementation(async () => {

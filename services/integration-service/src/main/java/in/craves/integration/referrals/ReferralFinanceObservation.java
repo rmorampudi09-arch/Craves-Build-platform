@@ -52,10 +52,28 @@ public class ReferralFinanceObservation {
             .put("cumulativeFoodRefundPaise",Long.toString(refunded)).put("observedAt",at.toString()).put("evidenceRef","finance-source/"+order+"/"+version).put("currency","INR");
         // Conservatively use the immutable finance capture receipt, never an untrusted client time.
         if(captures.size()==1 && verified) payload.put("paidAt",((java.sql.Timestamp)captures.getFirst().get("recorded_at")).toInstant().toString());
+        int idle=verified && earned?86400:60;
+        // Same facts as the last event are not a new event: this ran about every 11 s for 24 orders and wrote 7.4M identical rows (Nov 2026).
+        // A refresh the referral service asked for is still answered, because it checks how recent the observation is.
+        if(!Boolean.TRUE.equals(binding.get("refresh_requested")) && sameFacts(previous(order,version-1),payload)){
+            db.update("UPDATE payment_schema.referral_finance_binding SET next_observation_at=now()+(?*interval '1 second') WHERE chef_order_id=?",idle,order);
+            return true;
+        }
         outbox.enqueue("finance/"+order+"/"+version,"order.finance_confirmed",order,at,payload);
-        db.update("UPDATE payment_schema.referral_finance_binding SET source_version=?,next_observation_at=now()+(?*interval '1 second') WHERE chef_order_id=?",version,verified && earned?86400:60,order);
+        db.update("UPDATE payment_schema.referral_finance_binding SET source_version=?,refresh_requested=false,next_observation_at=now()+(?*interval '1 second') WHERE chef_order_id=?",version,idle,order);
         return true;
     }));}
+    private JsonNode previous(UUID order,int version){
+        var rows=db.queryForList("SELECT envelope FROM payment_schema.referral_source_outbox WHERE event_key=?",String.class,"finance/"+order+"/"+version);
+        return rows.isEmpty()?null:parse(rows.getFirst()).path("payload");
+    }
+    /** True when both payloads carry the same facts; version, observedAt and evidenceRef differ on every observation. */
+    static boolean sameFacts(JsonNode before,JsonNode now){
+        if(before==null || !before.isObject())return false;
+        var a=((com.fasterxml.jackson.databind.node.ObjectNode)before).deepCopy();var b=((com.fasterxml.jackson.databind.node.ObjectNode)now).deepCopy();
+        for(String field:java.util.List.of("version","observedAt","evidenceRef")){a.remove(field);b.remove(field);}
+        return a.equals(b);
+    }
     private JsonNode parse(String body){try{return json.readTree(body);}catch(Exception e){throw new IllegalStateException("Invalid financial snapshot",e);}}
     private static long paise(BigDecimal amount){if(amount.signum()<0)throw new IllegalArgumentException("Nonnegative finance money required");return amount.movePointRight(2).longValueExact();}
 }
